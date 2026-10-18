@@ -56,7 +56,8 @@ const ALL_GLOBAL: &[Command] = &[
 ];
 
 /// How much of the screen the graph and details panes take. `+` steps
-/// through the levels and wraps back to [`Zoom::Off`].
+/// through the levels and wraps back to [`Zoom::Off`], skipping
+/// [`Zoom::Wide`] when details is focused.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Zoom {
     #[default]
@@ -727,10 +728,10 @@ impl App {
 
     fn step_zoom(&mut self) {
         self.zoom = match self.zoom {
+            // Wide is for the graph; from details, go straight to fullscreen.
+            Zoom::Off if self.focus == PaneId::Details => Zoom::Full(PaneId::Details),
             Zoom::Off => {
-                if !matches!(self.focus, PaneId::Graph | PaneId::Details) {
-                    self.focus = PaneId::Graph;
-                }
+                self.focus = PaneId::Graph;
                 Zoom::Wide
             }
             // The graph alone already fills the screen; fullscreen would look the same.

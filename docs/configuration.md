@@ -100,7 +100,8 @@ the left and the selected file's diff on the right.
 
 `+` zooms whichever layout you use: first to just the graph and details at
 full width (the graph alone, full height, if details is closed; `space` still
-toggles details), then to the focused pane alone, then back.
+toggles details), then to the focused pane alone, then back. With details
+focused, `+` skips the first step and fills the screen with details.
 
 ## Key bindings
 

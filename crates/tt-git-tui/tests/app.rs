@@ -409,6 +409,22 @@ fn zoom_full_uses_details_when_focused() {
 }
 
 #[test]
+fn zoom_from_details_goes_straight_to_fullscreen() {
+    let sb = Sandbox::new();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
+    t.press("space").press("4").press("+");
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    assert_eq!(t.app().focus(), PaneId::Details);
+    let details = t.app().pane_area(PaneId::Details).unwrap();
+    assert_eq!((details.width, details.height), (100, 23));
+    assert!(t.app().pane_area(PaneId::Graph).is_none());
+
+    t.press("+");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+    assert_eq!(t.app().focus(), PaneId::Details);
+}
+
+#[test]
 fn focusing_a_hidden_pane_unzooms() {
     let sb = Sandbox::new();
     let mut t = TestDriver::new(&sb);
