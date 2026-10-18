@@ -1,4 +1,4 @@
-use tt_git_core::{BranchHistory, FileState, GitCli, GitError, Head, LogScope, RefKind, Repo};
+use tt_git_core::{BranchHistory, FileState, GitCli, GitError, Head, LogFilter, LogScope, RefKind, Repo};
 use tt_git_testkit::{BASE_TIME, Sandbox};
 
 fn open(sb: &Sandbox) -> Repo {
@@ -411,4 +411,92 @@ fn branch_history_from_fork_to_merge() {
     assert_eq!(h.fork, None);
     assert_eq!(h.commits.len(), 3);
     assert_eq!(h.commits[0].parents, vec![sub_merge]);
+}
+
+/// Commits a change to `file` as `author` (`Name <email>`).
+fn commit_as(sb: &Sandbox, author: &str, file: &str, msg: &str) -> String {
+    sb.write(file, &format!("{msg}\n"));
+    sb.git(&["add", "--", file]);
+    sb.tick();
+    sb.git(&["commit", "-q", &format!("--author={author}"), "-m", msg]);
+    sb.rev_parse("HEAD")
+}
+
+#[test]
+fn filters_commits_by_author_and_path() {
+    let sb = Sandbox::new();
+    let alice = "Alice <alice@example.com>";
+    let a1 = commit_as(&sb, alice, "src/a.txt", "a1");
+    sb.commit_file("b.txt", "b1\n", "b1");
+    sb.checkout_new("side");
+    let a2 = commit_as(&sb, alice, "src/a.txt", "a2 side");
+    sb.commit_file("b.txt", "b2\n", "b2 side");
+    sb.checkout("main");
+    let a3 = commit_as(&sb, alice, "c.txt", "a3");
+    let repo = open(&sb);
+    let oids = |commits: &[tt_git_core::Commit]| commits.iter().map(|c| c.oid.clone()).collect::<Vec<_>>();
+
+    let by_alice = LogFilter {
+        author: Some(alice.into()),
+        path: None,
+    };
+    let commits = repo.filtered_commits(&LogScope::All, &by_alice, 100).unwrap();
+    let mut got = oids(&commits);
+    got.sort();
+    let mut want = vec![a1.clone(), a2.clone(), a3.clone()];
+    want.sort();
+    assert_eq!(got, want);
+    // Parents outside the result are dropped (a2's is the b1 commit).
+    assert!(commits.iter().all(|c| c.parents.is_empty()), "{commits:#?}");
+
+    // A path filter rewrites parents to the previous commit that touched it.
+    let in_src = LogFilter {
+        author: None,
+        path: Some("src".into()),
+    };
+    let commits = repo.filtered_commits(&LogScope::All, &in_src, 100).unwrap();
+    assert_eq!(oids(&commits), vec![a2.clone(), a1.clone()]);
+    assert_eq!(commits[0].parents, vec![a1.clone()]);
+
+    let both = LogFilter {
+        author: Some(alice.into()),
+        path: Some("c.txt".into()),
+    };
+    assert_eq!(
+        oids(&repo.filtered_commits(&LogScope::All, &both, 100).unwrap()),
+        vec![a3]
+    );
+    let current = LogScope::Head { upstream: None };
+    assert_eq!(oids(&repo.filtered_commits(&current, &in_src, 100).unwrap()), vec![a1]);
+    let nobody = LogFilter {
+        author: Some("Bob <bob@example.com>".into()),
+        path: None,
+    };
+    assert!(repo.filtered_commits(&LogScope::All, &nobody, 100).unwrap().is_empty());
+
+    assert_eq!(
+        repo.authors().unwrap(),
+        vec![(alice.to_string(), 3), ("Test User <test@example.com>".to_string(), 2)]
+    );
+    assert_eq!(repo.tracked_files().unwrap(), vec!["b.txt", "c.txt", "src/a.txt"]);
+}
+
+#[test]
+fn author_filter_matches_mailmapped_identity() {
+    let sb = Sandbox::new();
+    sb.commit("one");
+    sb.write(
+        ".mailmap",
+        "Real Name <real@example.com> Test User <test@example.com>\n",
+    );
+    let repo = open(&sb);
+    assert_eq!(
+        repo.authors().unwrap(),
+        vec![("Real Name <real@example.com>".to_string(), 1)]
+    );
+    let filter = LogFilter {
+        author: Some("Real Name <real@example.com>".into()),
+        path: None,
+    };
+    assert_eq!(repo.filtered_commits(&LogScope::All, &filter, 100).unwrap().len(), 1);
 }

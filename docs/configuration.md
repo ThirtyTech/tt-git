@@ -135,7 +135,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `close_details` | `esc` | graph, details |
 | `move_up`, `move_down`, `page_up`, `page_down`, `top`, `bottom` | `k`/`↑`, `j`/`↓`, `ctrl+u`, `ctrl+d`, `g`, `G` | global |
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |
-| `toggle_scope`, `new_branch`, `merge`, `rebase`, `cherry_pick` | `a`, `n`, `M`, `r`, `C` | graph |
+| `toggle_scope`, `filter`, `new_branch`, `merge`, `rebase`, `cherry_pick` | `a`, `f`, `n`, `M`, `r`, `C` | graph |
 | `checkout`, `new_branch`, `delete_branch`, `rename_branch`, `fetch`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `d`, `R`, `f`, `/`, `M`, `r` | branches |
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |
 | `stage_toggle`, `stage_all`, `discard`, `commit`, `amend`, `continue`, `abort` | `space`/`enter`, `a`, `d`, `c`, `A`, `C`, `X` | status |

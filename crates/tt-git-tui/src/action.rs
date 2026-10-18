@@ -6,6 +6,7 @@ use tt_git_core::{
 use tt_git_plugin::runtime::CommandLog;
 use tt_git_plugin::socket::Call;
 
+use crate::filter::{Choice, FilterTab};
 use crate::keymap::Command;
 use crate::modal::{GitOp, Modal};
 use crate::panes::{BranchFocus, DetailsSubject};
@@ -115,5 +116,10 @@ pub enum Action {
         oid: String,
         path: String,
         text: String,
+    },
+    /// The authors or files for a list in the graph's filter panel.
+    FilterChoicesLoaded {
+        tab: FilterTab,
+        choices: Result<Vec<Choice>, String>,
     },
 }

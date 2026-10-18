@@ -4,6 +4,7 @@ pub mod action;
 pub mod app;
 pub mod component;
 pub mod config;
+pub mod filter;
 pub mod jobs;
 pub mod keymap;
 pub mod layout;

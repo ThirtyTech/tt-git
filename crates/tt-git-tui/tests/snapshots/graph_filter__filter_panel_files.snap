@@ -1,0 +1,34 @@
+---
+source: crates/tt-git-tui/tests/graph_filter.rs
+expression: t.screen()
+---
+╭[3] Graph [all] 1/4───────────────────────────────────────────────────────────────────────────────╮
+│●  [side] test lib                                                   Test User         23h 23ce23b│
+│●  alice guide╭ Filter graph ──────────────────────────────────────────────────────╮   23h b3a6e10│
+│●   main  test│Author: any · File: any                                             │   23h 53b1860│
+│●  alice lib  │> █                                                              3/3│   23h dfc47d5│
+│              │                                                                    │              │
+│              │README.md                                                           │              │
+│              │src/                                                                │              │
+│              │src/lib.rs                                                          │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+│              │                                                                    │              │
+╰──────────────│enter filter · tab author/file · ↑↓ pick · esc cancel               │──────────────╯
+╭[1] Status: re╰────────────────────────────────────────────────────────────────────╯ed 0──────────╮
+│working tree clean                              ││* main                            local      23h│
+│                                                ││  side                            local      23h│
+│                                                ││                                                │
+│                                                ││                                                │
+│                                                ││                                                │
+│                                                ││                                                │
+│                                                ││                                                │
+╰────────────────────────────────────────────────╯╰────────────────────────────────────────────────╯
+enter files + diff  space show/hide details  a all/current  tab next pane  ? help  q quit

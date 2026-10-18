@@ -23,6 +23,21 @@ pub enum LogScope {
     Head { upstream: Option<String> },
 }
 
+/// Narrows a log to some of its commits. Both parts must match.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LogFilter {
+    /// `Name <email>` as [`Repo::authors`] lists it (after `.mailmap`).
+    pub author: Option<String>,
+    /// A path or pathspec; commits that didn't change it are left out.
+    pub path: Option<String>,
+}
+
+impl LogFilter {
+    pub fn is_empty(&self) -> bool {
+        self.author.is_none() && self.path.is_none()
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Repo {
     git: GitCli,
@@ -275,13 +290,53 @@ impl Repo {
     /// Streams commits in topological order, newest first, stopping after
     /// `limit` or when `on_commit` returns `false`.
     pub fn stream_commits(&self, scope: &LogScope, limit: usize, on_commit: impl FnMut(Commit) -> bool) -> Result<()> {
-        let mut args: Vec<String> = vec![
-            "log".into(),
-            "--topo-order".into(),
-            "-z".into(),
-            parse::LOG_FORMAT.into(),
-            format!("--max-count={limit}"),
-        ];
+        let mut args = topo_log_args(limit);
+        if !self.push_scope(&mut args, scope)? {
+            return Ok(());
+        }
+        args.push("--".into());
+        self.stream_log(&args, on_commit)
+    }
+
+    /// Up to `limit` commits of `scope` that match `filter`, in topological
+    /// order. Parents name only commits in the result: a path filter
+    /// rewrites them to the nearest commit that changed the path, and
+    /// parents an author filter leaves out are dropped.
+    pub fn filtered_commits(&self, scope: &LogScope, filter: &LogFilter, limit: usize) -> Result<Vec<Commit>> {
+        let mut args = topo_log_args(limit);
+        if let Some(author) = &filter.author {
+            // --use-mailmap so the match is against the mapped identity
+            // that %aN/%aE (and `authors`) show.
+            args.extend([
+                "--use-mailmap".into(),
+                "--fixed-strings".into(),
+                format!("--author={author}"),
+            ]);
+        }
+        if filter.path.is_some() {
+            // Without it %P shows the real parents, which mostly aren't listed.
+            args.push("--parents".into());
+        }
+        if !self.push_scope(&mut args, scope)? {
+            return Ok(Vec::new());
+        }
+        args.push("--".into());
+        args.extend(filter.path.clone());
+        let mut commits = Vec::new();
+        self.stream_log(&args, |c| {
+            commits.push(c);
+            true
+        })?;
+        let shown: HashSet<String> = commits.iter().map(|c| c.oid.clone()).collect();
+        for c in &mut commits {
+            c.parents.retain(|p| shown.contains(p));
+        }
+        Ok(commits)
+    }
+
+    /// Adds the revisions for `scope` to a log command line. `false` when
+    /// there's nothing to log (HEAD is unborn).
+    fn push_scope(&self, args: &mut Vec<String>, scope: &LogScope) -> Result<bool> {
         match scope {
             LogScope::All => {
                 args.push("--exclude=refs/stash".into());
@@ -291,7 +346,7 @@ impl Repo {
             }
             LogScope::Head { upstream } => {
                 if self.head()?.oid().is_none() {
-                    return Ok(());
+                    return Ok(false);
                 }
                 args.push("HEAD".into());
                 if let Some(up) = upstream {
@@ -299,8 +354,44 @@ impl Repo {
                 }
             }
         }
-        args.push("--".into());
-        self.stream_log(&args, on_commit)
+        Ok(true)
+    }
+
+    /// Everyone who authored a commit on any ref, as `Name <email>` after
+    /// `.mailmap`, with their commit counts: most commits first.
+    pub fn authors(&self) -> Result<Vec<(String, usize)>> {
+        let args = [
+            "log",
+            "-z",
+            "--use-mailmap",
+            "--format=%aN <%aE>",
+            "--exclude=refs/stash",
+            "--all",
+            "--",
+        ];
+        let mut counts: HashMap<String, usize> = HashMap::new();
+        self.git.stream(&args, 0, |record| {
+            let ident = String::from_utf8_lossy(record);
+            let ident = ident.trim();
+            if !ident.is_empty() {
+                *counts.entry(ident.to_string()).or_default() += 1;
+            }
+            true
+        })?;
+        let mut authors: Vec<(String, usize)> = counts.into_iter().collect();
+        authors.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        Ok(authors)
+    }
+
+    /// Paths of the files in the index, relative to the root.
+    pub fn tracked_files(&self) -> Result<Vec<String>> {
+        let out = self.git.run(&["ls-files", "-z"])?;
+        Ok(out
+            .stdout
+            .split(|b| *b == 0)
+            .filter(|p| !p.is_empty())
+            .map(|p| String::from_utf8_lossy(p).into_owned())
+            .collect())
     }
 
     /// Runs `args` (a `git log -z` with [`parse::LOG_FORMAT`]), handing each
@@ -474,4 +565,15 @@ impl Repo {
         })?;
         Ok(commits)
     }
+}
+
+/// `git log` in topological order with [`parse::LOG_FORMAT`], up to `limit`.
+fn topo_log_args(limit: usize) -> Vec<String> {
+    vec![
+        "log".into(),
+        "--topo-order".into(),
+        "-z".into(),
+        parse::LOG_FORMAT.into(),
+        format!("--max-count={limit}"),
+    ]
 }

@@ -1,9 +1,10 @@
 //! Background jobs that read from git and report back as actions.
 
-use tt_git_core::{BaseBranches, BranchEntry, CommitFile, GitError, GitRef, LogScope, Repo};
+use tt_git_core::{BaseBranches, BranchEntry, CommitFile, GitError, GitRef, LogFilter, LogScope, Repo};
 
 use crate::action::{Action, RefsSnapshot};
 use crate::config::BranchesConfig;
+use crate::filter::{FilterTab, author_choices, file_choices};
 use crate::jobs::Ctx;
 use crate::modal::GitOp;
 use crate::panes::{BranchFocus, DetailsSubject, GraphScope};
@@ -71,16 +72,35 @@ fn load_base(
     }))
 }
 
+/// Everyone with commits, for the filter panel's author list.
+pub fn load_filter_authors(repo: Repo) -> Action {
+    Action::FilterChoicesLoaded {
+        tab: FilterTab::Author,
+        choices: repo.authors().map(author_choices).map_err(message),
+    }
+}
+
+/// Tracked files and their directories, for the filter panel's file list.
+pub fn load_filter_files(repo: Repo) -> Action {
+    Action::FilterChoicesLoaded {
+        tab: FilterTab::File,
+        choices: repo.tracked_files().map(file_choices).map_err(message),
+    }
+}
+
 pub fn load_status(repo: Repo) -> Action {
     Action::StatusLoaded(repo.status().map_err(message))
 }
 
 /// Streams the graph's commits in batches, ending with a `done` batch; or,
-/// with a `focus`, loads just that branch's history in one go.
+/// with a `focus`, loads just that branch's history in one go. A `filter`
+/// (ignored with a `focus`) also loads in one go, since parents it leaves
+/// out are only known at the end.
 pub fn load_graph(
     repo: Repo,
     scope: GraphScope,
     focus: Option<BranchFocus>,
+    filter: LogFilter,
     generation: u64,
     limit: usize,
     ctx: &Ctx,
@@ -100,6 +120,19 @@ pub fn load_graph(
             upstream: head_upstream(&repo),
         },
     };
+    if !filter.is_empty() {
+        return match repo.filtered_commits(&scope, &filter, limit) {
+            Ok(commits) => Action::GraphBatch {
+                generation,
+                commits,
+                done: true,
+            },
+            Err(e) => Action::GraphFailed {
+                generation,
+                error: message(e),
+            },
+        };
+    }
     let mut batch = Vec::with_capacity(GRAPH_BATCH);
     let result = repo.stream_commits(&scope, limit, |commit| {
         batch.push(commit);

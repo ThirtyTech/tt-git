@@ -1,5 +1,5 @@
-//! Modal popups: a one-line text prompt, a yes/no confirmation and a
-//! fuzzy-filtered list.
+//! Modal popups: a one-line text prompt, a yes/no confirmation, a
+//! fuzzy-filtered list and the graph's filter panel.
 
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::Frame;
@@ -7,8 +7,9 @@ use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
-use tt_git_core::{CheckoutPlan, DiscardKind, InProgress};
+use tt_git_core::{CheckoutPlan, DiscardKind, InProgress, LogFilter};
 
+use crate::filter::FilterPanel;
 use crate::keymap::{Command, KeyCombo};
 use crate::theme::Theme;
 
@@ -187,6 +188,8 @@ pub enum Modal {
         message: String,
         op: GitOp,
     },
+    /// Pick an author or file to narrow the graph to.
+    Filter(Box<FilterPanel>),
 }
 
 /// Result of feeding a key to a modal.
@@ -199,6 +202,8 @@ pub enum ModalOutcome {
     Command(Command),
     PluginAction(String),
     PluginPane(String, String),
+    /// Show only the graph's commits that match.
+    Filter(LogFilter),
 }
 
 impl Modal {
@@ -311,6 +316,7 @@ impl Modal {
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => ModalOutcome::Cancelled,
                 _ => ModalOutcome::Open,
             },
+            Modal::Filter(panel) => panel.handle_key(key),
         }
     }
 
@@ -324,8 +330,11 @@ impl Modal {
         {
             return draw_palette(frame, area, theme, title, input, items, *selected);
         }
+        if let Modal::Filter(panel) = self {
+            return panel.draw(frame, area, theme);
+        }
         let (title, body, hint): (&str, Vec<Line>, &str) = match self {
-            Modal::Palette { .. } => unreachable!("handled above"),
+            Modal::Palette { .. } | Modal::Filter(_) => unreachable!("handled above"),
             Modal::Prompt { title, input, action } => {
                 let input_line = Line::from(vec![Span::raw(input.as_str()), Span::styled("█", theme.help_key)]);
                 match action {

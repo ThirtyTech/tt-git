@@ -424,6 +424,7 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Graph, Command::Merge, &["M"]),
     (Context::Graph, Command::Rebase, &["r"]),
     (Context::Graph, Command::CherryPick, &["C"]),
+    (Context::Graph, Command::Filter, &["f"]),
     (Context::Branches, Command::Merge, &["M"]),
     (Context::Branches, Command::Rebase, &["r"]),
     (Context::Status, Command::Continue, &["C"]),

@@ -18,4 +18,4 @@ pub use branches::{BaseBranches, BranchEntry, BranchState, CheckoutPlan};
 pub use git::{GitCli, GitError};
 pub use model::*;
 pub use ops::DiscardKind;
-pub use repo::{LogScope, Repo};
+pub use repo::{LogFilter, LogScope, Repo};

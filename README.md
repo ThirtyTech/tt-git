@@ -68,8 +68,9 @@ command palette, which lists built-in commands and plugin actions.
 | | `q` | quit |
 | graph | `enter` | the commit fullscreen: changed files on the left, the selected file's diff on the right (`j`/`k` pick a file, `pgup`/`pgdn` scroll, `esc` back) |
 | | `space` | show / hide the commit's details (they replace the bottom row) |
-| | `esc` | hide details |
+| | `esc` | hide details (with details hidden: clear the filter) |
 | | `a` | all branches ↔ current branch |
+| | `f` | filter: only one author's commits, or the commits that changed a file or folder (`tab` in the panel switches between the two; both can be set) |
 | | `n` | new branch at the selected commit (`tab` in the dialog: create it in a worktree) |
 | | `M` / `r` / `C` | merge into current / rebase current onto / cherry-pick |
 | branches | `enter` `space` | check out (remote-only branches get a tracking branch) |

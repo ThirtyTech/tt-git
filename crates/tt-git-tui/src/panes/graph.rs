@@ -6,13 +6,14 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use tt_git_core::time::{SharedClock, relative};
-use tt_git_core::{BranchHistory, Commit, GitRef, Head, RefKind};
+use tt_git_core::{BranchHistory, Commit, GitRef, Head, LogFilter, RefKind};
 use tt_git_graph::{GraphBuilder, NodeId, Row};
 use unicode_width::UnicodeWidthStr;
 
 use super::{PaneId, pane_block};
 use crate::action::{Action, RefsSnapshot};
 use crate::component::{Component, EventState};
+use crate::filter::author_name;
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context};
 use crate::modal::{GitOp, Modal, PromptAction};
@@ -89,6 +90,8 @@ pub struct GraphPane {
     pub scope: GraphScope,
     /// Shows only this branch's history instead of `scope`.
     pub focus: Option<BranchFocus>,
+    /// Narrows `scope` to some commits (not used with a `focus`).
+    pub filter: LogFilter,
     /// Maximum number of lanes drawn before collapsing into `…`.
     pub max_lanes: usize,
     /// Commit limit of the current load; reaching it means more may exist.
@@ -118,6 +121,7 @@ impl GraphPane {
         Self {
             scope: GraphScope::All,
             focus: None,
+            filter: LogFilter::default(),
             max_lanes: 16,
             limit: usize::MAX,
             clock,
@@ -286,8 +290,22 @@ impl GraphPane {
         }
     }
 
+    /// Whether the graph is narrowed by its filter.
+    pub fn is_filtered(&self) -> bool {
+        self.focus.is_none() && !self.filter.is_empty()
+    }
+
     fn title(&self) -> String {
-        let mut t = format!("Graph [{}]", self.scope_label());
+        let mut t = format!("Graph [{}", self.scope_label());
+        if self.is_filtered() {
+            if let Some(author) = &self.filter.author {
+                t.push_str(&format!(" · author {}", author_name(author)));
+            }
+            if let Some(path) = &self.filter.path {
+                t.push_str(&format!(" · file {path}"));
+            }
+        }
+        t.push(']');
         if !self.commits.is_empty() {
             t.push_str(&format!(" {}/{}", self.cursor.selected + 1, self.commits.len()));
         }
@@ -531,6 +549,7 @@ impl Component for GraphPane {
             Command::Merge,
             Command::Rebase,
             Command::CherryPick,
+            Command::Filter,
         ]
     }
 
@@ -540,7 +559,11 @@ impl Component for GraphPane {
         frame.render_widget(block, area);
 
         if self.commits.is_empty() {
-            let msg = if self.loading { "loading…" } else { "no commits" };
+            let msg = match () {
+                _ if self.loading => "loading…",
+                _ if self.is_filtered() => "no commits match the filter (f to change it, esc to clear it)",
+                _ => "no commits",
+            };
             frame.render_widget(Paragraph::new(msg).style(theme.muted), inner);
             return;
         }

@@ -6,12 +6,13 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
-use tt_git_core::Repo;
 use tt_git_core::time::SharedClock;
+use tt_git_core::{LogFilter, Repo};
 
 use crate::action::{Action, RefsSnapshot};
 use crate::component::{Component, EventState};
 use crate::config::Config;
+use crate::filter::FilterPanel;
 use crate::jobs::{Ctx, JobTracker};
 use crate::keymap::{Command, Context, KeyCombo, Keymap, KeymapError};
 use crate::layout::View;
@@ -338,6 +339,10 @@ impl App {
                     self.modal = None;
                     self.run_command(cmd);
                 }
+                ModalOutcome::Filter(filter) => {
+                    self.modal = None;
+                    self.set_graph_filter(filter);
+                }
                 ModalOutcome::PluginAction(action) => {
                     self.modal = None;
                     let _ = self.invoke_plugin_action(&action, "palette");
@@ -467,6 +472,11 @@ impl App {
                 self.ctx.spawn(move || loaders::load_commit_file_diff(repo, oid, file));
             }
             Action::CommitFileDiffLoaded { oid, path, text } => self.details.set_file_diff(&oid, &path, &text),
+            Action::FilterChoicesLoaded { tab, choices } => {
+                if let Some(Modal::Filter(panel)) = &mut self.modal {
+                    panel.set_choices(tab, choices);
+                }
+            }
         }
     }
 
@@ -487,9 +497,30 @@ impl App {
         let repo = self.repo.clone();
         let scope = self.graph.scope;
         let focus = self.graph.focus.clone();
+        let filter = self.graph.filter.clone();
         let limit = self.graph_limit;
         self.ctx
-            .spawn_streaming(move |ctx| loaders::load_graph(repo, scope, focus, generation, limit, ctx));
+            .spawn_streaming(move |ctx| loaders::load_graph(repo, scope, focus, filter, generation, limit, ctx));
+    }
+
+    /// Opens the graph's filter panel and loads the authors and files it lists.
+    fn open_graph_filter(&mut self) {
+        self.modal = Some(Modal::Filter(Box::new(FilterPanel::new(self.graph.filter.clone()))));
+        let repo = self.repo.clone();
+        self.ctx.spawn(move || loaders::load_filter_authors(repo));
+        let repo = self.repo.clone();
+        self.ctx.spawn(move || loaders::load_filter_files(repo));
+    }
+
+    /// Narrows the graph to `filter`'s commits (leaving a focused branch,
+    /// which the filter doesn't apply to), or shows them all again.
+    fn set_graph_filter(&mut self, filter: LogFilter) {
+        if self.graph.filter == filter && self.graph.focus.is_none() {
+            return;
+        }
+        self.graph.filter = filter;
+        self.graph.focus = None;
+        self.load_graph();
     }
 
     /// Shows only `focus`'s history in the graph (with its tip selected), or
@@ -704,7 +735,14 @@ impl App {
             Command::Zoom => self.step_zoom(),
             Command::ToggleDetails if self.focus == PaneId::Graph => self.toggle_details(),
             Command::ExpandDetails if self.focus == PaneId::Graph => self.expand_details(),
+            // With details already closed, esc in the graph drops its filter.
+            Command::CloseDetails
+                if self.focus == PaneId::Graph && !self.shows(PaneId::Details) && self.graph.is_filtered() =>
+            {
+                self.set_graph_filter(LogFilter::default())
+            }
             Command::CloseDetails if matches!(self.focus, PaneId::Graph | PaneId::Details) => self.close_details(),
+            Command::Filter if self.focus == PaneId::Graph => self.open_graph_filter(),
             Command::Refresh => self.update(Action::Refresh),
             Command::Palette => self.modal = Some(Modal::palette(self.palette_items())),
             Command::PluginLogs => self.show_plugin_logs(),
