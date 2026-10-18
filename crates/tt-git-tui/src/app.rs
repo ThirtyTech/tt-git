@@ -36,6 +36,7 @@ const ALL_GLOBAL: &[Command] = &[
     Command::FocusDetails,
     Command::FocusNext,
     Command::FocusPrev,
+    Command::Zoom,
     Command::MoveUp,
     Command::MoveDown,
     Command::PageUp,
@@ -47,6 +48,18 @@ const ALL_GLOBAL: &[Command] = &[
     Command::Quit,
 ];
 
+/// How much of the screen the graph and details panes take. `+` steps
+/// through the levels and wraps back to [`Zoom::Off`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Zoom {
+    #[default]
+    Off,
+    /// Graph and details span the full width; status and branches are hidden.
+    Wide,
+    /// One pane fills the screen.
+    Full(PaneId),
+}
+
 pub struct App {
     ctx: Ctx,
     config: Config,
@@ -54,6 +67,7 @@ pub struct App {
     theme: Theme,
     repo: Repo,
     focus: PaneId,
+    zoom: Zoom,
     status: StatusPane,
     branches: BranchesPane,
     graph: GraphPane,
@@ -106,6 +120,7 @@ impl App {
             status: StatusPane::new(repo.name()),
             repo,
             focus: PaneId::Graph,
+            zoom: Zoom::Off,
             branches: BranchesPane::new(clock),
             graph,
             details: DetailsPane::default(),
@@ -146,6 +161,10 @@ impl App {
 
     pub fn focus(&self) -> PaneId {
         self.focus
+    }
+
+    pub fn zoom(&self) -> Zoom {
+        self.zoom
     }
 
     pub fn repo(&self) -> &Repo {
@@ -523,7 +542,33 @@ impl App {
         let before = self.focus;
         self.dispatch(cmd);
         if self.focus != before {
+            self.unzoom_if_hidden();
             self.refresh_details(false);
+        }
+    }
+
+    fn step_zoom(&mut self) {
+        self.zoom = match self.zoom {
+            Zoom::Off => {
+                if !matches!(self.focus, PaneId::Graph | PaneId::Details) {
+                    self.focus = PaneId::Graph;
+                }
+                Zoom::Wide
+            }
+            Zoom::Wide => Zoom::Full(self.focus),
+            Zoom::Full(_) => Zoom::Off,
+        };
+    }
+
+    /// Moving focus to a pane the zoom hides restores the normal layout.
+    fn unzoom_if_hidden(&mut self) {
+        let visible = match self.zoom {
+            Zoom::Off => true,
+            Zoom::Wide => matches!(self.focus, PaneId::Graph | PaneId::Details),
+            Zoom::Full(pane) => self.focus == pane,
+        };
+        if !visible {
+            self.zoom = Zoom::Off;
         }
     }
 
@@ -537,6 +582,7 @@ impl App {
             Command::FocusBranches => self.focus = PaneId::Branches,
             Command::FocusGraph => self.focus = PaneId::Graph,
             Command::FocusDetails => self.focus = PaneId::Details,
+            Command::Zoom => self.step_zoom(),
             Command::Refresh => self.update(Action::Refresh),
             Command::Palette => self.modal = Some(Modal::palette(self.palette_items())),
             Command::PluginLogs => self.show_plugin_logs(),
@@ -588,23 +634,33 @@ impl App {
             Layout::horizontal([Constraint::Percentage(side), Constraint::Percentage(100 - side)]).areas(main);
         let [status_area, branches_area] =
             Layout::vertical([Constraint::Percentage(40), Constraint::Percentage(60)]).areas(left);
+        let right = if self.zoom == Zoom::Off { right } else { main };
         let [graph_area, details_area] =
             Layout::vertical([Constraint::Percentage(graph_h), Constraint::Percentage(100 - graph_h)]).areas(right);
 
-        self.pane_areas = vec![
-            (PaneId::Status, status_area),
-            (PaneId::Branches, branches_area),
-            (PaneId::Graph, graph_area),
-            (PaneId::Details, details_area),
-        ];
+        self.pane_areas = match self.zoom {
+            Zoom::Off => vec![
+                (PaneId::Status, status_area),
+                (PaneId::Branches, branches_area),
+                (PaneId::Graph, graph_area),
+                (PaneId::Details, details_area),
+            ],
+            Zoom::Wide => vec![(PaneId::Graph, graph_area), (PaneId::Details, details_area)],
+            Zoom::Full(pane) => vec![(pane, main)],
+        };
+        let details_area = self.pane_area(PaneId::Details).unwrap_or(details_area);
         self.layout_rects = (main, details_area);
         let focus = self.focus;
         let theme = &self.theme;
-        self.status.draw(frame, status_area, focus == PaneId::Status, theme);
-        self.branches
-            .draw(frame, branches_area, focus == PaneId::Branches, theme);
-        self.graph.draw(frame, graph_area, focus == PaneId::Graph, theme);
-        if !self.draw_split_pane(frame, details_area) {
+        for (pane, area) in self.pane_areas.clone() {
+            match pane {
+                PaneId::Status => self.status.draw(frame, area, focus == pane, theme),
+                PaneId::Branches => self.branches.draw(frame, area, focus == pane, theme),
+                PaneId::Graph => self.graph.draw(frame, area, focus == pane, theme),
+                PaneId::Details => {}
+            }
+        }
+        if self.pane_area(PaneId::Details).is_some() && !self.draw_split_pane(frame, details_area) {
             let theme = &self.theme;
             self.details.draw(frame, details_area, focus == PaneId::Details, theme);
         }

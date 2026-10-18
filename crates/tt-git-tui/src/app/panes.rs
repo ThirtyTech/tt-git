@@ -126,6 +126,7 @@ impl App {
                     self.close_pane(id);
                 }
                 self.focus = PaneId::Graph;
+                self.unzoom_if_hidden();
                 self.refresh_details(false);
             } else if exited {
                 // Any key dismisses a finished split pane.

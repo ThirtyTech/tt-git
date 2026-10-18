@@ -50,6 +50,7 @@ command palette, which lists built-in commands and plugin actions.
 | Where | Key | Does |
 |---|---|---|
 | anywhere | `1` `2` `3` `4` / `tab` `shift+tab` | focus status / branches / graph / details |
+| | `+` | zoom: graph + details full width → focused one fullscreen → back |
 | | `j` `k` `↑` `↓`, `ctrl+d` `ctrl+u`, `g` `G` | move, page, top/bottom |
 | | `P` / `p` | push (sets upstream on first push) / pull |
 | | `ctrl+r` | refresh |

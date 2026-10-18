@@ -1,5 +1,6 @@
 use tt_git_testkit::{Sandbox, TestDriver};
 use tt_git_tui::Config;
+use tt_git_tui::app::Zoom;
 use tt_git_tui::panes::{GraphScope, PaneId};
 
 #[test]
@@ -195,4 +196,54 @@ fn details_respect_mailmap() {
     t.assert_pane_contains(PaneId::Details, "Author: Real Name <real@example.com>");
     t.assert_pane_contains(PaneId::Details, "Committer: Real Name <real@example.com>");
     t.assert_pane_contains(PaneId::Graph, "Real Name");
+}
+
+#[test]
+fn zoom_cycles_wide_full_and_back() {
+    let sb = Sandbox::new();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
+    let normal_graph = t.app().pane_area(PaneId::Graph).unwrap();
+
+    // Wide: graph and details span the screen, the left column is gone.
+    t.press("1").press("+");
+    assert_eq!(t.app().zoom(), Zoom::Wide);
+    assert_eq!(t.app().focus(), PaneId::Graph);
+    let graph = t.app().pane_area(PaneId::Graph).unwrap();
+    let details = t.app().pane_area(PaneId::Details).unwrap();
+    assert_eq!((graph.x, graph.width), (0, 100));
+    assert_eq!((details.x, details.width), (0, 100));
+    assert!(t.app().pane_area(PaneId::Status).is_none());
+    assert!(t.app().pane_area(PaneId::Branches).is_none());
+
+    // Full: the focused pane takes the whole main area.
+    t.press("+");
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Graph));
+    assert_eq!(t.app().pane_area(PaneId::Graph).unwrap().height, 23);
+    assert!(t.app().pane_area(PaneId::Details).is_none());
+
+    t.press("+");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+    assert_eq!(t.app().pane_area(PaneId::Graph).unwrap(), normal_graph);
+}
+
+#[test]
+fn zoom_full_uses_details_when_focused() {
+    let sb = Sandbox::new();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
+    t.press("+").press("4").press("+");
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    assert_eq!(t.app().pane_area(PaneId::Details).unwrap().width, 100);
+    assert!(t.app().pane_area(PaneId::Graph).is_none());
+}
+
+#[test]
+fn focusing_a_hidden_pane_unzooms() {
+    let sb = Sandbox::new();
+    let mut t = TestDriver::new(&sb);
+    t.press("+").press("+");
+    t.press("4");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+    t.press("+").press("2");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+    assert!(t.app().pane_area(PaneId::Status).is_some());
 }
