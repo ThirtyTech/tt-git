@@ -109,7 +109,7 @@ fn stage_and_commit_in_the_real_binary() {
     sb.write("hello.txt", "hi\n");
     let mut t = spawn(&sb, &[]);
     t.wait_until(|s| s.contains("?? hello.txt")).expect("status lists file");
-    t.send_str("1").unwrap();
+    t.send_str("2").unwrap();
     t.send(Key::Char(' ')).unwrap();
     t.wait_until(|s| s.contains("A  hello.txt")).expect("staged");
     t.send_str("c").unwrap();

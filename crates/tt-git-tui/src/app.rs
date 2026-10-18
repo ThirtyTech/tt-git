@@ -33,9 +33,9 @@ const GLOBAL_HELP: &[Command] = &[Command::FocusNext, Command::Help, Command::Qu
 
 /// Global commands listed in the help popup.
 const ALL_GLOBAL: &[Command] = &[
+    Command::FocusGraph,
     Command::FocusStatus,
     Command::FocusBranches,
-    Command::FocusGraph,
     Command::FocusDetails,
     Command::FocusNext,
     Command::FocusPrev,

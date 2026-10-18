@@ -49,7 +49,7 @@ fn unified_list_merges_local_and_remote() {
 fn checkout_remote_only_branch_creates_local_without_asking() {
     let sb = repo_with_remote_branch();
     let mut t = TestDriver::new(&sb);
-    t.press("2");
+    t.press("3");
     let idx = names(&t).iter().position(|n| n == "their-feature").unwrap();
     for _ in 0..idx {
         t.press("j");
@@ -85,7 +85,7 @@ fn checkout_failure_shows_git_error() {
     sb.checkout("main");
     sb.write("f.txt", "dirty\n");
     let mut t = TestDriver::new(&sb);
-    t.press("2");
+    t.press("3");
     let idx = names(&t).iter().position(|n| n == "other").unwrap();
     for _ in 0..idx {
         t.press("j");
@@ -110,7 +110,7 @@ fn filter_narrows_the_list() {
         sb.branch(b);
     }
     let mut t = TestDriver::new(&sb);
-    t.press("2").press("/").type_text("lgo");
+    t.press("3").press("/").type_text("lgo");
     assert_eq!(names(&t), vec!["feature/logout"]);
     assert!(t.pane_title(PaneId::Branches).contains("/lgo"));
     // Keys are text while filtering: "q" does not quit.
@@ -128,7 +128,7 @@ fn new_branch_from_selected_branch() {
     let sb = Sandbox::new();
     sb.commit("base");
     let mut t = TestDriver::new(&sb);
-    t.press("2").press("n");
+    t.press("3").press("n");
     assert!(matches!(t.app().modal(), Some(Modal::Prompt { .. })));
     assert!(t.screen().contains("New branch from main"));
     t.type_text("topic").press("enter");
@@ -154,7 +154,7 @@ fn rename_branch() {
     sb.commit("base");
     sb.branch("old-name");
     let mut t = TestDriver::new(&sb);
-    t.press("2");
+    t.press("3");
     let idx = names(&t).iter().position(|n| n == "old-name").unwrap();
     for _ in 0..idx {
         t.press("j");
@@ -172,7 +172,7 @@ fn deleting_unmerged_branch_asks_to_force() {
     sb.commit("unmerged");
     sb.checkout("main");
     let mut t = TestDriver::new(&sb);
-    t.press("2");
+    t.press("3");
     let idx = names(&t).iter().position(|n| n == "wip").unwrap();
     for _ in 0..idx {
         t.press("j");
@@ -191,7 +191,7 @@ fn cannot_delete_checked_out_branch() {
     let sb = Sandbox::new();
     sb.commit("base");
     let mut t = TestDriver::new(&sb);
-    t.press("2").press("d");
+    t.press("3").press("d");
     assert!(t.app().modal().is_none());
     assert!(t.app().notice().unwrap_or_default().contains("checked-out"));
 }
@@ -205,7 +205,7 @@ fn selecting_a_branch_moves_the_graph() {
     sb.checkout("main");
     sb.commit("main tip");
     let mut t = TestDriver::new(&sb);
-    t.press("2");
+    t.press("3");
     let idx = names(&t).iter().position(|n| n == "older").unwrap();
     // Move onto "older" (moving at least once so the selection is announced).
     if idx == 0 {
@@ -216,7 +216,7 @@ fn selecting_a_branch_moves_the_graph() {
         }
     }
     assert_eq!(t.app().graph().selected().unwrap().summary, "older tip");
-    t.press("3").press("space");
+    t.press("1").press("space");
     t.assert_pane_contains(PaneId::Details, "older tip");
 }
 
@@ -228,7 +228,7 @@ fn fetch_picks_up_new_remote_branches() {
     sb.git_in(&other, &["push", "-q", "origin", "brand-new"]);
     let mut t = TestDriver::new(&sb);
     assert!(!names(&t).contains(&"brand-new".to_string()));
-    t.press("2").press("f");
+    t.press("3").press("f");
     assert!(names(&t).contains(&"brand-new".to_string()), "{:?}", names(&t));
     assert!(t.app().notice().unwrap_or_default().contains("fetch"));
 }
@@ -260,7 +260,7 @@ fn repo_for_base_tabs() -> Sandbox {
 fn tabs_list_branches_merged_and_unmerged_into_the_primary_branch() {
     let sb = repo_for_base_tabs();
     let mut t = TestDriver::with_size(Config::default(), &sb, 160, 40);
-    t.press("2");
+    t.press("3");
     assert_eq!(t.app().branches().tab(), BranchTab::All);
     let title = t.pane_title(PaneId::Branches);
     assert!(title.contains("Branches 5 · Unmerged 2 · Merged 1"), "{title}");
@@ -296,7 +296,7 @@ fn base_branch_follows_origin_head() {
     let sb = repo_for_base_tabs();
     sb.git(&["remote", "set-head", "origin", "development"]);
     let mut t = TestDriver::new(&sb);
-    t.press("2").press("]");
+    t.press("3").press("]");
     let base = t.app().branches().base().unwrap();
     assert_eq!(base.base, "origin/development");
     assert!(!base.chosen);
@@ -313,7 +313,7 @@ fn base_branch_follows_origin_head() {
     let mut config = Config::default();
     config.branches.safe_branches.clear();
     let mut t = TestDriver::with_config(config, &sb);
-    t.press("2").press("]").press("]");
+    t.press("3").press("]").press("]");
     let mut merged = names(&t);
     merged.sort();
     assert_eq!(merged, vec!["done", "main", "open"], "listed once nothing is safe");
@@ -323,7 +323,7 @@ fn base_branch_follows_origin_head() {
 fn pick_base_branch_from_a_list_and_go_back_to_detecting() {
     let sb = repo_for_base_tabs();
     let mut t = TestDriver::new(&sb);
-    t.press("2").press("]").press("b");
+    t.press("3").press("]").press("b");
     assert!(t.screen().contains("Base branch"));
     assert!(t.screen().contains("Detect automatically"));
     t.type_text("origin/dev").press("enter");
@@ -359,7 +359,7 @@ fn no_base_branch_without_a_primary_one() {
     sb.commit("base");
     sb.git(&["branch", "-q", "-m", "topic"]);
     let mut t = TestDriver::new(&sb);
-    t.press("2").press("]");
+    t.press("3").press("]");
     assert!(t.app().branches().base().is_none());
     assert!(t.pane_lines(PaneId::Branches)[0].contains("no base branch"));
     let title = t.pane_title(PaneId::Branches);
@@ -379,7 +379,7 @@ fn merged_and_unmerged_tabs_show_one_branch_from_fork_to_merge() {
             .collect::<Vec<_>>()
     };
     let all = summaries(&t).len();
-    t.press("2").press("]").press("j");
+    t.press("3").press("]").press("j");
     t.wait_idle();
     assert!(t.pane_title(PaneId::Graph).contains("Graph [origin/open]"));
     // The branch's commit and the base commit it branched off, which is
@@ -410,7 +410,7 @@ fn merged_and_unmerged_tabs_show_one_branch_from_fork_to_merge() {
     t.press("[");
     t.wait_idle();
     assert!(t.pane_title(PaneId::Graph).contains("Graph [origin/done]"));
-    t.press("3").press("a");
+    t.press("1").press("a");
     t.wait_idle();
     assert!(t.pane_title(PaneId::Graph).contains("Graph [all]"));
     assert_eq!(summaries(&t).len(), all);
@@ -421,7 +421,7 @@ fn new_branch_as_a_worktree() {
     let sb = Sandbox::new();
     sb.commit("base");
     let mut t = TestDriver::new(&sb);
-    t.press("2").press("n");
+    t.press("3").press("n");
     assert!(t.screen().contains("switches to it here"));
     t.type_text("side").press("tab");
     assert!(t.screen().contains("checked out in .worktrees/side"), "{}", t.screen());

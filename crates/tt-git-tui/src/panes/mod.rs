@@ -27,7 +27,7 @@ pub enum PaneId {
 
 impl PaneId {
     /// Focus cycle order.
-    pub const ALL: [PaneId; 4] = [PaneId::Status, PaneId::Branches, PaneId::Graph, PaneId::Details];
+    pub const ALL: [PaneId; 4] = [PaneId::Graph, PaneId::Status, PaneId::Branches, PaneId::Details];
 
     pub fn number(self) -> usize {
         PaneId::ALL.iter().position(|p| *p == self).unwrap_or(0) + 1

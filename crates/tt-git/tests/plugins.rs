@@ -128,7 +128,7 @@ fn palette_lists_and_runs_plugin_actions_for_the_focused_context() {
     .unwrap();
     assert_eq!(ctx["invocation_source"], "palette");
 
-    t.press("2").press("ctrl+p").type_text("thing");
+    t.press("3").press("ctrl+p").type_text("thing");
     assert!(t.screen().contains("Branch thing"));
     t.press("esc");
 }
@@ -153,7 +153,7 @@ fn event_hooks_get_event_json() {
         .install(&sb);
     let mut t = TestDriver::with_plugins(Config::default(), &sb, bin());
 
-    t.press("2");
+    t.press("3");
     let idx = t.app().branches().visible().position(|b| b.name == "feature").unwrap();
     for _ in 0..idx {
         t.press("j");
@@ -163,7 +163,7 @@ fn event_hooks_get_event_json() {
 
     sb.write("new.txt", "x");
     t.press("ctrl+r")
-        .press("1")
+        .press("2")
         .press("a")
         .press("c")
         .type_text("from ui")
@@ -407,7 +407,7 @@ fn events_subscribe_streams_events() {
         t.wait_idle();
         std::thread::sleep(Duration::from_millis(10));
     }
-    t.press("2");
+    t.press("3");
     let idx = t.app().branches().visible().position(|b| b.name == "feature").unwrap();
     for _ in 0..idx {
         t.press("j");
@@ -438,7 +438,7 @@ fn link_handlers_receive_the_clicked_url() {
     t.press("4").press("o");
     assert_eq!(t.app().notice(), Some("no plugin handles https://example.com/guide"));
 
-    t.press("3").press("j").press("4").press("o");
+    t.press("1").press("j").press("4").press("o");
     until(&mut t, "link handler ran", |_| !read_records(&out).is_empty());
     let env = &read_records(&out)[0]["env"];
     assert_eq!(env["TTGIT_PLUGIN_CLICKED_URL"], "https://github.com/acme/app/issues/42");

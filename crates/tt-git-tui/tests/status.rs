@@ -14,7 +14,7 @@ fn codes(t: &TestDriver) -> Vec<(String, String)> {
 }
 
 fn select_file(t: &mut TestDriver, path: &str) {
-    t.press("1");
+    t.press("2");
     let idx = t
         .app()
         .status()
@@ -63,7 +63,7 @@ fn commit_with_nothing_staged_explains() {
     sb.commit("base");
     sb.write("x.txt", "x");
     let mut t = TestDriver::new(&sb);
-    t.press("1").press("c");
+    t.press("2").press("c");
     assert!(t.app().modal().is_none());
     assert!(t.app().notice().unwrap_or_default().contains("nothing staged"));
 }
@@ -74,7 +74,7 @@ fn stage_all_toggles() {
     sb.commit("base");
     sb.write("a.txt", "a").write("b.txt", "b");
     let mut t = TestDriver::new(&sb);
-    t.press("1").press("a");
+    t.press("2").press("a");
     assert!(codes(&t).iter().all(|(c, _)| c == "A "), "{:?}", codes(&t));
     t.press("a");
     assert!(codes(&t).iter().all(|(c, _)| c == "??"), "{:?}", codes(&t));
@@ -129,7 +129,7 @@ fn details_show_file_diff_then_commit_again() {
     )
     .unwrap();
     let mut t = TestDriver::with_config(cfg, &sb);
-    t.press("1");
+    t.press("2");
     assert_eq!(t.app().details().subject(), Some(&DetailsSubject::File("f.txt".into())));
     t.assert_pane_contains(PaneId::Details, "-one");
     t.assert_pane_contains(PaneId::Details, "+two");
@@ -138,7 +138,7 @@ fn details_show_file_diff_then_commit_again() {
     assert!(t.pane_title(PaneId::Details).contains("Diff new.txt"));
 
     // Back to the graph: details show the selected commit again.
-    t.press("3");
+    t.press("1");
     t.assert_pane_contains(PaneId::Details, "Author: Test User");
 }
 
@@ -149,7 +149,7 @@ fn amend_keeps_message() {
     sb.commit_file("x.txt", "x\n", "Add x");
     sb.write("y.txt", "y\n");
     let mut t = TestDriver::new(&sb);
-    t.press("1").press("a").press("A");
+    t.press("2").press("a").press("A");
     assert!(t.screen().contains("Amend the last commit"));
     t.press("y");
     assert_eq!(sb.git(&["log", "-1", "--format=%s"]), "Add x");

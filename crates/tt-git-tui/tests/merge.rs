@@ -12,7 +12,7 @@ fn conflicting() -> Sandbox {
 }
 
 fn select_branch(t: &mut TestDriver, name: &str) {
-    t.press("2").press("g");
+    t.press("3").press("g");
     let idx = t.app().branches().visible().position(|b| b.name == name).unwrap();
     for _ in 0..idx {
         t.press("j");
@@ -35,7 +35,7 @@ fn merge_conflict_resolve_and_continue() {
     t.assert_pane_contains(PaneId::Status, "UU f.txt");
 
     // Continue is refused while files are still conflicted.
-    t.press("1").press("C");
+    t.press("2").press("C");
     assert!(t.app().notice().unwrap_or_default().contains("resolve and stage"));
 
     sb.write("f.txt", "resolved\n");
@@ -55,7 +55,7 @@ fn abort_rebase_restores_branch() {
     select_branch(&mut t, "other");
     t.press("r").press("y").press("esc");
     assert!(t.pane_title(PaneId::Status).contains("REBASING"));
-    t.press("1").press("X");
+    t.press("2").press("X");
     assert!(t.screen().contains("Abort the rebase in progress"));
     t.press("y");
     assert!(!t.pane_title(PaneId::Status).contains("REBASING"));
@@ -93,6 +93,6 @@ fn continue_without_operation_explains() {
     let sb = Sandbox::new();
     sb.commit("base");
     let mut t = TestDriver::new(&sb);
-    t.press("1").press("C");
+    t.press("2").press("C");
     assert!(t.app().notice().unwrap_or_default().contains("no merge, rebase"));
 }

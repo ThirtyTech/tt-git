@@ -88,7 +88,7 @@ fn release_key_closes_overlay() {
     t.press("f12");
     assert!(t.app().plugin_panes().is_empty());
     // Back to normal key handling.
-    t.press("2");
+    t.press("3");
     assert_eq!(t.app().focus(), PaneId::Branches);
 }
 

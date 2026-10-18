@@ -15,7 +15,7 @@ fn initial_layout_empty_repo() {
 fn focus_keys_and_cycle() {
     let sb = Sandbox::new();
     let mut t = TestDriver::new(&sb);
-    t.press("1");
+    t.press("2");
     assert_eq!(t.app().focus(), PaneId::Status);
     t.press("tab");
     assert_eq!(t.app().focus(), PaneId::Branches);
@@ -29,7 +29,7 @@ fn focus_keys_and_cycle() {
     assert_eq!(t.app().focus(), PaneId::Details);
     assert!(t.app().shows(PaneId::Details));
     assert!(!t.app().shows(PaneId::Status));
-    t.press("3");
+    t.press("1");
     assert_eq!(t.app().focus(), PaneId::Graph);
 }
 
@@ -94,7 +94,7 @@ fn space_toggles_details_over_the_bottom_row() {
     assert_eq!(t.app().pane_area(PaneId::Status), Some(status));
 
     // Focusing a pane details covers closes it.
-    t.press("space").press("2");
+    t.press("space").press("3");
     assert_eq!(t.app().focus(), PaneId::Branches);
     assert!(!t.app().shows(PaneId::Details));
 }
@@ -335,7 +335,7 @@ fn c_copies_the_commit_hash_or_branch_name() {
     assert_eq!(t.app_mut().take_clipboard().as_deref(), Some(oid.as_str()));
     assert_eq!(t.app().notice(), Some(format!("copied {oid}").as_str()));
 
-    t.press("2").press("g");
+    t.press("3").press("g");
     assert_eq!(t.app().branches().selected().unwrap().name, "feature/copy-me");
     t.press("c");
     assert_eq!(t.app_mut().take_clipboard().as_deref(), Some("feature/copy-me"));
@@ -348,7 +348,7 @@ fn zoom_puts_the_graph_fullscreen_and_back() {
     let normal_graph = t.app().pane_area(PaneId::Graph).unwrap();
 
     // One `+` from the graph fills the screen, even with details open.
-    t.press("space").press("3").press("+");
+    t.press("space").press("1").press("+");
     assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Graph));
     assert_eq!(t.app().focus(), PaneId::Graph);
     let graph = t.app().pane_area(PaneId::Graph).unwrap();
@@ -411,7 +411,7 @@ fn focusing_a_hidden_pane_unzooms() {
     t.press("+");
     t.press("4");
     assert_eq!(t.app().zoom(), Zoom::Off);
-    t.press("+").press("2");
+    t.press("+").press("3");
     assert_eq!(t.app().zoom(), Zoom::Off);
     assert!(t.app().pane_area(PaneId::Status).is_some());
 }

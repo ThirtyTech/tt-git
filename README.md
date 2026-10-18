@@ -24,14 +24,14 @@ A terminal git client in Rust ([ratatui](https://ratatui.rs)), inspired by
   `tt-git` CLI or a JSON socket. See [docs/plugins.md](docs/plugins.md).
 
 ```
-╭[3] Graph [all] 1/5─────────────────────────────────────────────────────────────────────────────╮
+╭[1] Graph [all] 1/5─────────────────────────────────────────────────────────────────────────────╮
 │●    [side] side experiment                                             Test User      2h b66   │
 │◉─╮   main  <v1.0> Merge 'feature'                                      Test User      3h 59f   │
 ││ ●  [feature] feature work                                             Test User      1d 788   │
 │● │  main work                                                          Test User      1d f75   │
 │●─╯  base                                                               Test User      2d b29   │
 ╰────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭[1] Status: repo · main → origin/main ↑1───────╮╭[2] Branches 3─────────────────────────────────╮
+╭[2] Status: repo · main → origin/main ↑1───────╮╭[3] Branches 3─────────────────────────────────╮
 │ M src/app.rs                                  ││* main            ✓          2h                │
 │?? notes.md                                    ││  feature         local      1d                │
 ╰───────────────────────────────────────────────╯╰───────────────────────────────────────────────╯
@@ -59,7 +59,7 @@ command palette, which lists built-in commands and plugin actions.
 
 | Where | Key | Does |
 |---|---|---|
-| anywhere | `1` `2` `3` `4` / `tab` `shift+tab` | focus status / branches / graph / details |
+| anywhere | `1` `2` `3` `4` / `tab` `shift+tab` | focus graph / status / branches / details |
 | | `ctrl+h` `ctrl+j` `ctrl+k` `ctrl+l` | focus the pane to the left / below / above / right |
 | | `+` | zoom: the graph, or details if focused, fullscreen and back |
 | | `j` `k` `↑` `↓`, `ctrl+d` `ctrl+u`, `g` `G` | move, page, top/bottom |

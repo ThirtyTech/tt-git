@@ -43,7 +43,7 @@ fn click_focuses_and_selects() {
 fn wheel_scrolls_the_pane_under_the_pointer() {
     let sb = repo();
     let mut t = TestDriver::new(&sb);
-    t.press("1"); // focus elsewhere: the wheel follows the pointer, not focus
+    t.press("2"); // focus elsewhere: the wheel follows the pointer, not focus
     let area = t.app().pane_area(PaneId::Graph).unwrap();
     t.scroll(area.x + 5, area.y + 2, true);
     assert_eq!(t.app().graph().selected_index(), 3);

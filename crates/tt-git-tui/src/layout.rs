@@ -286,7 +286,10 @@ mod tests {
     #[test]
     fn details_leaf_is_always_shown() {
         let panes: Vec<_> = areas(&classic(), View::default()).into_iter().map(|(p, _)| p).collect();
-        assert_eq!(panes, PaneId::ALL);
+        assert_eq!(
+            panes,
+            [PaneId::Status, PaneId::Branches, PaneId::Graph, PaneId::Details]
+        );
     }
 
     #[test]
