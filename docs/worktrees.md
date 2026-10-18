@@ -198,9 +198,8 @@ What it takes to make the above the default rather than a checklist:
    section would change to match.
 3. **Give the perf test a unique config dir.** Replace the fixed
    `temp_dir().join("tt-git-perf-config")` with a `tempfile::tempdir()`.
-4. **Point to this page.** Link it from the README's Development section, and
-   add a short `CLAUDE.md` that says: worktrees go in `.worktrees/<name>`;
-   branch only when asked, otherwise `--detach`; keep `target/` and the tt-git
-   dirs per worktree; run the CI test command from the worktree root.
+4. **Point to this page.** Link it from the README's Development section.
+   (`CLAUDE.md` already links it, and covers how agents build into
+   `target/agent` so they never disturb a running dev copy.)
 5. **Optional: `sccache`.** Only if cold builds in new worktrees turn out to
    be a real cost.
