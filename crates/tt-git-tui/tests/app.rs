@@ -494,3 +494,31 @@ fn enter_opens_files_beside_a_diff() {
     assert!(!t.app().shows(PaneId::Details));
     assert_eq!(t.app().details().subject(), Some(&DetailsSubject::Commit(oid)));
 }
+
+#[test]
+fn files_view_shows_its_list_from_the_first_frame() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "one\n", "base");
+    sb.commit_file("a.txt", "two\n", "change a");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
+    // The column of the list's right border on the details pane's first row.
+    let divider = |t: &TestDriver| {
+        let first = t.pane_lines(PaneId::Details).remove(0);
+        assert!(first.starts_with("Files"), "no file list:\n{}", t.screen());
+        first.chars().position(|c| c == '│')
+    };
+
+    // Before the files load, the list is already down the left; the plain
+    // commit text loaded for the graph isn't drawn full width meanwhile.
+    t.press_frame("enter");
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    let loading = divider(&t);
+    assert!(loading.is_some());
+    assert!(!t.pane_lines(PaneId::Details).iter().any(|l| l.contains("Author:")));
+
+    // Once they arrive, everything lands beside the list where it stood.
+    t.wait_idle();
+    assert_eq!(divider(&t), loading);
+    t.assert_pane_contains(PaneId::Details, "Files (1)");
+    t.assert_pane_contains(PaneId::Details, "change a");
+}

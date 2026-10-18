@@ -123,6 +123,21 @@ impl TestDriver {
         self.wait_idle()
     }
 
+    /// Presses one key and renders the next frame before anything it queued
+    /// is applied, as the real terminal does when background jobs haven't
+    /// reported back yet. Catches in-between states that
+    /// [`press`](Self::press) would skip; call [`wait_idle`](Self::wait_idle)
+    /// to finish the jobs.
+    pub fn press_frame(&mut self, key: &str) -> &mut Self {
+        let combo: KeyCombo = key.parse().unwrap_or_else(|e| panic!("{e}"));
+        {
+            let _guard = self.runtime.enter();
+            self.app.handle_key(combo.to_event());
+        }
+        self.render();
+        self
+    }
+
     /// Presses each key in order.
     pub fn press_all(&mut self, keys: &[&str]) -> &mut Self {
         for key in keys {

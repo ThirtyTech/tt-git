@@ -88,22 +88,41 @@ impl DetailsPane {
         view.files.get(view.cursor.selected)
     }
 
-    /// Marks `subject` as the thing to show; content arrives via [`set_content`](Self::set_content).
+    /// Marks `subject` as the thing to show; content arrives via
+    /// [`set_content`](Self::set_content) or, for the files view,
+    /// [`set_commit_files`](Self::set_commit_files).
     pub fn request(&mut self, subject: DetailsSubject, title: String) {
-        if self.subject.as_ref() != Some(&subject) {
-            self.subject = Some(subject);
-            self.title = title;
-            self.loading = true;
-            self.cursor = Cursor::default();
-            self.files = None;
+        if self.subject.as_ref() == Some(&subject) {
+            return;
         }
+        // The old content stays up until the new arrives, and so does the
+        // files view's layout: drawing a loading files view as plain text
+        // would show it full width for a frame, then jump right when the
+        // list appears. Coming from another view, an empty list stands in.
+        match &subject {
+            DetailsSubject::CommitFiles(_) if self.files.is_some() => {}
+            DetailsSubject::CommitFiles(oid) => {
+                self.files = Some(FilesView {
+                    oid: oid.clone(),
+                    ..FilesView::default()
+                });
+                self.lines.clear();
+            }
+            _ => self.files = None,
+        }
+        self.subject = Some(subject);
+        self.title = title;
+        self.loading = true;
+        self.cursor = Cursor::default();
     }
 
-    /// Sets content if it is for the current subject (stale results are dropped).
+    /// Sets content if it is for the current subject (stale results are
+    /// dropped). Text replaces the files view (e.g. its files failed to load).
     pub fn set_content(&mut self, subject: &DetailsSubject, text: &str) {
         if self.subject.as_ref() == Some(subject) {
             self.lines = split_lines(text);
             self.loading = false;
+            self.files = None;
         }
     }
 
@@ -197,7 +216,12 @@ impl DetailsPane {
         let list_inner = list_block.inner(list_area);
         frame.render_widget(list_block, list_area);
         let width = list_inner.width as usize;
-        let mut rows = vec![Line::styled(format!("Files ({})", view.files.len()), theme.muted)];
+        let label = if self.loading {
+            "Files".to_string()
+        } else {
+            format!("Files ({})", view.files.len())
+        };
+        let mut rows = vec![Line::styled(label, theme.muted)];
         let height = (list_inner.height as usize).saturating_sub(1);
         view.cursor.scroll_into_view(height);
         let start = view.cursor.offset.min(view.files.len());
@@ -343,5 +367,53 @@ impl Component for DetailsPane {
         } else {
             self.draw_text(frame, inner, theme);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn file(path: &str) -> CommitFile {
+        CommitFile {
+            state: FileState::Modified,
+            path: path.into(),
+            orig_path: None,
+        }
+    }
+
+    fn paths(pane: &DetailsPane) -> Option<Vec<String>> {
+        pane.commit_files()
+            .map(|files| files.iter().map(|f| f.path.clone()).collect())
+    }
+
+    #[test]
+    fn a_loading_files_view_keeps_its_layout() {
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let ctx = Ctx::new(tx);
+        let mut pane = DetailsPane::default();
+        pane.request(DetailsSubject::Commit("a".into()), "Commit a".into());
+        pane.set_content(&DetailsSubject::Commit("a".into()), "commit a\nAuthor: me");
+
+        // From plain text, an empty list stands in and the text goes.
+        pane.request(DetailsSubject::CommitFiles("a".into()), "Commit a files".into());
+        assert_eq!(paths(&pane), Some(vec![]));
+        assert!(pane.lines().is_empty());
+        pane.set_commit_files("a", "subject a", vec![file("a.txt")], &ctx);
+        assert_eq!(paths(&pane), Some(vec!["a.txt".into()]));
+
+        // Another commit's files keep the old list up until they arrive.
+        pane.request(DetailsSubject::CommitFiles("b".into()), "Commit b files".into());
+        assert_eq!(paths(&pane), Some(vec!["a.txt".into()]));
+        pane.set_commit_files("b", "subject b", vec![file("b.txt")], &ctx);
+        assert_eq!(paths(&pane), Some(vec!["b.txt".into()]));
+
+        // Text for the files view (a failed load) and other subjects drop the list.
+        pane.request(DetailsSubject::CommitFiles("c".into()), "Commit c files".into());
+        pane.set_content(&DetailsSubject::CommitFiles("c".into()), "could not load commit");
+        assert_eq!(paths(&pane), None);
+        pane.request(DetailsSubject::CommitFiles("a".into()), "Commit a files".into());
+        pane.request(DetailsSubject::Commit("a".into()), "Commit a".into());
+        assert_eq!(paths(&pane), None);
     }
 }
