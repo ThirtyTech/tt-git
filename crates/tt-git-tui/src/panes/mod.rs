@@ -7,7 +7,7 @@ mod status;
 
 pub use branches::{BranchTab, BranchesPane};
 pub use details::{DetailsPane, DetailsSubject};
-pub use graph::{GraphPane, GraphScope, LabelKind, RefLabel, build_labels};
+pub use graph::{BranchFocus, GraphPane, GraphScope, LabelKind, RefLabel, build_labels};
 pub use status::StatusPane;
 
 use ratatui::text::{Line, Span};

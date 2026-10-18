@@ -1,4 +1,4 @@
-use tt_git_core::{FileState, GitCli, GitError, Head, LogScope, RefKind, Repo};
+use tt_git_core::{BranchHistory, FileState, GitCli, GitError, Head, LogScope, RefKind, Repo};
 use tt_git_testkit::{BASE_TIME, Sandbox};
 
 fn open(sb: &Sandbox) -> Repo {
@@ -344,4 +344,71 @@ fn merged_refs_and_authors_for_base_comparison() {
     repo.set_base_branch(None).unwrap();
     repo.set_base_branch(None).unwrap();
     assert_eq!(repo.base_branch_setting(), None);
+}
+
+#[test]
+fn branch_history_from_fork_to_merge() {
+    let sb = Sandbox::new();
+    sb.commit("m1");
+    let fork = sb.commit("m2");
+    sb.checkout_new("feat");
+    let f1 = sb.commit("f1");
+    sb.checkout("main");
+    sb.commit("m3");
+    sb.checkout("feat");
+    let sync = sb.merge("main");
+    sb.checkout_new("sub");
+    sb.commit("s1");
+    sb.checkout("feat");
+    let sub_merge = sb.merge("sub");
+    sb.checkout("main");
+    sb.commit("m4");
+    let merge = sb.merge("feat");
+    sb.checkout_new("open");
+    let o1 = sb.commit("o1");
+    sb.checkout("main");
+    let base_tip = sb.commit("m5");
+
+    let repo = open(&sb);
+    let summaries = |h: &BranchHistory| h.commits.iter().map(|c| c.summary.clone()).collect::<Vec<_>>();
+
+    // Only the branch's first-parent commits: neither `main`'s commits it
+    // pulled in nor `sub`'s.
+    let h = repo.branch_history(&sb.rev_parse("feat"), "main", 100).unwrap();
+    assert_eq!(h.merge.as_deref(), Some(merge.as_str()));
+    assert_eq!(h.fork.as_deref(), Some(fork.as_str()));
+    assert_eq!(
+        summaries(&h),
+        vec![
+            "Merge branch 'feat'",
+            "Merge branch 'sub' into feat",
+            "Merge branch 'main' into feat",
+            "f1",
+            "m2"
+        ]
+    );
+    assert_eq!(h.commits[0].parents, vec![fork.clone(), sub_merge.clone()]);
+    assert_eq!(h.commits[1].parents, vec![sync.clone()], "sub's side is dropped");
+    assert_eq!(h.commits[2].parents, vec![f1.clone()], "main's side is dropped");
+    assert_eq!(h.commits[3].parents, vec![fork.clone()]);
+    assert!(h.commits[4].parents.is_empty());
+
+    // Unmerged: the base's tip, joined to the fork.
+    let h = repo.branch_history(&o1, "main", 100).unwrap();
+    assert_eq!(h.merge, None);
+    assert_eq!(h.fork.as_deref(), Some(merge.as_str()));
+    assert_eq!(summaries(&h), vec!["m5", "o1", "Merge branch 'feat'"]);
+    assert_eq!(h.commits[0].oid, base_tip);
+    assert_eq!(h.commits[0].parents, vec![merge.clone()]);
+
+    // A branch with nothing of its own left is just its tip.
+    let h = repo.branch_history(&base_tip, "main", 100).unwrap();
+    assert_eq!(summaries(&h), vec!["m5"]);
+    assert_eq!((h.fork, h.merge), (None, None));
+
+    // Hitting the limit leaves the fork unknown.
+    let h = repo.branch_history(&sb.rev_parse("feat"), "main", 2).unwrap();
+    assert_eq!(h.fork, None);
+    assert_eq!(h.commits.len(), 3);
+    assert_eq!(h.commits[0].parents, vec![sub_merge]);
 }

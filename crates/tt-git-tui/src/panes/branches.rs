@@ -9,7 +9,7 @@ use tt_git_core::time::{SharedClock, relative};
 use tt_git_core::{BaseBranches, BranchEntry, BranchState, RefKind};
 use unicode_width::UnicodeWidthStr;
 
-use super::{PaneId, pane_block};
+use super::{BranchFocus, PaneId, pane_block};
 use crate::action::Action;
 use crate::component::{Component, EventState};
 use crate::jobs::Ctx;
@@ -160,8 +160,27 @@ impl BranchesPane {
         self.announce(ctx);
     }
 
+    /// On the merged and unmerged tabs, the selected branch for the graph
+    /// to show on its own.
+    pub fn focus(&self) -> Option<BranchFocus> {
+        if self.tab == BranchTab::All {
+            return None;
+        }
+        let base = self.base.as_ref()?;
+        let tip = BaseBranches::tip(self.selected()?)?;
+        Some(BranchFocus {
+            branch: tip.short_name.clone(),
+            tip: tip.target.clone(),
+            base: base.base.clone(),
+            base_ref: base.base_ref.clone(),
+        })
+    }
+
     fn announce(&self, ctx: &Ctx) {
-        if let Some(oid) = self.selected().and_then(BranchEntry::target) {
+        ctx.emit(Action::BranchFocused(self.focus()));
+        if self.tab == BranchTab::All
+            && let Some(oid) = self.selected().and_then(BranchEntry::target)
+        {
             ctx.emit(Action::BranchSelected(oid.to_string()));
         }
     }

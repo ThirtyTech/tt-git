@@ -5,7 +5,7 @@ use tt_git_core::{BaseBranches, BranchEntry, CommitFile, GitError, GitRef, LogSc
 use crate::action::{Action, RefsSnapshot};
 use crate::jobs::Ctx;
 use crate::modal::GitOp;
-use crate::panes::{DetailsSubject, GraphScope};
+use crate::panes::{BranchFocus, DetailsSubject, GraphScope};
 
 /// Commits per `GraphBatch`, so the first screenful appears quickly.
 const GRAPH_BATCH: usize = 1000;
@@ -60,6 +60,7 @@ fn load_base(
     let (unmerged, merged) = compare_with_base(branches, base, &merged, exclude);
     Ok(Some(BaseBranches {
         base: base.short_name.clone(),
+        base_ref: base.full_name.clone(),
         chosen: setting.is_some_and(|s| s == base.short_name || s == base.full_name),
         detected,
         unmerged,
@@ -72,8 +73,25 @@ pub fn load_status(repo: Repo) -> Action {
     Action::StatusLoaded(repo.status().map_err(message))
 }
 
-/// Streams the graph's commits in batches, ending with a `done` batch.
-pub fn load_graph(repo: Repo, scope: GraphScope, generation: u64, limit: usize, ctx: &Ctx) -> Action {
+/// Streams the graph's commits in batches, ending with a `done` batch; or,
+/// with a `focus`, loads just that branch's history in one go.
+pub fn load_graph(
+    repo: Repo,
+    scope: GraphScope,
+    focus: Option<BranchFocus>,
+    generation: u64,
+    limit: usize,
+    ctx: &Ctx,
+) -> Action {
+    if let Some(focus) = focus {
+        return match repo.branch_history(&focus.tip, &focus.base_ref, limit) {
+            Ok(history) => Action::BranchHistoryLoaded { generation, history },
+            Err(e) => Action::GraphFailed {
+                generation,
+                error: message(e),
+            },
+        };
+    }
     let scope = match scope {
         GraphScope::All => LogScope::All,
         GraphScope::Current => LogScope::Head {

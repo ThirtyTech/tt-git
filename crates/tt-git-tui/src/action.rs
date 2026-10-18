@@ -1,12 +1,14 @@
 //! Messages that drive [`App::update`](crate::App::update).
 
-use tt_git_core::{BaseBranches, BranchEntry, Checkout, Commit, CommitFile, GitRef, Head, Status, StatusEntry};
+use tt_git_core::{
+    BaseBranches, BranchEntry, BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, Status, StatusEntry,
+};
 use tt_git_plugin::runtime::CommandLog;
 use tt_git_plugin::socket::Call;
 
 use crate::keymap::Command;
 use crate::modal::{GitOp, Modal};
-use crate::panes::DetailsSubject;
+use crate::panes::{BranchFocus, DetailsSubject};
 
 /// Refs and HEAD, loaded together so labels and branch lists agree.
 #[derive(Debug, Clone)]
@@ -48,6 +50,11 @@ pub enum Action {
         generation: u64,
         error: String,
     },
+    /// The history for graph load `generation` of a focused branch.
+    BranchHistoryLoaded {
+        generation: u64,
+        history: BranchHistory,
+    },
     RefsLoaded(Result<RefsSnapshot, String>),
     StatusLoaded(Result<Status, String>),
     /// The graph selection moved to this commit.
@@ -61,6 +68,9 @@ pub enum Action {
     },
     /// The branch list selection moved to a branch whose tip is this commit.
     BranchSelected(String),
+    /// The branch the graph should show on its own, or `None` for the
+    /// whole graph.
+    BranchFocused(Option<BranchFocus>),
     /// Run a git write operation in the background.
     Run(GitOp),
     /// A write operation finished; `result` is git's output or error text.

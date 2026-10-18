@@ -17,7 +17,7 @@ use crate::keymap::{Command, Context, KeyCombo, Keymap, KeymapError};
 use crate::layout::View;
 use crate::loaders;
 use crate::modal::{GitOp, Modal, ModalOutcome};
-use crate::panes::{BranchesPane, DetailsPane, DetailsSubject, GraphPane, PaneId, StatusPane};
+use crate::panes::{BranchFocus, BranchesPane, DetailsPane, DetailsSubject, GraphPane, PaneId, StatusPane};
 use crate::theme::Theme;
 use crate::watcher::RepoWatcher;
 
@@ -400,6 +400,9 @@ impl App {
                 commits,
                 done,
             } => self.graph.apply_batch(generation, commits, done, &self.ctx),
+            Action::BranchHistoryLoaded { generation, history } => {
+                self.graph.apply_history(generation, history, &self.ctx)
+            }
             Action::GraphFailed { generation, error } => {
                 self.graph.load_failed(generation);
                 self.error = Some(error);
@@ -420,10 +423,13 @@ impl App {
                     .set_entries(snapshot.branches.clone(), snapshot.base.clone());
                 self.refs = Some(snapshot);
                 self.track_head();
+                // Follow the focused branch if the list changed under it.
+                if self.graph.focus.is_some() {
+                    self.focus_branch(self.branches.focus());
+                }
             }
-            Action::BranchSelected(oid) => {
-                self.graph.select_oid(&oid, &self.ctx);
-            }
+            Action::BranchSelected(oid) => self.graph.select_when_loaded(oid, &self.ctx),
+            Action::BranchFocused(focus) => self.focus_branch(focus),
             Action::OpenModal(modal) => self.modal = Some(modal),
             Action::Run(op) => self.run_op(op),
             Action::OpDone { op, result, head } => self.op_done(op, result, head),
@@ -480,9 +486,24 @@ impl App {
         self.graph.limit = self.graph_limit;
         let repo = self.repo.clone();
         let scope = self.graph.scope;
+        let focus = self.graph.focus.clone();
         let limit = self.graph_limit;
         self.ctx
-            .spawn_streaming(move |ctx| loaders::load_graph(repo, scope, generation, limit, ctx));
+            .spawn_streaming(move |ctx| loaders::load_graph(repo, scope, focus, generation, limit, ctx));
+    }
+
+    /// Shows only `focus`'s history in the graph (with its tip selected), or
+    /// the whole graph again.
+    fn focus_branch(&mut self, focus: Option<BranchFocus>) {
+        if self.graph.focus == focus {
+            return;
+        }
+        let tip = focus.as_ref().map(|f| f.tip.clone());
+        self.graph.focus = focus;
+        self.load_graph();
+        if let Some(tip) = tip {
+            self.graph.select_when_loaded(tip, &self.ctx);
+        }
     }
 
     fn run_op(&mut self, op: GitOp) {

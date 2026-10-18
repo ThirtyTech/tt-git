@@ -28,6 +28,22 @@ impl Commit {
     }
 }
 
+/// One branch's own commits against a base branch, from where it branched
+/// off to where it was merged back in.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize)]
+pub struct BranchHistory {
+    /// Newest first: the base commit that merged the branch in (or, while
+    /// unmerged, the base's tip), the branch's first-parent commits, then
+    /// the base commit it branched off. Parents only name commits in the
+    /// list, so the base's side is one edge from the merge (or tip) down to
+    /// the fork.
+    pub commits: Vec<Commit>,
+    /// The base commit the branch branched off.
+    pub fork: Option<String>,
+    /// The base commit that merged the branch in.
+    pub merge: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RefKind {

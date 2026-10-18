@@ -275,6 +275,8 @@ pub fn base_scope(base: &GitRef) -> String {
 pub struct BaseBranches {
     /// Short name of the base, e.g. `origin/main`.
     pub base: String,
+    /// Its full ref name.
+    pub base_ref: String,
     /// The base was picked by the user rather than detected.
     pub chosen: bool,
     /// What [`default_base`] picks, for going back to it.

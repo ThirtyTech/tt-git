@@ -357,3 +357,53 @@ fn no_base_branch_without_a_primary_one() {
     let title = t.pane_title(PaneId::Branches);
     assert!(title.contains("Branches 1 · Unmerged · Merged"), "{title}");
 }
+
+#[test]
+fn merged_and_unmerged_tabs_show_one_branch_from_fork_to_merge() {
+    let sb = repo_for_base_tabs();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 160, 40);
+    let summaries = |t: &TestDriver| {
+        t.app()
+            .graph()
+            .commits()
+            .iter()
+            .map(|c| c.summary.clone())
+            .collect::<Vec<_>>()
+    };
+    let all = summaries(&t).len();
+    t.press("2").press("]").press("j");
+    t.wait_idle();
+    assert!(t.pane_title(PaneId::Graph).contains("Graph [origin/open]"));
+    // The branch's commit and the base commit it branched off, which is
+    // still main's tip.
+    assert_eq!(summaries(&t), vec!["open work", "Merge branch 'done'"]);
+    let tip = sb.rev_parse("origin/open");
+    assert_eq!(t.app().graph().selected().map(|c| c.oid.clone()), Some(tip));
+    t.assert_pane_contains(PaneId::Graph, "(branched off origin/main)");
+
+    t.press("]");
+    t.wait_idle();
+    assert!(t.pane_title(PaneId::Graph).contains("Graph [origin/done]"));
+    assert_eq!(
+        summaries(&t),
+        vec!["Merge branch 'done'", "done work", "base"],
+        "merge, branch commits, fork"
+    );
+    t.assert_pane_contains(PaneId::Graph, "(merged into origin/main)");
+    t.assert_pane_contains(PaneId::Graph, "(branched off origin/main)");
+
+    // Back on the full list, the graph shows everything again.
+    t.press("]");
+    t.wait_idle();
+    assert!(t.pane_title(PaneId::Graph).contains("Graph [all]"));
+    assert_eq!(summaries(&t).len(), all);
+
+    // `a` in the graph also leaves a focused branch.
+    t.press("[");
+    t.wait_idle();
+    assert!(t.pane_title(PaneId::Graph).contains("Graph [origin/done]"));
+    t.press("3").press("a");
+    t.wait_idle();
+    assert!(t.pane_title(PaneId::Graph).contains("Graph [all]"));
+    assert_eq!(summaries(&t).len(), all);
+}

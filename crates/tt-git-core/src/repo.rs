@@ -4,7 +4,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::git::{GitCli, GitError, Result};
-use crate::model::{Checkout, Commit, CommitFile, GitRef, Head, Status};
+use crate::model::{BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, Status};
 use crate::parse;
 
 /// Repo-local git config key holding the picked base branch.
@@ -256,12 +256,7 @@ impl Repo {
 
     /// Streams commits in topological order, newest first, stopping after
     /// `limit` or when `on_commit` returns `false`.
-    pub fn stream_commits(
-        &self,
-        scope: &LogScope,
-        limit: usize,
-        mut on_commit: impl FnMut(Commit) -> bool,
-    ) -> Result<()> {
+    pub fn stream_commits(&self, scope: &LogScope, limit: usize, on_commit: impl FnMut(Commit) -> bool) -> Result<()> {
         let mut args: Vec<String> = vec![
             "log".into(),
             "--topo-order".into(),
@@ -287,9 +282,14 @@ impl Repo {
             }
         }
         args.push("--".into());
+        self.stream_log(&args, on_commit)
+    }
 
+    /// Runs `args` (a `git log -z` with [`parse::LOG_FORMAT`]), handing each
+    /// commit to `on_commit` until it returns `false`.
+    fn stream_log(&self, args: &[String], mut on_commit: impl FnMut(Commit) -> bool) -> Result<()> {
         let mut error = None;
-        self.git.stream(&args, 0, |record| {
+        self.git.stream(args, 0, |record| {
             if record.iter().all(|b| b.is_ascii_whitespace()) {
                 return true;
             }
@@ -305,6 +305,113 @@ impl Repo {
             Some(e) => Err(e),
             None => Ok(()),
         }
+    }
+
+    /// `git log` of `revs` with `options`, collected.
+    fn log(&self, options: &[&str], revs: &[&str]) -> Result<Vec<Commit>> {
+        let mut args: Vec<String> = vec!["log".into(), "-z".into(), parse::LOG_FORMAT.into()];
+        args.extend(options.iter().map(|o| o.to_string()));
+        args.extend(revs.iter().map(|r| r.to_string()));
+        args.push("--".into());
+        let mut commits = Vec::new();
+        self.stream_log(&args, |c| {
+            commits.push(c);
+            true
+        })?;
+        Ok(commits)
+    }
+
+    /// Whether `ancestor` is reachable from `rev`.
+    pub fn is_ancestor(&self, ancestor: &str, rev: &str) -> Result<bool> {
+        match self.git.run(&["merge-base", "--is-ancestor", ancestor, rev]) {
+            Ok(_) => Ok(true),
+            Err(GitError::Failed { code, .. }) if code == "1" => Ok(false),
+            Err(e) => Err(e),
+        }
+    }
+
+    /// The commits `tip` made on its own against `base`: up to `limit` of its
+    /// first-parent commits that aren't on the base, where it branched off,
+    /// and the base commit that merged it in (or the base's tip, if it isn't
+    /// merged). A branch fast-forwarded into the base, so that no commit of
+    /// its own is left to show, is just its tip.
+    pub fn branch_history(&self, tip: &str, base: &str, limit: usize) -> Result<BranchHistory> {
+        let tip_commit = self
+            .log(&["--no-walk"], &[tip])?
+            .pop()
+            .ok_or_else(|| GitError::Parse(format!("{tip} is not a commit")))?;
+        let merge = if self.is_ancestor(tip, base)? {
+            // The oldest commit on the base's first-parent line that has the
+            // tip in it.
+            let range = format!("{tip}..{base}");
+            let out = self
+                .git
+                .run(&["rev-list", "--first-parent", "--ancestry-path", &range, "--"])?;
+            let text = out.stdout_str();
+            let merge = match text.lines().rfind(|l| !l.is_empty()) {
+                Some(oid) => self.log(&["--no-walk"], &[oid])?.pop(),
+                None => None,
+            };
+            match merge.filter(|m| m.parents.len() > 1 && m.parents[0] != tip_commit.oid) {
+                Some(m) => Some(m),
+                None => {
+                    let mut only = tip_commit;
+                    only.parents.clear();
+                    return Ok(BranchHistory {
+                        commits: vec![only],
+                        ..BranchHistory::default()
+                    });
+                }
+            }
+        } else {
+            None
+        };
+        let exclude = format!("^{}", merge.as_ref().map_or(base, |m| m.parents[0].as_str()));
+        let max = format!("--max-count={limit}");
+        let mut commits = self.log(&["--first-parent", "--topo-order", &max], &[tip, &exclude])?;
+        let fork = match commits.last() {
+            Some(last) if commits.len() < limit => last.parents.first().cloned(),
+            _ => None,
+        };
+        let mut extras = Vec::new();
+        extras.extend(fork.as_deref());
+        if merge.is_none() {
+            extras.push(base);
+        }
+        let mut extras = self.log(&["--no-walk=unsorted"], &extras)?.into_iter();
+        let fork_commit = fork.as_ref().and_then(|_| extras.next());
+        let shown: HashSet<String> = commits.iter().map(|c| c.oid.clone()).chain(fork.clone()).collect();
+        for c in &mut commits {
+            c.parents.retain(|p| shown.contains(p));
+        }
+        let merge_oid = merge.as_ref().map(|m| m.oid.clone());
+        match merge {
+            Some(mut m) => {
+                m.parents = fork.iter().cloned().chain([tip_commit.oid]).collect();
+                commits.insert(0, m);
+            }
+            // While unmerged, the base's tip shows where the base is now,
+            // unless it hasn't moved since the fork.
+            None => {
+                if let Some(mut b) = extras.next().filter(|b| Some(&b.oid) != fork.as_ref()) {
+                    b.parents = fork.iter().cloned().collect();
+                    let at = commits
+                        .iter()
+                        .position(|c| c.commit_time < b.commit_time)
+                        .unwrap_or(commits.len());
+                    commits.insert(at, b);
+                }
+            }
+        }
+        if let Some(mut f) = fork_commit {
+            f.parents.clear();
+            commits.push(f);
+        }
+        Ok(BranchHistory {
+            commits,
+            fork,
+            merge: merge_oid,
+        })
     }
 
     /// Paths `oid` changed, compared with its first parent (renames detected).

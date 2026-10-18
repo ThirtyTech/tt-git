@@ -38,6 +38,16 @@ between them:
   `unmerged_exclude` are left out.
 - **Merged**: the ones that are.
 
+On the Unmerged and Merged tabs the graph shows only the selected branch:
+its own commits (first-parent, so commits it pulled in from other branches
+are left out), the base commit it branched off, and the base commit that
+merged it in. For an unmerged branch, the base's current tip takes the
+merge's place, so you can see how far the base has moved on. The base's
+commits in between are skipped. A branch that was fast-forwarded into the
+base has no commits of its own left, so only its tip is shown. Going back
+to the Branches tab, or pressing `a` in the graph, shows the whole graph
+again.
+
 The base branch is the project's primary branch: whatever `origin/HEAD`
 points at, else the first of `main`, `master`, `development`, `develop` or
 `trunk` found on a remote (then locally). Press `b` on the branches pane

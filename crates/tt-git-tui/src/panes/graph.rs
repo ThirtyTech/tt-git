@@ -6,7 +6,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use tt_git_core::time::{SharedClock, relative};
-use tt_git_core::{Commit, GitRef, Head, RefKind};
+use tt_git_core::{BranchHistory, Commit, GitRef, Head, RefKind};
 use tt_git_graph::{GraphBuilder, NodeId, Row};
 use unicode_width::UnicodeWidthStr;
 
@@ -45,6 +45,21 @@ impl GraphScope {
     }
 }
 
+/// A branch shown on its own, from the branches pane's merged and unmerged
+/// tabs: its commits between where it branched off the base and where it
+/// was merged back in.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BranchFocus {
+    /// Short name, e.g. `origin/feat`.
+    pub branch: String,
+    /// Its tip commit, selected when the view opens.
+    pub tip: String,
+    /// Short name of the base branch, e.g. `origin/main`.
+    pub base: String,
+    /// The base's full ref name.
+    pub base_ref: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LabelKind {
     /// The checked-out branch.
@@ -72,6 +87,8 @@ const LOAD_MORE_MARGIN: usize = 200;
 #[derive(Debug)]
 pub struct GraphPane {
     pub scope: GraphScope,
+    /// Shows only this branch's history instead of `scope`.
+    pub focus: Option<BranchFocus>,
     /// Maximum number of lanes drawn before collapsing into `…`.
     pub max_lanes: usize,
     /// Commit limit of the current load; reaching it means more may exist.
@@ -82,6 +99,8 @@ pub struct GraphPane {
     builder: GraphBuilder,
     ids: HashMap<String, NodeId>,
     labels: HashMap<String, Vec<RefLabel>>,
+    /// Notes on the focused branch's fork and merge commits.
+    notes: HashMap<String, String>,
     cursor: Cursor,
     generation: u64,
     loading: bool,
@@ -98,6 +117,7 @@ impl GraphPane {
     pub fn new(clock: SharedClock) -> Self {
         Self {
             scope: GraphScope::All,
+            focus: None,
             max_lanes: 16,
             limit: usize::MAX,
             clock,
@@ -106,6 +126,7 @@ impl GraphPane {
             builder: GraphBuilder::new(),
             ids: HashMap::new(),
             labels: HashMap::new(),
+            notes: HashMap::new(),
             cursor: Cursor::default(),
             generation: 0,
             loading: false,
@@ -151,6 +172,7 @@ impl GraphPane {
         self.commits.clear();
         self.rows.clear();
         self.ids.clear();
+        self.notes.clear();
         self.builder = GraphBuilder::new();
     }
 
@@ -190,6 +212,31 @@ impl GraphPane {
         // through intermediate commits while batches stream in.
         if done {
             self.announce(ctx);
+        }
+    }
+
+    /// Shows a focused branch's history from load `generation`.
+    pub fn apply_history(&mut self, generation: u64, history: BranchHistory, ctx: &Ctx) {
+        if generation != self.generation {
+            return;
+        }
+        self.apply_batch(generation, history.commits, true, ctx);
+        if let Some(focus) = &self.focus {
+            if let Some(fork) = history.fork {
+                self.notes.insert(fork, format!("branched off {}", focus.base));
+            }
+            if let Some(merge) = history.merge {
+                self.notes.insert(merge, format!("merged into {}", focus.base));
+            }
+        }
+    }
+
+    /// What the graph shows, for the title and plugins: `all`, `current`,
+    /// or the focused branch.
+    pub fn scope_label(&self) -> &str {
+        match &self.focus {
+            Some(focus) => &focus.branch,
+            None => self.scope.label(),
         }
     }
 
@@ -240,7 +287,7 @@ impl GraphPane {
     }
 
     fn title(&self) -> String {
-        let mut t = format!("Graph [{}]", self.scope.label());
+        let mut t = format!("Graph [{}]", self.scope_label());
         if !self.commits.is_empty() {
             t.push_str(&format!(" {}/{}", self.cursor.selected + 1, self.commits.len()));
         }
@@ -303,6 +350,15 @@ impl GraphPane {
                 }
                 text_width -= w;
                 spans.push(Span::styled(text, style));
+                spans.push(Span::raw(" "));
+            }
+        }
+        if let Some(note) = self.notes.get(&commit.oid) {
+            let text = format!("({note})");
+            let w = text.width() + 1;
+            if w <= text_width {
+                text_width -= w;
+                spans.push(Span::styled(text, theme.muted));
                 spans.push(Span::raw(" "));
             }
         }
@@ -399,7 +455,10 @@ impl Component for GraphPane {
         }
         match cmd {
             Command::ToggleScope => {
-                self.scope = self.scope.toggled();
+                // Leaving a focused branch goes back to the scope it covered.
+                if self.focus.take().is_none() {
+                    self.scope = self.scope.toggled();
+                }
                 ctx.emit(Action::ReloadGraph);
                 EventState::Consumed
             }

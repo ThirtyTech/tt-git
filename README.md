@@ -15,7 +15,9 @@ A terminal git client in Rust ([ratatui](https://ratatui.rs)), inspired by
   exists on a remote, tt-git creates the local tracking branch for you
   without asking.
   Two more tabs list the branches merged and not yet merged into the
-  project's primary branch (or any base branch you pick).
+  project's primary branch (or any base branch you pick). On those tabs the
+  graph shows only the selected branch, from where it branched off to where
+  it was merged back in.
 - **Plugins built the same way as [herdr](https://herdr.dev/docs/plugins/):**
   plain subprocesses with a TOML manifest. Plugins can add actions, event
   hooks, startup commands and terminal panes, and they talk back through the

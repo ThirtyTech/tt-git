@@ -209,7 +209,7 @@ named pipe on Windows:
 | `repo.info` | | `{path, name, head, branch, upstream, ahead, behind}` |
 | `status.get` | | branch headers, entries, in-progress operation |
 | `branch.list` | | the unified branch list, with `state` |
-| `graph.selection` | | `{scope, index, commit}` |
+| `graph.selection` | | `{scope, branch, index, commit}`; `branch` is set while the graph shows one branch from the merged/unmerged tabs |
 | `ui.notify` / `ui.error` | `{message}` | |
 | `ui.refresh` | | |
 | `ui.focus` | `{pane}`: status, branches, graph, details | |

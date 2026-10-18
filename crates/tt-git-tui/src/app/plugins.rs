@@ -566,6 +566,7 @@ impl App {
             }
             "graph.selection" => ok(json!({
                 "scope": self.graph.scope.label(),
+                "branch": self.graph.focus.as_ref().map(|f| &f.branch),
                 "index": self.graph.selected_index(),
                 "commit": self.graph.selected(),
             })),
