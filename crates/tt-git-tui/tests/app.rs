@@ -300,7 +300,7 @@ fn zoom_cycles_wide_full_and_back() {
     let normal_graph = t.app().pane_area(PaneId::Graph).unwrap();
 
     // Wide: graph and details span the screen, the left column is gone.
-    t.press("1").press("+");
+    t.press("1").press("+").press("space");
     assert_eq!(t.app().zoom(), Zoom::Wide);
     assert_eq!(t.app().focus(), PaneId::Graph);
     let graph = t.app().pane_area(PaneId::Graph).unwrap();
@@ -322,10 +322,44 @@ fn zoom_cycles_wide_full_and_back() {
 }
 
 #[test]
+fn zoom_with_details_closed_gives_the_graph_full_height() {
+    let sb = Sandbox::new();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
+
+    t.press("+");
+    assert_eq!(t.app().zoom(), Zoom::Wide);
+    let graph = t.app().pane_area(PaneId::Graph).unwrap();
+    assert_eq!((graph.width, graph.height), (100, 23));
+    assert!(t.app().pane_area(PaneId::Details).is_none());
+
+    // Space opens details below it, and closes it again without unzooming.
+    t.press("space");
+    assert!(t.app().pane_area(PaneId::Details).is_some());
+    t.press("space");
+    assert_eq!(t.app().zoom(), Zoom::Wide);
+    assert!(t.app().pane_area(PaneId::Details).is_none());
+
+    // Fullscreen would look the same, so the next `+` goes straight back.
+    t.press("+");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+}
+
+#[test]
+fn space_in_a_fullscreen_graph_brings_back_details() {
+    let sb = Sandbox::new();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
+    t.press("space").press("+").press("+");
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Graph));
+    t.press("space");
+    assert_eq!(t.app().zoom(), Zoom::Wide);
+    assert!(t.app().pane_area(PaneId::Details).is_some());
+}
+
+#[test]
 fn zoom_full_uses_details_when_focused() {
     let sb = Sandbox::new();
     let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
-    t.press("+").press("4").press("+");
+    t.press("space").press("+").press("4").press("+");
     assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
     assert_eq!(t.app().pane_area(PaneId::Details).unwrap().width, 100);
     assert!(t.app().pane_area(PaneId::Graph).is_none());

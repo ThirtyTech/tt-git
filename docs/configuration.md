@@ -99,8 +99,8 @@ children = [
 the left and the selected file's diff on the right.
 
 `+` zooms whichever layout you use: first to just the graph and details at
-full width (opening details if needed), then to the focused pane alone, then
-back.
+full width (the graph alone, full height, if details is closed; `space` still
+toggles details), then to the focused pane alone, then back.
 
 ## Key bindings
 

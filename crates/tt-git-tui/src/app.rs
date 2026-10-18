@@ -60,7 +60,7 @@ const ALL_GLOBAL: &[Command] = &[
 pub enum Zoom {
     #[default]
     Off,
-    /// Only graph and details, at full width (details opens if it's closed).
+    /// Only graph and details (if it's open), at full width.
     Wide,
     /// One pane fills the screen.
     Full(PaneId),
@@ -677,6 +677,8 @@ impl App {
                 }
                 Zoom::Wide
             }
+            // The graph alone already fills the screen; fullscreen would look the same.
+            Zoom::Wide if !self.shows(PaneId::Details) => Zoom::Off,
             Zoom::Wide => Zoom::Full(self.focus),
             Zoom::Full(_) => Zoom::Off,
         };
@@ -704,6 +706,10 @@ impl App {
             self.close_details();
         } else {
             self.details_open = true;
+            // A fullscreen graph has no room for details; drop back to wide.
+            if self.zoom == Zoom::Full(PaneId::Graph) {
+                self.zoom = Zoom::Wide;
+            }
         }
     }
 
@@ -713,7 +719,7 @@ impl App {
             self.show_commit_plain(oid);
         }
         self.details_open = false;
-        if matches!(self.zoom, Zoom::Wide | Zoom::Full(PaneId::Details)) {
+        if self.zoom == Zoom::Full(PaneId::Details) {
             self.zoom = Zoom::Off;
         }
         if self.focus == PaneId::Details {

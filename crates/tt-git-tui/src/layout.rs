@@ -156,7 +156,7 @@ impl TryFrom<Node> for Layout {
 pub struct View {
     /// Details has been opened (its host node shows details instead).
     pub details: bool,
-    /// Only the graph and details, with details open.
+    /// Only the graph and, if it's showing, details.
     pub wide: bool,
 }
 
@@ -169,10 +169,6 @@ enum Placed {
 impl Layout {
     /// Where each visible pane goes inside `area`.
     pub fn place(&self, area: Rect, view: View) -> Vec<(PaneId, Rect)> {
-        let view = View {
-            details: view.details || view.wide,
-            ..view
-        };
         let mut out = Vec::new();
         if let Some(placed) = resolve(&self.root, view) {
             assign(&placed, area, &mut out);
@@ -296,8 +292,8 @@ mod tests {
     #[test]
     fn wide_keeps_graph_and_details_at_full_width() {
         let wide = View {
+            details: true,
             wide: true,
-            ..View::default()
         };
         for layout in [Layout::default(), classic()] {
             let placed = areas(&layout, wide);
@@ -306,6 +302,15 @@ mod tests {
             assert_eq!(placed[1].0, PaneId::Details);
             assert!(placed.iter().all(|(_, r)| r.x == 0 && r.width == 100), "{placed:?}");
         }
+    }
+
+    #[test]
+    fn wide_with_details_closed_gives_the_graph_everything() {
+        let wide = View {
+            wide: true,
+            ..View::default()
+        };
+        assert_eq!(areas(&Layout::default(), wide), vec![(PaneId::Graph, AREA)]);
     }
 
     fn parse_err(layout: &str) -> String {
