@@ -31,4 +31,4 @@ expression: t.screen()
 │                                                ││                                                │
 │                                                ││                                                │
 ╰────────────────────────────────────────────────╯╰────────────────────────────────────────────────╯
-enter files + diff  space show/hide details  a all/current  tab next pane  ? help  q quit
+enter files + diff  space show/hide details  a all/current  c copy  tab next pane  ? help  q quit

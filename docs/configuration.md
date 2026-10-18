@@ -140,6 +140,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |
 | `stage_toggle`, `stage_all`, `discard`, `commit`, `amend`, `continue`, `abort` | `space`/`enter`, `a`, `d`, `c`, `A`, `C`, `X` | status |
 | `open_link` | `o` | details |
+| `copy` (commit hash / branch name) | `c` | graph, branches |
 | `plugin_logs` | (palette only) | global |
 
 ### Plugin action bindings

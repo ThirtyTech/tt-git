@@ -2,6 +2,7 @@
 
 use std::time::Duration;
 
+use crossterm::clipboard::CopyToClipboard;
 use futures::StreamExt;
 use ratatui::DefaultTerminal;
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -37,6 +38,11 @@ pub async fn run(
         }
         if app.should_quit() {
             break;
+        }
+        if let Some(text) = app.take_clipboard()
+            && let Err(e) = crossterm::execute!(terminal.backend_mut(), CopyToClipboard::to_clipboard_from(text))
+        {
+            app.update(Action::Notify(format!("couldn't copy: {e}")));
         }
         terminal.draw(|f| app.draw(f))?;
     }

@@ -37,6 +37,8 @@ pub enum Action {
     Notify(String),
     /// Show an error popup.
     Error(String),
+    /// Put this text on the clipboard.
+    Copy(String),
     /// Reload refs, status and the graph.
     Refresh,
     /// Reload only the graph (e.g. after changing its scope).

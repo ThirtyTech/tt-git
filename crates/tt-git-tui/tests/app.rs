@@ -294,6 +294,24 @@ fn details_respect_mailmap() {
 }
 
 #[test]
+fn c_copies_the_commit_hash_or_branch_name() {
+    let sb = Sandbox::new();
+    sb.commit("one");
+    sb.checkout_new("feature/copy-me");
+    let oid = sb.commit("two");
+    let mut t = TestDriver::new(&sb);
+
+    t.press("c");
+    assert_eq!(t.app_mut().take_clipboard().as_deref(), Some(oid.as_str()));
+    assert_eq!(t.app().notice(), Some(format!("copied {oid}").as_str()));
+
+    t.press("2").press("g");
+    assert_eq!(t.app().branches().selected().unwrap().name, "feature/copy-me");
+    t.press("c");
+    assert_eq!(t.app_mut().take_clipboard().as_deref(), Some("feature/copy-me"));
+}
+
+#[test]
 fn zoom_cycles_wide_full_and_back() {
     let sb = Sandbox::new();
     let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);

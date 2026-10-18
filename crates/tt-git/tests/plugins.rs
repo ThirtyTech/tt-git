@@ -113,7 +113,11 @@ fn palette_lists_and_runs_plugin_actions_for_the_focused_context() {
         !screen.contains("Branch thing"),
         "branch actions hidden in graph:\n{screen}"
     );
-    assert!(screen.contains("Fetch"), "built-ins listed too");
+    t.type_text("fetch");
+    assert!(t.screen().contains("Fetch"), "built-ins listed too");
+    for _ in "fetch".chars() {
+        t.press("backspace");
+    }
     t.type_text("commit th").press("enter");
     until(&mut t, "palette action", |_| !read_records(&out).is_empty());
     let ctx: Value = serde_json::from_str(
@@ -124,7 +128,7 @@ fn palette_lists_and_runs_plugin_actions_for_the_focused_context() {
     .unwrap();
     assert_eq!(ctx["invocation_source"], "palette");
 
-    t.press("2").press("ctrl+p");
+    t.press("2").press("ctrl+p").type_text("thing");
     assert!(t.screen().contains("Branch thing"));
     t.press("esc");
 }

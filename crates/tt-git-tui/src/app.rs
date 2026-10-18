@@ -97,6 +97,8 @@ pub struct App {
     show_help: bool,
     error: Option<String>,
     notice: Option<String>,
+    /// Text waiting for the runner to put on the clipboard.
+    clipboard: Option<String>,
     should_quit: bool,
     pane_areas: Vec<(PaneId, Rect)>,
 }
@@ -146,6 +148,7 @@ impl App {
             show_help: false,
             error: None,
             notice: None,
+            clipboard: None,
             should_quit: false,
             pane_areas: Vec::new(),
         };
@@ -229,6 +232,11 @@ impl App {
 
     pub fn notice(&self) -> Option<&str> {
         self.notice.as_deref()
+    }
+
+    /// Takes the text a command copied, for the runner to send to the terminal.
+    pub fn take_clipboard(&mut self) -> Option<String> {
+        self.clipboard.take()
     }
 
     /// Where each pane was drawn in the last frame.
@@ -395,6 +403,10 @@ impl App {
             Action::PaneExited { id, status } => self.pane_exited(id, status),
             Action::Notify(msg) => self.notice = Some(msg),
             Action::Error(msg) => self.error = Some(msg),
+            Action::Copy(text) => {
+                self.notice = Some(format!("copied {text}"));
+                self.clipboard = Some(text);
+            }
             Action::Refresh => {
                 self.load_refs();
                 self.load_status();

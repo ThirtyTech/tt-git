@@ -530,6 +530,12 @@ impl Component for GraphPane {
                 }
                 EventState::Consumed
             }
+            Command::Copy => {
+                if let Some(c) = self.selected() {
+                    ctx.emit(Action::Copy(c.oid.clone()));
+                }
+                EventState::Consumed
+            }
             _ => EventState::NotConsumed,
         }
     }
@@ -550,6 +556,7 @@ impl Component for GraphPane {
             Command::Rebase,
             Command::CherryPick,
             Command::Filter,
+            Command::Copy,
         ]
     }
 

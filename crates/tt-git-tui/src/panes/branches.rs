@@ -314,6 +314,7 @@ impl BranchesPane {
                 ))),
                 None => ctx.emit(Action::Notify("only local branches can be renamed".into())),
             },
+            Command::Copy => ctx.emit(Action::Copy(entry.name.clone())),
             _ => return EventState::NotConsumed,
         }
         EventState::Consumed
@@ -508,6 +509,7 @@ impl Component for BranchesPane {
             Command::Filter,
             Command::Merge,
             Command::Rebase,
+            Command::Copy,
         ]
     }
 
