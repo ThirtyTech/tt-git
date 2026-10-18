@@ -31,6 +31,8 @@ pub enum GitOp {
         new: String,
     },
     FetchAll,
+    /// Save the base branch for the merged/unmerged lists (`None`: detect it).
+    SetBaseBranch(Option<String>),
     Stage(Vec<String>),
     Unstage(Vec<String>),
     StageAll,
@@ -73,6 +75,8 @@ impl GitOp {
             GitOp::DeleteRemoteBranch { remote, branch } => format!("delete {remote}/{branch}"),
             GitOp::RenameBranch { old, new } => format!("rename {old} → {new}"),
             GitOp::FetchAll => "fetch --all".into(),
+            GitOp::SetBaseBranch(Some(base)) => format!("base branch {base}"),
+            GitOp::SetBaseBranch(None) => "base branch auto".into(),
             GitOp::Stage(paths) => format!("stage {}", paths.join(" ")),
             GitOp::Unstage(paths) => format!("unstage {}", paths.join(" ")),
             GitOp::StageAll => "stage all".into(),
@@ -125,6 +129,7 @@ pub enum PaletteTarget {
     PluginAction(String),
     /// (plugin id, pane entry point)
     PluginPane(String, String),
+    Op(GitOp),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -139,8 +144,10 @@ const PALETTE_ROWS: usize = 12;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Modal {
-    /// Fuzzy-filtered list of built-in commands and plugin actions.
+    /// Fuzzy-filtered list: the command palette (built-in commands and
+    /// plugin actions) or a picker such as the base branch one.
     Palette {
+        title: String,
         input: String,
         items: Vec<PaletteItem>,
         selected: usize,
@@ -187,10 +194,16 @@ impl Modal {
     }
 
     pub fn palette(items: Vec<PaletteItem>) -> Self {
+        Self::picker("Commands", items, 0)
+    }
+
+    /// A fuzzy-filtered list titled `title`, starting on item `selected`.
+    pub fn picker(title: impl Into<String>, items: Vec<PaletteItem>, selected: usize) -> Self {
         Modal::Palette {
+            title: title.into(),
             input: String::new(),
+            selected: selected.min(items.len().saturating_sub(1)),
             items,
-            selected: 0,
         }
     }
 
@@ -204,7 +217,9 @@ impl Modal {
 
     pub fn handle_key(&mut self, key: KeyCombo) -> ModalOutcome {
         match self {
-            Modal::Palette { input, items, selected } => {
+            Modal::Palette {
+                input, items, selected, ..
+            } => {
                 let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
                 let count = Self::palette_matches(items, input).len();
                 match key.code {
@@ -215,6 +230,7 @@ impl Modal {
                                 PaletteTarget::Command(c) => ModalOutcome::Command(*c),
                                 PaletteTarget::PluginAction(a) => ModalOutcome::PluginAction(a.clone()),
                                 PaletteTarget::PluginPane(p, e) => ModalOutcome::PluginPane(p.clone(), e.clone()),
+                                PaletteTarget::Op(op) => ModalOutcome::Run(op.clone()),
                             },
                             None => ModalOutcome::Open,
                         };
@@ -268,8 +284,14 @@ impl Modal {
     }
 
     pub fn draw(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        if let Modal::Palette { input, items, selected } = self {
-            return draw_palette(frame, area, theme, input, items, *selected);
+        if let Modal::Palette {
+            title,
+            input,
+            items,
+            selected,
+        } = self
+        {
+            return draw_palette(frame, area, theme, title, input, items, *selected);
         }
         let (title, body, hint): (&str, Vec<Line>, &str) = match self {
             Modal::Palette { .. } => unreachable!("handled above"),
@@ -304,7 +326,15 @@ impl Modal {
     }
 }
 
-fn draw_palette(frame: &mut Frame, area: Rect, theme: &Theme, input: &str, items: &[PaletteItem], selected: usize) {
+fn draw_palette(
+    frame: &mut Frame,
+    area: Rect,
+    theme: &Theme,
+    title: &str,
+    input: &str,
+    items: &[PaletteItem],
+    selected: usize,
+) {
     let matches = Modal::palette_matches(items, input);
     let rows = matches.len().clamp(1, PALETTE_ROWS);
     let width = 70.min(area.width);
@@ -317,7 +347,7 @@ fn draw_palette(frame: &mut Frame, area: Rect, theme: &Theme, input: &str, items
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(theme.border_focused)
-        .title(Span::styled(" Commands ", theme.title_focused));
+        .title(Span::styled(format!(" {title} "), theme.title_focused));
     let inner_width = popup.width.saturating_sub(2) as usize;
     let mut lines = vec![
         Line::from(vec![
@@ -329,7 +359,7 @@ fn draw_palette(frame: &mut Frame, area: Rect, theme: &Theme, input: &str, items
     ];
     let start = selected.saturating_sub(PALETTE_ROWS - 1);
     if matches.is_empty() {
-        lines.push(Line::styled("no matching commands", theme.muted));
+        lines.push(Line::styled("no matches", theme.muted));
     }
     for (i, item) in matches.iter().enumerate().skip(start).take(PALETTE_ROWS) {
         let hint_w = item.hint.chars().count();

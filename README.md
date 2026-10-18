@@ -14,6 +14,8 @@ A terminal git client in Rust ([ratatui](https://ratatui.rs)), inspired by
   activity (commits, fetches, checkouts). If you check out a branch that only
   exists on a remote, tt-git creates the local tracking branch for you
   without asking.
+  Two more tabs list the branches merged and not yet merged into the
+  project's primary branch (or any base branch you pick).
 - **Plugins built the same way as [herdr](https://herdr.dev/docs/plugins/):**
   plain subprocesses with a TOML manifest. Plugins can add actions, event
   hooks, startup commands and terminal panes, and they talk back through the
@@ -72,6 +74,8 @@ command palette, which lists built-in commands and plugin actions.
 | | `n` `d` `R` | new / delete (asks before force-deleting unmerged) / rename |
 | | `f` | `fetch --all --prune` |
 | | `/` | filter as you type (`esc` clears) |
+| | `]` `[` | next / previous tab: all branches, unmerged into the base branch, merged into it |
+| | `b` | pick the base branch (default: the project's primary branch) |
 | | `M` / `r` | merge / rebase onto the selected branch |
 | status | `space` `enter` | stage / unstage the file |
 | | `a` | stage everything (or unstage, if all staged) |

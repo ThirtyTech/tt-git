@@ -1,6 +1,6 @@
 //! Background jobs that read from git and report back as actions.
 
-use tt_git_core::{CommitFile, GitError, LogScope, Repo};
+use tt_git_core::{BaseBranches, BranchEntry, CommitFile, GitError, GitRef, LogScope, Repo};
 
 use crate::action::{Action, RefsSnapshot};
 use crate::jobs::Ctx;
@@ -16,20 +16,56 @@ fn message(e: GitError) -> String {
     e.to_string()
 }
 
-pub fn load_refs(repo: Repo) -> Action {
+/// `exclude` hides unmerged branches whose name contains any of its strings.
+pub fn load_refs(repo: Repo, exclude: Vec<String>) -> Action {
     let result = (|| {
         let head = repo.head()?;
         let refs = repo.refs()?;
         let checkouts = repo.checkouts(500)?;
         let branches = tt_git_core::branches::unify(&refs, &head, &checkouts, |r| repo.ref_activity(r));
+        let base = match load_base(&repo, &refs, &branches, &exclude) {
+            Ok(base) => base,
+            Err(e) => {
+                tracing::warn!("comparing branches with the base failed: {e}");
+                None
+            }
+        };
         Ok(RefsSnapshot {
             head,
             refs,
             checkouts,
             branches,
+            base,
         })
     })();
     Action::RefsLoaded(result.map_err(message))
+}
+
+/// Splits the branches by whether they're merged into the base branch.
+fn load_base(
+    repo: &Repo,
+    refs: &[GitRef],
+    branches: &[BranchEntry],
+    exclude: &[String],
+) -> Result<Option<BaseBranches>, GitError> {
+    use tt_git_core::branches::{base_scope, compare_with_base, default_base, resolve_base};
+
+    let setting = repo.base_branch_setting();
+    let Some(base) = resolve_base(refs, setting.as_deref()) else {
+        return Ok(None);
+    };
+    let detected = default_base(refs).map(|r| r.short_name.clone());
+    let scope = base_scope(base);
+    let merged = repo.merged_refs(&base.full_name, &scope)?;
+    let (unmerged, merged) = compare_with_base(branches, base, &merged, exclude);
+    Ok(Some(BaseBranches {
+        base: base.short_name.clone(),
+        chosen: setting.is_some_and(|s| s == base.short_name || s == base.full_name),
+        detected,
+        unmerged,
+        merged,
+        authors: repo.ref_authors(&scope)?,
+    }))
 }
 
 pub fn load_status(repo: Repo) -> Action {
@@ -153,6 +189,7 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::DeleteRemoteBranch { remote, branch } => repo.delete_remote_branch(remote, branch),
         GitOp::RenameBranch { old, new } => repo.rename_branch(old, new),
         GitOp::FetchAll => repo.fetch_all(),
+        GitOp::SetBaseBranch(base) => repo.set_base_branch(base.as_deref()),
         GitOp::Stage(paths) => repo.stage(paths),
         GitOp::Unstage(paths) => repo.unstage(paths),
         GitOp::StageAll => repo.stage_all(),

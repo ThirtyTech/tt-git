@@ -1,6 +1,6 @@
 //! Messages that drive [`App::update`](crate::App::update).
 
-use tt_git_core::{BranchEntry, Checkout, Commit, CommitFile, GitRef, Head, Status, StatusEntry};
+use tt_git_core::{BaseBranches, BranchEntry, Checkout, Commit, CommitFile, GitRef, Head, Status, StatusEntry};
 use tt_git_plugin::runtime::CommandLog;
 use tt_git_plugin::socket::Call;
 
@@ -17,6 +17,8 @@ pub struct RefsSnapshot {
     pub checkouts: Vec<Checkout>,
     /// The unified, recency-sorted branch list.
     pub branches: Vec<BranchEntry>,
+    /// Branches merged and not merged into the base branch, when there is one.
+    pub base: Option<BaseBranches>,
 }
 
 /// Everything that can change app state. Input, timers, finished background

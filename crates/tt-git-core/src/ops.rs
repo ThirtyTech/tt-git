@@ -2,8 +2,8 @@
 //! UI can show it, or a [`GitError`] carrying stderr.
 
 use crate::branches::CheckoutPlan;
-use crate::git::{GitOutput, Result};
-use crate::repo::Repo;
+use crate::git::{GitError, GitOutput, Result};
+use crate::repo::{BASE_BRANCH_KEY, Repo};
 
 fn text(out: GitOutput) -> String {
     let mut s = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -55,6 +55,20 @@ impl Repo {
     /// `git fetch --all --prune`
     pub fn fetch_all(&self) -> Result<String> {
         self.git().run(&["fetch", "--all", "--prune"]).map(text)
+    }
+
+    /// Saves the base branch for this repo in its local git config, or with
+    /// `None` goes back to detecting it.
+    pub fn set_base_branch(&self, base: Option<&str>) -> Result<String> {
+        match base {
+            Some(name) => self.git().run(&["config", "--local", BASE_BRANCH_KEY, name]).map(text),
+            None => match self.git().run(&["config", "--local", "--unset", BASE_BRANCH_KEY]) {
+                Ok(out) => Ok(text(out)),
+                // Exit 5: it wasn't set.
+                Err(GitError::Failed { code, .. }) if code == "5" => Ok(String::new()),
+                Err(e) => Err(e),
+            },
+        }
     }
 }
 

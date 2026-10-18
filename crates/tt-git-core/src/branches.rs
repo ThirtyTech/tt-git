@@ -14,7 +14,7 @@
 //! last reflog update (commits, resets, fetches), and the last time HEAD was
 //! checked out to the local branch.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::Serialize;
 
@@ -213,6 +213,146 @@ pub fn unify(
     entries
 }
 
+/// Branch names tried, in order, when no remote has a `HEAD` to say which
+/// branch is primary.
+const PRIMARY_NAMES: &[&str] = &["main", "master", "development", "develop", "trunk"];
+
+/// The project's primary branch: what `origin/HEAD` (or another remote's
+/// `HEAD`) points at, else the first of `main`, `master`, `development`,
+/// `develop`, `trunk` that exists on a remote, else as a local branch.
+pub fn default_base(refs: &[GitRef]) -> Option<&GitRef> {
+    let find = |full: &str| {
+        refs.iter()
+            .find(|r| r.full_name == full && r.symref.is_none() && is_branch(r))
+    };
+    let mut remote_heads: Vec<&GitRef> = refs
+        .iter()
+        .filter(|r| matches!(r.kind, RefKind::RemoteBranch { .. }) && r.branch_name() == "HEAD")
+        .collect();
+    remote_heads.sort_by_key(|r| remote_of(r).as_deref() != Some(PREFERRED_REMOTE));
+    if let Some(target) = remote_heads.iter().find_map(|h| h.symref.as_deref().and_then(find)) {
+        return Some(target);
+    }
+    let remote_branch = |name: &str| {
+        refs.iter()
+            .filter(|r| matches!(r.kind, RefKind::RemoteBranch { .. }) && r.symref.is_none())
+            .filter(|r| r.branch_name() == name)
+            .min_by_key(|r| remote_of(r).as_deref() != Some(PREFERRED_REMOTE))
+    };
+    PRIMARY_NAMES
+        .iter()
+        .find_map(|n| remote_branch(n))
+        .or_else(|| PRIMARY_NAMES.iter().find_map(|n| find(&format!("refs/heads/{n}"))))
+}
+
+/// The base branch to compare against: `chosen` (a short name such as
+/// `origin/development`) if it is still a branch, else [`default_base`].
+pub fn resolve_base<'a>(refs: &'a [GitRef], chosen: Option<&str>) -> Option<&'a GitRef> {
+    chosen
+        .and_then(|name| {
+            refs.iter()
+                .find(|r| is_branch(r) && r.symref.is_none() && (r.short_name == name || r.full_name == name))
+        })
+        .or_else(|| default_base(refs))
+}
+
+fn is_branch(r: &GitRef) -> bool {
+    matches!(r.kind, RefKind::LocalBranch | RefKind::RemoteBranch { .. })
+}
+
+/// Where branches compared with `base` come from: the base's remote
+/// (`refs/remotes/origin/`), or local branches when the base is local.
+pub fn base_scope(base: &GitRef) -> String {
+    match &base.kind {
+        RefKind::RemoteBranch { remote } => format!("refs/remotes/{remote}/"),
+        _ => "refs/heads/".into(),
+    }
+}
+
+/// Branches split by whether they are merged into a base branch, like
+/// `git branch -r --merged origin/main` and `--no-merged`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct BaseBranches {
+    /// Short name of the base, e.g. `origin/main`.
+    pub base: String,
+    /// The base was picked by the user rather than detected.
+    pub chosen: bool,
+    /// What [`default_base`] picks, for going back to it.
+    pub detected: Option<String>,
+    /// Entries are narrowed to the compared ref (the one in
+    /// [`base_scope`]); `activity` is that ref's commit date, and both lists
+    /// are newest first.
+    pub unmerged: Vec<BranchEntry>,
+    pub merged: Vec<BranchEntry>,
+    /// Author of each compared ref's tip, keyed by full ref name.
+    pub authors: HashMap<String, String>,
+}
+
+impl BaseBranches {
+    /// The ref an entry from [`unmerged`](Self::unmerged) or
+    /// [`merged`](Self::merged) was compared by.
+    pub fn tip(entry: &BranchEntry) -> Option<&GitRef> {
+        entry.remotes.first().or(entry.local.as_ref())
+    }
+}
+
+/// Splits `entries` into unmerged and merged lists against `base`.
+/// `merged` holds the full names of the refs in [`base_scope`] that are
+/// merged into it. The base itself is left out, as are unmerged refs whose
+/// short name contains any of `exclude` (`grep -v archive` style).
+pub fn compare_with_base(
+    entries: &[BranchEntry],
+    base: &GitRef,
+    merged: &HashSet<String>,
+    exclude: &[String],
+) -> (Vec<BranchEntry>, Vec<BranchEntry>) {
+    let scope = base_scope(base);
+    let mut unmerged_list = Vec::new();
+    let mut merged_list = Vec::new();
+    for entry in entries {
+        let narrowed = match &base.kind {
+            RefKind::RemoteBranch { .. } => {
+                let Some(tip) = entry.remotes.iter().find(|r| r.full_name.starts_with(&scope)) else {
+                    continue;
+                };
+                BranchEntry {
+                    remotes: vec![tip.clone()],
+                    activity: tip.date,
+                    ..entry.clone()
+                }
+            }
+            _ => {
+                let Some(local) = &entry.local else {
+                    continue;
+                };
+                BranchEntry {
+                    remotes: Vec::new(),
+                    activity: local.date,
+                    ..entry.clone()
+                }
+            }
+        };
+        let Some(tip) = BaseBranches::tip(&narrowed) else {
+            continue;
+        };
+        if tip.full_name == base.full_name {
+            continue;
+        }
+        if merged.contains(&tip.full_name) {
+            merged_list.push(narrowed);
+        } else if !exclude
+            .iter()
+            .any(|x| !x.is_empty() && tip.short_name.contains(x.as_str()))
+        {
+            unmerged_list.push(narrowed);
+        }
+    }
+    for list in [&mut unmerged_list, &mut merged_list] {
+        list.sort_by(|a, b| b.activity.cmp(&a.activity).then_with(|| a.name.cmp(&b.name)));
+    }
+    (unmerged_list, merged_list)
+}
+
 /// Case-insensitive subsequence match, for filtering the list as you type.
 pub fn matches_filter(name: &str, filter: &str) -> bool {
     let mut chars = name.chars().flat_map(char::to_lowercase);
@@ -395,6 +535,84 @@ mod tests {
     fn ties_sort_by_name() {
         let entries = unify(&[local("b", "x", 5), local("a", "x", 5)], &head("a"), &[], |_| None);
         assert_eq!(names(&entries), vec!["a", "b"]);
+    }
+
+    fn symref(remote_name: &str, to: &str) -> GitRef {
+        let mut r = remote(remote_name, "HEAD", "a", 0);
+        r.symref = Some(format!("refs/remotes/{remote_name}/{to}"));
+        r
+    }
+
+    #[test]
+    fn default_base_follows_remote_head_then_common_names() {
+        let refs = vec![
+            local("main", "a", 1),
+            remote("origin", "main", "a", 1),
+            remote("origin", "development", "b", 1),
+            symref("origin", "development"),
+        ];
+        assert_eq!(default_base(&refs).unwrap().short_name, "origin/development");
+
+        let no_head = &refs[..3];
+        assert_eq!(default_base(no_head).unwrap().short_name, "origin/main");
+
+        let fork_first = vec![remote("fork", "master", "a", 1), remote("origin", "master", "a", 1)];
+        assert_eq!(default_base(&fork_first).unwrap().short_name, "origin/master");
+
+        let local_only = vec![local("topic", "a", 1), local("master", "a", 1)];
+        assert_eq!(default_base(&local_only).unwrap().short_name, "master");
+        assert!(default_base(&[local("topic", "a", 1)]).is_none());
+    }
+
+    #[test]
+    fn resolve_base_prefers_choice_that_still_exists() {
+        let refs = vec![remote("origin", "main", "a", 1), remote("origin", "release", "b", 1)];
+        assert_eq!(
+            resolve_base(&refs, Some("origin/release")).unwrap().short_name,
+            "origin/release"
+        );
+        assert_eq!(
+            resolve_base(&refs, Some("origin/gone")).unwrap().short_name,
+            "origin/main"
+        );
+        assert_eq!(resolve_base(&refs, None).unwrap().short_name, "origin/main");
+    }
+
+    #[test]
+    fn compares_remote_branches_with_base() {
+        let refs = vec![
+            tracking(local("main", "a", 100), "refs/remotes/origin/main", 0, 0),
+            local("local-only", "x", 500),
+            tracking(local("feat", "f", 300), "refs/remotes/origin/feat", 0, 0),
+            remote("origin", "main", "a", 100),
+            remote("origin", "feat", "f", 300),
+            remote("origin", "old", "o", 50),
+            remote("origin", "newer", "n", 400),
+            remote("origin", "archive/x", "z", 450),
+            remote("upstream", "elsewhere", "e", 600),
+        ];
+        let entries = unify(&refs, &head("main"), &[], |_| Some(999));
+        let base = &refs[3];
+        let merged: HashSet<String> = ["refs/remotes/origin/main", "refs/remotes/origin/old"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        let (unmerged, merged) = compare_with_base(&entries, base, &merged, &["archive".into()]);
+        assert_eq!(names(&unmerged), vec!["newer", "feat"], "newest commit first");
+        assert_eq!(names(&merged), vec!["old"], "base itself left out");
+        assert_eq!(unmerged[0].activity, 400, "commit date, not reflog activity");
+        let feat = &unmerged[1];
+        assert!(feat.local.is_some(), "keeps the local side");
+        assert_eq!(BaseBranches::tip(feat).unwrap().short_name, "origin/feat");
+
+        let (unmerged, _) = compare_with_base(&entries, base, &HashSet::new(), &[]);
+        assert!(names(&unmerged).contains(&"archive/x"), "nothing excluded");
+
+        let local_base = &refs[0];
+        let (unmerged, merged) = compare_with_base(&entries, local_base, &HashSet::new(), &[]);
+        assert_eq!(names(&unmerged), vec!["local-only", "feat"]);
+        assert!(merged.is_empty());
+        assert_eq!(BaseBranches::tip(&unmerged[1]).unwrap().short_name, "feat");
     }
 
     #[test]

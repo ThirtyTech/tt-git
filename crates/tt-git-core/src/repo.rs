@@ -1,10 +1,14 @@
 //! A discovered repository and its read operations.
 
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 use crate::git::{GitCli, GitError, Result};
 use crate::model::{Checkout, Commit, CommitFile, GitRef, Head, Status};
 use crate::parse;
+
+/// Repo-local git config key holding the picked base branch.
+pub const BASE_BRANCH_KEY: &str = "tt-git.baseBranch";
 
 /// Which commits the graph loads.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -124,6 +128,82 @@ impl Repo {
             "refs/tags",
         ])?;
         parse::parse_refs(&out.stdout, &remotes)
+    }
+
+    /// The base branch picked for this repo (`tt-git.baseBranch`), if any.
+    pub fn base_branch_setting(&self) -> Option<String> {
+        let out = self.git.run(&["config", "--get", BASE_BRANCH_KEY]).ok()?;
+        let name = out.stdout_str().trim().to_string();
+        (!name.is_empty()).then_some(name)
+    }
+
+    /// Full names of the refs under `prefix` (e.g. `refs/remotes/origin/`)
+    /// that are merged into `base`.
+    pub fn merged_refs(&self, base: &str, prefix: &str) -> Result<HashSet<String>> {
+        let merged = format!("--merged={base}");
+        let out = self
+            .git
+            .run(&["for-each-ref", "--format=%(refname)", &merged, prefix])?;
+        Ok(out
+            .stdout_str()
+            .lines()
+            .filter(|l| !l.is_empty())
+            .map(str::to_string)
+            .collect())
+    }
+
+    /// Author of each tip under `prefix`, keyed by full ref name, with names
+    /// mapped through `.mailmap`.
+    pub fn ref_authors(&self, prefix: &str) -> Result<HashMap<String, String>> {
+        let out = self.git.run(&[
+            "for-each-ref",
+            "--format=%(refname)%00%(authorname)%00%(authoremail)",
+            prefix,
+        ])?;
+        let text = out.stdout_str();
+        let rows: Vec<(&str, String)> = text
+            .lines()
+            .filter_map(|l| {
+                let mut f = l.split('\0');
+                let (name, author, email) = (f.next()?, f.next()?, f.next().unwrap_or(""));
+                let email = if email.starts_with('<') {
+                    email.to_string()
+                } else {
+                    format!("<{email}>")
+                };
+                Some((name, format!("{author} {email}")))
+            })
+            .collect();
+        let mut contacts: Vec<&str> = rows.iter().map(|(_, c)| c.as_str()).collect();
+        contacts.sort_unstable();
+        contacts.dedup();
+        let mapped = self.mailmap(&contacts);
+        Ok(rows
+            .iter()
+            .map(|(name, contact)| {
+                let contact = mapped.get(contact.as_str()).map_or(contact.as_str(), String::as_str);
+                let author = contact.rsplit_once(" <").map_or(contact, |(n, _)| n);
+                (name.to_string(), author.to_string())
+            })
+            .collect())
+    }
+
+    /// `git check-mailmap` for each `Name <email>`; contacts git can't map
+    /// are left out.
+    fn mailmap(&self, contacts: &[&str]) -> HashMap<String, String> {
+        let mut mapped = HashMap::new();
+        // Batches keep the command line short (Windows caps it at 32K).
+        for chunk in contacts.chunks(100) {
+            let mut args = vec!["check-mailmap"];
+            args.extend(chunk);
+            let Ok(out) = self.git.run(&args) else {
+                continue;
+            };
+            for (from, to) in chunk.iter().zip(out.stdout_str().lines()) {
+                mapped.insert(from.to_string(), to.to_string());
+            }
+        }
+        mapped
     }
 
     pub fn status(&self) -> Result<Status> {

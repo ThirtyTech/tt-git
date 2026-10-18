@@ -5,7 +5,7 @@ mod details;
 mod graph;
 mod status;
 
-pub use branches::BranchesPane;
+pub use branches::{BranchTab, BranchesPane};
 pub use details::{DetailsPane, DetailsSubject};
 pub use graph::{GraphPane, GraphScope, LabelKind, RefLabel, build_labels};
 pub use status::StatusPane;

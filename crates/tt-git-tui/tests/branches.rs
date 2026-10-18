@@ -1,7 +1,7 @@
 use tt_git_testkit::{Sandbox, TestDriver};
 use tt_git_tui::Config;
 use tt_git_tui::modal::Modal;
-use tt_git_tui::panes::PaneId;
+use tt_git_tui::panes::{BranchTab, PaneId};
 
 /// main (tracking origin/main) plus a local-only branch, plus a branch that
 /// only exists on the remote (pushed by someone else).
@@ -231,4 +231,129 @@ fn fetch_picks_up_new_remote_branches() {
     t.press("2").press("f");
     assert!(names(&t).contains(&"brand-new".to_string()), "{:?}", names(&t));
     assert!(t.app().notice().unwrap_or_default().contains("fetch"));
+}
+
+/// On origin: `main`, `done` (merged into main), `open` and `archive/old`
+/// (not merged), and `development`, which has `open` merged into it.
+fn repo_for_base_tabs() -> Sandbox {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.checkout_new("done");
+    sb.commit("done work");
+    sb.checkout("main");
+    sb.merge("done");
+    sb.checkout_new("archive/old");
+    sb.commit("old work");
+    sb.checkout("main");
+    sb.checkout_new("open");
+    sb.commit("open work");
+    sb.checkout("main");
+    sb.checkout_new("development");
+    sb.merge("open");
+    sb.checkout("main");
+    sb.add_remote("origin");
+    sb.git(&["branch", "-q", "-D", "done", "open", "archive/old", "development"]);
+    sb
+}
+
+#[test]
+fn tabs_list_branches_merged_and_unmerged_into_the_primary_branch() {
+    let sb = repo_for_base_tabs();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 160, 40);
+    t.press("2");
+    assert_eq!(t.app().branches().tab(), BranchTab::All);
+    let title = t.pane_title(PaneId::Branches);
+    assert!(title.contains("Branches 5 · Unmerged 2 · Merged 1"), "{title}");
+
+    t.press("]");
+    assert_eq!(t.app().branches().tab(), BranchTab::Unmerged);
+    assert_eq!(names(&t), vec!["development", "open"], "archive is hidden");
+    assert!(t.pane_title(PaneId::Branches).contains("(origin/main)"));
+    let open = t
+        .pane_lines(PaneId::Branches)
+        .into_iter()
+        .find(|l| l.starts_with("  open "))
+        .unwrap();
+    assert!(open.contains("open work") && open.contains("Test User"), "{open}");
+
+    t.press("]");
+    assert_eq!(names(&t), vec!["done"]);
+    t.press("]");
+    assert_eq!(t.app().branches().tab(), BranchTab::All, "wraps round");
+    t.press("[");
+    assert_eq!(t.app().branches().tab(), BranchTab::Merged);
+    t.press("{");
+    assert_eq!(t.app().branches().tab(), BranchTab::Unmerged);
+
+    // Selecting a row moves the graph to its tip, as in the full list.
+    t.press("j");
+    let tip = sb.rev_parse("origin/open");
+    assert_eq!(t.app().graph().selected().map(|c| c.oid.clone()), Some(tip));
+}
+
+#[test]
+fn base_branch_follows_origin_head() {
+    let sb = repo_for_base_tabs();
+    sb.git(&["remote", "set-head", "origin", "development"]);
+    let mut t = TestDriver::new(&sb);
+    t.press("2").press("]");
+    let base = t.app().branches().base().unwrap();
+    assert_eq!(base.base, "origin/development");
+    assert!(!base.chosen);
+    assert_eq!(
+        names(&t),
+        Vec::<String>::new(),
+        "only archive/old is unmerged, and it's hidden"
+    );
+    t.press("]");
+    let mut merged = names(&t);
+    merged.sort();
+    assert_eq!(merged, vec!["done", "main", "open"]);
+}
+
+#[test]
+fn pick_base_branch_from_a_list_and_go_back_to_detecting() {
+    let sb = repo_for_base_tabs();
+    let mut t = TestDriver::new(&sb);
+    t.press("2").press("]").press("b");
+    assert!(t.screen().contains("Base branch"));
+    assert!(t.screen().contains("Detect automatically"));
+    t.type_text("origin/dev").press("enter");
+    assert!(t.app().modal().is_none());
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(sb.git(&["config", "--get", "tt-git.baseBranch"]), "origin/development");
+    let base = t.app().branches().base().unwrap();
+    assert_eq!(base.base, "origin/development");
+    assert!(base.chosen);
+    assert_eq!(base.detected.as_deref(), Some("origin/main"));
+    assert!(t.pane_title(PaneId::Branches).contains("(origin/development)"));
+    t.press("]");
+    let mut merged = names(&t);
+    merged.sort();
+    assert_eq!(merged, vec!["done", "main", "open"]);
+
+    // The choice is per repo and survives a restart.
+    let t2 = TestDriver::new(&sb);
+    assert_eq!(t2.app().branches().base().unwrap().base, "origin/development");
+
+    // The picker opens on the current base; the first entry detects again.
+    t.press("b");
+    t.type_text("detect").press("enter");
+    assert!(!sb.git(&["config", "--list", "--local"]).contains("tt-git."));
+    let base = t.app().branches().base().unwrap();
+    assert_eq!(base.base, "origin/main");
+    assert!(!base.chosen);
+}
+
+#[test]
+fn no_base_branch_without_a_primary_one() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.git(&["branch", "-q", "-m", "topic"]);
+    let mut t = TestDriver::new(&sb);
+    t.press("2").press("]");
+    assert!(t.app().branches().base().is_none());
+    assert!(t.pane_lines(PaneId::Branches)[0].contains("no base branch"));
+    let title = t.pane_title(PaneId::Branches);
+    assert!(title.contains("Branches 1 · Unmerged · Merged"), "{title}");
 }

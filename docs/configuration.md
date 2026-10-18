@@ -19,9 +19,31 @@ max_commits = 20000             # loaded at a time; scrolling near the end loads
 max_lanes = 16                  # lanes drawn before collapsing into …
 current_includes_upstream = true  # current-branch mode also shows HEAD's upstream
 
+[branches]
+unmerged_exclude = ["archive"]  # hide unmerged branches whose name contains any of these
+
 [plugins]
 pane_release_keys = ["ctrl+\\", "f12"]   # leave/close plugin panes
 ```
+
+## Merged and unmerged branches
+
+The branches pane has three tabs; `]` and `[` (or `}` and `{`) move
+between them:
+
+- **Branches**: every local and remote branch, most recently active first.
+- **Unmerged**: branches on the base branch's remote that aren't merged into
+  it, newest commit first, with each tip's subject and author (like
+  `git branch -r --no-merged origin/main`). Names matching
+  `unmerged_exclude` are left out.
+- **Merged**: the ones that are.
+
+The base branch is the project's primary branch: whatever `origin/HEAD`
+points at, else the first of `main`, `master`, `development`, `develop` or
+`trunk` found on a remote (then locally). Press `b` on the branches pane
+to pick a different one from a list; tt-git saves it in the repo's own git
+config as `tt-git.baseBranch`, so each project remembers its own.
+"Detect automatically" at the top of the list clears it again.
 
 ## Layout
 
@@ -99,6 +121,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |
 | `toggle_scope`, `new_branch`, `merge`, `rebase`, `cherry_pick` | `a`, `n`, `M`, `r`, `C` | graph |
 | `checkout`, `new_branch`, `delete_branch`, `rename_branch`, `fetch`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `d`, `R`, `f`, `/`, `M`, `r` | branches |
+| `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |
 | `stage_toggle`, `stage_all`, `discard`, `commit`, `amend`, `continue`, `abort` | `space`/`enter`, `a`, `d`, `c`, `A`, `C`, `X` | status |
 | `open_link` | `o` | details |
 | `plugin_logs` | (palette only) | global |

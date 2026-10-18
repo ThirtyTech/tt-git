@@ -309,3 +309,39 @@ fn commit_files_and_their_diffs() {
     let root = repo.commit_files(&sb.rev_parse("HEAD~1")).unwrap();
     assert!(root.iter().all(|f| f.state == FileState::Added), "{root:?}");
 }
+
+#[test]
+fn merged_refs_and_authors_for_base_comparison() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.checkout_new("done");
+    sb.commit("done work");
+    sb.checkout("main");
+    sb.merge("done");
+    sb.checkout_new("open");
+    sb.commit("open work");
+    sb.checkout("main");
+    sb.add_remote("origin");
+    sb.write(
+        ".mailmap",
+        "Real Name <real@example.com> Test User <test@example.com>\n",
+    );
+
+    let repo = open(&sb);
+    let merged = repo
+        .merged_refs("refs/remotes/origin/main", "refs/remotes/origin/")
+        .unwrap();
+    assert!(merged.contains("refs/remotes/origin/done"), "{merged:?}");
+    assert!(merged.contains("refs/remotes/origin/main"));
+    assert!(!merged.contains("refs/remotes/origin/open"));
+
+    let authors = repo.ref_authors("refs/remotes/origin/").unwrap();
+    assert_eq!(authors["refs/remotes/origin/open"], "Real Name");
+
+    assert_eq!(repo.base_branch_setting(), None);
+    repo.set_base_branch(Some("origin/open")).unwrap();
+    assert_eq!(repo.base_branch_setting().as_deref(), Some("origin/open"));
+    repo.set_base_branch(None).unwrap();
+    repo.set_base_branch(None).unwrap();
+    assert_eq!(repo.base_branch_setting(), None);
+}

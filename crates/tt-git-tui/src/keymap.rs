@@ -219,6 +219,9 @@ pub enum Command {
     RenameBranch,
     Fetch,
     Filter,
+    PrevTab,
+    NextTab,
+    PickBase,
     StageToggle,
     StageAll,
     Discard,
@@ -270,6 +273,9 @@ impl Command {
             Command::RenameBranch => "rename",
             Command::Fetch => "fetch",
             Command::Filter => "filter",
+            Command::PrevTab => "prev tab",
+            Command::NextTab => "next tab",
+            Command::PickBase => "base branch",
             Command::StageToggle => "stage/unstage",
             Command::StageAll => "stage all",
             Command::Discard => "discard",
@@ -430,6 +436,9 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Branches, Command::RenameBranch, &["R"]),
     (Context::Branches, Command::Fetch, &["f"]),
     (Context::Branches, Command::Filter, &["/"]),
+    (Context::Branches, Command::PrevTab, &["[", "{"]),
+    (Context::Branches, Command::NextTab, &["]", "}"]),
+    (Context::Branches, Command::PickBase, &["b"]),
 ];
 
 impl Default for Keymap {

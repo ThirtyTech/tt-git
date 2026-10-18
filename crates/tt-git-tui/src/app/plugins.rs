@@ -280,7 +280,7 @@ impl App {
                 },
                 json!({ "head": head, "continued": true }),
             ),
-            GitOp::Abort(_) => return,
+            GitOp::Abort(_) | GitOp::SetBaseBranch(_) => return,
             GitOp::Commit { message, amend } => (
                 "commit.created",
                 json!({

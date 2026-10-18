@@ -416,7 +416,8 @@ impl App {
                     self.graph.select_when_loaded(oid.to_string(), &self.ctx);
                 }
                 self.graph.set_refs(&snapshot);
-                self.branches.set_entries(snapshot.branches.clone());
+                self.branches
+                    .set_entries(snapshot.branches.clone(), snapshot.base.clone());
                 self.refs = Some(snapshot);
                 self.track_head();
             }
@@ -465,7 +466,8 @@ impl App {
 
     fn load_refs(&self) {
         let repo = self.repo.clone();
-        self.ctx.spawn(move || loaders::load_refs(repo));
+        let exclude = self.config.branches.unmerged_exclude.clone();
+        self.ctx.spawn(move || loaders::load_refs(repo, exclude));
     }
 
     fn load_status(&self) {

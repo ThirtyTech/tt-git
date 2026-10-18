@@ -17,7 +17,23 @@ pub struct Config {
     pub keys: KeysConfig,
     pub layout: Layout,
     pub graph: GraphConfig,
+    pub branches: BranchesConfig,
     pub plugins: PluginsConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct BranchesConfig {
+    /// Unmerged branches whose name contains any of these are hidden.
+    pub unmerged_exclude: Vec<String>,
+}
+
+impl Default for BranchesConfig {
+    fn default() -> Self {
+        Self {
+            unmerged_exclude: vec!["archive".into()],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -43,6 +59,7 @@ impl Default for Config {
             keys: KeysConfig::default(),
             layout: Layout::default(),
             graph: GraphConfig::default(),
+            branches: BranchesConfig::default(),
             plugins: PluginsConfig::default(),
         }
     }
