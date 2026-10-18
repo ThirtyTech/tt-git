@@ -112,7 +112,7 @@ impl Component for DetailsPane {
     }
 
     fn commands(&self) -> &[Command] {
-        &[Command::OpenLink]
+        &[Command::OpenLink, Command::CloseDetails]
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {

@@ -454,6 +454,7 @@ fn ctrl_click_on_a_link_runs_its_handler() {
         .raw("[[link_handlers]]\nid = \"gh\"\ntitle = \"GitHub\"\npattern = 'issues/[0-9]+$'\naction = \"issue\"\n")
         .install(&sb);
     let mut t = TestDriver::with_plugins(Config::default(), &sb, bin());
+    t.press("enter");
     let area = t.app().pane_area(PaneId::Details).unwrap();
     let row = t
         .pane_lines(PaneId::Details)

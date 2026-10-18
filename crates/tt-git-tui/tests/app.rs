@@ -19,10 +19,71 @@ fn focus_keys_and_cycle() {
     assert_eq!(t.app().focus(), PaneId::Status);
     t.press("tab");
     assert_eq!(t.app().focus(), PaneId::Branches);
+    // Details is closed, so cycling skips it.
     t.press("shift+tab").press("shift+tab");
+    assert_eq!(t.app().focus(), PaneId::Graph);
+    t.press("tab");
+    assert_eq!(t.app().focus(), PaneId::Status);
+    // Focusing details opens it in place of status and branches.
+    t.press("4");
     assert_eq!(t.app().focus(), PaneId::Details);
+    assert!(t.app().shows(PaneId::Details));
+    assert!(!t.app().shows(PaneId::Status));
     t.press("3");
     assert_eq!(t.app().focus(), PaneId::Graph);
+}
+
+#[test]
+fn enter_toggles_details_over_the_bottom_row() {
+    let sb = branchy_repo();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 40);
+    assert!(t.app().pane_area(PaneId::Details).is_none());
+    let status = t.app().pane_area(PaneId::Status).unwrap();
+    let branches = t.app().pane_area(PaneId::Branches).unwrap();
+
+    t.press("enter");
+    assert_eq!(t.app().focus(), PaneId::Graph);
+    let details = t.app().pane_area(PaneId::Details).unwrap();
+    assert_eq!(details, status.union(branches));
+    assert!(t.app().pane_area(PaneId::Status).is_none());
+    t.assert_pane_contains(PaneId::Details, "side experiment");
+
+    t.press("enter");
+    assert!(t.app().pane_area(PaneId::Details).is_none());
+    assert_eq!(t.app().pane_area(PaneId::Status), Some(status));
+
+    // esc in details closes it and returns to the graph.
+    t.press("enter").press("4").press("esc");
+    assert!(!t.app().shows(PaneId::Details));
+    assert_eq!(t.app().focus(), PaneId::Graph);
+
+    // Focusing a pane details covers closes it.
+    t.press("enter").press("2");
+    assert_eq!(t.app().focus(), PaneId::Branches);
+    assert!(!t.app().shows(PaneId::Details));
+}
+
+#[test]
+fn custom_layout_from_config() {
+    let sb = Sandbox::new();
+    let cfg = Config::parse(
+        r#"
+        [layout]
+        split = "columns"
+        children = [
+          { pane = "branches", size = 25 },
+          { split = "rows", children = [{ pane = "graph" }, { pane = "status" }, { pane = "details" }] },
+        ]
+        "#,
+    )
+    .unwrap();
+    let t = TestDriver::with_size(cfg, &sb, 100, 24);
+    let branches = t.app().pane_area(PaneId::Branches).unwrap();
+    assert_eq!((branches.x, branches.width, branches.height), (0, 25, 23));
+    for pane in [PaneId::Graph, PaneId::Status, PaneId::Details] {
+        let area = t.app().pane_area(pane).unwrap();
+        assert_eq!((area.x, area.width), (25, 75), "{pane:?}");
+    }
 }
 
 #[test]
@@ -121,6 +182,7 @@ fn toggle_to_current_branch_hides_other_branches() {
 fn details_follow_the_selection() {
     let sb = branchy_repo();
     let mut t = TestDriver::new(&sb);
+    t.press("enter");
     t.assert_pane_contains(PaneId::Details, "side experiment");
     t.assert_pane_contains(PaneId::Details, "Author: Test User <test@example.com>");
     t.press("j");
@@ -149,6 +211,7 @@ fn merge_commit_details_show_first_parent_diff() {
         .iter()
         .position(|c| c.parents.len() == 2)
         .unwrap();
+    t.press("enter");
     for _ in 0..idx {
         t.press("j");
     }
@@ -192,7 +255,8 @@ fn details_respect_mailmap() {
         ".mailmap",
         "Real Name <real@example.com> Test User <test@example.com>\n",
     );
-    let t = TestDriver::new(&sb);
+    let mut t = TestDriver::new(&sb);
+    t.press("enter");
     t.assert_pane_contains(PaneId::Details, "Author: Real Name <real@example.com>");
     t.assert_pane_contains(PaneId::Details, "Committer: Real Name <real@example.com>");
     t.assert_pane_contains(PaneId::Graph, "Real Name");

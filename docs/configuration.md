@@ -14,10 +14,6 @@ Unknown keys are reported as errors, so typos don't go unnoticed.
 watch = true        # refresh when files or refs change outside tt-git
 mouse = true        # click, wheel, ctrl+click links
 
-[layout]
-side_panel_width = 33   # % of the width for status + branches
-graph_height = 65       # % of the right column for the graph
-
 [graph]
 max_commits = 20000             # loaded at a time; scrolling near the end loads more
 max_lanes = 16                  # lanes drawn before collapsing into …
@@ -26,6 +22,44 @@ current_includes_upstream = true  # current-branch mode also shows HEAD's upstre
 [plugins]
 pane_release_keys = ["ctrl+\\", "f12"]   # leave/close plugin panes
 ```
+
+## Layout
+
+`[layout]` is a tree. Each node is either a pane (`status`, `branches`,
+`graph` or `details`) or a split whose `children` sit in `rows` (top to
+bottom) or `columns` (left to right). `size` is a percentage of the parent
+split; children without a size share whatever is left. This is the default:
+
+```toml
+[layout]
+split = "rows"
+children = [
+  { pane = "graph", size = 70 },
+  { split = "columns", details = true, children = [{ pane = "status" }, { pane = "branches" }] },
+]
+```
+
+The graph spans the top 70%, with status and branches side by side below it.
+`details = true` marks where the details pane opens: press `enter` on a
+commit in the graph (or `4`) and details takes that node's place until you
+press `enter` again, `esc` in details, or focus a pane it covers. Status,
+branches and graph must each appear once.
+
+To keep details on screen all the time, give it a pane of its own instead.
+This is the earlier four-pane layout:
+
+```toml
+[layout]
+split = "columns"
+children = [
+  { size = 33, split = "rows", children = [{ pane = "status", size = 40 }, { pane = "branches" }] },
+  { split = "rows", children = [{ pane = "graph", size = 65 }, { pane = "details" }] },
+]
+```
+
+`+` zooms whichever layout you use: first to just the graph and details at
+full width (opening details if needed), then to the focused pane alone, then
+back.
 
 ## Key bindings
 
@@ -54,6 +88,8 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `quit`, `help`, `palette` | `q` `ctrl+c`, `?`, `:` `ctrl+p` | global |
 | `focus_status` … `focus_details`, `focus_next`, `focus_prev` | `1`–`4`, `tab`, `shift+tab` | global |
 | `zoom` | `+` | global |
+| `toggle_details` | `enter` | graph |
+| `close_details` | `esc` | details |
 | `move_up`, `move_down`, `page_up`, `page_down`, `top`, `bottom` | `k`/`↑`, `j`/`↓`, `ctrl+u`, `ctrl+d`, `g`, `G` | global |
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |
 | `toggle_scope`, `new_branch`, `merge`, `rebase`, `cherry_pick` | `a`, `n`, `M`, `r`, `C` | graph |

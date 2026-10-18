@@ -216,6 +216,7 @@ fn selecting_a_branch_moves_the_graph() {
         }
     }
     assert_eq!(t.app().graph().selected().unwrap().summary, "older tip");
+    t.press("3").press("enter");
     t.assert_pane_contains(PaneId::Details, "older tip");
 }
 

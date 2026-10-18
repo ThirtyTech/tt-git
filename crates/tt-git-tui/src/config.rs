@@ -5,6 +5,7 @@ use std::path::Path;
 use serde::Deserialize;
 
 use crate::keymap::{Keymap, KeymapError, KeysConfig};
+use crate::layout::Layout;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -14,7 +15,7 @@ pub struct Config {
     /// Click to focus/select, wheel to scroll, ctrl+click links.
     pub mouse: bool,
     pub keys: KeysConfig,
-    pub layout: LayoutConfig,
+    pub layout: Layout,
     pub graph: GraphConfig,
     pub plugins: PluginsConfig,
 }
@@ -40,7 +41,7 @@ impl Default for Config {
             watch: true,
             mouse: true,
             keys: KeysConfig::default(),
-            layout: LayoutConfig::default(),
+            layout: Layout::default(),
             graph: GraphConfig::default(),
             plugins: PluginsConfig::default(),
         }
@@ -64,24 +65,6 @@ impl Default for GraphConfig {
             max_commits: 20_000,
             max_lanes: 16,
             current_includes_upstream: true,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct LayoutConfig {
-    /// Width of the left column (status + branches) as a percentage.
-    pub side_panel_width: u16,
-    /// Height of the graph within the right column as a percentage.
-    pub graph_height: u16,
-}
-
-impl Default for LayoutConfig {
-    fn default() -> Self {
-        Self {
-            side_panel_width: 33,
-            graph_height: 65,
         }
     }
 }
@@ -130,15 +113,14 @@ mod tests {
     fn parses_full_config() {
         let cfg = Config::parse(
             r#"
+            mouse = false
             [keys.global]
             quit = "x"
-            [layout]
-            side_panel_width = 40
             "#,
         )
         .unwrap();
-        assert_eq!(cfg.layout.side_panel_width, 40);
-        assert_eq!(cfg.layout.graph_height, 65);
+        assert!(!cfg.mouse);
+        assert!(cfg.watch);
         let km = cfg.keymap().unwrap();
         assert_eq!(km.lookup(Context::Global, "x".parse().unwrap()), Some(Command::Quit));
     }
@@ -152,6 +134,6 @@ mod tests {
     #[test]
     fn missing_file_is_default() {
         let cfg = Config::load(Path::new("definitely/not/here.toml")).unwrap();
-        assert_eq!(cfg.layout.side_panel_width, 33);
+        assert_eq!(cfg.layout, Layout::default());
     }
 }

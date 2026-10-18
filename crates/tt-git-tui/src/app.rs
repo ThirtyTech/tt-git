@@ -14,6 +14,7 @@ use crate::component::{Component, EventState};
 use crate::config::Config;
 use crate::jobs::{Ctx, JobTracker};
 use crate::keymap::{Command, Context, KeyCombo, Keymap, KeymapError};
+use crate::layout::View;
 use crate::loaders;
 use crate::modal::{GitOp, Modal, ModalOutcome};
 use crate::panes::{BranchesPane, DetailsPane, DetailsSubject, GraphPane, PaneId, StatusPane};
@@ -54,7 +55,7 @@ const ALL_GLOBAL: &[Command] = &[
 pub enum Zoom {
     #[default]
     Off,
-    /// Graph and details span the full width; status and branches are hidden.
+    /// Only graph and details, at full width (details opens if it's closed).
     Wide,
     /// One pane fills the screen.
     Full(PaneId),
@@ -68,6 +69,8 @@ pub struct App {
     repo: Repo,
     focus: PaneId,
     zoom: Zoom,
+    /// Details is open in place of the layout's `details = true` node.
+    details_open: bool,
     status: StatusPane,
     branches: BranchesPane,
     graph: GraphPane,
@@ -121,6 +124,7 @@ impl App {
             repo,
             focus: PaneId::Graph,
             zoom: Zoom::Off,
+            details_open: false,
             branches: BranchesPane::new(clock),
             graph,
             details: DetailsPane::default(),
@@ -165,6 +169,21 @@ impl App {
 
     pub fn zoom(&self) -> Zoom {
         self.zoom
+    }
+
+    /// Whether `pane` is on screen with the current layout, zoom and details state.
+    pub fn shows(&self, pane: PaneId) -> bool {
+        match self.zoom {
+            Zoom::Full(full) => pane == full,
+            _ => self.config.layout.shows(pane, self.view()),
+        }
+    }
+
+    fn view(&self) -> View {
+        View {
+            details: self.details_open,
+            wide: self.zoom == Zoom::Wide,
+        }
     }
 
     pub fn repo(&self) -> &Repo {
@@ -542,7 +561,7 @@ impl App {
         let before = self.focus;
         self.dispatch(cmd);
         if self.focus != before {
-            self.unzoom_if_hidden();
+            self.settle_focus(before);
             self.refresh_details(false);
         }
     }
@@ -560,15 +579,38 @@ impl App {
         };
     }
 
-    /// Moving focus to a pane the zoom hides restores the normal layout.
-    fn unzoom_if_hidden(&mut self) {
-        let visible = match self.zoom {
-            Zoom::Off => true,
-            Zoom::Wide => matches!(self.focus, PaneId::Graph | PaneId::Details),
-            Zoom::Full(pane) => self.focus == pane,
-        };
-        if !visible {
+    /// Makes the newly focused pane visible: unzoom, then open details (to
+    /// focus it) or close it (to focus a pane it covers). Falls back to
+    /// `before` if neither helps.
+    fn settle_focus(&mut self, before: PaneId) {
+        if self.shows(self.focus) {
+            return;
+        }
+        self.zoom = Zoom::Off;
+        if self.shows(self.focus) {
+            return;
+        }
+        self.details_open = self.focus == PaneId::Details;
+        if !self.shows(self.focus) {
+            self.focus = before;
+        }
+    }
+
+    fn toggle_details(&mut self) {
+        if self.shows(PaneId::Details) {
+            self.close_details();
+        } else {
+            self.details_open = true;
+        }
+    }
+
+    fn close_details(&mut self) {
+        self.details_open = false;
+        if matches!(self.zoom, Zoom::Wide | Zoom::Full(PaneId::Details)) {
             self.zoom = Zoom::Off;
+        }
+        if self.focus == PaneId::Details {
+            self.focus = PaneId::Graph;
         }
     }
 
@@ -583,6 +625,8 @@ impl App {
             Command::FocusGraph => self.focus = PaneId::Graph,
             Command::FocusDetails => self.focus = PaneId::Details,
             Command::Zoom => self.step_zoom(),
+            Command::ToggleDetails if self.focus == PaneId::Graph => self.toggle_details(),
+            Command::CloseDetails if self.focus == PaneId::Details => self.close_details(),
             Command::Refresh => self.update(Action::Refresh),
             Command::Palette => self.modal = Some(Modal::palette(self.palette_items())),
             Command::PluginLogs => self.show_plugin_logs(),
@@ -602,9 +646,16 @@ impl App {
         }
     }
 
+    /// Moves focus `step` places round [`PaneId::ALL`], skipping hidden panes.
     fn cycle_focus(&mut self, step: usize) {
         let idx = PaneId::ALL.iter().position(|p| *p == self.focus).unwrap_or(0);
-        self.focus = PaneId::ALL[(idx + step) % PaneId::ALL.len()];
+        let n = PaneId::ALL.len();
+        if let Some(next) = (1..n)
+            .map(|i| PaneId::ALL[(idx + i * step) % n])
+            .find(|p| self.shows(*p))
+        {
+            self.focus = next;
+        }
     }
 
     fn focused(&self) -> &dyn Component {
@@ -627,28 +678,22 @@ impl App {
 
     pub fn draw(&mut self, frame: &mut Frame) {
         let [main, help] = Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(frame.area());
-        let layout = &self.config.layout;
-        let side = layout.side_panel_width.clamp(10, 90);
-        let graph_h = layout.graph_height.clamp(10, 90);
-        let [left, right] =
-            Layout::horizontal([Constraint::Percentage(side), Constraint::Percentage(100 - side)]).areas(main);
-        let [status_area, branches_area] =
-            Layout::vertical([Constraint::Percentage(40), Constraint::Percentage(60)]).areas(left);
-        let right = if self.zoom == Zoom::Off { right } else { main };
-        let [graph_area, details_area] =
-            Layout::vertical([Constraint::Percentage(graph_h), Constraint::Percentage(100 - graph_h)]).areas(right);
-
         self.pane_areas = match self.zoom {
-            Zoom::Off => vec![
-                (PaneId::Status, status_area),
-                (PaneId::Branches, branches_area),
-                (PaneId::Graph, graph_area),
-                (PaneId::Details, details_area),
-            ],
-            Zoom::Wide => vec![(PaneId::Graph, graph_area), (PaneId::Details, details_area)],
             Zoom::Full(pane) => vec![(pane, main)],
+            _ => self.config.layout.place(main, self.view()),
         };
-        let details_area = self.pane_area(PaneId::Details).unwrap_or(details_area);
+        // Where details would open, for sizing split plugin panes while it's closed.
+        let details_area = self.pane_area(PaneId::Details).unwrap_or_else(|| {
+            let open = View {
+                details: true,
+                ..self.view()
+            };
+            let placed = self.config.layout.place(main, open);
+            placed
+                .into_iter()
+                .find(|(p, _)| *p == PaneId::Details)
+                .map_or(main, |(_, r)| r)
+        });
         self.layout_rects = (main, details_area);
         let focus = self.focus;
         let theme = &self.theme;

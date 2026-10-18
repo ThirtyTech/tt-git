@@ -66,15 +66,6 @@ const PALETTE_BUILTINS: &[Command] = &[
     Command::Quit,
 ];
 
-fn pane_name(p: PaneId) -> &'static str {
-    match p {
-        PaneId::Status => "status",
-        PaneId::Branches => "branches",
-        PaneId::Graph => "graph",
-        PaneId::Details => "details",
-    }
-}
-
 fn pane_from_name(s: &str) -> Option<PaneId> {
     Some(match s {
         "status" | "files" => PaneId::Status,
@@ -200,7 +191,7 @@ impl App {
             selected_branch: self.branches.selected().map(|b| b.name.clone()),
             selected_file: self.status.selected().map(|e| e.path.clone()),
             selected_text: None,
-            focused_pane: Some(pane_name(self.focus).into()),
+            focused_pane: Some(self.focus.name().into()),
             invocation_source: Some(source.into()),
             correlation_id: correlation,
             clicked_url: None,

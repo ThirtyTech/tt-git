@@ -16,7 +16,8 @@ use ratatui::widgets::{Block, BorderType, Borders};
 use crate::theme::Theme;
 
 /// Identifies a pane for focus and layout.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum PaneId {
     Status,
     Branches,
@@ -30,6 +31,16 @@ impl PaneId {
 
     pub fn number(self) -> usize {
         PaneId::ALL.iter().position(|p| *p == self).unwrap_or(0) + 1
+    }
+
+    /// The name used in config and by plugins.
+    pub fn name(self) -> &'static str {
+        match self {
+            PaneId::Status => "status",
+            PaneId::Branches => "branches",
+            PaneId::Graph => "graph",
+            PaneId::Details => "details",
+        }
     }
 }
 

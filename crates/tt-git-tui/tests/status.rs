@@ -116,7 +116,19 @@ fn details_show_file_diff_then_commit_again() {
     sb.commit_file("f.txt", "one\n", "base");
     sb.write("f.txt", "two\n");
     sb.write("new.txt", "brand new\n");
-    let mut t = TestDriver::new(&sb);
+    // A layout with details always on screen, next to status.
+    let cfg = Config::parse(
+        r#"
+        [layout]
+        split = "columns"
+        children = [
+          { split = "rows", children = [{ pane = "status" }, { pane = "branches" }] },
+          { split = "rows", children = [{ pane = "graph" }, { pane = "details" }] },
+        ]
+        "#,
+    )
+    .unwrap();
+    let mut t = TestDriver::with_config(cfg, &sb);
     t.press("1");
     assert_eq!(t.app().details().subject(), Some(&DetailsSubject::File("f.txt".into())));
     t.assert_pane_contains(PaneId::Details, "-one");

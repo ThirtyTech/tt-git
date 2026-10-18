@@ -67,6 +67,7 @@ impl App {
         if pane.placement == Placement::Split {
             // One split at a time: it takes the details pane's place.
             self.panes.retain(|p| p.placement != Placement::Split);
+            self.details_open = true;
             if req.focus {
                 self.focus = PaneId::Details;
             }
@@ -126,7 +127,7 @@ impl App {
                     self.close_pane(id);
                 }
                 self.focus = PaneId::Graph;
-                self.unzoom_if_hidden();
+                self.settle_focus(PaneId::Details);
                 self.refresh_details(false);
             } else if exited {
                 // Any key dismisses a finished split pane.

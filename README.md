@@ -9,8 +9,7 @@ A terminal git client in Rust ([ratatui](https://ratatui.rs)), inspired by
   Press `a` to switch between all branches and just the current branch (plus
   its upstream).
 - **A status pane** like lazygit's files panel: stage, unstage, discard,
-  commit and amend, with the diff in the details pane. It also handles
-  merge/rebase/cherry-pick conflicts.
+  commit and amend. It also handles merge/rebase/cherry-pick conflicts.
 - **One branch list for local and remote branches**, sorted by recent
   activity (commits, fetches, checkouts). If you check out a branch that only
   exists on a remote, tt-git creates the local tracking branch for you
@@ -21,17 +20,22 @@ A terminal git client in Rust ([ratatui](https://ratatui.rs)), inspired by
   `tt-git` CLI or a JSON socket. See [docs/plugins.md](docs/plugins.md).
 
 ```
-╭[1] Status: repo · main → origin/main ↑1╮╭[3] Graph [all] 1/5────────────────────────────────────╮
-│ M src/app.rs                           ││●    [side] side experiment          Test User   2h b66 │
-│?? notes.md                             ││◉─╮   main  <v1.0> Merge 'feature'   Test User   3h 59f │
-╰────────────────────────────────────────╯││ ●  [feature] feature work           Test User   1d 788 │
-╭[2] Branches 3──────────────────────────╮│● │  main work                       Test User   1d f75 │
-│* main            ✓          2h         ││●─╯  base                            Test User   2d b29 │
-│  feature         local      1d         │╰────────────────────────────────────────────────────────╯
-│  their-feature   origin     3d         │╭[4] Commit 59f0f13──────────────────────────────────────╮
-╰────────────────────────────────────────╯│commit 59f0f13…  Author: …  + diff                      │
- a all/current  n new branch  M merge into current  r rebase  C cherry-pick  tab next pane  ? help
+╭[3] Graph [all] 1/5─────────────────────────────────────────────────────────────────────────────╮
+│●    [side] side experiment                                             Test User      2h b66   │
+│◉─╮   main  <v1.0> Merge 'feature'                                      Test User      3h 59f   │
+││ ●  [feature] feature work                                             Test User      1d 788   │
+│● │  main work                                                          Test User      1d f75   │
+│●─╯  base                                                               Test User      2d b29   │
+╰────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭[1] Status: repo · main → origin/main ↑1───────╮╭[2] Branches 3─────────────────────────────────╮
+│ M src/app.rs                                  ││* main            ✓          2h                │
+│?? notes.md                                    ││  feature         local      1d                │
+╰───────────────────────────────────────────────╯╰───────────────────────────────────────────────╯
+ enter show/hide details  a all/current  n new branch  M merge into current  tab next pane  ? help
 ```
+
+Press `enter` on a commit to open its details in place of the bottom row.
+The layout is configurable; see [docs/configuration.md](docs/configuration.md#layout).
 
 ## Install
 
@@ -56,7 +60,8 @@ command palette, which lists built-in commands and plugin actions.
 | | `ctrl+r` | refresh |
 | | `:` `ctrl+p` | command palette |
 | | `q` | quit |
-| graph | `a` | all branches ↔ current branch |
+| graph | `enter` | show / hide the commit's details (they replace the bottom row) |
+| | `a` | all branches ↔ current branch |
 | | `n` | new branch at the selected commit |
 | | `M` / `r` / `C` | merge into current / rebase current onto / cherry-pick |
 | branches | `enter` `space` | check out (remote-only branches get a tracking branch) |
@@ -70,6 +75,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `c` / `A` | commit / amend keeping the message |
 | | `C` / `X` | continue / abort a merge, rebase or cherry-pick |
 | details | `o` | open the link in view with a plugin link handler |
+| | `esc` | close details |
 
 The mouse also works: click a pane or row to focus and select it, use the
 wheel to scroll the pane under the pointer, and `ctrl`+click a link in the

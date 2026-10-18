@@ -6,6 +6,7 @@ pub mod component;
 pub mod config;
 pub mod jobs;
 pub mod keymap;
+pub mod layout;
 pub mod loaders;
 pub mod modal;
 pub mod panes;
