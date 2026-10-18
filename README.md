@@ -70,10 +70,10 @@ command palette, which lists built-in commands and plugin actions.
 | | `space` | show / hide the commit's details (they replace the bottom row) |
 | | `esc` | hide details |
 | | `a` | all branches ↔ current branch |
-| | `n` | new branch at the selected commit |
+| | `n` | new branch at the selected commit (`tab` in the dialog: create it in a worktree) |
 | | `M` / `r` / `C` | merge into current / rebase current onto / cherry-pick |
 | branches | `enter` `space` | check out (remote-only branches get a tracking branch) |
-| | `n` `d` `R` | new / delete (asks before force-deleting unmerged) / rename |
+| | `n` `d` `R` | new (`tab` in the dialog: create it in a worktree under `.worktrees/`) / delete (asks before force-deleting unmerged) / rename |
 | | `f` | `fetch --all --prune` |
 | | `/` | filter as you type (`esc` clears) |
 | | `]` `[` | next / previous tab: all branches, unmerged into the base branch, merged into it |

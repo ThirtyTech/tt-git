@@ -524,7 +524,7 @@ impl App {
                 op,
                 GitOp::Commit { .. }
                     | GitOp::Checkout(_)
-                    | GitOp::CreateBranch { .. }
+                    | GitOp::CreateBranch { worktree: false, .. }
                     | GitOp::Pull
                     | GitOp::Merge { .. }
                     | GitOp::Rebase { .. }

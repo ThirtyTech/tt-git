@@ -225,3 +225,39 @@ fn clean_rebase_and_cherry_pick() {
     // topic's commit was already applied on main, so the rebase drops it.
     assert_eq!(sb.rev_parse("topic"), sb.rev_parse("main"));
 }
+
+#[test]
+fn create_branch_in_a_worktree() {
+    let sb = Sandbox::new();
+    let base = sb.commit("base");
+    let repo = open(&sb);
+    repo.create_worktree("feature/x", "main").unwrap();
+
+    let path = sb.path().join(".worktrees").join("feature").join("x");
+    assert_eq!(
+        repo.worktree_path("feature/x"),
+        repo.root().join(".worktrees/feature/x")
+    );
+    assert!(path.join("base.txt").is_file(), "checked out at {}", path.display());
+    assert_eq!(sb.current_branch(), "main", "this worktree stays where it was");
+    assert_eq!(sb.git_in(&path, &["branch", "--show-current"]), "feature/x");
+    assert_eq!(sb.rev_parse("feature/x"), base);
+    assert!(
+        repo.status().unwrap().entries.is_empty(),
+        "the worktrees folder is excluded"
+    );
+
+    // From inside the new worktree, more go next to it rather than in it.
+    let inner = Repo::discover(&path, &GitCli::new(".").with_env(sb.env())).unwrap();
+    assert_eq!(
+        std::fs::canonicalize(inner.main_root()).unwrap(),
+        std::fs::canonicalize(sb.path()).unwrap()
+    );
+    inner.create_worktree("y", "main").unwrap();
+    assert!(sb.path().join(".worktrees/y/base.txt").is_file());
+    let exclude = std::fs::read_to_string(repo.common_dir().join("info/exclude")).unwrap();
+    assert_eq!(exclude.matches("/.worktrees/").count(), 1, "{exclude}");
+
+    let err = repo.create_worktree("y", "main").unwrap_err();
+    assert!(err.stderr().unwrap_or_default().contains("already exists"), "{err}");
+}

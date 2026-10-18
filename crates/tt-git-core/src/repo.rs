@@ -10,6 +10,9 @@ use crate::parse;
 /// Repo-local git config key holding the picked base branch.
 pub const BASE_BRANCH_KEY: &str = "tt-git.baseBranch";
 
+/// Folder, in the main working tree, that new worktrees are created in.
+pub const WORKTREE_DIR: &str = ".worktrees";
+
 /// Which commits the graph loads.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LogScope {
@@ -86,6 +89,21 @@ impl Repo {
     /// The shared `.git` directory (differs from `git_dir` in linked worktrees).
     pub fn common_dir(&self) -> &Path {
         &self.common_dir
+    }
+
+    /// The main working tree's root: the same as [`root`](Self::root)
+    /// except inside a linked worktree.
+    pub fn main_root(&self) -> &Path {
+        match self.common_dir.parent() {
+            Some(parent) if self.common_dir.file_name().is_some_and(|n| n == ".git") => parent,
+            _ => &self.root,
+        }
+    }
+
+    /// Where [`create_worktree`](Self::create_worktree) puts branch `name`:
+    /// `.worktrees/<name>` in the main working tree.
+    pub fn worktree_path(&self, name: &str) -> PathBuf {
+        self.main_root().join(WORKTREE_DIR).join(name)
     }
 
     pub fn head(&self) -> Result<Head> {

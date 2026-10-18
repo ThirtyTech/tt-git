@@ -276,6 +276,7 @@ impl BranchesPane {
                 "",
                 PromptAction::CreateBranch {
                     start: Self::start_ref(entry),
+                    worktree: false,
                 },
             ))),
             Command::Merge | Command::Rebase => {

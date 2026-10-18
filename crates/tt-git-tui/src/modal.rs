@@ -1,8 +1,10 @@
-//! Modal popups: a one-line text prompt and a yes/no confirmation.
+//! Modal popups: a one-line text prompt, a yes/no confirmation and a
+//! fuzzy-filtered list.
 
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tt_git_core::{CheckoutPlan, DiscardKind, InProgress};
@@ -14,9 +16,12 @@ use crate::theme::Theme;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitOp {
     Checkout(CheckoutPlan),
+    /// With `worktree`, the branch is checked out in a new worktree under
+    /// `.worktrees/` instead of switching to it here.
     CreateBranch {
         name: String,
         start: String,
+        worktree: bool,
     },
     DeleteBranch {
         name: String,
@@ -70,7 +75,14 @@ impl GitOp {
             GitOp::Checkout(CheckoutPlan::Track { name, remote_ref }) => {
                 format!("checkout {name} (tracking {remote_ref})")
             }
-            GitOp::CreateBranch { name, .. } => format!("create branch {name}"),
+            GitOp::CreateBranch {
+                name, worktree: false, ..
+            } => format!("create branch {name}"),
+            GitOp::CreateBranch {
+                name, worktree: true, ..
+            } => {
+                format!("create worktree {}", worktree_rel_path(name))
+            }
             GitOp::DeleteBranch { name, .. } => format!("delete branch {name}"),
             GitOp::DeleteRemoteBranch { remote, branch } => format!("delete {remote}/{branch}"),
             GitOp::RenameBranch { old, new } => format!("rename {old} → {new}"),
@@ -95,20 +107,33 @@ impl GitOp {
     }
 }
 
+/// Where a new worktree for branch `name` goes, relative to the main
+/// working tree.
+pub fn worktree_rel_path(name: &str) -> String {
+    format!("{}/{name}", tt_git_core::repo::WORKTREE_DIR)
+}
+
 /// What a submitted prompt turns into.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromptAction {
-    CreateBranch { start: String },
-    RenameBranch { old: String },
+    /// `tab` switches `worktree` on and off.
+    CreateBranch {
+        start: String,
+        worktree: bool,
+    },
+    RenameBranch {
+        old: String,
+    },
     Commit,
 }
 
 impl PromptAction {
     fn op(&self, input: &str) -> GitOp {
         match self {
-            PromptAction::CreateBranch { start } => GitOp::CreateBranch {
+            PromptAction::CreateBranch { start, worktree } => GitOp::CreateBranch {
                 name: input.to_string(),
                 start: start.clone(),
+                worktree: *worktree,
             },
             PromptAction::RenameBranch { old } => GitOp::RenameBranch {
                 old: old.clone(),
@@ -269,6 +294,12 @@ impl Modal {
                     input.clear();
                     ModalOutcome::Open
                 }
+                KeyCode::Tab | KeyCode::BackTab => {
+                    if let PromptAction::CreateBranch { worktree, .. } = action {
+                        *worktree = !*worktree;
+                    }
+                    ModalOutcome::Open
+                }
                 KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
                     input.push(c);
                     ModalOutcome::Open
@@ -295,14 +326,38 @@ impl Modal {
         }
         let (title, body, hint): (&str, Vec<Line>, &str) = match self {
             Modal::Palette { .. } => unreachable!("handled above"),
-            Modal::Prompt { title, input, .. } => (
-                title,
-                vec![Line::from(vec![
-                    Span::raw(input.as_str()),
-                    Span::styled("█", theme.help_key),
-                ])],
-                "enter confirm · esc cancel",
-            ),
+            Modal::Prompt { title, input, action } => {
+                let input_line = Line::from(vec![Span::raw(input.as_str()), Span::styled("█", theme.help_key)]);
+                match action {
+                    PromptAction::CreateBranch { worktree, .. } => {
+                        let tab = |label: &'static str, on: bool| {
+                            if on {
+                                Span::styled(label, theme.help_key.add_modifier(Modifier::UNDERLINED))
+                            } else {
+                                Span::styled(label, theme.muted)
+                            }
+                        };
+                        let note = if *worktree {
+                            let name = input.trim();
+                            let name = if name.is_empty() { "<name>" } else { name };
+                            format!("checked out in {}", worktree_rel_path(name))
+                        } else {
+                            "switches to it here".to_string()
+                        };
+                        let body = vec![
+                            Line::from(vec![
+                                tab("Branch", !worktree),
+                                Span::styled(" · ", theme.muted),
+                                tab("Worktree", *worktree),
+                            ]),
+                            input_line,
+                            Line::styled(note, theme.muted),
+                        ];
+                        (title, body, "enter confirm · tab branch/worktree · esc cancel")
+                    }
+                    _ => (title, vec![input_line], "enter confirm · esc cancel"),
+                }
+            }
             Modal::Confirm { title, message, .. } => (
                 title,
                 message.lines().map(Line::from).collect(),
@@ -388,7 +443,14 @@ mod tests {
 
     #[test]
     fn prompt_edits_and_submits() {
-        let mut m = Modal::prompt("New branch", "", PromptAction::CreateBranch { start: "abc".into() });
+        let mut m = Modal::prompt(
+            "New branch",
+            "",
+            PromptAction::CreateBranch {
+                start: "abc".into(),
+                worktree: false,
+            },
+        );
         assert_eq!(
             m.handle_key(k("enter")),
             ModalOutcome::Open,
@@ -403,9 +465,25 @@ mod tests {
             m.handle_key(k("enter")),
             ModalOutcome::Run(GitOp::CreateBranch {
                 name: "topic".into(),
-                start: "abc".into()
+                start: "abc".into(),
+                worktree: false,
             })
         );
+        m.handle_key(k("tab"));
+        assert_eq!(
+            m.handle_key(k("enter")),
+            ModalOutcome::Run(GitOp::CreateBranch {
+                name: "topic".into(),
+                start: "abc".into(),
+                worktree: true,
+            }),
+            "tab switches to a worktree"
+        );
+        m.handle_key(k("shift+tab"));
+        assert!(matches!(
+            m.handle_key(k("enter")),
+            ModalOutcome::Run(GitOp::CreateBranch { worktree: false, .. })
+        ));
         m.handle_key(k("ctrl+u"));
         assert_eq!(m.handle_key(k("esc")), ModalOutcome::Cancelled);
     }

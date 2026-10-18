@@ -202,7 +202,16 @@ fn cap_lines(text: &str) -> String {
 pub fn run_op(repo: Repo, op: GitOp) -> Action {
     let result = match &op {
         GitOp::Checkout(plan) => repo.checkout(plan),
-        GitOp::CreateBranch { name, start } => repo.create_branch(name, start),
+        GitOp::CreateBranch {
+            name,
+            start,
+            worktree: false,
+        } => repo.create_branch(name, start),
+        GitOp::CreateBranch {
+            name,
+            start,
+            worktree: true,
+        } => repo.create_worktree(name, start),
         GitOp::DeleteBranch { name, force } => repo.delete_branch(name, *force),
         GitOp::DeleteRemoteBranch { remote, branch } => repo.delete_remote_branch(remote, branch),
         GitOp::RenameBranch { old, new } => repo.rename_branch(old, new),

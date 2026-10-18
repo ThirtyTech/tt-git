@@ -251,7 +251,13 @@ impl App {
                 "branch.checked_out",
                 json!({ "branch": name, "created": true, "tracking": remote_ref }),
             ),
-            GitOp::CreateBranch { name, start } => ("branch.created", json!({ "branch": name, "start": start })),
+            GitOp::CreateBranch { name, start, worktree } => {
+                let path = worktree.then(|| self.repo.worktree_path(name));
+                (
+                    "branch.created",
+                    json!({ "branch": name, "start": start, "worktree": path }),
+                )
+            }
             GitOp::DeleteBranch { name, .. } => ("branch.deleted", json!({ "branch": name, "remote": null })),
             GitOp::DeleteRemoteBranch { remote, branch } => {
                 ("branch.deleted", json!({ "branch": branch, "remote": remote }))
@@ -291,7 +297,10 @@ impl App {
             ),
         };
         self.emit_event(event, data);
-        if let GitOp::CreateBranch { name, .. } = op {
+        if let GitOp::CreateBranch {
+            name, worktree: false, ..
+        } = op
+        {
             self.emit_event("branch.checked_out", json!({ "branch": name, "created": true }));
         }
     }

@@ -3,7 +3,7 @@
 
 use crate::branches::CheckoutPlan;
 use crate::git::{GitError, GitOutput, Result};
-use crate::repo::{BASE_BRANCH_KEY, Repo};
+use crate::repo::{BASE_BRANCH_KEY, Repo, WORKTREE_DIR};
 
 fn text(out: GitOutput) -> String {
     let mut s = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -35,6 +35,40 @@ impl Repo {
     /// Creates `name` at `start` (a commit or ref) and switches to it.
     pub fn create_branch(&self, name: &str, start: &str) -> Result<String> {
         self.git().run(&["switch", "-c", name, start]).map(text)
+    }
+
+    /// Creates `name` at `start` checked out in a new worktree at
+    /// [`worktree_path`](Self::worktree_path), leaving this one as it is.
+    /// The worktrees folder is added to the repo's `info/exclude` so it
+    /// doesn't show up as untracked.
+    pub fn create_worktree(&self, name: &str, start: &str) -> Result<String> {
+        self.exclude_worktrees().map_err(GitError::Spawn)?;
+        let path = self.worktree_path(name).to_string_lossy().into_owned();
+        self.git()
+            .run(&["worktree", "add", "-b", name, path.as_str(), start])
+            .map(text)
+    }
+
+    /// Adds `/.worktrees/` to `info/exclude` unless it's already there.
+    fn exclude_worktrees(&self) -> std::io::Result<()> {
+        let pattern = format!("/{WORKTREE_DIR}/");
+        let path = self.common_dir().join("info").join("exclude");
+        let current = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(e) => return Err(e),
+        };
+        if current.lines().any(|l| l.trim() == pattern) {
+            return Ok(());
+        }
+        let mut updated = current;
+        if !updated.is_empty() && !updated.ends_with('\n') {
+            updated.push('\n');
+        }
+        updated.push_str(&pattern);
+        updated.push('\n');
+        std::fs::create_dir_all(path.parent().expect("info dir"))?;
+        std::fs::write(&path, updated)
     }
 
     /// Deletes a local branch; without `force` git refuses unmerged ones.

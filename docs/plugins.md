@@ -140,7 +140,7 @@ Event hooks are low-volume events, each run as a fresh process:
 | `repo.opened` | `{path, name}` |
 | `head.changed` | `{from, from_branch, to, branch}` (also on switching between branches at the same commit) |
 | `branch.checked_out` | `{branch, created, tracking?}`; `created` is true for auto-created tracking branches |
-| `branch.created` / `branch.deleted` / `branch.renamed` | `{branch, start}` / `{branch, remote}` / `{from, to}` |
+| `branch.created` / `branch.deleted` / `branch.renamed` | `{branch, start, worktree}` (`worktree` is the new worktree's path, or null) / `{branch, remote}` / `{from, to}` |
 | `commit.created` | `{oid, amend, summary}` |
 | `fetch.completed` / `pull.completed` / `push.completed` | `{}` / `{branch, head}` / `{branch}` |
 | `files.staged` / `files.unstaged` / `files.discarded` | `{paths}` (`"all"` for stage-all) / `{paths}` / `{path}` |

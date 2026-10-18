@@ -407,3 +407,30 @@ fn merged_and_unmerged_tabs_show_one_branch_from_fork_to_merge() {
     assert!(t.pane_title(PaneId::Graph).contains("Graph [all]"));
     assert_eq!(summaries(&t).len(), all);
 }
+
+#[test]
+fn new_branch_as_a_worktree() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let mut t = TestDriver::new(&sb);
+    t.press("2").press("n");
+    assert!(t.screen().contains("switches to it here"));
+    t.type_text("side").press("tab");
+    assert!(t.screen().contains("checked out in .worktrees/side"), "{}", t.screen());
+    t.press("shift+tab");
+    assert!(t.screen().contains("switches to it here"));
+    t.press("tab").press("enter");
+    assert!(t.app().modal().is_none());
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(sb.current_branch(), "main", "stays on the current branch");
+    let path = sb.path().join(".worktrees/side");
+    assert_eq!(sb.git_in(&path, &["branch", "--show-current"]), "side");
+    assert!(names(&t).contains(&"side".to_string()));
+    assert!(t.app().status().entries().is_empty(), "the worktree isn't untracked");
+    assert!(
+        t.app()
+            .notice()
+            .unwrap_or_default()
+            .contains("create worktree .worktrees/side")
+    );
+}

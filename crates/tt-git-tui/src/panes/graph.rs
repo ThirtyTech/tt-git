@@ -504,7 +504,10 @@ impl Component for GraphPane {
                     ctx.emit(Action::OpenModal(Modal::prompt(
                         format!("New branch at {}", c.short_oid()),
                         "",
-                        PromptAction::CreateBranch { start: c.oid.clone() },
+                        PromptAction::CreateBranch {
+                            start: c.oid.clone(),
+                            worktree: false,
+                        },
                     )));
                 }
                 EventState::Consumed
