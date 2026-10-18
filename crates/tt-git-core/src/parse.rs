@@ -9,7 +9,7 @@ pub const FS: char = '\u{1f}';
 
 /// `git log` arguments producing records [`parse_commit`] understands.
 /// Records are NUL-terminated (`-z`), fields separated by [`FS`].
-pub const LOG_FORMAT: &str = "--format=%H%x1f%P%x1f%an%x1f%ae%x1f%at%x1f%ct%x1f%s";
+pub const LOG_FORMAT: &str = "--format=%H%x1f%P%x1f%aN%x1f%aE%x1f%at%x1f%ct%x1f%s";
 
 /// Parses one record of [`LOG_FORMAT`].
 pub fn parse_commit(record: &[u8]) -> Result<Commit, GitError> {

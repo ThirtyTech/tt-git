@@ -248,3 +248,18 @@ fn command_log_records_calls() {
     );
     assert!(entries.iter().all(|e| e.duration.is_some()));
 }
+
+#[test]
+fn author_names_respect_mailmap() {
+    let sb = Sandbox::new();
+    sb.commit("one");
+    sb.write(
+        ".mailmap",
+        "Real Name <real@example.com> Test User <test@example.com>\n",
+    );
+
+    let repo = open(&sb);
+    let commits = repo.commits(&LogScope::All, 100).unwrap();
+    assert_eq!(commits[0].author_name, "Real Name");
+    assert_eq!(commits[0].author_email, "real@example.com");
+}

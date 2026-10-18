@@ -182,3 +182,17 @@ fn small_graph_limit_loads_more_when_scrolling() {
     t.press("G").press("G");
     assert_eq!(t.app().graph().commits().len(), 30);
 }
+
+#[test]
+fn details_respect_mailmap() {
+    let sb = Sandbox::new();
+    sb.commit("one");
+    sb.write(
+        ".mailmap",
+        "Real Name <real@example.com> Test User <test@example.com>\n",
+    );
+    let t = TestDriver::new(&sb);
+    t.assert_pane_contains(PaneId::Details, "Author: Real Name <real@example.com>");
+    t.assert_pane_contains(PaneId::Details, "Committer: Real Name <real@example.com>");
+    t.assert_pane_contains(PaneId::Graph, "Real Name");
+}

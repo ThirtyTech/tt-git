@@ -80,7 +80,7 @@ fn head_upstream(repo: &Repo) -> Option<String> {
 }
 
 pub fn load_commit_details(repo: Repo, oid: String) -> Action {
-    let format = "--format=commit %H%nParents: %P%nAuthor: %an <%ae>%nDate:   %ad%nCommitter: %cn <%ce>%n%n%w(0,4,4)%B";
+    let format = "--format=commit %H%nParents: %P%nAuthor: %aN <%aE>%nDate:   %ad%nCommitter: %cN <%cE>%n%n%w(0,4,4)%B";
     let text = match repo.git().run(&[
         "show",
         format,
