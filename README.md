@@ -31,10 +31,11 @@ A terminal git client in Rust ([ratatui](https://ratatui.rs)), inspired by
 │ M src/app.rs                                  ││* main            ✓          2h                │
 │?? notes.md                                    ││  feature         local      1d                │
 ╰───────────────────────────────────────────────╯╰───────────────────────────────────────────────╯
- enter show/hide details  a all/current  n new branch  M merge into current  tab next pane  ? help
+ enter files + diff  space show/hide details  a all/current  n new branch  tab next pane  ? help
 ```
 
-Press `enter` on a commit to open its details in place of the bottom row.
+Press `space` on a commit to open its details in place of the bottom row,
+or `enter` to open it fullscreen as changed files beside a diff.
 The layout is configurable; see [docs/configuration.md](docs/configuration.md#layout).
 
 ## Install
@@ -54,14 +55,16 @@ command palette, which lists built-in commands and plugin actions.
 | Where | Key | Does |
 |---|---|---|
 | anywhere | `1` `2` `3` `4` / `tab` `shift+tab` | focus status / branches / graph / details |
+| | `ctrl+h` `ctrl+j` `ctrl+k` `ctrl+l` | focus the pane to the left / below / above / right |
 | | `+` | zoom: graph + details full width → focused one fullscreen → back |
 | | `j` `k` `↑` `↓`, `ctrl+d` `ctrl+u`, `g` `G` | move, page, top/bottom |
 | | `P` / `p` | push (sets upstream on first push) / pull |
 | | `ctrl+r` | refresh |
 | | `:` `ctrl+p` | command palette |
 | | `q` | quit |
-| graph | `enter` | show / hide the commit's details (they replace the bottom row) |
-| | `shift+enter` | the commit fullscreen: changed files on the left, the selected file's diff on the right (`j`/`k` pick a file, `pgup`/`pgdn` scroll, `esc` back) |
+| graph | `enter` | the commit fullscreen: changed files on the left, the selected file's diff on the right (`j`/`k` pick a file, `pgup`/`pgdn` scroll, `esc` back) |
+| | `space` | show / hide the commit's details (they replace the bottom row) |
+| | `esc` | hide details |
 | | `a` | all branches ↔ current branch |
 | | `n` | new branch at the selected commit |
 | | `M` / `r` / `C` | merge into current / rebase current onto / cherry-pick |

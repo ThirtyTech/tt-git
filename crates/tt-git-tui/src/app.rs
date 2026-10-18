@@ -37,6 +37,10 @@ const ALL_GLOBAL: &[Command] = &[
     Command::FocusDetails,
     Command::FocusNext,
     Command::FocusPrev,
+    Command::FocusLeft,
+    Command::FocusDown,
+    Command::FocusUp,
+    Command::FocusRight,
     Command::Zoom,
     Command::MoveUp,
     Command::MoveDown,
@@ -233,6 +237,9 @@ impl App {
 
     /// Handles a terminal event.
     pub fn handle_event(&mut self, event: Event) {
+        if let Event::Key(key) = &event {
+            tracing::debug!(code = ?key.code, modifiers = ?key.modifiers, kind = ?key.kind, "key");
+        }
         match event {
             // Windows reports releases too; only act on presses (and repeats).
             Event::Key(key) if key.kind != KeyEventKind::Release => self.handle_key(key),
@@ -666,6 +673,7 @@ impl App {
             Command::Help => self.show_help = !self.show_help,
             Command::FocusNext => self.cycle_focus(1),
             Command::FocusPrev => self.cycle_focus(PaneId::ALL.len() - 1),
+            Command::FocusLeft | Command::FocusDown | Command::FocusUp | Command::FocusRight => self.focus_toward(cmd),
             Command::FocusStatus => self.focus = PaneId::Status,
             Command::FocusBranches => self.focus = PaneId::Branches,
             Command::FocusGraph => self.focus = PaneId::Graph,
@@ -673,7 +681,7 @@ impl App {
             Command::Zoom => self.step_zoom(),
             Command::ToggleDetails if self.focus == PaneId::Graph => self.toggle_details(),
             Command::ExpandDetails if self.focus == PaneId::Graph => self.expand_details(),
-            Command::CloseDetails if self.focus == PaneId::Details => self.close_details(),
+            Command::CloseDetails if matches!(self.focus, PaneId::Graph | PaneId::Details) => self.close_details(),
             Command::Refresh => self.update(Action::Refresh),
             Command::Palette => self.modal = Some(Modal::palette(self.palette_items())),
             Command::PluginLogs => self.show_plugin_logs(),
@@ -690,6 +698,42 @@ impl App {
                     tracing::debug!(?cmd, pane = ?self.focus, "command not handled");
                 }
             }
+        }
+    }
+
+    /// Moves focus to the nearest pane on screen in the direction of `cmd`
+    /// (one of the `Focus{Left,Down,Up,Right}` commands), vim-window style.
+    /// Panes that overlap the focused one across that direction win; ties go
+    /// to the one whose middle is closest.
+    fn focus_toward(&mut self, cmd: Command) {
+        let Some(from) = self.pane_area(self.focus) else {
+            return;
+        };
+        let sideways = matches!(cmd, Command::FocusLeft | Command::FocusRight);
+        // A rect's extent across the direction of travel, as (start, end).
+        let across = |r: Rect| if sideways { (r.y, r.bottom()) } else { (r.x, r.right()) };
+        // Sorts best first: overlapping across, then nearest, then most centred.
+        let score = |to: Rect| -> Option<(bool, u16, u32)> {
+            let gap = match cmd {
+                Command::FocusLeft => from.x.checked_sub(to.right())?,
+                Command::FocusRight => to.x.checked_sub(from.right())?,
+                Command::FocusUp => from.y.checked_sub(to.bottom())?,
+                Command::FocusDown => to.y.checked_sub(from.bottom())?,
+                _ => return None,
+            };
+            let ((a0, a1), (b0, b1)) = (across(from), across(to));
+            let overlaps = a0 < b1 && b0 < a1;
+            let off_centre = (u32::from(a0) + u32::from(a1)).abs_diff(u32::from(b0) + u32::from(b1));
+            Some((!overlaps, gap, off_centre))
+        };
+        let next = self
+            .pane_areas
+            .iter()
+            .filter(|(p, _)| *p != self.focus)
+            .filter_map(|(p, r)| score(*r).map(|s| (s, *p)))
+            .min_by_key(|(s, _)| *s);
+        if let Some((_, pane)) = next {
+            self.focus = pane;
         }
     }
 

@@ -34,31 +34,62 @@ fn focus_keys_and_cycle() {
 }
 
 #[test]
-fn enter_toggles_details_over_the_bottom_row() {
+fn ctrl_hjkl_moves_between_panes_by_position() {
+    let sb = branchy_repo();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
+    // Default layout: graph on top, status bottom left, branches bottom right.
+    t.press("ctrl+j");
+    assert_eq!(t.app().focus(), PaneId::Status);
+    t.press("ctrl+l");
+    assert_eq!(t.app().focus(), PaneId::Branches);
+    t.press("ctrl+l"); // nothing further right
+    assert_eq!(t.app().focus(), PaneId::Branches);
+    t.press("ctrl+h");
+    assert_eq!(t.app().focus(), PaneId::Status);
+    t.press("ctrl+k");
+    assert_eq!(t.app().focus(), PaneId::Graph);
+    t.press("ctrl+k");
+    assert_eq!(t.app().focus(), PaneId::Graph);
+
+    // With details open below the graph, ctrl+j goes there.
+    t.press("space").press("ctrl+j");
+    assert_eq!(t.app().focus(), PaneId::Details);
+    t.press("ctrl+k");
+    assert_eq!(t.app().focus(), PaneId::Graph);
+}
+
+#[test]
+fn space_toggles_details_over_the_bottom_row() {
     let sb = branchy_repo();
     let mut t = TestDriver::with_size(Config::default(), &sb, 100, 40);
     assert!(t.app().pane_area(PaneId::Details).is_none());
     let status = t.app().pane_area(PaneId::Status).unwrap();
     let branches = t.app().pane_area(PaneId::Branches).unwrap();
 
-    t.press("enter");
+    t.press("space");
     assert_eq!(t.app().focus(), PaneId::Graph);
     let details = t.app().pane_area(PaneId::Details).unwrap();
     assert_eq!(details, status.union(branches));
     assert!(t.app().pane_area(PaneId::Status).is_none());
     t.assert_pane_contains(PaneId::Details, "side experiment");
 
-    t.press("enter");
+    t.press("space");
     assert!(t.app().pane_area(PaneId::Details).is_none());
     assert_eq!(t.app().pane_area(PaneId::Status), Some(status));
 
     // esc in details closes it and returns to the graph.
-    t.press("enter").press("4").press("esc");
+    t.press("space").press("4").press("esc");
     assert!(!t.app().shows(PaneId::Details));
     assert_eq!(t.app().focus(), PaneId::Graph);
 
+    // So does esc in the graph while details is showing.
+    t.press("space").press("esc");
+    assert!(!t.app().shows(PaneId::Details));
+    assert_eq!(t.app().focus(), PaneId::Graph);
+    assert_eq!(t.app().pane_area(PaneId::Status), Some(status));
+
     // Focusing a pane details covers closes it.
-    t.press("enter").press("2");
+    t.press("space").press("2");
     assert_eq!(t.app().focus(), PaneId::Branches);
     assert!(!t.app().shows(PaneId::Details));
 }
@@ -182,7 +213,7 @@ fn toggle_to_current_branch_hides_other_branches() {
 fn details_follow_the_selection() {
     let sb = branchy_repo();
     let mut t = TestDriver::new(&sb);
-    t.press("enter");
+    t.press("space");
     t.assert_pane_contains(PaneId::Details, "side experiment");
     t.assert_pane_contains(PaneId::Details, "Author: Test User <test@example.com>");
     t.press("j");
@@ -211,7 +242,7 @@ fn merge_commit_details_show_first_parent_diff() {
         .iter()
         .position(|c| c.parents.len() == 2)
         .unwrap();
-    t.press("enter");
+    t.press("space");
     for _ in 0..idx {
         t.press("j");
     }
@@ -256,7 +287,7 @@ fn details_respect_mailmap() {
         "Real Name <real@example.com> Test User <test@example.com>\n",
     );
     let mut t = TestDriver::new(&sb);
-    t.press("enter");
+    t.press("space");
     t.assert_pane_contains(PaneId::Details, "Author: Real Name <real@example.com>");
     t.assert_pane_contains(PaneId::Details, "Committer: Real Name <real@example.com>");
     t.assert_pane_contains(PaneId::Graph, "Real Name");
@@ -313,7 +344,7 @@ fn focusing_a_hidden_pane_unzooms() {
 }
 
 #[test]
-fn shift_enter_opens_files_beside_a_diff() {
+fn enter_opens_files_beside_a_diff() {
     let sb = Sandbox::new();
     sb.commit_file("a.txt", "one\n", "base");
     sb.write("a.txt", "two\n").write("b.txt", "bee\n");
@@ -321,7 +352,7 @@ fn shift_enter_opens_files_beside_a_diff() {
     let oid = sb.commit_staged("touch two files");
     let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
 
-    t.press("shift+enter");
+    t.press("enter");
     assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
     assert_eq!(t.app().focus(), PaneId::Details);
     assert_eq!(
@@ -352,7 +383,7 @@ fn shift_enter_opens_files_beside_a_diff() {
     assert_eq!(t.app().zoom(), Zoom::Off);
     assert_eq!(t.app().focus(), PaneId::Graph);
     assert!(!t.app().shows(PaneId::Details));
-    t.press("enter");
+    t.press("space");
     assert_eq!(t.app().details().subject(), Some(&DetailsSubject::Commit(oid)));
     t.assert_pane_contains(PaneId::Details, "touch two files");
 }

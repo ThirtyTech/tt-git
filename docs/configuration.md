@@ -40,9 +40,9 @@ children = [
 ```
 
 The graph spans the top 70%, with status and branches side by side below it.
-`details = true` marks where the details pane opens: press `enter` on a
+`details = true` marks where the details pane opens: press `space` on a
 commit in the graph (or `4`) and details takes that node's place until you
-press `enter` again, `esc` in details, or focus a pane it covers. Status,
+press `space` again, `esc` (in the graph or details), or focus a pane it covers. Status,
 branches and graph must each appear once.
 
 To keep details on screen all the time, give it a pane of its own instead.
@@ -57,12 +57,8 @@ children = [
 ]
 ```
 
-`shift+enter` on a commit opens it fullscreen instead, with the changed
-files on the left and the selected file's diff on the right. Most terminals
-on Linux and macOS only report `shift+enter` if they support the kitty
-keyboard protocol (kitty, WezTerm, foot, Ghostty, recent iTerm2); elsewhere
-it arrives as plain `enter`, so bind `expand_details` to another key if you
-need to.
+`enter` on a commit opens it fullscreen instead, with the changed files on
+the left and the selected file's diff on the right.
 
 `+` zooms whichever layout you use: first to just the graph and details at
 full width (opening details if needed), then to the focused pane alone, then
@@ -94,10 +90,11 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 |---|---|---|
 | `quit`, `help`, `palette` | `q` `ctrl+c`, `?`, `:` `ctrl+p` | global |
 | `focus_status` … `focus_details`, `focus_next`, `focus_prev` | `1`–`4`, `tab`, `shift+tab` | global |
+| `focus_left`, `focus_down`, `focus_up`, `focus_right` | `ctrl+h`, `ctrl+j`, `ctrl+k`, `ctrl+l` | global |
 | `zoom` | `+` | global |
-| `toggle_details` | `enter` | graph |
-| `expand_details` | `shift+enter` | graph |
-| `close_details` | `esc` | details |
+| `expand_details` | `enter` | graph |
+| `toggle_details` | `space` | graph |
+| `close_details` | `esc` | graph, details |
 | `move_up`, `move_down`, `page_up`, `page_down`, `top`, `bottom` | `k`/`↑`, `j`/`↓`, `ctrl+u`, `ctrl+d`, `g`, `G` | global |
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |
 | `toggle_scope`, `new_branch`, `merge`, `rebase`, `cherry_pick` | `a`, `n`, `M`, `r`, `C` | graph |

@@ -20,9 +20,9 @@ fn click_focuses_and_selects() {
     t.click_pane_row(PaneId::Graph, 3);
     assert_eq!(t.app().focus(), PaneId::Graph);
     assert_eq!(t.app().graph().selected_index(), 3);
-    t.press("enter");
+    t.press("space");
     t.assert_pane_contains(PaneId::Details, "commit 6");
-    t.press("enter");
+    t.press("space");
 
     t.click_pane_row(PaneId::Status, 1);
     assert_eq!(t.app().focus(), PaneId::Status);
