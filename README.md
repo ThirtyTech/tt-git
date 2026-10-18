@@ -89,16 +89,59 @@ variables, events, panes, the socket API and the CLI.
 
 ## Development
 
-The workspace is split into crates:
+You need Rust 1.89 or newer (the workspace uses edition 2024) and git 2.31
+or newer on `PATH`.
 
-| Crate | What |
-|---|---|
-| `tt-git-core` | git CLI runner, parsers, unified branch list, write operations |
-| `tt-git-graph` | lane layout for the commit graph (no git or UI dependencies) |
-| `tt-git-plugin` | manifest, registry, runtime, install/GC, NDJSON socket |
-| `tt-git-tui` | the ratatui app: panes, keymap, modals, PTY plugin panes |
-| `tt-git` | the binary and CLI |
-| `tt-git-testkit` | sandbox repos, the in-process `TestDriver`, plugin fixtures |
+### Running from source
+
+```sh
+cargo run -p tt-git                        # the repository in the current directory
+cargo run -p tt-git -- path/to/repo        # another repository
+cargo run -p tt-git -- --no-plugins        # without plugins or the API socket
+cargo run -p tt-git -- --config dev.toml   # with a different config file
+cargo run -p tt-git -- plugin list         # subcommands work the same way
+```
+
+Everything after `--` goes to tt-git rather than Cargo.
+
+A dev build reads your real config and installed plugins. To keep it
+separate, point the config and state directories somewhere under `target/`:
+
+```sh
+export TTGIT_CONFIG_DIR=$PWD/target/dev/config
+export TTGIT_STATE_DIR=$PWD/target/dev/state
+```
+
+```powershell
+$env:TTGIT_CONFIG_DIR = "$PWD\target\dev\config"
+$env:TTGIT_STATE_DIR = "$PWD\target\dev\state"
+```
+
+### Logs
+
+The UI owns the terminal, so tt-git logs to `<state>/logs/tt-git.log`
+instead (see [docs/configuration.md](docs/configuration.md#logs) for where
+`<state>` is). `TTGIT_LOG` sets the level as an
+[`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html)
+string, default `info`. Follow the log from a second terminal:
+
+```sh
+TTGIT_LOG=debug,tt_git_tui=trace cargo run -p tt-git
+tail -f target/dev/state/logs/tt-git.log   # PowerShell: Get-Content target\dev\state\logs\tt-git.log -Wait
+```
+
+### Working on plugins
+
+`plugin link` uses a plugin straight from its directory, so edits take
+effect without reinstalling:
+
+```sh
+cargo run -p tt-git -- plugin link examples/plugins/open-on-github
+```
+
+[docs/plugins.md](docs/plugins.md#testing-a-plugin) covers testing plugins.
+
+### Tests
 
 ```sh
 cargo test --workspace            # unit, integration, in-process UI and PTY end-to-end tests
@@ -111,3 +154,32 @@ and fixed dates (`Sandbox`). UI flows drive the real app on ratatui's
 `TestBackend` and wait until the app is idle after each key (`TestDriver`),
 so they never sleep. A few end-to-end tests run the real binary in a
 pseudo-terminal, ConPTY on Windows, via [termlens](https://crates.io/crates/termlens).
+
+### Before you push
+
+CI checks formatting and lints, then runs the tests on Linux, macOS and
+Windows with [cargo-nextest](https://nexte.st) and
+[cargo-insta](https://insta.rs). To run the same checks locally:
+
+```sh
+cargo install cargo-nextest cargo-insta   # once
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo insta test --workspace --test-runner nextest --check --unreferenced reject
+cargo test --workspace --doc
+```
+
+`--check` fails on any snapshot that doesn't match, and
+`--unreferenced reject` fails on snapshot files no test uses, so delete
+those when you remove a test.
+
+### Crates
+
+| Crate | What |
+|---|---|
+| `tt-git-core` | git CLI runner, parsers, unified branch list, write operations |
+| `tt-git-graph` | lane layout for the commit graph (no git or UI dependencies) |
+| `tt-git-plugin` | manifest, registry, runtime, install/GC, NDJSON socket |
+| `tt-git-tui` | the ratatui app: panes, keymap, modals, PTY plugin panes |
+| `tt-git` | the binary and CLI |
+| `tt-git-testkit` | sandbox repos, the in-process `TestDriver`, plugin fixtures |
