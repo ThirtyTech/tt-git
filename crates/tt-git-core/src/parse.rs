@@ -2,7 +2,7 @@
 //! printed so they can be unit tested on fixture strings.
 
 use crate::git::GitError;
-use crate::model::{BranchStatus, Checkout, Commit, FileState, GitRef, RefKind, Status, StatusEntry};
+use crate::model::{BranchStatus, Checkout, Commit, CommitFile, FileState, GitRef, RefKind, Status, StatusEntry};
 
 /// Field separator inside a record (ASCII unit separator).
 pub const FS: char = '\u{1f}';
@@ -260,6 +260,33 @@ pub fn parse_checkouts(out: &[u8]) -> Vec<Checkout> {
         .collect()
 }
 
+/// Parses `git show --name-status -z`: a status token (`M`, `A`, `R100`, …)
+/// then one path, or two (source, destination) for renames and copies.
+pub fn parse_name_status(out: &[u8]) -> Vec<CommitFile> {
+    let text = String::from_utf8_lossy(out);
+    let mut fields = text.split('\0').filter(|f| !f.is_empty());
+    let mut files = Vec::new();
+    while let Some(token) = fields.next() {
+        let state = token
+            .bytes()
+            .next()
+            .and_then(FileState::from_code)
+            .unwrap_or(FileState::Modified);
+        let two_paths = matches!(state, FileState::Renamed | FileState::Copied);
+        let Some(first) = fields.next() else { break };
+        let (orig_path, path) = if two_paths {
+            match fields.next() {
+                Some(dest) => (Some(first.to_string()), dest.to_string()),
+                None => break,
+            }
+        } else {
+            (None, first.to_string())
+        };
+        files.push(CommitFile { state, path, orig_path });
+    }
+    files
+}
+
 /// Timestamp of the last entry of a raw reflog file
 /// (`<old> <new> <name> <<email>> <time> <tz>\t<message>` per line).
 pub fn last_reflog_time(contents: &[u8]) -> Option<i64> {
@@ -281,6 +308,26 @@ mod tests {
 
     fn log_record(oid: &str, parents: &str, summary: &str) -> String {
         format!("{oid}{FS}{parents}{FS}Ann Author{FS}ann@example.com{FS}100{FS}200{FS}{summary}")
+    }
+
+    #[test]
+    fn parses_name_status() {
+        let out = b"M\0src/a.rs\0R087\0old name.txt\0new name.txt\0A\0b.txt\0D\0c.txt\0";
+        let files = parse_name_status(out);
+        let summary: Vec<_> = files
+            .iter()
+            .map(|f| (f.state.code(), f.orig_path.as_deref(), f.path.as_str()))
+            .collect();
+        assert_eq!(
+            summary,
+            vec![
+                ('M', None, "src/a.rs"),
+                ('R', Some("old name.txt"), "new name.txt"),
+                ('A', None, "b.txt"),
+                ('D', None, "c.txt"),
+            ]
+        );
+        assert!(parse_name_status(b"").is_empty());
     }
 
     #[test]

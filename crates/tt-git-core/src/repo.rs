@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::git::{GitCli, GitError, Result};
-use crate::model::{Checkout, Commit, GitRef, Head, Status};
+use crate::model::{Checkout, Commit, CommitFile, GitRef, Head, Status};
 use crate::parse;
 
 /// Which commits the graph loads.
@@ -225,6 +225,39 @@ impl Repo {
             Some(e) => Err(e),
             None => Ok(()),
         }
+    }
+
+    /// Paths `oid` changed, compared with its first parent (renames detected).
+    pub fn commit_files(&self, oid: &str) -> Result<Vec<CommitFile>> {
+        let out = self.git.run(&[
+            "show",
+            "--format=",
+            "-z",
+            "--name-status",
+            "-M",
+            "--diff-merges=first-parent",
+            oid,
+            "--",
+        ])?;
+        Ok(parse::parse_name_status(&out.stdout))
+    }
+
+    /// The patch `oid` made to one of its [`commit_files`](Self::commit_files).
+    pub fn commit_file_diff(&self, oid: &str, file: &CommitFile) -> Result<String> {
+        let mut args = vec![
+            "show",
+            "--format=",
+            "--patch",
+            "-M",
+            "--diff-merges=first-parent",
+            oid,
+            "--",
+        ];
+        args.push(&file.path);
+        if let Some(orig) = &file.orig_path {
+            args.push(orig);
+        }
+        Ok(self.git.run(&args)?.stdout_str())
     }
 
     /// Loads up to `limit` commits into a Vec.

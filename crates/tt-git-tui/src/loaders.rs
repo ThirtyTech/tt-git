@@ -1,6 +1,6 @@
 //! Background jobs that read from git and report back as actions.
 
-use tt_git_core::{GitError, LogScope, Repo};
+use tt_git_core::{CommitFile, GitError, LogScope, Repo};
 
 use crate::action::{Action, RefsSnapshot};
 use crate::jobs::Ctx;
@@ -79,11 +79,13 @@ fn head_upstream(repo: &Repo) -> Option<String> {
     (!name.is_empty()).then_some(name)
 }
 
+const COMMIT_HEADER_FORMAT: &str =
+    "--format=commit %H%nParents: %P%nAuthor: %aN <%aE>%nDate:   %ad%nCommitter: %cN <%cE>%n%n%w(0,4,4)%B";
+
 pub fn load_commit_details(repo: Repo, oid: String) -> Action {
-    let format = "--format=commit %H%nParents: %P%nAuthor: %aN <%aE>%nDate:   %ad%nCommitter: %cN <%cE>%n%n%w(0,4,4)%B";
     let text = match repo.git().run(&[
         "show",
-        format,
+        COMMIT_HEADER_FORMAT,
         "--date=iso",
         "--stat",
         "--patch",
@@ -97,6 +99,36 @@ pub fn load_commit_details(repo: Repo, oid: String) -> Action {
     };
     Action::DetailsLoaded {
         subject: DetailsSubject::Commit(oid),
+        text,
+    }
+}
+
+/// The commit header and changed files for the details files view.
+pub fn load_commit_files(repo: Repo, oid: String) -> Action {
+    let header = match repo.git().run(&[
+        "show",
+        "-s",
+        "--format=%s%n%h · %aN <%aE> · %ad%n%n%b",
+        "--date=format:%Y-%m-%d %H:%M",
+        &oid,
+        "--",
+    ]) {
+        Ok(out) => out.stdout_str(),
+        Err(e) => format!("could not load commit: {e}"),
+    };
+    let files = repo.commit_files(&oid).map_err(|e| e.to_string());
+    Action::CommitFilesLoaded { oid, header, files }
+}
+
+pub fn load_commit_file_diff(repo: Repo, oid: String, file: CommitFile) -> Action {
+    let text = match repo.commit_file_diff(&oid, &file) {
+        Ok(t) if t.trim().is_empty() => format!("{}: no textual changes", file.path),
+        Ok(t) => cap_lines(&t),
+        Err(e) => format!("could not diff {}: {e}", file.path),
+    };
+    Action::CommitFileDiffLoaded {
+        oid,
+        path: file.path,
         text,
     }
 }

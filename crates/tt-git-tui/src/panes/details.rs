@@ -1,22 +1,40 @@
+use std::collections::HashMap;
+
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
+use ratatui::widgets::{Block, Borders, Paragraph};
+use tt_git_core::{CommitFile, FileState};
+use unicode_width::UnicodeWidthStr;
 
 use super::{PaneId, pane_block};
+use crate::action::Action;
 use crate::component::{Component, EventState};
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context};
 use crate::theme::Theme;
-use crate::widgets::Cursor;
+use crate::widgets::{Cursor, truncate};
 
 /// What the details pane is showing.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DetailsSubject {
     Commit(String),
+    /// A commit as a list of changed files beside the selected file's diff.
+    CommitFiles(String),
     File(String),
     /// Free text produced by the app (e.g. plugin logs).
     Text(String),
+}
+
+/// The changed-files view of a commit.
+#[derive(Debug, Default)]
+struct FilesView {
+    oid: String,
+    header: Vec<String>,
+    files: Vec<CommitFile>,
+    cursor: Cursor,
+    /// Diff lines already loaded, by file index.
+    diffs: HashMap<usize, Vec<String>>,
 }
 
 /// Commit details or file diff for the current selection.
@@ -24,9 +42,13 @@ pub enum DetailsSubject {
 pub struct DetailsPane {
     subject: Option<DetailsSubject>,
     title: String,
+    /// The text shown, or in the files view the selected file's diff.
     lines: Vec<String>,
     cursor: Cursor,
     loading: bool,
+    files: Option<FilesView>,
+    /// Rows the files view's header took in the last draw.
+    header_rows: usize,
 }
 
 impl DetailsPane {
@@ -38,11 +60,32 @@ impl DetailsPane {
         &self.lines
     }
 
-    /// The lines currently scrolled into view.
-    pub fn visible_lines(&self) -> &[String] {
+    /// The text rows currently on screen, top to bottom. In the files view
+    /// these are the right-hand side: header, separator, then diff.
+    pub fn visible_lines(&self) -> Vec<String> {
         let start = self.cursor.offset.min(self.lines.len());
         let end = (start + self.cursor.height.max(1)).min(self.lines.len());
-        &self.lines[start..end]
+        let diff = self.lines[start..end].iter().cloned();
+        match &self.files {
+            Some(view) => {
+                let mut rows: Vec<String> = view.header.iter().take(self.header_rows).cloned().collect();
+                rows.push(String::new());
+                rows.extend(diff);
+                rows
+            }
+            None => diff.collect(),
+        }
+    }
+
+    /// The changed files, in the files view.
+    pub fn commit_files(&self) -> Option<&[CommitFile]> {
+        self.files.as_ref().map(|v| v.files.as_slice())
+    }
+
+    /// The file selected in the files view.
+    pub fn selected_file(&self) -> Option<&CommitFile> {
+        let view = self.files.as_ref()?;
+        view.files.get(view.cursor.selected)
     }
 
     /// Marks `subject` as the thing to show; content arrives via [`set_content`](Self::set_content).
@@ -52,21 +95,182 @@ impl DetailsPane {
             self.title = title;
             self.loading = true;
             self.cursor = Cursor::default();
+            self.files = None;
         }
     }
 
     /// Sets content if it is for the current subject (stale results are dropped).
     pub fn set_content(&mut self, subject: &DetailsSubject, text: &str) {
         if self.subject.as_ref() == Some(subject) {
-            self.lines = text.lines().map(|l| l.replace('\t', "    ")).collect();
+            self.lines = split_lines(text);
             self.loading = false;
+        }
+    }
+
+    /// Fills the files view for `oid` and asks for the first file's diff.
+    pub fn set_commit_files(&mut self, oid: &str, header: &str, files: Vec<CommitFile>, ctx: &Ctx) {
+        if self.subject != Some(DetailsSubject::CommitFiles(oid.to_string())) {
+            return;
+        }
+        self.loading = false;
+        self.lines = if files.is_empty() {
+            vec!["no file changes".into()]
+        } else {
+            Vec::new()
+        };
+        self.files = Some(FilesView {
+            oid: oid.to_string(),
+            header: split_lines(header.trim_end()),
+            files,
+            ..FilesView::default()
+        });
+        self.show_selected_file(ctx);
+    }
+
+    /// Stores a file's diff, showing it if that file is still selected.
+    pub fn set_file_diff(&mut self, oid: &str, path: &str, text: &str) {
+        let Some(view) = &mut self.files else { return };
+        if view.oid != oid {
+            return;
+        }
+        let Some(idx) = view.files.iter().position(|f| f.path == path) else {
+            return;
+        };
+        let lines = split_lines(text);
+        if idx == view.cursor.selected {
+            self.lines = lines.clone();
+            self.cursor.offset = 0;
+        }
+        view.diffs.insert(idx, lines);
+    }
+
+    fn show_selected_file(&mut self, ctx: &Ctx) {
+        let Some(view) = &self.files else { return };
+        let idx = view.cursor.selected;
+        let Some(file) = view.files.get(idx) else { return };
+        self.cursor.offset = 0;
+        match view.diffs.get(&idx) {
+            Some(lines) => self.lines = lines.clone(),
+            None => {
+                self.lines = vec!["loading…".into()];
+                ctx.emit(Action::CommitFileSelected {
+                    oid: view.oid.clone(),
+                    file: file.clone(),
+                });
+            }
         }
     }
 
     pub fn clear(&mut self) {
         self.subject = None;
         self.lines.clear();
+        self.files = None;
         self.loading = false;
+    }
+
+    fn scroll(&mut self, cmd: Command) -> EventState {
+        // The diff scrolls rather than selecting lines: keep the cursor at
+        // the top of the viewport.
+        let len = self.lines.len();
+        let max_offset = len.saturating_sub(self.cursor.height.max(1));
+        let page = self.cursor.height.max(1);
+        let offset = &mut self.cursor.offset;
+        *offset = match cmd {
+            Command::MoveUp => offset.saturating_sub(1),
+            Command::MoveDown => (*offset + 1).min(max_offset),
+            Command::PageUp => offset.saturating_sub(page),
+            Command::PageDown => (*offset + page).min(max_offset),
+            Command::Top => 0,
+            Command::Bottom => max_offset,
+            _ => return EventState::NotConsumed,
+        };
+        EventState::Consumed
+    }
+
+    fn draw_files(&mut self, frame: &mut Frame, inner: Rect, focused: bool, theme: &Theme) {
+        let Some(view) = &mut self.files else { return };
+        let longest = view.files.iter().map(|f| file_label(f).width() + 3).max().unwrap_or(0);
+        let list_width = (longest as u16 + 1).clamp(20, (inner.width * 2 / 5).max(20));
+        let [list_area, right] = Layout::horizontal([Constraint::Length(list_width), Constraint::Fill(1)]).areas(inner);
+
+        let list_block = Block::new().borders(Borders::RIGHT).border_style(theme.border);
+        let list_inner = list_block.inner(list_area);
+        frame.render_widget(list_block, list_area);
+        let width = list_inner.width as usize;
+        let mut rows = vec![Line::styled(format!("Files ({})", view.files.len()), theme.muted)];
+        let height = (list_inner.height as usize).saturating_sub(1);
+        view.cursor.scroll_into_view(height);
+        let start = view.cursor.offset.min(view.files.len());
+        let end = (start + height).min(view.files.len());
+        for (i, file) in view.files.iter().enumerate().take(end).skip(start) {
+            let code = file.state.code().to_string();
+            let line = Line::from(vec![
+                Span::styled(code, state_style(file.state, theme)),
+                Span::raw(" "),
+                Span::raw(truncate(&file_label(file), width.saturating_sub(2))),
+            ]);
+            rows.push(if i == view.cursor.selected {
+                line.patch_style(if focused {
+                    theme.selected
+                } else {
+                    theme.selected_unfocused
+                })
+            } else {
+                line
+            });
+        }
+        frame.render_widget(Paragraph::new(rows), list_inner);
+
+        // Header (up to a third of the height), a rule, then the diff.
+        let right = Rect {
+            x: right.x + 1,
+            width: right.width.saturating_sub(1),
+            ..right
+        };
+        let header_rows = view.header.len().min((right.height as usize / 3).max(1));
+        self.header_rows = header_rows;
+        let [header_area, rule_area, diff_area] = Layout::vertical([
+            Constraint::Length(header_rows as u16),
+            Constraint::Length(1),
+            Constraint::Fill(1),
+        ])
+        .areas(right);
+        let header: Vec<Line> = view.header[..header_rows]
+            .iter()
+            .map(|l| style_line(l, theme))
+            .collect();
+        frame.render_widget(Paragraph::new(header), header_area);
+        let rule = "─".repeat(rule_area.width as usize);
+        frame.render_widget(Paragraph::new(rule).style(theme.border), rule_area);
+        self.draw_text(frame, diff_area, theme);
+    }
+
+    fn draw_text(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+        self.cursor.height = area.height as usize;
+        let start = self.cursor.offset.min(self.lines.len());
+        let end = (start + area.height as usize).min(self.lines.len());
+        let lines: Vec<Line> = self.lines[start..end].iter().map(|l| style_line(l, theme)).collect();
+        frame.render_widget(Paragraph::new(lines), area);
+    }
+}
+
+fn split_lines(text: &str) -> Vec<String> {
+    text.lines().map(|l| l.replace('\t', "    ")).collect()
+}
+
+fn file_label(file: &CommitFile) -> String {
+    match &file.orig_path {
+        Some(orig) => format!("{orig} → {}", file.path),
+        None => file.path.clone(),
+    }
+}
+
+fn state_style(state: FileState, theme: &Theme) -> ratatui::style::Style {
+    match state {
+        FileState::Added | FileState::Copied => theme.diff_add,
+        FileState::Deleted => theme.diff_del,
+        FileState::Renamed => theme.diff_hunk,
+        _ => theme.label_tag,
     }
 }
 
@@ -92,23 +296,22 @@ impl Component for DetailsPane {
         Context::Details
     }
 
-    fn on_command(&mut self, cmd: Command, _ctx: &Ctx) -> EventState {
-        // The details pane scrolls rather than selecting lines: keep the
-        // cursor at the top of the viewport.
-        let len = self.lines.len();
-        let max_offset = len.saturating_sub(self.cursor.height.max(1));
-        let page = self.cursor.height.max(1);
-        let offset = &mut self.cursor.offset;
-        *offset = match cmd {
-            Command::MoveUp => offset.saturating_sub(1),
-            Command::MoveDown => (*offset + 1).min(max_offset),
-            Command::PageUp => offset.saturating_sub(page),
-            Command::PageDown => (*offset + page).min(max_offset),
-            Command::Top => 0,
-            Command::Bottom => max_offset,
-            _ => return EventState::NotConsumed,
-        };
-        EventState::Consumed
+    fn on_command(&mut self, cmd: Command, ctx: &Ctx) -> EventState {
+        // In the files view, line movement picks a file and paging scrolls its diff.
+        if let Some(view) = &mut self.files
+            && matches!(
+                cmd,
+                Command::MoveUp | Command::MoveDown | Command::Top | Command::Bottom
+            )
+        {
+            let before = view.cursor.selected;
+            view.cursor.apply(cmd, view.files.len());
+            if view.cursor.selected != before {
+                self.show_selected_file(ctx);
+            }
+            return EventState::Consumed;
+        }
+        self.scroll(cmd)
     }
 
     fn commands(&self) -> &[Command] {
@@ -129,15 +332,16 @@ impl Component for DetailsPane {
         let block = pane_block(PaneId::Details, title, focused, theme);
         let inner = block.inner(area);
         frame.render_widget(block, area);
-        self.cursor.height = inner.height as usize;
 
         if self.subject.is_none() {
+            self.cursor.height = inner.height as usize;
             frame.render_widget(Paragraph::new("nothing selected").style(theme.muted), inner);
             return;
         }
-        let start = self.cursor.offset.min(self.lines.len());
-        let end = (start + inner.height as usize).min(self.lines.len());
-        let lines: Vec<Line> = self.lines[start..end].iter().map(|l| style_line(l, theme)).collect();
-        frame.render_widget(Paragraph::new(lines), inner);
+        if self.files.is_some() {
+            self.draw_files(frame, inner, focused, theme);
+        } else {
+            self.draw_text(frame, inner, theme);
+        }
     }
 }

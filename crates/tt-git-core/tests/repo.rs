@@ -263,3 +263,49 @@ fn author_names_respect_mailmap() {
     assert_eq!(commits[0].author_name, "Real Name");
     assert_eq!(commits[0].author_email, "real@example.com");
 }
+
+#[test]
+fn commit_files_and_their_diffs() {
+    let sb = Sandbox::new();
+    sb.write("keep.txt", "one\n").write("gone.txt", "bye\n");
+    sb.write(
+        "old name.txt",
+        "a fairly long line so rename detection has something to match\n",
+    );
+    sb.git(&["add", "."]);
+    sb.commit_staged("base");
+    sb.write("keep.txt", "two\n").write("new.txt", "hello\n");
+    sb.git(&["rm", "-q", "gone.txt"]);
+    sb.git(&["mv", "old name.txt", "new name.txt"]);
+    sb.git(&["add", "."]);
+    let oid = sb.commit_staged("change things");
+    let repo = open(&sb);
+
+    let files = repo.commit_files(&oid).unwrap();
+    let mut summary: Vec<_> = files
+        .iter()
+        .map(|f| (f.state, f.orig_path.as_deref(), f.path.as_str()))
+        .collect();
+    summary.sort_by_key(|(_, _, p)| *p);
+    assert_eq!(
+        summary,
+        vec![
+            (FileState::Deleted, None, "gone.txt"),
+            (FileState::Modified, None, "keep.txt"),
+            (FileState::Renamed, Some("old name.txt"), "new name.txt"),
+            (FileState::Added, None, "new.txt"),
+        ]
+    );
+
+    let keep = files.iter().find(|f| f.path == "keep.txt").unwrap();
+    let diff = repo.commit_file_diff(&oid, keep).unwrap();
+    assert!(diff.contains("-one") && diff.contains("+two"), "{diff}");
+    assert!(!diff.contains("hello"), "{diff}");
+    let renamed = files.iter().find(|f| f.state == FileState::Renamed).unwrap();
+    let diff = repo.commit_file_diff(&oid, renamed).unwrap();
+    assert!(diff.contains("rename from old name.txt"), "{diff}");
+
+    // The root commit lists everything as added.
+    let root = repo.commit_files(&sb.rev_parse("HEAD~1")).unwrap();
+    assert!(root.iter().all(|f| f.state == FileState::Added), "{root:?}");
+}

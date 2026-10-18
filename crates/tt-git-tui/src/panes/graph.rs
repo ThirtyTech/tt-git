@@ -463,6 +463,7 @@ impl Component for GraphPane {
     fn commands(&self) -> &[Command] {
         &[
             Command::ToggleDetails,
+            Command::ExpandDetails,
             Command::ToggleScope,
             Command::NewBranch,
             Command::Merge,

@@ -1,7 +1,7 @@
 use tt_git_testkit::{Sandbox, TestDriver};
 use tt_git_tui::Config;
 use tt_git_tui::app::Zoom;
-use tt_git_tui::panes::{GraphScope, PaneId};
+use tt_git_tui::panes::{DetailsSubject, GraphScope, PaneId};
 
 #[test]
 fn initial_layout_empty_repo() {
@@ -310,4 +310,49 @@ fn focusing_a_hidden_pane_unzooms() {
     t.press("+").press("2");
     assert_eq!(t.app().zoom(), Zoom::Off);
     assert!(t.app().pane_area(PaneId::Status).is_some());
+}
+
+#[test]
+fn shift_enter_opens_files_beside_a_diff() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "one\n", "base");
+    sb.write("a.txt", "two\n").write("b.txt", "bee\n");
+    sb.git(&["add", "."]);
+    let oid = sb.commit_staged("touch two files");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
+
+    t.press("shift+enter");
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    assert_eq!(t.app().focus(), PaneId::Details);
+    assert_eq!(
+        t.app().details().subject(),
+        Some(&DetailsSubject::CommitFiles(oid.clone()))
+    );
+    let paths: Vec<_> = t
+        .app()
+        .details()
+        .commit_files()
+        .unwrap()
+        .iter()
+        .map(|f| f.path.clone())
+        .collect();
+    assert_eq!(paths, ["a.txt", "b.txt"]);
+    t.assert_pane_contains(PaneId::Details, "Files (2)");
+    t.assert_pane_contains(PaneId::Details, "touch two files");
+    t.assert_pane_contains(PaneId::Details, "+two");
+
+    // j picks the next file and shows its diff.
+    t.press("j");
+    assert_eq!(t.app().details().selected_file().unwrap().path, "b.txt");
+    t.assert_pane_contains(PaneId::Details, "+bee");
+    assert!(!t.pane_lines(PaneId::Details).iter().any(|l| l.contains("+two")));
+
+    // esc goes back to the normal layout with the plain commit details.
+    t.press("esc");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+    assert_eq!(t.app().focus(), PaneId::Graph);
+    assert!(!t.app().shows(PaneId::Details));
+    t.press("enter");
+    assert_eq!(t.app().details().subject(), Some(&DetailsSubject::Commit(oid)));
+    t.assert_pane_contains(PaneId::Details, "touch two files");
 }

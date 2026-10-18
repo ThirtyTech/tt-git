@@ -73,7 +73,17 @@ fn main() -> Result<()> {
     if mouse {
         let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture);
     }
+    // Terminals with the kitty keyboard protocol can then tell shift+enter
+    // from enter. (Windows consoles report modifiers without it.)
+    let enhanced = matches!(crossterm::terminal::supports_keyboard_enhancement(), Ok(true));
+    if enhanced {
+        let flags = crossterm::event::KeyboardEnhancementFlags::DISAMBIGUATE_ESCAPE_CODES;
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::event::PushKeyboardEnhancementFlags(flags));
+    }
     let result = runtime.block_on(tt_git_tui::runner::run(&mut terminal, &mut app, &mut rx));
+    if enhanced {
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::event::PopKeyboardEnhancementFlags);
+    }
     if mouse {
         let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture);
     }

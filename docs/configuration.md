@@ -57,6 +57,13 @@ children = [
 ]
 ```
 
+`shift+enter` on a commit opens it fullscreen instead, with the changed
+files on the left and the selected file's diff on the right. Most terminals
+on Linux and macOS only report `shift+enter` if they support the kitty
+keyboard protocol (kitty, WezTerm, foot, Ghostty, recent iTerm2); elsewhere
+it arrives as plain `enter`, so bind `expand_details` to another key if you
+need to.
+
 `+` zooms whichever layout you use: first to just the graph and details at
 full width (opening details if needed), then to the focused pane alone, then
 back.
@@ -89,6 +96,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `focus_status` … `focus_details`, `focus_next`, `focus_prev` | `1`–`4`, `tab`, `shift+tab` | global |
 | `zoom` | `+` | global |
 | `toggle_details` | `enter` | graph |
+| `expand_details` | `shift+enter` | graph |
 | `close_details` | `esc` | details |
 | `move_up`, `move_down`, `page_up`, `page_down`, `top`, `bottom` | `k`/`↑`, `j`/`↓`, `ctrl+u`, `ctrl+d`, `g`, `G` | global |
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |

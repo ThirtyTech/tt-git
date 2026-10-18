@@ -255,6 +255,15 @@ impl Status {
     }
 }
 
+/// A path a commit changed, compared with its first parent.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct CommitFile {
+    pub state: FileState,
+    pub path: String,
+    /// Source path of a rename or copy.
+    pub orig_path: Option<String>,
+}
+
 /// A `checkout: moving from A to B` entry from HEAD's reflog.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Checkout {

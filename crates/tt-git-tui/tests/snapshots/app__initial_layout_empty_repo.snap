@@ -25,4 +25,4 @@ expression: t.screen()
 │                                                ││                                                │
 │                                                ││                                                │
 ╰────────────────────────────────────────────────╯╰────────────────────────────────────────────────╯
-enter show/hide details  a all/current  n new branch  C cherry-pick  tab next pane  ? help  q quit
+enter show/hide details  shift+enter files + diff  a all/current  tab next pane  ? help  q quit

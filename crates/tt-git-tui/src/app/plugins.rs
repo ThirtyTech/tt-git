@@ -416,7 +416,7 @@ impl App {
     /// Runs the first plugin link handler matching a URL in view in the
     /// details pane (the first URL on screen, else anywhere in the text).
     pub(super) fn open_link(&mut self) {
-        let url = find_url(self.details.visible_lines()).or_else(|| find_url(self.details.lines()));
+        let url = find_url(&self.details.visible_lines()).or_else(|| find_url(self.details.lines()));
         let Some(url) = url else {
             self.notice = Some("no link in view".into());
             return;

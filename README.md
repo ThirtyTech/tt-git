@@ -61,6 +61,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `:` `ctrl+p` | command palette |
 | | `q` | quit |
 | graph | `enter` | show / hide the commit's details (they replace the bottom row) |
+| | `shift+enter` | the commit fullscreen: changed files on the left, the selected file's diff on the right (`j`/`k` pick a file, `pgup`/`pgdn` scroll, `esc` back) |
 | | `a` | all branches ↔ current branch |
 | | `n` | new branch at the selected commit |
 | | `M` / `r` / `C` | merge into current / rebase current onto / cherry-pick |

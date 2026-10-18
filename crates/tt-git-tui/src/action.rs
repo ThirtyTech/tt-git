@@ -1,6 +1,6 @@
 //! Messages that drive [`App::update`](crate::App::update).
 
-use tt_git_core::{BranchEntry, Checkout, Commit, GitRef, Head, Status, StatusEntry};
+use tt_git_core::{BranchEntry, Checkout, Commit, CommitFile, GitRef, Head, Status, StatusEntry};
 use tt_git_plugin::runtime::CommandLog;
 use tt_git_plugin::socket::Call;
 
@@ -85,6 +85,23 @@ pub enum Action {
     /// Text for the details pane (`git show` or a file diff).
     DetailsLoaded {
         subject: DetailsSubject,
+        text: String,
+    },
+    /// A commit's header and changed files, for the details files view.
+    CommitFilesLoaded {
+        oid: String,
+        header: String,
+        files: Result<Vec<CommitFile>, String>,
+    },
+    /// The details files view selected a file whose diff isn't loaded yet.
+    CommitFileSelected {
+        oid: String,
+        file: CommitFile,
+    },
+    /// One file's diff in a commit.
+    CommitFileDiffLoaded {
+        oid: String,
+        path: String,
         text: String,
     },
 }

@@ -442,6 +442,17 @@ impl App {
                 }
             }
             Action::DetailsLoaded { subject, text } => self.details.set_content(&subject, &text),
+            Action::CommitFilesLoaded { oid, header, files } => match files {
+                Ok(files) => self.details.set_commit_files(&oid, &header, files, &self.ctx),
+                Err(e) => self
+                    .details
+                    .set_content(&DetailsSubject::CommitFiles(oid), &format!("{header}\n{e}")),
+            },
+            Action::CommitFileSelected { oid, file } => {
+                let repo = self.repo.clone();
+                self.ctx.spawn(move || loaders::load_commit_file_diff(repo, oid, file));
+            }
+            Action::CommitFileDiffLoaded { oid, path, text } => self.details.set_file_diff(&oid, &path, &text),
         }
     }
 
@@ -546,7 +557,16 @@ impl App {
         self.ctx.spawn(move || loaders::load_file_diff(repo, entry));
     }
 
+    /// Shows `oid` in details, staying in the files view if that's open.
     fn show_commit(&mut self, oid: String) {
+        if matches!(self.details.subject(), Some(DetailsSubject::CommitFiles(_))) {
+            self.show_commit_files(oid);
+        } else {
+            self.show_commit_plain(oid);
+        }
+    }
+
+    fn show_commit_plain(&mut self, oid: String) {
         let subject = DetailsSubject::Commit(oid.clone());
         if self.details.subject() == Some(&subject) {
             return;
@@ -555,6 +575,28 @@ impl App {
         self.details.request(subject, format!("Commit {short}"));
         let repo = self.repo.clone();
         self.ctx.spawn(move || loaders::load_commit_details(repo, oid));
+    }
+
+    fn show_commit_files(&mut self, oid: String) {
+        let subject = DetailsSubject::CommitFiles(oid.clone());
+        if self.details.subject() == Some(&subject) {
+            return;
+        }
+        let short = oid.chars().take(7).collect::<String>();
+        self.details.request(subject, format!("Commit {short} files"));
+        let repo = self.repo.clone();
+        self.ctx.spawn(move || loaders::load_commit_files(repo, oid));
+    }
+
+    /// Opens the selected commit fullscreen as changed files beside a diff.
+    fn expand_details(&mut self) {
+        let Some(oid) = self.graph.selected().map(|c| c.oid.clone()) else {
+            return;
+        };
+        self.show_commit_files(oid);
+        self.details_open = true;
+        self.zoom = Zoom::Full(PaneId::Details);
+        self.focus = PaneId::Details;
     }
 
     fn run_command(&mut self, cmd: Command) {
@@ -605,6 +647,10 @@ impl App {
     }
 
     fn close_details(&mut self) {
+        // Leave the files view: next time details opens it's the plain commit.
+        if let Some(DetailsSubject::CommitFiles(oid)) = self.details.subject().cloned() {
+            self.show_commit_plain(oid);
+        }
         self.details_open = false;
         if matches!(self.zoom, Zoom::Wide | Zoom::Full(PaneId::Details)) {
             self.zoom = Zoom::Off;
@@ -626,6 +672,7 @@ impl App {
             Command::FocusDetails => self.focus = PaneId::Details,
             Command::Zoom => self.step_zoom(),
             Command::ToggleDetails if self.focus == PaneId::Graph => self.toggle_details(),
+            Command::ExpandDetails if self.focus == PaneId::Graph => self.expand_details(),
             Command::CloseDetails if self.focus == PaneId::Details => self.close_details(),
             Command::Refresh => self.update(Action::Refresh),
             Command::Palette => self.modal = Some(Modal::palette(self.palette_items())),
