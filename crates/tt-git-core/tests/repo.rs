@@ -482,21 +482,44 @@ fn filters_commits_by_author_and_path() {
 }
 
 #[test]
-fn author_filter_matches_mailmapped_identity() {
+fn author_filter_includes_every_mailmapped_account() {
     let sb = Sandbox::new();
-    sb.commit("one");
+    // One person committing from three accounts, on two branches.
+    let work = commit_as(&sb, "Jon Sheely <jon@work.com>", "a.txt", "from work");
+    sb.checkout_new("side");
+    let home = commit_as(&sb, "jsheely <jon@home.net>", "a.txt", "from home");
+    let github = commit_as(&sb, "Jonathan <1+js@users.noreply.github.com>", "b.txt", "from github");
+    sb.checkout("main");
+    commit_as(&sb, "Someone Else <else@example.com>", "c.txt", "someone else");
+    // Both mailmap forms: by email alone, and by name and email.
     sb.write(
         ".mailmap",
-        "Real Name <real@example.com> Test User <test@example.com>\n",
+        "Jon Sheely <jon@work.com> <jon@home.net>\n\
+         Jon Sheely <jon@work.com> Jonathan <1+js@users.noreply.github.com>\n",
     );
     let repo = open(&sb);
+
+    // The picker lists the person once, counting every account.
     assert_eq!(
         repo.authors().unwrap(),
-        vec![("Real Name <real@example.com>".to_string(), 1)]
+        vec![
+            ("Jon Sheely <jon@work.com>".to_string(), 3),
+            ("Someone Else <else@example.com>".to_string(), 1),
+        ]
     );
+    // And filtering by them finds the commits from all three.
     let filter = LogFilter {
-        author: Some("Real Name <real@example.com>".into()),
+        author: Some("Jon Sheely <jon@work.com>".into()),
         path: None,
     };
-    assert_eq!(repo.filtered_commits(&LogScope::All, &filter, 100).unwrap().len(), 1);
+    let mut got: Vec<String> = repo
+        .filtered_commits(&LogScope::All, &filter, 100)
+        .unwrap()
+        .into_iter()
+        .map(|c| c.oid)
+        .collect();
+    got.sort();
+    let mut want = vec![work, home, github];
+    want.sort();
+    assert_eq!(got, want);
 }
