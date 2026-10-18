@@ -26,12 +26,16 @@ pub struct Config {
 pub struct BranchesConfig {
     /// Unmerged branches whose name contains any of these are hidden.
     pub unmerged_exclude: Vec<String>,
+    /// Long-lived branches, by exact name (on any remote), never listed on
+    /// the merged and unmerged tabs.
+    pub safe_branches: Vec<String>,
 }
 
 impl Default for BranchesConfig {
     fn default() -> Self {
         Self {
             unmerged_exclude: vec!["archive".into()],
+            safe_branches: ["master", "main", "production", "prod"].map(String::from).to_vec(),
         }
     }
 }

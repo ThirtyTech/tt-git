@@ -3,6 +3,7 @@
 use tt_git_core::{BaseBranches, BranchEntry, CommitFile, GitError, GitRef, LogScope, Repo};
 
 use crate::action::{Action, RefsSnapshot};
+use crate::config::BranchesConfig;
 use crate::jobs::Ctx;
 use crate::modal::GitOp;
 use crate::panes::{BranchFocus, DetailsSubject, GraphScope};
@@ -16,14 +17,14 @@ fn message(e: GitError) -> String {
     e.to_string()
 }
 
-/// `exclude` hides unmerged branches whose name contains any of its strings.
-pub fn load_refs(repo: Repo, exclude: Vec<String>) -> Action {
+/// `config` says which branches the merged and unmerged lists leave out.
+pub fn load_refs(repo: Repo, config: BranchesConfig) -> Action {
     let result = (|| {
         let head = repo.head()?;
         let refs = repo.refs()?;
         let checkouts = repo.checkouts(500)?;
         let branches = tt_git_core::branches::unify(&refs, &head, &checkouts, |r| repo.ref_activity(r));
-        let base = match load_base(&repo, &refs, &branches, &exclude) {
+        let base = match load_base(&repo, &refs, &branches, &config) {
             Ok(base) => base,
             Err(e) => {
                 tracing::warn!("comparing branches with the base failed: {e}");
@@ -46,7 +47,7 @@ fn load_base(
     repo: &Repo,
     refs: &[GitRef],
     branches: &[BranchEntry],
-    exclude: &[String],
+    config: &BranchesConfig,
 ) -> Result<Option<BaseBranches>, GitError> {
     use tt_git_core::branches::{base_scope, compare_with_base, default_base, resolve_base};
 
@@ -57,7 +58,8 @@ fn load_base(
     let detected = default_base(refs).map(|r| r.short_name.clone());
     let scope = base_scope(base);
     let merged = repo.merged_refs(&base.full_name, &scope)?;
-    let (unmerged, merged) = compare_with_base(branches, base, &merged, exclude);
+    let (unmerged, merged) =
+        compare_with_base(branches, base, &merged, &config.unmerged_exclude, &config.safe_branches);
     Ok(Some(BaseBranches {
         base: base.short_name.clone(),
         base_ref: base.full_name.clone(),

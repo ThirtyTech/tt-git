@@ -308,7 +308,15 @@ fn base_branch_follows_origin_head() {
     t.press("]");
     let mut merged = names(&t);
     merged.sort();
-    assert_eq!(merged, vec!["done", "main", "open"]);
+    assert_eq!(merged, vec!["done", "open"], "main is a safe branch");
+
+    let mut config = Config::default();
+    config.branches.safe_branches.clear();
+    let mut t = TestDriver::with_config(config, &sb);
+    t.press("2").press("]").press("]");
+    let mut merged = names(&t);
+    merged.sort();
+    assert_eq!(merged, vec!["done", "main", "open"], "listed once nothing is safe");
 }
 
 #[test]
@@ -330,7 +338,7 @@ fn pick_base_branch_from_a_list_and_go_back_to_detecting() {
     t.press("]");
     let mut merged = names(&t);
     merged.sort();
-    assert_eq!(merged, vec!["done", "main", "open"]);
+    assert_eq!(merged, vec!["done", "open"]);
 
     // The choice is per repo and survives a restart.
     let t2 = TestDriver::new(&sb);

@@ -300,13 +300,16 @@ impl BaseBranches {
 
 /// Splits `entries` into unmerged and merged lists against `base`.
 /// `merged` holds the full names of the refs in [`base_scope`] that are
-/// merged into it. The base itself is left out, as are unmerged refs whose
-/// short name contains any of `exclude` (`grep -v archive` style).
+/// merged into it. The base itself is left out, as are branches named
+/// exactly one of `safe` (long-lived ones such as `main` or `production`)
+/// and unmerged refs whose short name contains any of `exclude`
+/// (`grep -v archive` style).
 pub fn compare_with_base(
     entries: &[BranchEntry],
     base: &GitRef,
     merged: &HashSet<String>,
     exclude: &[String],
+    safe: &[String],
 ) -> (Vec<BranchEntry>, Vec<BranchEntry>) {
     let scope = base_scope(base);
     let mut unmerged_list = Vec::new();
@@ -337,7 +340,7 @@ pub fn compare_with_base(
         let Some(tip) = BaseBranches::tip(&narrowed) else {
             continue;
         };
-        if tip.full_name == base.full_name {
+        if tip.full_name == base.full_name || safe.contains(&narrowed.name) {
             continue;
         }
         if merged.contains(&tip.full_name) {
@@ -595,11 +598,11 @@ mod tests {
         ];
         let entries = unify(&refs, &head("main"), &[], |_| Some(999));
         let base = &refs[3];
-        let merged: HashSet<String> = ["refs/remotes/origin/main", "refs/remotes/origin/old"]
+        let merged_set: HashSet<String> = ["refs/remotes/origin/main", "refs/remotes/origin/old"]
             .iter()
             .map(|s| s.to_string())
             .collect();
-        let (unmerged, merged) = compare_with_base(&entries, base, &merged, &["archive".into()]);
+        let (unmerged, merged) = compare_with_base(&entries, base, &merged_set, &["archive".into()], &[]);
         assert_eq!(names(&unmerged), vec!["newer", "feat"], "newest commit first");
         assert_eq!(names(&merged), vec!["old"], "base itself left out");
         assert_eq!(unmerged[0].activity, 400, "commit date, not reflog activity");
@@ -607,11 +610,17 @@ mod tests {
         assert!(feat.local.is_some(), "keeps the local side");
         assert_eq!(BaseBranches::tip(feat).unwrap().short_name, "origin/feat");
 
-        let (unmerged, _) = compare_with_base(&entries, base, &HashSet::new(), &[]);
+        let (unmerged, _) = compare_with_base(&entries, base, &HashSet::new(), &[], &[]);
         assert!(names(&unmerged).contains(&"archive/x"), "nothing excluded");
 
+        // Safe branches are left out of both lists, by exact name.
+        let safe = ["newer".to_string(), "ol".to_string()];
+        let (unmerged, merged) = compare_with_base(&entries, base, &merged_set, &[], &safe);
+        assert_eq!(names(&unmerged), vec!["archive/x", "feat"]);
+        assert_eq!(names(&merged), vec!["old"], "only exact names match");
+
         let local_base = &refs[0];
-        let (unmerged, merged) = compare_with_base(&entries, local_base, &HashSet::new(), &[]);
+        let (unmerged, merged) = compare_with_base(&entries, local_base, &HashSet::new(), &[], &[]);
         assert_eq!(names(&unmerged), vec!["local-only", "feat"]);
         assert!(merged.is_empty());
         assert_eq!(BaseBranches::tip(&unmerged[1]).unwrap().short_name, "feat");

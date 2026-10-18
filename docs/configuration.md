@@ -21,6 +21,7 @@ current_includes_upstream = true  # current-branch mode also shows HEAD's upstre
 
 [branches]
 unmerged_exclude = ["archive"]  # hide unmerged branches whose name contains any of these
+safe_branches = ["master", "main", "production", "prod"]  # never list these on the merged/unmerged tabs
 
 [plugins]
 pane_release_keys = ["ctrl+\\", "f12"]   # leave/close plugin panes
@@ -37,6 +38,11 @@ between them:
   `git branch -r --no-merged origin/main`). Names matching
   `unmerged_exclude` are left out.
 - **Merged**: the ones that are.
+
+Neither list includes the base branch itself or the long-lived branches in
+`safe_branches` (by default `master`, `main`, `production` and `prod`),
+matched by exact branch name on any remote. Set it to `[]` to list them
+too.
 
 On the Unmerged and Merged tabs the graph shows only the selected branch:
 its own commits (first-parent, so commits it pulled in from other branches

@@ -472,8 +472,8 @@ impl App {
 
     fn load_refs(&self) {
         let repo = self.repo.clone();
-        let exclude = self.config.branches.unmerged_exclude.clone();
-        self.ctx.spawn(move || loaders::load_refs(repo, exclude));
+        let config = self.config.branches.clone();
+        self.ctx.spawn(move || loaders::load_refs(repo, config));
     }
 
     fn load_status(&self) {
