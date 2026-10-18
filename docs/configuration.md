@@ -100,10 +100,9 @@ the left and the selected file's diff on the right. `}` in the details pane
 switches it to the same view without going fullscreen, with the files listed
 below the diff.
 
-`+` zooms whichever layout you use: first to just the graph and details at
-full width (the graph alone, full height, if details is closed; `space` still
-toggles details), then to the focused pane alone, then back. With details
-focused, `+` skips the first step and fills the screen with details.
+`+` zooms whichever layout you use: the focused pane (details, or else the
+graph) fills the screen, and the next `+` goes back. `space` in a fullscreen
+graph opens details below it at full width and closes it again.
 
 ## Key bindings
 

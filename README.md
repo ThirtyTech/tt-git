@@ -61,7 +61,7 @@ command palette, which lists built-in commands and plugin actions.
 |---|---|---|
 | anywhere | `1` `2` `3` `4` / `tab` `shift+tab` | focus status / branches / graph / details |
 | | `ctrl+h` `ctrl+j` `ctrl+k` `ctrl+l` | focus the pane to the left / below / above / right |
-| | `+` | zoom: graph (+ details if open) full width → focused one fullscreen → back (details goes straight to fullscreen) |
+| | `+` | zoom: the graph, or details if focused, fullscreen and back |
 | | `j` `k` `↑` `↓`, `ctrl+d` `ctrl+u`, `g` `G` | move, page, top/bottom |
 | | `P` / `p` | push (sets upstream on first push) / pull |
 | | `ctrl+r` | refresh |

@@ -342,15 +342,36 @@ fn c_copies_the_commit_hash_or_branch_name() {
 }
 
 #[test]
-fn zoom_cycles_wide_full_and_back() {
+fn zoom_puts_the_graph_fullscreen_and_back() {
     let sb = Sandbox::new();
     let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
     let normal_graph = t.app().pane_area(PaneId::Graph).unwrap();
 
-    // Wide: graph and details span the screen, the left column is gone.
-    t.press("1").press("+").press("space");
-    assert_eq!(t.app().zoom(), Zoom::Wide);
+    // One `+` from the graph fills the screen, even with details open.
+    t.press("space").press("3").press("+");
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Graph));
     assert_eq!(t.app().focus(), PaneId::Graph);
+    let graph = t.app().pane_area(PaneId::Graph).unwrap();
+    assert_eq!((graph.width, graph.height), (100, 23));
+    assert!(t.app().pane_area(PaneId::Details).is_none());
+    assert!(t.app().pane_area(PaneId::Status).is_none());
+
+    t.press("+");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+    assert_eq!(t.app().pane_area(PaneId::Graph).unwrap(), normal_graph);
+    assert!(t.app().pane_area(PaneId::Details).is_some());
+}
+
+#[test]
+fn space_in_a_fullscreen_graph_opens_details_below_it() {
+    let sb = Sandbox::new();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
+    t.press("+");
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Graph));
+
+    // Wide: graph and details span the screen, the left column is gone.
+    t.press("space");
+    assert_eq!(t.app().zoom(), Zoom::Wide);
     let graph = t.app().pane_area(PaneId::Graph).unwrap();
     let details = t.app().pane_area(PaneId::Details).unwrap();
     assert_eq!((graph.x, graph.width), (0, 100));
@@ -358,59 +379,13 @@ fn zoom_cycles_wide_full_and_back() {
     assert!(t.app().pane_area(PaneId::Status).is_none());
     assert!(t.app().pane_area(PaneId::Branches).is_none());
 
-    // Full: the focused pane takes the whole main area.
-    t.press("+");
-    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Graph));
-    assert_eq!(t.app().pane_area(PaneId::Graph).unwrap().height, 23);
-    assert!(t.app().pane_area(PaneId::Details).is_none());
-
-    t.press("+");
-    assert_eq!(t.app().zoom(), Zoom::Off);
-    assert_eq!(t.app().pane_area(PaneId::Graph).unwrap(), normal_graph);
-}
-
-#[test]
-fn zoom_with_details_closed_gives_the_graph_full_height() {
-    let sb = Sandbox::new();
-    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
-
-    t.press("+");
+    // Closing details again keeps the graph zoomed; `+` goes back.
+    t.press("space");
     assert_eq!(t.app().zoom(), Zoom::Wide);
     let graph = t.app().pane_area(PaneId::Graph).unwrap();
     assert_eq!((graph.width, graph.height), (100, 23));
-    assert!(t.app().pane_area(PaneId::Details).is_none());
-
-    // Space opens details below it, and closes it again without unzooming.
-    t.press("space");
-    assert!(t.app().pane_area(PaneId::Details).is_some());
-    t.press("space");
-    assert_eq!(t.app().zoom(), Zoom::Wide);
-    assert!(t.app().pane_area(PaneId::Details).is_none());
-
-    // Fullscreen would look the same, so the next `+` goes straight back.
     t.press("+");
     assert_eq!(t.app().zoom(), Zoom::Off);
-}
-
-#[test]
-fn space_in_a_fullscreen_graph_brings_back_details() {
-    let sb = Sandbox::new();
-    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
-    t.press("space").press("+").press("+");
-    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Graph));
-    t.press("space");
-    assert_eq!(t.app().zoom(), Zoom::Wide);
-    assert!(t.app().pane_area(PaneId::Details).is_some());
-}
-
-#[test]
-fn zoom_full_uses_details_when_focused() {
-    let sb = Sandbox::new();
-    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
-    t.press("space").press("+").press("4").press("+");
-    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
-    assert_eq!(t.app().pane_area(PaneId::Details).unwrap().width, 100);
-    assert!(t.app().pane_area(PaneId::Graph).is_none());
 }
 
 #[test]
@@ -433,7 +408,7 @@ fn zoom_from_details_goes_straight_to_fullscreen() {
 fn focusing_a_hidden_pane_unzooms() {
     let sb = Sandbox::new();
     let mut t = TestDriver::new(&sb);
-    t.press("+").press("+");
+    t.press("+");
     t.press("4");
     assert_eq!(t.app().zoom(), Zoom::Off);
     t.press("+").press("2");
@@ -548,22 +523,13 @@ fn close_brace_lists_files_below_the_diff() {
     assert_eq!(t.app().details().selected_file().unwrap().path, "b.txt");
     t.assert_pane_contains(PaneId::Details, "+bee");
 
-    // Fullscreen puts the list beside the diff, on the top row. (Step
-    // through the zoom levels rather than assume how many `+` it takes.)
-    for _ in 0..3 {
-        if t.app().zoom() != Zoom::Full(PaneId::Details) {
-            t.press("+");
-        }
-    }
+    // Fullscreen puts the list beside the diff, on the top row.
+    t.press("+");
     assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
     assert!(t.pane_lines(PaneId::Details)[0].starts_with("Files (2)"));
 
     // Leaving fullscreen puts the list back below.
-    for _ in 0..3 {
-        if t.app().zoom() != Zoom::Off {
-            t.press("+");
-        }
-    }
+    t.press("+");
     assert_eq!(t.app().zoom(), Zoom::Off);
     let lines = t.pane_lines(PaneId::Details);
     let row = |needle: &str| lines.iter().position(|l| l.contains(needle)).unwrap();
