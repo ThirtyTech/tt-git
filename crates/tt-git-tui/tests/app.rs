@@ -132,6 +132,31 @@ fn help_popup_lists_bindings() {
 }
 
 #[test]
+fn help_popup_filters_as_you_type() {
+    let sb = Sandbox::new();
+    let mut t = TestDriver::new(&sb);
+    t.press("?").type_text("cherry");
+    let labels: Vec<_> = t.app().help_rows().into_iter().map(|(_, l)| l).collect();
+    assert_eq!(labels, ["cherry-pick"]);
+    assert!(t.screen().contains("> cherry"), "{}", t.screen());
+
+    // Typing q searches instead of quitting.
+    t.press("ctrl+u").press("q");
+    assert!(!t.app().should_quit());
+
+    // Keys match as well as labels.
+    t.press("backspace").type_text("ctrl+d");
+    let labels: Vec<_> = t.app().help_rows().into_iter().map(|(_, l)| l).collect();
+    assert_eq!(labels, ["page down"]);
+
+    // With nothing typed, `?` closes the popup again.
+    t.press("ctrl+u").press("?");
+    assert!(!t.screen().contains("Keybindings"));
+    t.press("?");
+    assert!(t.screen().contains("type to search"), "{}", t.screen());
+}
+
+#[test]
 fn quit() {
     let sb = Sandbox::new();
     let mut t = TestDriver::new(&sb);

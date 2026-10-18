@@ -53,7 +53,8 @@ tt-git            # in a repository, or: tt-git path/to/repo
 
 ## Keys
 
-Press `?` for the keys of the focused pane, or `:` (or `ctrl+p`) for the
+Press `?` for the keys of the focused pane (type to search them, `esc` to
+close), or `:` (or `ctrl+p`) for the
 command palette, which lists built-in commands and plugin actions.
 
 | Where | Key | Does |

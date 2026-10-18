@@ -6,6 +6,7 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
+use tt_git_core::branches::matches_filter;
 use tt_git_core::time::SharedClock;
 use tt_git_core::{LogFilter, Repo};
 
@@ -95,6 +96,8 @@ pub struct App {
     /// (main, details) areas from the last frame, for sizing new panes.
     layout_rects: (Rect, Rect),
     show_help: bool,
+    /// What's typed into the help popup to narrow its list.
+    help_query: String,
     error: Option<String>,
     notice: Option<String>,
     /// Text waiting for the runner to put on the clipboard.
@@ -146,6 +149,7 @@ impl App {
             release_keys,
             layout_rects: (Rect::new(0, 0, 120, 40), Rect::new(0, 0, 80, 15)),
             show_help: false,
+            help_query: String::new(),
             error: None,
             notice: None,
             clipboard: None,
@@ -369,12 +373,7 @@ impl App {
             return;
         }
         if self.show_help {
-            match self.keymap.lookup(Context::Global, combo) {
-                Some(Command::Quit) => self.should_quit = true,
-                Some(Command::Help) => self.show_help = false,
-                _ if combo.code == KeyCode::Esc => self.show_help = false,
-                _ => {}
-            }
+            self.help_key(combo);
             return;
         }
         if self.focused().wants_text_input() {
@@ -391,6 +390,51 @@ impl App {
         if let Some(cmd) = self.keymap.lookup(context, combo) {
             self.update(Action::Command(cmd));
         }
+    }
+
+    /// Typing narrows the help popup's list. The help key closes it while
+    /// nothing is typed; other bound keys only count for quit.
+    fn help_key(&mut self, combo: KeyCombo) {
+        let ctrl_or_alt = combo.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        let bound = self.keymap.lookup(Context::Global, combo);
+        match combo.code {
+            KeyCode::Esc => self.show_help = false,
+            KeyCode::Backspace => {
+                self.help_query.pop();
+            }
+            KeyCode::Char('u') if combo.modifiers.contains(KeyModifiers::CONTROL) => self.help_query.clear(),
+            KeyCode::Char(_) if bound == Some(Command::Help) && self.help_query.is_empty() => self.show_help = false,
+            KeyCode::Char(c) if !ctrl_or_alt => self.help_query.push(c),
+            _ if bound == Some(Command::Quit) => self.should_quit = true,
+            _ => {}
+        }
+    }
+
+    /// The help popup's rows, narrowed to those matching the typed query.
+    pub fn help_rows(&self) -> Vec<(String, &'static str)> {
+        let q = &self.help_query;
+        let mut rows = self.all_help_rows();
+        rows.retain(|(keys, label)| matches_filter(label, q) || matches_filter(keys, q));
+        rows
+    }
+
+    /// (keys, label) for the focused pane's bound commands, then the global ones.
+    fn all_help_rows(&self) -> Vec<(String, &'static str)> {
+        let context = self.focused().context();
+        let sections: [(Context, &[Command]); 2] =
+            [(context, self.focused().commands()), (Context::Global, ALL_GLOBAL)];
+        let mut rows = Vec::new();
+        for (ctx, cmds) in sections {
+            for cmd in cmds {
+                let keys = self.keymap.keys_for(ctx, *cmd);
+                if keys.is_empty() {
+                    continue;
+                }
+                let keys = keys.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
+                rows.push((keys, cmd.label()));
+            }
+        }
+        rows
     }
 
     pub fn update(&mut self, action: Action) {
@@ -742,7 +786,10 @@ impl App {
     fn dispatch(&mut self, cmd: Command) {
         match cmd {
             Command::Quit => self.should_quit = true,
-            Command::Help => self.show_help = !self.show_help,
+            Command::Help => {
+                self.show_help = !self.show_help;
+                self.help_query.clear();
+            }
             Command::FocusNext => self.cycle_focus(1),
             Command::FocusPrev => self.cycle_focus(PaneId::ALL.len() - 1),
             Command::FocusLeft | Command::FocusDown | Command::FocusUp | Command::FocusRight => self.focus_toward(cmd),
@@ -939,25 +986,32 @@ impl App {
     }
 
     fn draw_help_popup(&self, frame: &mut Frame, area: Rect) {
-        let context = self.focused().context();
-        let sections: [(Context, &[Command]); 2] =
-            [(context, self.focused().commands()), (Context::Global, ALL_GLOBAL)];
-        let mut lines = Vec::new();
-        for (ctx, cmds) in sections {
-            for cmd in cmds {
-                let keys = self.keymap.keys_for(ctx, *cmd);
-                if keys.is_empty() {
-                    continue;
-                }
-                let keys = keys.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
-                lines.push(Line::from(vec![
-                    Span::styled(format!("{keys:>16}  "), self.theme.help_key),
-                    Span::styled(cmd.label(), self.theme.help_text),
-                ]));
-            }
+        let search = if self.help_query.is_empty() {
+            Line::from(vec![
+                Span::styled("> ", self.theme.help_key),
+                Span::styled("type to search", self.theme.muted),
+            ])
+        } else {
+            Line::from(vec![
+                Span::styled("> ", self.theme.help_key),
+                Span::raw(self.help_query.clone()),
+                Span::styled("█", self.theme.help_key),
+            ])
+        };
+        let mut lines = vec![search];
+        let rows = self.help_rows();
+        if rows.is_empty() {
+            lines.push(Line::styled("no matching keys", self.theme.muted));
+        }
+        for (keys, label) in rows {
+            lines.push(Line::from(vec![
+                Span::styled(format!("{keys:>16}  "), self.theme.help_key),
+                Span::styled(label, self.theme.help_text),
+            ]));
         }
 
-        let popup = centered(area, 50, lines.len() as u16 + 2);
+        // Size for the unfiltered list so the popup holds still while typing.
+        let popup = centered(area, 50, self.all_help_rows().len() as u16 + 3);
         frame.render_widget(Clear, popup);
         let block = Block::bordered()
             .border_type(BorderType::Rounded)
