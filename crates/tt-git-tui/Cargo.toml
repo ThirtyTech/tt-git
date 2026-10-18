@@ -1,0 +1,32 @@
+[package]
+name = "tt-git-tui"
+description = "ratatui user interface for tt-git"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+crossterm.workspace = true
+futures.workspace = true
+notify-debouncer-mini = "0.7.0"
+portable-pty = "0.9.0"
+ratatui.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tt-git-core.workspace = true
+tt-git-graph.workspace = true
+tt-git-plugin.workspace = true
+unicode-width = "0.2"
+vt100 = "0.17.0"
+
+[dev-dependencies]
+insta.workspace = true
+tt-git-testkit.workspace = true
+
+[lints]
+workspace = true

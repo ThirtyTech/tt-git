@@ -1,0 +1,20 @@
+[package]
+name = "tt-git-core"
+description = "Git backend, models and parsers for tt-git"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+etcetera.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tt-git-testkit.workspace = true
+
+[lints]
+workspace = true

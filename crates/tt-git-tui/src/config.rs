@@ -1,0 +1,157 @@
+//! User configuration loaded from `config.toml`.
+
+use std::path::Path;
+
+use serde::Deserialize;
+
+use crate::keymap::{Keymap, KeymapError, KeysConfig};
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Config {
+    /// Refresh automatically when files or refs change on disk.
+    pub watch: bool,
+    /// Click to focus/select, wheel to scroll, ctrl+click links.
+    pub mouse: bool,
+    pub keys: KeysConfig,
+    pub layout: LayoutConfig,
+    pub graph: GraphConfig,
+    pub plugins: PluginsConfig,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct PluginsConfig {
+    /// Keys that leave (and, for overlays/popups, close) a plugin pane.
+    pub pane_release_keys: Vec<String>,
+}
+
+impl Default for PluginsConfig {
+    fn default() -> Self {
+        Self {
+            pane_release_keys: vec!["ctrl+\\".into(), "f12".into()],
+        }
+    }
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            watch: true,
+            mouse: true,
+            keys: KeysConfig::default(),
+            layout: LayoutConfig::default(),
+            graph: GraphConfig::default(),
+            plugins: PluginsConfig::default(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct GraphConfig {
+    /// Commits loaded at a time; scrolling near the end loads this many more.
+    pub max_commits: usize,
+    /// Lanes drawn before the rest collapse into `…`.
+    pub max_lanes: usize,
+    /// Show `HEAD`'s upstream alongside it in current-branch mode.
+    pub current_includes_upstream: bool,
+}
+
+impl Default for GraphConfig {
+    fn default() -> Self {
+        Self {
+            max_commits: 20_000,
+            max_lanes: 16,
+            current_includes_upstream: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct LayoutConfig {
+    /// Width of the left column (status + branches) as a percentage.
+    pub side_panel_width: u16,
+    /// Height of the graph within the right column as a percentage.
+    pub graph_height: u16,
+}
+
+impl Default for LayoutConfig {
+    fn default() -> Self {
+        Self {
+            side_panel_width: 33,
+            graph_height: 65,
+        }
+    }
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigError {
+    #[error("reading {path}: {source}")]
+    Read { path: String, source: std::io::Error },
+    #[error("parsing {path}: {source}")]
+    Parse { path: String, source: toml::de::Error },
+    #[error(transparent)]
+    Keymap(#[from] KeymapError),
+}
+
+impl Config {
+    /// Loads `path`, or returns the defaults when it does not exist.
+    pub fn load(path: &Path) -> Result<Self, ConfigError> {
+        match std::fs::read_to_string(path) {
+            Ok(text) => Self::parse(&text).map_err(|source| ConfigError::Parse {
+                path: path.display().to_string(),
+                source,
+            }),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(source) => Err(ConfigError::Read {
+                path: path.display().to_string(),
+                source,
+            }),
+        }
+    }
+
+    pub fn parse(text: &str) -> Result<Self, toml::de::Error> {
+        toml::from_str(text)
+    }
+
+    pub fn keymap(&self) -> Result<Keymap, KeymapError> {
+        Keymap::from_config(&self.keys)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keymap::{Command, Context};
+
+    #[test]
+    fn parses_full_config() {
+        let cfg = Config::parse(
+            r#"
+            [keys.global]
+            quit = "x"
+            [layout]
+            side_panel_width = 40
+            "#,
+        )
+        .unwrap();
+        assert_eq!(cfg.layout.side_panel_width, 40);
+        assert_eq!(cfg.layout.graph_height, 65);
+        let km = cfg.keymap().unwrap();
+        assert_eq!(km.lookup(Context::Global, "x".parse().unwrap()), Some(Command::Quit));
+    }
+
+    #[test]
+    fn rejects_unknown_command() {
+        let err = Config::parse("[keys.global]\nfly = \"f\"").unwrap_err();
+        assert!(err.to_string().contains("unknown variant `fly`"), "{err}");
+    }
+
+    #[test]
+    fn missing_file_is_default() {
+        let cfg = Config::load(Path::new("definitely/not/here.toml")).unwrap();
+        assert_eq!(cfg.layout.side_panel_width, 33);
+    }
+}

@@ -1,0 +1,24 @@
+[package]
+name = "tt-git-plugin"
+description = "herdr-style subprocess plugin host for tt-git"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+interprocess = "2.4.6"
+regex = "1.13.1"
+semver = "1.0.28"
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tt-git-core.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

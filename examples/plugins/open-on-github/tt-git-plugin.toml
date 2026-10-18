@@ -1,0 +1,30 @@
+id = "examples.open-on-github"
+name = "Open on GitHub"
+version = "0.1.0"
+min_tt_git_version = "0.1.0"
+description = "Open the selected commit or branch on GitHub in your browser"
+platforms = ["linux", "macos", "windows"]
+
+[[actions]]
+id = "commit"
+title = "Open commit on GitHub"
+contexts = ["commit"]
+command = ["node", "open.mjs", "commit"]
+
+[[actions]]
+id = "branch"
+title = "Open branch on GitHub"
+contexts = ["branch"]
+command = ["node", "open.mjs", "branch"]
+
+[[actions]]
+id = "url"
+title = "Open link in browser"
+command = ["node", "open.mjs", "url"]
+
+# `o` in the details pane on a GitHub issue/PR link opens it.
+[[link_handlers]]
+id = "github"
+title = "Open GitHub link"
+pattern = '^https://github\.com/[^/]+/[^/]+/(issues|pull)/[0-9]+$'
+action = "url"

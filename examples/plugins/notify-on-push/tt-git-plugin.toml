@@ -1,0 +1,14 @@
+id = "examples.notify-on-push"
+name = "Notify on push"
+version = "0.1.0"
+min_tt_git_version = "0.1.0"
+description = "Shows a message after pushes and commits (demonstrates event hooks calling back through the CLI)"
+platforms = ["linux", "macos", "windows"]
+
+[[events]]
+on = "push.completed"
+command = ["node", "notify.mjs"]
+
+[[events]]
+on = "commit.created"
+command = ["node", "notify.mjs"]

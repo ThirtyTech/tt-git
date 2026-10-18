@@ -1,0 +1,22 @@
+id = "examples.pr-list"
+name = "Pull requests"
+version = "0.1.0"
+min_tt_git_version = "0.1.0"
+description = "Lists open pull requests (via the gh CLI) in a popup pane"
+platforms = ["linux", "macos", "windows"]
+
+# A pane is a terminal program: tt-git runs it in a PTY and draws it.
+[[panes]]
+id = "list"
+title = "Pull requests"
+placement = "popup"
+width = "80%"
+height = "70%"
+command = ["node", "pr-list.mjs"]
+
+# Actions can open panes too, by calling the CLI.
+[[actions]]
+id = "for-branch"
+title = "Pull requests for this branch"
+contexts = ["branch"]
+command = ["node", "open-for-branch.mjs"]

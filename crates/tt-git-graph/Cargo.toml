@@ -1,0 +1,21 @@
+[package]
+name = "tt-git-graph"
+description = "Commit graph lane layout for tt-git"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+smallvec.workspace = true
+
+[dev-dependencies]
+criterion = { version = "0.7", default-features = false }
+insta.workspace = true
+
+[lints]
+workspace = true
+
+[[bench]]
+name = "layout"
+harness = false
