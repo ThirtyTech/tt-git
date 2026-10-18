@@ -522,3 +522,88 @@ fn files_view_shows_its_list_from_the_first_frame() {
     t.assert_pane_contains(PaneId::Details, "Files (1)");
     t.assert_pane_contains(PaneId::Details, "change a");
 }
+
+#[test]
+fn close_brace_lists_files_below_the_diff() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "one\n", "base");
+    sb.write("a.txt", "two\n").write("b.txt", "bee\n");
+    sb.git(&["add", "."]);
+    let oid = sb.commit_staged("touch two files");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 60);
+
+    t.press("space").press("4").press("}");
+    assert_eq!(
+        t.app().details().subject(),
+        Some(&DetailsSubject::CommitFiles(oid.clone()))
+    );
+    assert_eq!(t.app().zoom(), Zoom::Off);
+    insta::assert_snapshot!(t.pane_lines(PaneId::Details).join("\n"));
+
+    // The list sits under the diff, and j still picks the file.
+    let lines = t.pane_lines(PaneId::Details);
+    let row = |needle: &str| lines.iter().position(|l| l.contains(needle)).unwrap();
+    assert!(row("Files (2)") > row("+two"), "{lines:#?}");
+    t.press("j");
+    assert_eq!(t.app().details().selected_file().unwrap().path, "b.txt");
+    t.assert_pane_contains(PaneId::Details, "+bee");
+
+    // Fullscreen puts the list beside the diff, on the top row. (Step
+    // through the zoom levels rather than assume how many `+` it takes.)
+    for _ in 0..3 {
+        if t.app().zoom() != Zoom::Full(PaneId::Details) {
+            t.press("+");
+        }
+    }
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    assert!(t.pane_lines(PaneId::Details)[0].starts_with("Files (2)"));
+
+    // Leaving fullscreen puts the list back below.
+    for _ in 0..3 {
+        if t.app().zoom() != Zoom::Off {
+            t.press("+");
+        }
+    }
+    assert_eq!(t.app().zoom(), Zoom::Off);
+    let lines = t.pane_lines(PaneId::Details);
+    let row = |needle: &str| lines.iter().position(|l| l.contains(needle)).unwrap();
+    assert!(row("Files (2)") > row("+bee"), "{lines:#?}");
+
+    // } again goes back to the plain commit.
+    t.press("}");
+    assert_eq!(t.app().details().subject(), Some(&DetailsSubject::Commit(oid)));
+    t.assert_pane_contains(PaneId::Details, "touch two files");
+    assert!(!t.pane_lines(PaneId::Details).iter().any(|l| l.contains("Files (2)")));
+}
+
+#[test]
+fn files_below_a_short_diff_keep_the_diff_visible() {
+    let sb = Sandbox::new();
+    sb.commit_file(
+        "a.txt", "one
+", "base",
+    );
+    sb.write(
+        "a.txt", "two
+",
+    )
+    .write(
+        "b.txt", "bee
+",
+    )
+    .write(
+        "c.txt", "sea
+",
+    );
+    sb.git(&["add", "."]);
+    sb.commit_staged("touch three files");
+    // At 24 rows the details pane has five rows inside its border.
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
+
+    t.press("space").press("4").press("}");
+    let lines = t.pane_lines(PaneId::Details);
+    assert!(lines.iter().any(|l| l.starts_with("diff --git a/a.txt")), "{lines:#?}");
+    assert!(lines.iter().any(|l| l.contains("Files (3)")), "{lines:#?}");
+    t.press("j");
+    t.assert_pane_contains(PaneId::Details, "diff --git a/b.txt");
+}

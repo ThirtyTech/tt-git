@@ -88,7 +88,8 @@ command palette, which lists built-in commands and plugin actions.
 | | `d` | discard changes to the file (asks first) |
 | | `c` / `A` | commit / amend keeping the message |
 | | `C` / `X` | continue / abort a merge, rebase or cherry-pick |
-| details | `o` | open the link in view with a plugin link handler |
+| details | `}` | show / hide the commit's changed files below the diff (`j`/`k` pick a file); fullscreen puts them on the left |
+| | `o` | open the link in view with a plugin link handler |
 | | `esc` `space` | close details |
 
 The mouse also works: click a pane or row to focus and select it, use the

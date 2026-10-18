@@ -96,7 +96,9 @@ children = [
 ```
 
 `enter` on a commit opens it fullscreen instead, with the changed files on
-the left and the selected file's diff on the right.
+the left and the selected file's diff on the right. `}` in the details pane
+switches it to the same view without going fullscreen, with the files listed
+below the diff.
 
 `+` zooms whichever layout you use: first to just the graph and details at
 full width (the graph alone, full height, if details is closed; `space` still
@@ -140,7 +142,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `checkout`, `new_branch`, `delete_branch`, `rename_branch`, `fetch`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `d`, `R`, `f`, `/`, `M`, `r` | branches |
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |
 | `stage_toggle`, `stage_all`, `discard`, `commit`, `amend`, `continue`, `abort` | `space`/`enter`, `a`, `d`, `c`, `A`, `C`, `X` | status |
-| `open_link` | `o` | details |
+| `toggle_files`, `open_link` | `}`, `o` | details |
 | `copy` (commit hash / branch name) | `c` | graph, branches |
 | `plugin_logs` | (palette only) | global |
 

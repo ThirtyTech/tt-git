@@ -717,6 +717,16 @@ impl App {
         self.focus = PaneId::Details;
     }
 
+    /// Switches details between the plain commit and its changed files
+    /// beside or below the selected file's diff.
+    fn toggle_files(&mut self) {
+        match self.details.subject().cloned() {
+            Some(DetailsSubject::Commit(oid)) => self.show_commit_files(oid),
+            Some(DetailsSubject::CommitFiles(oid)) => self.show_commit_plain(oid),
+            _ => {}
+        }
+    }
+
     fn run_command(&mut self, cmd: Command) {
         let before = self.focus;
         self.dispatch(cmd);
@@ -813,6 +823,7 @@ impl App {
             Command::Palette => self.modal = Some(Modal::palette(self.palette_items())),
             Command::PluginLogs => self.show_plugin_logs(),
             Command::OpenLink if self.focus == PaneId::Details => self.open_link(),
+            Command::ToggleFiles if self.focus == PaneId::Details => self.toggle_files(),
             Command::Continue | Command::Abort if self.focus != PaneId::Status => {
                 let ctx = self.ctx.clone();
                 self.status.on_command(cmd, &ctx);
@@ -924,6 +935,8 @@ impl App {
             }
         }
         if self.pane_area(PaneId::Details).is_some() && !self.draw_split_pane(frame, details_area) {
+            // Fullscreen has room for the file list beside the diff.
+            self.details.set_files_beside(self.zoom == Zoom::Full(PaneId::Details));
             let theme = &self.theme;
             self.details.draw(frame, details_area, focus == PaneId::Details, theme);
         }

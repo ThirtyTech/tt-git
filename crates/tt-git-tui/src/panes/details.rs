@@ -49,6 +49,9 @@ pub struct DetailsPane {
     files: Option<FilesView>,
     /// Rows the files view's header took in the last draw.
     header_rows: usize,
+    /// The files view lists the files to the left of the diff (fullscreen)
+    /// rather than below it.
+    files_beside: bool,
 }
 
 impl DetailsPane {
@@ -61,7 +64,7 @@ impl DetailsPane {
     }
 
     /// The text rows currently on screen, top to bottom. In the files view
-    /// these are the right-hand side: header, separator, then diff.
+    /// these are the header, separator, then diff, without the file list.
     pub fn visible_lines(&self) -> Vec<String> {
         let start = self.cursor.offset.min(self.lines.len());
         let end = (start + self.cursor.height.max(1)).min(self.lines.len());
@@ -69,7 +72,9 @@ impl DetailsPane {
         match &self.files {
             Some(view) => {
                 let mut rows: Vec<String> = view.header.iter().take(self.header_rows).cloned().collect();
-                rows.push(String::new());
+                if self.header_rows > 0 {
+                    rows.push(String::new());
+                }
                 rows.extend(diff);
                 rows
             }
@@ -86,6 +91,11 @@ impl DetailsPane {
     pub fn selected_file(&self) -> Option<&CommitFile> {
         let view = self.files.as_ref()?;
         view.files.get(view.cursor.selected)
+    }
+
+    /// Puts the files view's list beside the diff instead of below it.
+    pub fn set_files_beside(&mut self, beside: bool) {
+        self.files_beside = beside;
     }
 
     /// Marks `subject` as the thing to show; content arrives via
@@ -206,59 +216,63 @@ impl DetailsPane {
         EventState::Consumed
     }
 
+    /// The files view: the file list on the left when fullscreen, otherwise
+    /// along the bottom; the commit header and selected file's diff fill the rest.
     fn draw_files(&mut self, frame: &mut Frame, inner: Rect, focused: bool, theme: &Theme) {
         let Some(view) = &mut self.files else { return };
-        let longest = view.files.iter().map(|f| file_label(f).width() + 3).max().unwrap_or(0);
-        let list_width = (longest as u16 + 1).clamp(20, (inner.width * 2 / 5).max(20));
-        let [list_area, right] = Layout::horizontal([Constraint::Length(list_width), Constraint::Fill(1)]).areas(inner);
-
-        let list_block = Block::new().borders(Borders::RIGHT).border_style(theme.border);
-        let list_inner = list_block.inner(list_area);
-        frame.render_widget(list_block, list_area);
-        let width = list_inner.width as usize;
         let label = if self.loading {
             "Files".to_string()
         } else {
             format!("Files ({})", view.files.len())
         };
-        let mut rows = vec![Line::styled(label, theme.muted)];
-        let height = (list_inner.height as usize).saturating_sub(1);
-        view.cursor.scroll_into_view(height);
-        let start = view.cursor.offset.min(view.files.len());
-        let end = (start + height).min(view.files.len());
-        for (i, file) in view.files.iter().enumerate().take(end).skip(start) {
-            let code = file.state.code().to_string();
-            let line = Line::from(vec![
-                Span::styled(code, state_style(file.state, theme)),
-                Span::raw(" "),
-                Span::raw(truncate(&file_label(file), width.saturating_sub(2))),
-            ]);
-            rows.push(if i == view.cursor.selected {
-                line.patch_style(if focused {
-                    theme.selected
-                } else {
-                    theme.selected_unfocused
-                })
-            } else {
-                line
-            });
-        }
-        frame.render_widget(Paragraph::new(rows), list_inner);
-
-        // Header (up to a third of the height), a rule, then the diff.
-        let right = Rect {
-            x: right.x + 1,
-            width: right.width.saturating_sub(1),
-            ..right
+        let title = Line::styled(label, theme.muted);
+        let body = if self.files_beside {
+            let longest = view.files.iter().map(|f| file_label(f).width() + 3).max().unwrap_or(0);
+            let list_width = (longest as u16 + 1).clamp(20, (inner.width * 2 / 5).max(20));
+            let [list_area, right] =
+                Layout::horizontal([Constraint::Length(list_width), Constraint::Fill(1)]).areas(inner);
+            let list_block = Block::new().borders(Borders::RIGHT).border_style(theme.border);
+            let [title_area, rows_area] =
+                Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(list_block.inner(list_area));
+            frame.render_widget(list_block, list_area);
+            frame.render_widget(Paragraph::new(title), title_area);
+            draw_file_list(view, frame, rows_area, focused, theme);
+            Rect {
+                x: right.x + 1,
+                width: right.width.saturating_sub(1),
+                ..right
+            }
+        } else {
+            // Up to a third of the height, under a rule carrying the title.
+            let rows = view.files.len().clamp(1, (inner.height as usize / 3).max(2));
+            let [top, list_area] =
+                Layout::vertical([Constraint::Fill(1), Constraint::Length(rows as u16 + 1)]).areas(inner);
+            let list_block = Block::new()
+                .borders(Borders::TOP)
+                .border_style(theme.border)
+                .title(title);
+            draw_file_list(view, frame, list_block.inner(list_area), focused, theme);
+            frame.render_widget(list_block, list_area);
+            top
         };
-        let header_rows = view.header.len().min((right.height as usize / 3).max(1));
+
+        // Header (up to a third of the height), a rule, then the diff. Above
+        // the bottom list the space can be tiny; under three rows the header
+        // and rule give way so the diff still shows.
+        let max_header = body.height as usize / 3;
+        let max_header = if self.files_beside {
+            max_header.max(1)
+        } else {
+            max_header
+        };
+        let header_rows = view.header.len().min(max_header);
         self.header_rows = header_rows;
         let [header_area, rule_area, diff_area] = Layout::vertical([
             Constraint::Length(header_rows as u16),
-            Constraint::Length(1),
+            Constraint::Length(u16::from(header_rows > 0)),
             Constraint::Fill(1),
         ])
-        .areas(right);
+        .areas(body);
         let header: Vec<Line> = view.header[..header_rows]
             .iter()
             .map(|l| style_line(l, theme))
@@ -276,6 +290,33 @@ impl DetailsPane {
         let lines: Vec<Line> = self.lines[start..end].iter().map(|l| style_line(l, theme)).collect();
         frame.render_widget(Paragraph::new(lines), area);
     }
+}
+
+/// The changed files, scrolled to keep the selection in `area`.
+fn draw_file_list(view: &mut FilesView, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
+    let width = area.width as usize;
+    view.cursor.scroll_into_view(area.height as usize);
+    let start = view.cursor.offset.min(view.files.len());
+    let end = (start + area.height as usize).min(view.files.len());
+    let mut rows = Vec::new();
+    for (i, file) in view.files.iter().enumerate().take(end).skip(start) {
+        let code = file.state.code().to_string();
+        let line = Line::from(vec![
+            Span::styled(code, state_style(file.state, theme)),
+            Span::raw(" "),
+            Span::raw(truncate(&file_label(file), width.saturating_sub(2))),
+        ]);
+        rows.push(if i == view.cursor.selected {
+            line.patch_style(if focused {
+                theme.selected
+            } else {
+                theme.selected_unfocused
+            })
+        } else {
+            line
+        });
+    }
+    frame.render_widget(Paragraph::new(rows), area);
 }
 
 fn split_lines(text: &str) -> Vec<String> {
@@ -339,7 +380,7 @@ impl Component for DetailsPane {
     }
 
     fn commands(&self) -> &[Command] {
-        &[Command::OpenLink, Command::CloseDetails]
+        &[Command::OpenLink, Command::ToggleFiles, Command::CloseDetails]
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
