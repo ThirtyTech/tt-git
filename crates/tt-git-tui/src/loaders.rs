@@ -50,7 +50,9 @@ fn load_base(
     branches: &[BranchEntry],
     config: &BranchesConfig,
 ) -> Result<Option<BaseBranches>, GitError> {
-    use tt_git_core::branches::{base_scope, compare_with_base, default_base, resolve_base};
+    use tt_git_core::branches::{
+        TAGS_COMPARED, base_scope, compare_with_base, default_base, resolve_base, tags_newest_first,
+    };
 
     let setting = repo.base_branch_setting();
     let Some(base) = resolve_base(refs, setting.as_deref()) else {
@@ -61,6 +63,17 @@ fn load_base(
     let merged = repo.merged_refs(&base.full_name, &scope)?;
     let (unmerged, merged) =
         compare_with_base(branches, base, &merged, &config.unmerged_exclude, &config.safe_branches);
+    let tags = tags_newest_first(refs)
+        .into_iter()
+        .take(TAGS_COMPARED)
+        .filter_map(|tag| match repo.ahead_behind(&base.full_name, &tag.target) {
+            Ok(distance) => Some((tag.full_name, distance)),
+            Err(e) => {
+                tracing::warn!("comparing {} with the base failed: {e}", tag.short_name);
+                None
+            }
+        })
+        .collect();
     Ok(Some(BaseBranches {
         base: base.short_name.clone(),
         base_ref: base.full_name.clone(),
@@ -69,6 +82,7 @@ fn load_base(
         unmerged,
         merged,
         authors: repo.ref_authors(&scope)?,
+        tags,
     }))
 }
 
@@ -249,6 +263,7 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         } => repo.create_worktree(name, start),
         GitOp::DeleteBranch { name, force } => repo.delete_branch(name, *force),
         GitOp::DeleteRemoteBranch { remote, branch } => repo.delete_remote_branch(remote, branch),
+        GitOp::DeleteTag { name } => repo.delete_tag(name),
         GitOp::RenameBranch { old, new } => repo.rename_branch(old, new),
         GitOp::FetchAll => repo.fetch_all(),
         GitOp::SetBaseBranch(base) => repo.set_base_branch(base.as_deref()),

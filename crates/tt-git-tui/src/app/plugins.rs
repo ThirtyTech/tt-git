@@ -286,7 +286,7 @@ impl App {
                 },
                 json!({ "head": head, "continued": true }),
             ),
-            GitOp::Abort(_) | GitOp::SetBaseBranch(_) => return,
+            GitOp::Abort(_) | GitOp::SetBaseBranch(_) | GitOp::DeleteTag { .. } => return,
             GitOp::Commit { message, amend } => (
                 "commit.created",
                 json!({

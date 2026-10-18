@@ -14,7 +14,7 @@ pub mod paths;
 pub mod repo;
 pub mod time;
 
-pub use branches::{BaseBranches, BranchEntry, BranchState, CheckoutPlan};
+pub use branches::{AheadBehind, BaseBranches, BranchEntry, BranchState, CheckoutPlan};
 pub use git::{GitCli, GitError};
 pub use model::*;
 pub use ops::DiscardKind;

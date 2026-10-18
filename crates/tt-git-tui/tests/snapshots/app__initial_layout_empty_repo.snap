@@ -18,7 +18,7 @@ expression: t.screen()
 │                                                                                                  │
 │                                                                                                  │
 ╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
-╭[2] Status: repo · main─────────────────────────╮╭[3] Branches 0 · Unmerged · Merged──────────────╮
+╭[2] Status: repo · main─────────────────────────╮╭[3] Branches 0 · Tags 0 · Unmerged · Merged─────╮
 │working tree clean                              ││no branches                                     │
 │                                                ││                                                │
 │                                                ││                                                │

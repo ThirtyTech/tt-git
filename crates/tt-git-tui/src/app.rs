@@ -482,7 +482,7 @@ impl App {
                 }
                 self.graph.set_refs(&snapshot);
                 self.branches
-                    .set_entries(snapshot.branches.clone(), snapshot.base.clone());
+                    .set_entries(snapshot.branches.clone(), snapshot.base.clone(), &snapshot.refs);
                 self.refs = Some(snapshot);
                 self.track_head();
                 // Follow the focused branch if the list changed under it.

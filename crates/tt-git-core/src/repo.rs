@@ -3,6 +3,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
+use crate::branches::AheadBehind;
 use crate::git::{GitCli, GitError, Result};
 use crate::model::{BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, Status};
 use crate::parse;
@@ -183,6 +184,18 @@ impl Repo {
             .filter(|l| !l.is_empty())
             .map(str::to_string)
             .collect())
+    }
+
+    /// How far `rev` is from `base` (`git rev-list --left-right --count base...rev`).
+    pub fn ahead_behind(&self, base: &str, rev: &str) -> Result<AheadBehind> {
+        let range = format!("{base}...{rev}");
+        let out = self.git.run(&["rev-list", "--left-right", "--count", &range, "--"])?;
+        let text = out.stdout_str();
+        let mut counts = text.split_whitespace().map(str::parse::<u32>);
+        match (counts.next(), counts.next()) {
+            (Some(Ok(behind)), Some(Ok(ahead))) => Ok(AheadBehind { ahead, behind }),
+            _ => Err(GitError::Parse(format!("bad rev-list count {:?}", text.trim()))),
+        }
     }
 
     /// Author of each tip under `prefix`, keyed by full ref name, with names

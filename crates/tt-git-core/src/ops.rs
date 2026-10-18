@@ -82,6 +82,11 @@ impl Repo {
         self.git().run(&["push", remote, "--delete", branch]).map(text)
     }
 
+    /// Deletes a local tag (`git tag -d`).
+    pub fn delete_tag(&self, name: &str) -> Result<String> {
+        self.git().run(&["tag", "-d", name]).map(text)
+    }
+
     pub fn rename_branch(&self, old: &str, new: &str) -> Result<String> {
         self.git().run(&["branch", "-m", old, new]).map(text)
     }

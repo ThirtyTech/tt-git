@@ -79,7 +79,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `n` `d` `R` | new (`tab` in the dialog: create it in a worktree under `.worktrees/`) / delete (asks before force-deleting unmerged) / rename |
 | | `f` | `fetch --all --prune` |
 | | `/` | filter as you type (`esc` clears) |
-| | `]` `[` | next / previous tab: all branches, unmerged into the base branch, merged into it |
+| | `]` `[` | next / previous tab: all branches, tags, unmerged into the base branch, merged into it |
 | | `b` | pick the base branch (default: the project's primary branch) |
 | | `M` / `r` | merge / rebase onto the selected branch |
 | | `c` | copy the branch name |

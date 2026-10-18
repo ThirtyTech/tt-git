@@ -22,7 +22,7 @@ expression: t.screen()
 │              │                                                                    │              │
 │              │                                                                    │              │
 ╰──────────────│enter filter · tab author/file · ↑↓ pick · esc cancel               │──────────────╯
-╭[2] Status: re╰────────────────────────────────────────────────────────────────────╯ed 0──────────╮
+╭[2] Status: re╰────────────────────────────────────────────────────────────────────╯ 1 · Merged 0─╮
 │working tree clean                              ││* main                            local      23h│
 │                                                ││  side                            local      23h│
 │                                                ││                                                │

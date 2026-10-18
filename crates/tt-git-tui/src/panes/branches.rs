@@ -4,9 +4,9 @@ use ratatui::layout::Rect;
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use tt_git_core::branches::matches_filter;
+use tt_git_core::branches::{matches_filter, tags_newest_first};
 use tt_git_core::time::{SharedClock, relative};
-use tt_git_core::{BaseBranches, BranchEntry, BranchState, RefKind};
+use tt_git_core::{BaseBranches, BranchEntry, BranchState, GitRef, RefKind};
 use unicode_width::UnicodeWidthStr;
 
 use super::{BranchFocus, PaneId, pane_block};
@@ -21,7 +21,7 @@ use crate::widgets::{Cursor, fit, fit_right};
 const STATE_WIDTH: usize = 9;
 const DATE_WIDTH: usize = 4;
 const AUTHOR_WIDTH: usize = 14;
-/// Narrowest commit subject column worth showing in merged/unmerged rows.
+/// Narrowest commit subject column worth showing in tag and merged/unmerged rows.
 const SUBJECT_MIN_WIDTH: usize = 12;
 
 /// The pane's lists, switched lazygit-style with `[` and `]`.
@@ -30,6 +30,8 @@ pub enum BranchTab {
     /// Every local and remote branch, by recent activity.
     #[default]
     All,
+    /// Tags, newest first.
+    Tags,
     /// Branches on the base's remote that aren't merged into it.
     Unmerged,
     /// Branches on the base's remote that are merged into it.
@@ -37,11 +39,12 @@ pub enum BranchTab {
 }
 
 impl BranchTab {
-    pub const ALL: [BranchTab; 3] = [BranchTab::All, BranchTab::Unmerged, BranchTab::Merged];
+    pub const ALL: [BranchTab; 4] = [BranchTab::All, BranchTab::Tags, BranchTab::Unmerged, BranchTab::Merged];
 
     pub fn label(self) -> &'static str {
         match self {
             BranchTab::All => "Branches",
+            BranchTab::Tags => "Tags",
             BranchTab::Unmerged => "Unmerged",
             BranchTab::Merged => "Merged",
         }
@@ -50,22 +53,29 @@ impl BranchTab {
     fn index(self) -> usize {
         self as usize
     }
+
+    /// The tabs that compare branches with the base branch.
+    fn compares(self) -> bool {
+        matches!(self, BranchTab::Unmerged | BranchTab::Merged)
+    }
 }
 
-/// Unified local + remote branch list sorted by recent activity, plus the
-/// branches merged and not merged into the base branch.
+/// Unified local + remote branch list sorted by recent activity, the tags,
+/// and the branches merged and not merged into the base branch.
 #[derive(Debug)]
 pub struct BranchesPane {
     clock: SharedClock,
     entries: Vec<BranchEntry>,
     base: Option<BaseBranches>,
+    /// Newest first.
+    tags: Vec<GitRef>,
     tab: BranchTab,
     /// Indices into the current tab's list that pass the filter.
     visible: Vec<usize>,
     filter: String,
     editing_filter: bool,
     /// One per tab, so switching back returns to the same row.
-    cursors: [Cursor; 3],
+    cursors: [Cursor; BranchTab::ALL.len()],
 }
 
 impl BranchesPane {
@@ -74,21 +84,24 @@ impl BranchesPane {
             clock,
             entries: Vec::new(),
             base: None,
+            tags: Vec::new(),
             tab: BranchTab::default(),
             visible: Vec::new(),
             filter: String::new(),
             editing_filter: false,
-            cursors: [Cursor::default(); 3],
+            cursors: [Cursor::default(); BranchTab::ALL.len()],
         }
     }
 
-    /// Replaces the lists, keeping the selection on the same branch if it still exists.
-    pub fn set_entries(&mut self, entries: Vec<BranchEntry>, base: Option<BaseBranches>) {
-        let keep = self.selected().map(|e| e.name.clone());
+    /// Replaces the lists, keeping the selection on the same row if it
+    /// still exists. `refs` may hold any refs; only its tags are listed.
+    pub fn set_entries(&mut self, entries: Vec<BranchEntry>, base: Option<BaseBranches>, refs: &[GitRef]) {
+        let keep = self.selected_name().map(str::to_string);
         self.entries = entries;
         self.base = base;
+        self.tags = tags_newest_first(refs);
         self.refilter();
-        let pos = keep.and_then(|name| self.visible().position(|e| e.name == name));
+        let pos = keep.and_then(|name| (0..self.visible.len()).position(|pos| self.name_at(pos) == name));
         if let Some(pos) = pos {
             self.cursor_mut().selected = pos;
         }
@@ -107,16 +120,29 @@ impl BranchesPane {
         self.tab
     }
 
-    /// The current tab's entries passing the filter, in display order.
+    /// The current tab's branches passing the filter, in display order
+    /// (none on the tags tab).
     pub fn visible(&self) -> impl Iterator<Item = &BranchEntry> {
         let list = self.list(self.tab);
-        self.visible.iter().map(move |&i| &list[i])
+        self.visible.iter().filter_map(move |&i| list.get(i))
     }
 
     pub fn selected(&self) -> Option<&BranchEntry> {
         self.visible
             .get(self.cursor().selected)
-            .map(|&i| &self.list(self.tab)[i])
+            .and_then(|&i| self.list(self.tab).get(i))
+    }
+
+    /// The tags passing the filter, in display order, on the tags tab.
+    pub fn visible_tags(&self) -> impl Iterator<Item = &GitRef> {
+        let tags = self.tag_list();
+        self.visible.iter().filter_map(move |&i| tags.get(i))
+    }
+
+    pub fn selected_tag(&self) -> Option<&GitRef> {
+        self.visible
+            .get(self.cursor().selected)
+            .and_then(|&i| self.tag_list().get(i))
     }
 
     pub fn filter(&self) -> &str {
@@ -128,8 +154,37 @@ impl BranchesPane {
             (BranchTab::All, _) => &self.entries,
             (BranchTab::Unmerged, Some(base)) => &base.unmerged,
             (BranchTab::Merged, Some(base)) => &base.merged,
-            (_, None) => &[],
+            (BranchTab::Tags, _) | (_, None) => &[],
         }
+    }
+
+    fn tag_list(&self) -> &[GitRef] {
+        if self.tab == BranchTab::Tags { &self.tags } else { &[] }
+    }
+
+    /// How many rows `tab` has before filtering.
+    fn len(&self, tab: BranchTab) -> usize {
+        match tab {
+            BranchTab::Tags => self.tags.len(),
+            _ => self.list(tab).len(),
+        }
+    }
+
+    /// Name of the current tab's row `i` (an index into its unfiltered list).
+    fn row_name(&self, i: usize) -> &str {
+        match self.tab {
+            BranchTab::Tags => &self.tags[i].short_name,
+            _ => &self.list(self.tab)[i].name,
+        }
+    }
+
+    /// Name of the visible row at `pos`.
+    fn name_at(&self, pos: usize) -> &str {
+        self.row_name(self.visible[pos])
+    }
+
+    fn selected_name(&self) -> Option<&str> {
+        (self.cursor().selected < self.visible.len()).then(|| self.name_at(self.cursor().selected))
     }
 
     fn cursor(&self) -> &Cursor {
@@ -141,12 +196,8 @@ impl BranchesPane {
     }
 
     fn refilter(&mut self) {
-        self.visible = self
-            .list(self.tab)
-            .iter()
-            .enumerate()
-            .filter(|(_, e)| matches_filter(&e.name, &self.filter))
-            .map(|(i, _)| i)
+        self.visible = (0..self.len(self.tab))
+            .filter(|&i| matches_filter(self.row_name(i), &self.filter))
             .collect();
         let len = self.visible.len();
         self.cursor_mut().clamp(len);
@@ -163,7 +214,7 @@ impl BranchesPane {
     /// On the merged and unmerged tabs, the selected branch for the graph
     /// to show on its own.
     pub fn focus(&self) -> Option<BranchFocus> {
-        if self.tab == BranchTab::All {
+        if !self.tab.compares() {
             return None;
         }
         let base = self.base.as_ref()?;
@@ -178,9 +229,12 @@ impl BranchesPane {
 
     fn announce(&self, ctx: &Ctx) {
         ctx.emit(Action::BranchFocused(self.focus()));
-        if self.tab == BranchTab::All
-            && let Some(oid) = self.selected().and_then(BranchEntry::target)
-        {
+        let oid = match self.tab {
+            BranchTab::All => self.selected().and_then(BranchEntry::target),
+            BranchTab::Tags => self.selected_tag().map(|t| t.target.as_str()),
+            _ => None,
+        };
+        if let Some(oid) = oid {
             ctx.emit(Action::BranchSelected(oid.to_string()));
         }
     }
@@ -256,6 +310,44 @@ impl BranchesPane {
                 branch: remote_ref.branch_name().to_string(),
             },
         ))
+    }
+
+    /// Commands that act on the selected tag.
+    fn on_tag_command(&self, cmd: Command, ctx: &Ctx) -> EventState {
+        let Some(tag) = self.selected_tag() else {
+            return EventState::NotConsumed;
+        };
+        let name = tag.short_name.clone();
+        match cmd {
+            Command::Checkout => ctx.emit(Action::Notify(format!("n makes a branch from {name}"))),
+            Command::NewBranch => ctx.emit(Action::OpenModal(Modal::prompt(
+                format!("New branch from {name}"),
+                "",
+                PromptAction::CreateBranch {
+                    start: name,
+                    worktree: false,
+                },
+            ))),
+            Command::Merge => ctx.emit(Action::OpenModal(Modal::confirm(
+                "Merge",
+                format!("Merge {name} into the current branch?"),
+                GitOp::Merge { target: name },
+            ))),
+            Command::Rebase => ctx.emit(Action::OpenModal(Modal::confirm(
+                "Rebase",
+                format!("Rebase the current branch onto {name}?"),
+                GitOp::Rebase { onto: name },
+            ))),
+            Command::DeleteBranch => ctx.emit(Action::OpenModal(Modal::confirm(
+                "Delete tag",
+                format!("Delete local tag {name}?"),
+                GitOp::DeleteTag { name },
+            ))),
+            Command::RenameBranch => ctx.emit(Action::Notify("only local branches can be renamed".into())),
+            Command::Copy => ctx.emit(Action::Copy(name)),
+            _ => return EventState::NotConsumed,
+        }
+        EventState::Consumed
     }
 
     /// Commands that act on the selected branch.
@@ -392,13 +484,72 @@ impl BranchesPane {
         Line::from(spans)
     }
 
-    /// Name column width for merged/unmerged rows: the longest name on
+    /// How far a tag is from the base: `↓12` when the base has moved on 12
+    /// commits, `↑3` for commits the base doesn't have, `✓` at its tip.
+    /// Only the newest tags are compared.
+    fn tag_distance(&self, tag: &GitRef, theme: &Theme) -> Option<(String, Style)> {
+        let d = self.base.as_ref()?.tags.get(&tag.full_name)?;
+        let state = if d.ahead == 0 && d.behind == 0 {
+            BranchState::InSync
+        } else {
+            BranchState::Diverged {
+                ahead: d.ahead,
+                behind: d.behind,
+            }
+        };
+        Some(state_text(&state, theme))
+    }
+
+    /// Width of the tag distance column: the widest of the compared tags.
+    fn tag_distance_width(&self, theme: &Theme) -> usize {
+        self.tags
+            .iter()
+            .filter_map(|t| self.tag_distance(t, theme))
+            .map(|(text, _)| text.width())
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// A tag row: name, distance from the base, subject (the tag message's
+    /// for annotated tags, else the commit's) and date.
+    fn render_tag<'a>(
+        &self,
+        tag: &'a GitRef,
+        name_width: usize,
+        distance_width: usize,
+        width: usize,
+        theme: &Theme,
+    ) -> Line<'a> {
+        let mut spans = vec![
+            Span::raw("  "),
+            Span::styled(fit(&tag.short_name, name_width), theme.label_tag),
+        ];
+        let mut used = 2 + name_width;
+        if distance_width > 0 {
+            let (text, style) = self.tag_distance(tag, theme).unwrap_or_default();
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(fit(&text, distance_width), style));
+            used += 1 + distance_width;
+        }
+        let subject_width = width.saturating_sub(used + 1 + 1 + DATE_WIDTH);
+        if subject_width > 0 {
+            spans.push(Span::raw(" "));
+            spans.push(Span::raw(fit(&tag.subject, subject_width)));
+        }
+        spans.push(Span::raw(" "));
+        spans.push(Span::styled(
+            fit_right(&relative(self.clock.now(), tag.date), DATE_WIDTH),
+            theme.date,
+        ));
+        Line::from(spans)
+    }
+
+    /// Name column width for tag and merged/unmerged rows: the longest name on
     /// screen, up to half the row if that leaves room for subjects, else
     /// everything but the author column.
     fn compared_name_width(&self, rows: &[usize], width: usize) -> usize {
         let room = width.saturating_sub(2 + 1 + DATE_WIDTH);
-        let list = self.list(self.tab);
-        let longest = rows.iter().map(|&i| list[i].name.width()).max().unwrap_or(0).max(8);
+        let longest = rows.iter().map(|&i| self.row_name(i).width()).max().unwrap_or(0).max(8);
         let with_subject = longest.min(room / 2);
         if room.saturating_sub(with_subject + 1 + AUTHOR_WIDTH + 1) >= SUBJECT_MIN_WIDTH {
             with_subject
@@ -407,17 +558,18 @@ impl BranchesPane {
         }
     }
 
-    /// `Branches 12 · Unmerged 4 · Merged 9` with the current tab
-    /// underlined, then the base on the merged/unmerged tabs.
+    /// `Branches 12 · Tags 3 · Unmerged 4 · Merged 9` with the current tab
+    /// underlined, then the base everywhere but the full list.
     fn title(&self, theme: &Theme) -> Line<'static> {
         let mut spans = Vec::new();
         for tab in BranchTab::ALL {
             if !spans.is_empty() {
                 spans.push(Span::styled(" · ", theme.muted));
             }
-            let count = match (tab, &self.base) {
-                (BranchTab::All, _) | (_, Some(_)) => format!(" {}", self.list(tab).len()),
-                (_, None) => String::new(),
+            let count = if tab.compares() && self.base.is_none() {
+                String::new()
+            } else {
+                format!(" {}", self.len(tab))
             };
             let style = if tab == self.tab {
                 Style::new().add_modifier(Modifier::UNDERLINED)
@@ -441,8 +593,9 @@ impl BranchesPane {
     fn empty_message(&self) -> String {
         let base = self.base.as_ref().map(|b| b.base.as_str());
         match (self.tab, base) {
-            _ if !self.list(self.tab).is_empty() => "no matches".into(),
+            _ if self.len(self.tab) > 0 => "no matches".into(),
             (BranchTab::All, _) => "no branches".into(),
+            (BranchTab::Tags, _) => "no tags".into(),
             (_, None) => "no base branch found; pick one".into(),
             (BranchTab::Unmerged, Some(base)) => format!("everything is merged into {base}"),
             (BranchTab::Merged, Some(base)) => format!("nothing is merged into {base} yet"),
@@ -491,6 +644,7 @@ impl Component for BranchesPane {
             Command::NextTab => self.switch_tab(1, ctx),
             Command::PrevTab => self.switch_tab(BranchTab::ALL.len() - 1, ctx),
             Command::PickBase => ctx.emit(Action::OpenModal(self.base_picker())),
+            _ if self.tab == BranchTab::Tags => return self.on_tag_command(cmd, ctx),
             _ => return self.on_entry_command(cmd, ctx),
         }
         EventState::Consumed
@@ -571,12 +725,14 @@ impl Component for BranchesPane {
         let width = inner.width as usize;
         let list = self.list(self.tab);
         let name_width = self.compared_name_width(&self.visible[start..end], width);
+        let distance_width = self.tag_distance_width(theme);
         let lines: Vec<Line> = (start..end)
             .map(|pos| {
-                let entry = &list[self.visible[pos]];
+                let i = self.visible[pos];
                 let line = match self.tab {
-                    BranchTab::All => self.render_entry(entry, width, theme),
-                    _ => self.render_compared(entry, name_width, width, theme),
+                    BranchTab::All => self.render_entry(&list[i], width, theme),
+                    BranchTab::Tags => self.render_tag(&self.tags[i], name_width, distance_width, width, theme),
+                    _ => self.render_compared(&list[i], name_width, width, theme),
                 };
                 if pos == cursor.selected {
                     line.patch_style(if focused {

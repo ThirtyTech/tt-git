@@ -29,10 +29,19 @@ pane_release_keys = ["ctrl+\\", "f12"]   # leave/close plugin panes
 
 ## Merged and unmerged branches
 
-The branches pane has three tabs; `]` and `[` (or `}` and `{`) move
+The branches pane has four tabs; `]` and `[` (or `}` and `{`) move
 between them:
 
 - **Branches**: every local and remote branch, most recently active first.
+- **Tags**: every tag, newest first, with the tag message's subject (or the
+  commit's, for a lightweight tag). The five newest also show how far they
+  are from the base branch: `↓12` means the base has 12 commits since the
+  tag, `↑3` that the tag has 3 the base doesn't (say, a fix tagged on a
+  release branch), and `✓` that it's the base's tip. Older tags are left
+  blank, since each comparison walks history and gets slower the older the
+  tag. Selecting one moves the graph to its
+  commit; `n` makes a branch from it, `M`/`r` merge or rebase onto it, `c`
+  copies its name and `d` deletes it locally.
 - **Unmerged**: branches on the base branch's remote that aren't merged into
   it, newest commit first, with each tip's subject and author (like
   `git branch -r --no-merged origin/main`). Names matching

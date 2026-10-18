@@ -263,8 +263,10 @@ fn tabs_list_branches_merged_and_unmerged_into_the_primary_branch() {
     t.press("3");
     assert_eq!(t.app().branches().tab(), BranchTab::All);
     let title = t.pane_title(PaneId::Branches);
-    assert!(title.contains("Branches 5 · Unmerged 2 · Merged 1"), "{title}");
+    assert!(title.contains("Branches 5 · Tags 0 · Unmerged 2 · Merged 1"), "{title}");
 
+    t.press("]");
+    assert_eq!(t.app().branches().tab(), BranchTab::Tags);
     t.press("]");
     assert_eq!(t.app().branches().tab(), BranchTab::Unmerged);
     assert_eq!(names(&t), vec!["development", "open"], "archive is hidden");
@@ -284,6 +286,9 @@ fn tabs_list_branches_merged_and_unmerged_into_the_primary_branch() {
     assert_eq!(t.app().branches().tab(), BranchTab::Merged);
     t.press("{");
     assert_eq!(t.app().branches().tab(), BranchTab::Unmerged);
+    t.press("[");
+    assert_eq!(t.app().branches().tab(), BranchTab::Tags);
+    t.press("]");
 
     // Selecting a row moves the graph to its tip, as in the full list.
     t.press("j");
@@ -291,12 +296,105 @@ fn tabs_list_branches_merged_and_unmerged_into_the_primary_branch() {
     assert_eq!(t.app().graph().selected().map(|c| c.oid.clone()), Some(tip));
 }
 
+/// The first `n` words of a row.
+fn cols(line: &str, n: usize) -> Vec<&str> {
+    line.split_whitespace().take(n).collect()
+}
+
+fn tag_names(t: &TestDriver) -> Vec<String> {
+    t.app()
+        .branches()
+        .visible_tags()
+        .map(|r| r.short_name.clone())
+        .collect()
+}
+
+#[test]
+fn tags_tab_lists_tags_newest_first() {
+    let sb = Sandbox::new();
+    sb.commit("first");
+    sb.git(&["tag", "v1.0"]);
+    sb.commit("second");
+    sb.git(&["tag", "-a", "v2.0", "-m", "the big release"]);
+    sb.commit("third");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 120, 30);
+    t.press("3");
+    assert!(t.pane_title(PaneId::Branches).contains("Branches 1 · Tags 2 · "));
+    t.press("]");
+    assert_eq!(t.app().branches().tab(), BranchTab::Tags);
+    assert_eq!(tag_names(&t), vec!["v2.0", "v1.0"]);
+    assert!(t.app().branches().selected().is_none(), "no branch on the tags tab");
+    assert!(
+        t.pane_title(PaneId::Branches).contains("(main)"),
+        "distances are from the base"
+    );
+    let lines = t.pane_lines(PaneId::Branches);
+    assert!(
+        cols(&lines[0], 2) == ["v2.0", "↓1"] && lines[0].contains("the big release"),
+        "{lines:?}"
+    );
+    assert!(
+        cols(&lines[1], 2) == ["v1.0", "↓2"] && lines[1].contains("first"),
+        "{lines:?}"
+    );
+
+    // Selecting a tag moves the graph to its commit.
+    t.press("j");
+    assert_eq!(t.app().graph().selected().unwrap().summary, "first");
+
+    t.press("/").type_text("2").press("enter");
+    assert_eq!(tag_names(&t), vec!["v2.0"]);
+    t.press("c");
+    assert_eq!(t.app_mut().take_clipboard().as_deref(), Some("v2.0"));
+
+    t.press("n");
+    assert!(t.screen().contains("New branch from v2.0"));
+    t.type_text("hotfix").press("enter");
+    assert_eq!(sb.current_branch(), "hotfix");
+    assert_eq!(sb.rev_parse("HEAD"), sb.rev_parse("v2.0^{commit}"));
+
+    t.press("d");
+    assert!(t.screen().contains("Delete local tag v2.0?"));
+    t.press("y");
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(sb.git(&["tag"]), "v1.0");
+    t.press("/").press("esc");
+    assert_eq!(tag_names(&t), vec!["v1.0"]);
+}
+
+#[test]
+fn only_the_newest_tags_are_compared_with_the_base() {
+    let sb = Sandbox::new();
+    for n in 1..=7 {
+        sb.commit(&format!("release {n}"));
+        sb.git(&["tag", &format!("v{n}")]);
+    }
+    let mut t = TestDriver::with_size(Config::default(), &sb, 120, 30);
+    t.press("3").press("]");
+    let mut compared: Vec<_> = t.app().branches().base().unwrap().tags.keys().cloned().collect();
+    compared.sort();
+    assert_eq!(
+        compared,
+        vec![
+            "refs/tags/v3",
+            "refs/tags/v4",
+            "refs/tags/v5",
+            "refs/tags/v6",
+            "refs/tags/v7"
+        ]
+    );
+    let lines = t.pane_lines(PaneId::Branches);
+    assert!(cols(&lines[0], 2) == ["v7", "✓"], "the base's tip: {lines:?}");
+    assert!(cols(&lines[4], 2) == ["v3", "↓4"], "{lines:?}");
+    assert!(cols(&lines[5], 2) == ["v2", "release"], "not compared: {lines:?}");
+}
+
 #[test]
 fn base_branch_follows_origin_head() {
     let sb = repo_for_base_tabs();
     sb.git(&["remote", "set-head", "origin", "development"]);
     let mut t = TestDriver::new(&sb);
-    t.press("3").press("]");
+    t.press("3").press("]").press("]");
     let base = t.app().branches().base().unwrap();
     assert_eq!(base.base, "origin/development");
     assert!(!base.chosen);
@@ -313,7 +411,7 @@ fn base_branch_follows_origin_head() {
     let mut config = Config::default();
     config.branches.safe_branches.clear();
     let mut t = TestDriver::with_config(config, &sb);
-    t.press("3").press("]").press("]");
+    t.press("3").press("]").press("]").press("]");
     let mut merged = names(&t);
     merged.sort();
     assert_eq!(merged, vec!["done", "main", "open"], "listed once nothing is safe");
@@ -323,7 +421,7 @@ fn base_branch_follows_origin_head() {
 fn pick_base_branch_from_a_list_and_go_back_to_detecting() {
     let sb = repo_for_base_tabs();
     let mut t = TestDriver::new(&sb);
-    t.press("3").press("]").press("b");
+    t.press("3").press("]").press("]").press("b");
     assert!(t.screen().contains("Base branch"));
     assert!(t.screen().contains("Detect automatically"));
     t.type_text("origin/dev").press("enter");
@@ -359,11 +457,11 @@ fn no_base_branch_without_a_primary_one() {
     sb.commit("base");
     sb.git(&["branch", "-q", "-m", "topic"]);
     let mut t = TestDriver::new(&sb);
-    t.press("3").press("]");
+    t.press("3").press("]").press("]");
     assert!(t.app().branches().base().is_none());
     assert!(t.pane_lines(PaneId::Branches)[0].contains("no base branch"));
     let title = t.pane_title(PaneId::Branches);
-    assert!(title.contains("Branches 1 · Unmerged · Merged"), "{title}");
+    assert!(title.contains("Branches 1 · Tags 0 · Unmerged · Merged"), "{title}");
 }
 
 #[test]
@@ -379,7 +477,7 @@ fn merged_and_unmerged_tabs_show_one_branch_from_fork_to_merge() {
             .collect::<Vec<_>>()
     };
     let all = summaries(&t).len();
-    t.press("3").press("]").press("j");
+    t.press("3").press("]").press("]").press("j");
     t.wait_idle();
     assert!(t.pane_title(PaneId::Graph).contains("Graph [origin/open]"));
     // The branch's commit and the base commit it branched off, which is

@@ -32,6 +32,9 @@ pub enum GitOp {
         remote: String,
         branch: String,
     },
+    DeleteTag {
+        name: String,
+    },
     RenameBranch {
         old: String,
         new: String,
@@ -86,6 +89,7 @@ impl GitOp {
             }
             GitOp::DeleteBranch { name, .. } => format!("delete branch {name}"),
             GitOp::DeleteRemoteBranch { remote, branch } => format!("delete {remote}/{branch}"),
+            GitOp::DeleteTag { name } => format!("delete tag {name}"),
             GitOp::RenameBranch { old, new } => format!("rename {old} → {new}"),
             GitOp::FetchAll => "fetch --all".into(),
             GitOp::SetBaseBranch(Some(base)) => format!("base branch {base}"),

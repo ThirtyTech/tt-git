@@ -288,6 +288,28 @@ pub struct BaseBranches {
     pub merged: Vec<BranchEntry>,
     /// Author of each compared ref's tip, keyed by full ref name.
     pub authors: HashMap<String, String>,
+    /// How far the [`TAGS_COMPARED`] newest tags are from the base, keyed
+    /// by full ref name.
+    pub tags: HashMap<String, AheadBehind>,
+}
+
+/// Commits a ref has that the base doesn't (`ahead`), and the base has
+/// that it doesn't (`behind`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct AheadBehind {
+    pub ahead: u32,
+    pub behind: u32,
+}
+
+/// How many of the newest tags are compared with the base branch. Each one
+/// is a history walk, which gets slower the older the tag is.
+pub const TAGS_COMPARED: usize = 5;
+
+/// The tags among `refs`, newest first (tagger date for annotated tags).
+pub fn tags_newest_first(refs: &[GitRef]) -> Vec<GitRef> {
+    let mut tags: Vec<GitRef> = refs.iter().filter(|r| r.kind == RefKind::Tag).cloned().collect();
+    tags.sort_by(|a, b| b.date.cmp(&a.date).then_with(|| a.short_name.cmp(&b.short_name)));
+    tags
 }
 
 impl BaseBranches {

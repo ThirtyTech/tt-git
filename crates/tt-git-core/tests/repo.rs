@@ -523,3 +523,20 @@ fn author_filter_includes_every_mailmapped_account() {
     want.sort();
     assert_eq!(got, want);
 }
+
+#[test]
+fn ahead_behind_counts_both_sides() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.checkout_new("release");
+    sb.commit("release fix");
+    sb.git(&["tag", "v1.0.1"]);
+    sb.checkout("main");
+    sb.commit("main 1");
+    sb.commit("main 2");
+    let repo = open(&sb);
+    let d = repo.ahead_behind("refs/heads/main", &sb.rev_parse("v1.0.1")).unwrap();
+    assert_eq!((d.ahead, d.behind), (1, 2));
+    let d = repo.ahead_behind("refs/heads/main", "main").unwrap();
+    assert_eq!((d.ahead, d.behind), (0, 0));
+}
