@@ -80,7 +80,7 @@ children = [
 The graph spans the top 70%, with status and branches side by side below it.
 `details = true` marks where the details pane opens: press `space` on a
 commit in the graph (or `4`) and details takes that node's place until you
-press `space` again, `esc` (in the graph or details), or focus a pane it covers. Status,
+press `space` again (in the graph or details), `esc`, or focus a pane it covers. Status,
 branches and graph must each appear once.
 
 To keep details on screen all the time, give it a pane of its own instead.
@@ -133,7 +133,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `zoom` | `+` | global |
 | `expand_details` | `enter` | graph |
 | `toggle_details` | `space` | graph |
-| `close_details` | `esc` | graph, details |
+| `close_details` | `esc` (graph); `esc` `space` (details) | graph, details |
 | `move_up`, `move_down`, `page_up`, `page_down`, `top`, `bottom` | `k`/`↑`, `j`/`↓`, `ctrl+u`, `ctrl+d`, `g`, `G` | global |
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |
 | `toggle_scope`, `filter`, `new_branch`, `merge`, `rebase`, `cherry_pick` | `a`, `f`, `n`, `M`, `r`, `C` | graph |

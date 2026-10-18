@@ -67,7 +67,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `ctrl+r` | refresh |
 | | `:` `ctrl+p` | command palette |
 | | `q` | quit |
-| graph | `enter` | the commit fullscreen: changed files on the left, the selected file's diff on the right (`j`/`k` pick a file, `pgup`/`pgdn` scroll, `esc` back) |
+| graph | `enter` | the commit fullscreen: changed files on the left, the selected file's diff on the right (`j`/`k` pick a file, `pgup`/`pgdn` scroll, `esc` or `space` back) |
 | | `space` | show / hide the commit's details (they replace the bottom row) |
 | | `esc` | hide details (with details hidden: clear the filter) |
 | | `a` | all branches ↔ current branch |
@@ -89,7 +89,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `c` / `A` | commit / amend keeping the message |
 | | `C` / `X` | continue / abort a merge, rebase or cherry-pick |
 | details | `o` | open the link in view with a plugin link handler |
-| | `esc` | close details |
+| | `esc` `space` | close details |
 
 The mouse also works: click a pane or row to focus and select it, use the
 wheel to scroll the pane under the pointer, and `ctrl`+click a link in the

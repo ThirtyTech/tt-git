@@ -82,7 +82,12 @@ fn space_toggles_details_over_the_bottom_row() {
     assert!(!t.app().shows(PaneId::Details));
     assert_eq!(t.app().focus(), PaneId::Graph);
 
-    // So does esc in the graph while details is showing.
+    // So does space, the key that opened it.
+    t.press("space").press("4").press("space");
+    assert!(!t.app().shows(PaneId::Details));
+    assert_eq!(t.app().focus(), PaneId::Graph);
+
+    // And esc in the graph while details is showing.
     t.press("space").press("esc");
     assert!(!t.app().shows(PaneId::Details));
     assert_eq!(t.app().focus(), PaneId::Graph);
@@ -477,6 +482,15 @@ fn enter_opens_files_beside_a_diff() {
     assert_eq!(t.app().focus(), PaneId::Graph);
     assert!(!t.app().shows(PaneId::Details));
     t.press("space");
-    assert_eq!(t.app().details().subject(), Some(&DetailsSubject::Commit(oid)));
+    assert_eq!(t.app().details().subject(), Some(&DetailsSubject::Commit(oid.clone())));
     t.assert_pane_contains(PaneId::Details, "touch two files");
+
+    // space closes the fullscreen files view too.
+    t.press("space").press("enter");
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    t.press("space");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+    assert_eq!(t.app().focus(), PaneId::Graph);
+    assert!(!t.app().shows(PaneId::Details));
+    assert_eq!(t.app().details().subject(), Some(&DetailsSubject::Commit(oid)));
 }

@@ -434,7 +434,7 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Status, Command::Continue, &["C"]),
     (Context::Status, Command::Abort, &["X"]),
     (Context::Details, Command::OpenLink, &["o"]),
-    (Context::Details, Command::CloseDetails, &["esc"]),
+    (Context::Details, Command::CloseDetails, &["esc", "space"]),
     (Context::Branches, Command::Checkout, &["enter", "space"]),
     (Context::Branches, Command::NewBranch, &["n"]),
     (Context::Branches, Command::DeleteBranch, &["d"]),
