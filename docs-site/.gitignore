@@ -19,3 +19,6 @@ pnpm-debug.log*
 
 # macOS-specific files
 .DS_Store
+
+# screen captures from docshots (regenerate with pnpm screens:capture)
+screens/captures/

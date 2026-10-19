@@ -3,6 +3,7 @@ title: Merge, rebase and cherry-pick
 description: "Bring commits from one branch into another, and resolve conflicts."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 All three act on the **current branch**: you pick the other side in the graph,
@@ -19,7 +20,7 @@ branch name rather than the hash, so the merge commit says `Merge branch
 'feature'`. In the branch list it uses your local branch if you have one,
 and the remote branch otherwise.
 
-{/* screenshot: the "Merge" confirm box over the screen with "Merge feature into the current branch?" and the "y confirm · n/esc cancel" hint; callout on the hint. */}
+<Screenshot name="graph-merge" alt="The Merge confirmation dialog" />
 
 Press <kbd>y</kbd> or <kbd>enter</kbd> to go ahead, <kbd>n</kbd> or
 <kbd>esc</kbd> to cancel. When it's done, the graph moves to the new head.
@@ -52,7 +53,7 @@ shows what's going on:
   `REBASING: stage fixes · C continue · X abort`.
 - Conflicted files show `UU` (or another `U` code) in the error color.
 
-{/* screenshot: status pane during a rebase with a conflict: title with REBASING, the banner row, one "UU src/app.rs" in red and one resolved "M " file; callouts on the banner, the UU row and the title. */}
+<Screenshot name="status-conflict" alt="The status pane during a merge with a conflict: MERGING in the title, the banner, a resolved file and a conflicted one" />
 
 <Steps>
 

@@ -67,29 +67,35 @@ impl Default for Sandbox {
 impl Sandbox {
     /// A sandbox with an initialized, empty repo on branch `main`.
     pub fn new() -> Self {
-        let sb = Self::bare_dirs();
+        Self::named("repo")
+    }
+
+    /// Like [`new`](Self::new), with the repo at `<tmp>/<name>`, so the app
+    /// shows `name` as the repository's name.
+    pub fn named(name: &str) -> Self {
+        let sb = Self::bare_dirs(name);
         sb.git(&["init", "-q", "-b", "main"]);
         sb
     }
 
     /// A sandbox whose repo directory exists but is not a git repo.
     pub fn without_repo() -> Self {
-        Self::bare_dirs()
+        Self::bare_dirs("repo")
     }
 
-    fn bare_dirs() -> Self {
+    fn bare_dirs(name: &str) -> Self {
         let dir = tempfile::Builder::new()
             .prefix("tt-git-test-")
             .tempdir()
             .expect("create temp dir");
         let root = dir.path();
-        for sub in ["home", "home/.config", "repo", "remotes", "tt-config", "tt-state"] {
+        for sub in ["home", "home/.config", name, "remotes", "tt-config", "tt-state"] {
             std::fs::create_dir_all(root.join(sub)).expect("create sandbox dir");
         }
         std::fs::write(root.join("home/.gitconfig"), GITCONFIG).expect("write gitconfig");
         // Canonicalize so paths compare equal to what git reports
         // (macOS /var -> /private/var, Windows short names).
-        let repo = dunce_canonicalize(&root.join("repo"));
+        let repo = dunce_canonicalize(&root.join(name));
         Self {
             dir,
             repo,

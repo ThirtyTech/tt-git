@@ -3,6 +3,7 @@ title: Moving around
 description: "Focusing panes, moving the selection, zooming, the mouse, and the help popup."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside } from '@astrojs/starlight/components';
 
 ## Focusing a pane
@@ -42,7 +43,7 @@ open) follows the selection. It only loads the row you stop on, so holding
 <kbd>+</kbd> makes a pane fill the screen, and <kbd>+</kbd> again puts it
 back. It zooms details if details is focused, and the graph otherwise.
 
-{/* screenshot: the graph zoomed to fullscreen with "space" details open below it at full width; callout on the full-width graph and on the details area. */}
+<Screenshot name="graph-zoom" alt="The graph zoomed to fill the screen with details open below it" />
 
 With the graph zoomed, <kbd>space</kbd> opens details below it at full width.
 
@@ -61,7 +62,9 @@ holding <kbd>shift</kbd>.
 
 ## Getting help
 
-{/* screenshot: the Keybindings popup over the screen with the graph focused, then the same popup with "merge" typed, showing the narrowed list; callouts on the search line and on the pane-specific vs global rows. */}
+<Screenshot name="help" alt="The Keybindings popup listing the graph pane keys" />
+
+<Screenshot name="help-search" alt="The Keybindings popup narrowed by typing merge" />
 
 Press <kbd>?</kbd> to see the keys for the focused pane, followed by the ones
 that work everywhere. Start typing to narrow the list: `stash` finds every

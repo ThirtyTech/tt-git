@@ -3,6 +3,8 @@ title: Tags
 description: "Every tag, newest first, and how far each recent release is from the base branch."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
+
 The **Tags** tab of the [branches pane](/panes/branches/) lists every tag,
 newest first, with its message and age. Tags are treated as releases: the
 five newest also show how far they are from the base branch, so the newest
@@ -10,7 +12,7 @@ tag tells you how many commits are waiting to be released and how long ago
 the last release was. Selecting a tag moves the [graph](/panes/graph/) to its
 commit.
 
-{/* screenshot: full 1080p screen with the Tags tab selected in the branches pane and the graph scrolled to the selected tag's commit (its <v1.2.0> badge visible). Callouts: "selected tag", "graph jumps to the tagged commit". */}
+<Screenshot name="tags-overview" alt="The Tags tab with a tag selected and the graph moved to its commit" />
 
 ## What it shows
 
@@ -56,7 +58,7 @@ a different base.
 Older tags are left blank. Each comparison walks history, which gets slower
 the older the tag is, so only five are compared.
 
-{/* screenshot: zoomed crop of the Tags tab with the distance column. Callouts: "↓12 = 12 commits unreleased on origin/main", "↑1↓40 = tagged on a release branch", "✓ = tag is the base's tip", "older tags aren't compared", and "(origin/main)" in the title. */}
+<Screenshot name="tags-distance" alt="The Tags tab with the distance from the base branch called out" />
 
 ## Acting on a tag
 

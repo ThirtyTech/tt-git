@@ -3,6 +3,7 @@ title: Merged and unmerged
 description: "The Unmerged and Merged tabs, the base branch, and a branch's history in the graph."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 The **Unmerged** and **Merged** tabs of the [branches pane](/panes/branches/)
@@ -13,7 +14,7 @@ many people keep around, but you can act on each row, and the
 [graph](/panes/graph/) shows only the selected branch: where it branched off,
 its own commits, and where it was merged back in.
 
-{/* screenshot: full 1080p screen on the Unmerged tab. The graph shows only the selected branch as a loop: the fork commit "(branched off origin/main)" at the bottom, the branch's commits, and the base's tip at the top. Callouts: "graph title shows the branch", "branched off" note, "base tip", and the selected row in the branches pane. */}
+<Screenshot name="unmerged" alt="The Unmerged tab with the graph showing only the selected branch" />
 
 ## What the tabs list
 
@@ -47,7 +48,7 @@ Some branches are never listed:
 
 Both lists are set in the [configuration file](/configuration/#settings).
 
-{/* screenshot: zoomed crop of the branches pane on the Merged tab. Callouts on the name, subject, author and date columns, and on "(origin/main)" in the title. */}
+<Screenshot name="merged-tab" alt="The Merged tab with the base branch in the title" />
 
 ### Like with like
 
@@ -79,7 +80,7 @@ later deleted, detection takes over again.
 The [Tags](/panes/tags/) tab measures how far each recent tag is from the
 same base branch.
 
-{/* screenshot: the "Base branch" picker open over the screen, "Detect automatically" at the top with its hint (origin/main), a remote branch marked "current". Callouts on both. */}
+<Screenshot name="base-picker" alt="The Base branch picker" />
 
 <Aside>
 In a repository with several [worktrees](/git/worktrees/), the base branch
@@ -120,7 +121,7 @@ graph again. Any [author or file filter](/panes/graph/#filtering-by-author-or-fi
 on the graph is set aside while these tabs are open and comes back when you
 leave them.
 
-{/* screenshot: zoomed crop of the graph on the Merged tab showing a merged branch: fork commit "(branched off origin/main)", 3 branch commits, merge commit "(merged into origin/main)". Numbered callouts 1-2-3 matching the steps above. */}
+<Screenshot name="merged-graph" alt="The graph showing a merged branch from where it branched off to where it was merged in" />
 
 How tt-git works this out with git is covered in [How tt-git uses
 git](/reference/how-it-works/#the-branch-history-in-the-graph).

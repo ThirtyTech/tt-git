@@ -3,6 +3,7 @@ title: Staging hunks and lines
 description: "Open a file's changes and stage, unstage or discard them a hunk or a line at a time."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 Sometimes a file holds two changes that belong in different commits. The staging view opens one
@@ -10,7 +11,7 @@ file's changes fullscreen, with what's unstaged on one side and what's staged on
 you move them across a hunk or a single line at a time. You can also throw away just part of a file.
 Open it with <kbd>enter</kbd> on a file in the [status pane](/panes/status/).
 
-{/* screenshot: full 1080p screen of the staging view side by side (terminal ≥140 columns). Callouts: 1) title "[4] Stage src/app.rs · hunks", 2) "▌Unstaged  3 hunks" active side marker, 3) "Staged  1 hunk" inactive side, 4) the selected hunk highlighted, 5) hunk header @@ in cyan, 6) + / - lines */}
+<Screenshot name="staging" alt="The staging view for a file, with the first hunk selected" />
 
 ## Opening the staging view
 
@@ -49,7 +50,7 @@ changes left.
 
 ## Line mode and ranges
 
-{/* screenshot: zoomed crop of the unstaged side in line mode with a range selected across three changed lines. Callouts: 1) title ending "· lines", 2) the highlighted range, 3) context lines skipped by j/k, 4) an unselected + line that stays unstaged */}
+<Screenshot name="staging-lines" alt="The staging view in line mode with a range of lines selected" />
 
 Press <kbd>a</kbd> to switch to line mode, and <kbd>a</kbd> again to go back to hunks.
 
@@ -73,9 +74,11 @@ works the way you'd expect: the removed line stays in the file until you stage i
 Press <kbd>tab</kbd> to move to the Staged side. Everything works the same way, but <kbd>space</kbd>
 unstages the selection, moving it back to the Unstaged side.
 
+<Screenshot name="staging-both" alt="The staging view side by side, unstaged changes on the left and staged on the right" />
+
 ## Discarding
 
-{/* screenshot: zoomed crop of the "Discard changes" confirm dialog over the staging view: "Discard the selected hunk of src/app.rs? This cannot be undone." Callout: the hint "y confirm · n/esc cancel" */}
+<Screenshot name="staging-discard" alt="The Discard changes dialog for the selected hunk" />
 
 Press <kbd>d</kbd> on the Unstaged side to throw away the selected hunk or lines from your working
 tree. tt-git asks first, since this can't be undone:

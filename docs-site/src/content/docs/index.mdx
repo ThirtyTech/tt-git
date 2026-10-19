@@ -19,9 +19,10 @@ hero:
       variant: minimal
 ---
 
+import Screenshot from '../../components/Screenshot.astro';
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
-{/* screenshot: full 1080p hero screenshot of the default layout on a busy mock repo: graph on top with several colored lanes, branch/tag badges and a merge; status below left with staged, modified and untracked files; branches below right with the status column showing ✓, ↑2, local and gone. No callouts; this is the hero image. */}
+<Screenshot name="hero" alt="tt-git on a web project: the commit graph on top, the status pane and the branch list below" />
 
 ## What it does
 

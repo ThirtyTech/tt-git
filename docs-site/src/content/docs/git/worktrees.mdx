@@ -3,6 +3,7 @@ title: Worktrees
 description: "Create a branch in its own worktree under .worktrees/."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 A [git worktree](https://git-scm.com/docs/git-worktree) is a second working
@@ -29,7 +30,7 @@ tt-git can create a new branch straight into a worktree.
 
 </Steps>
 
-{/* screenshot: the "New branch at b66496d" box with the Worktree tab underlined, "fix-login" typed and "checked out in .worktrees/fix-login" under it; callouts on the Branch · Worktree tabs and on the path line. */}
+<Screenshot name="worktree-dialog" alt="The New branch dialog with Worktree selected and the worktree path shown" />
 
 tt-git runs `git worktree add -b <name> .worktrees/<name> <start>`. Your
 current checkout stays as it was: you stay on the same branch with the same

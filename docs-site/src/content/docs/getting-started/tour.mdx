@@ -3,9 +3,10 @@ title: A tour of the screen
 description: "The four panes, the help bar and how they fit together on first launch."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside } from '@astrojs/starlight/components';
 
-{/* screenshot: full 1080p screen, each pane outlined and numbered: [1] graph (top 70%), [2] status (bottom left), [3] branches (bottom right), and the help bar on the last line. Callout boxes name each region and link to the sections below. */}
+<Screenshot name="tour-overview" alt="The default layout with the graph, status and branches panes and the help bar outlined" />
 
 ## The default layout
 
@@ -30,7 +31,7 @@ next one. The focused pane has a green border and a bold title.
 
 ## Graph
 
-{/* screenshot: zoom on the graph pane (top region), callouts on: the title "[1] Graph [all] 1/120" (scope and position), a lane line, a merge ◉, the green current-branch badge, a [local] badge, an [origin/…] badge, a <tag>, and the author / date / hash columns on the right. */}
+<Screenshot name="tour-graph" alt="The top of the graph pane with its title, the checked-out branch and local, remote and tag badges called out" />
 
 The graph shows the history of every branch, remote branch and tag, newest
 commit first. Each line of development keeps its own column and color, merges
@@ -47,7 +48,7 @@ Read more in [Graph](/panes/graph/).
 
 ## Status
 
-{/* screenshot: zoom on the status pane, callouts on the title "Status: repo · main → origin/main ↑1" (branch, upstream, ahead/behind) and on the two-letter codes: "M " staged (green), " M" modified (red), "??" untracked. */}
+<Screenshot name="status-pane" alt="The status pane with its title and each kind of file status code called out" />
 
 The status pane lists every changed file with the same two-letter code as
 `git status -s`. The title shows the repository, the current branch, its
@@ -59,7 +60,7 @@ Read more in [Status](/panes/status/).
 
 ## Branches
 
-{/* screenshot: zoom on the branches pane, callouts on the tab row in the title (Branches · Tags · Unmerged · Merged), the "* " marker on the current branch, and the status column values ✓, ↑2, local, origin, gone. */}
+<Screenshot name="branches-pane" alt="The branches pane with its tabs, the checked-out marker, the status column and activity column called out" />
 
 One list holds your local and remote branches, with `main` and `origin/main`
 on a single row. The branches you've used most recently are at the top. The
@@ -72,7 +73,7 @@ switch to the Tags, Unmerged, Merged and Stash tabs. Read more in
 
 ## Details
 
-{/* screenshot: full screen with details open in place of the bottom row after pressing space on a commit; callouts on the commit message, the author/hash line and a diff hunk. */}
+<Screenshot name="details-commit" alt="Details open in place of the bottom row, showing a commit header, message and diffstat" />
 
 Details shows whatever is selected: a commit's message and diff, a stash, or
 the diff of a file in the status pane. It follows your selection as you move.
@@ -83,7 +84,7 @@ more in [Details](/panes/details/).
 
 ## The help bar
 
-{/* screenshot: zoom on the bottom line, callouts on the pane's key hints (left), the global hints (tab next pane, ? help, q quit), and a "✓ commit" notice on the right. */}
+<Screenshot name="help-bar" alt="The help bar at the bottom of the screen with key hints and a commit notice" />
 
 The last line lists the most useful keys for the focused pane, followed by
 <kbd>tab</kbd>, <kbd>?</kbd> and <kbd>q</kbd>, which work everywhere. It

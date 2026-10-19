@@ -3,6 +3,7 @@ title: Your first commit
 description: "A walk through staging, committing and pushing a change from tt-git."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 This page walks through one change from edit to push. You don't need to
@@ -15,7 +16,7 @@ Edit a file in your repository with your usual editor and save it. In a
 moment it appears in the status pane with ` M` (modified, not staged) in red.
 A new file shows `??` (untracked).
 
-{/* screenshot: status pane zoomed with one " M src/app.rs" (red) and one "?? notes.md", details showing the selected file's diff; callouts on the red " M" code and on the diff in details. */}
+<Screenshot name="status-pane" alt="The status pane with its title and each kind of file status code called out" />
 
 ## Stage it
 
@@ -37,7 +38,7 @@ file to unstage it.
 To stage only part of a file, press <kbd>enter</kbd> on it instead and pick
 the hunks or lines you want. See [Staging hunks and lines](/panes/staging/).
 
-{/* screenshot: status pane after staging, "M  src/app.rs" in green; callout on the green code. */}
+<Screenshot name="status-staged" alt="The status pane after staging package.json, its code now green on the left" />
 
 ## Commit
 
@@ -49,7 +50,7 @@ the hunks or lines you want. See [Staging hunks and lines](/panes/staging/).
 
 </Steps>
 
-{/* screenshot: the "Commit message" prompt over the screen with a message typed; callouts on the input line and the "enter confirm · esc cancel" hint. */}
+<Screenshot name="status-commit" alt="The Commit message dialog over the screen with a message typed" />
 
 The help bar shows `✓ commit`, the file leaves the status list, and the graph
 jumps to your new commit. The status title now shows `↑1`: one commit your

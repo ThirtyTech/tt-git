@@ -25,6 +25,9 @@
 	--tt-green: #7bd938;
 	--tt-tile: #11151c;
 
+	/* A little wider than Starlight's 45rem, for the screenshots. */
+	--sl-content-width: 50rem;
+
 	--sl-font-system-mono: 'Cascadia Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo,
 		Consolas, monospace;
 }

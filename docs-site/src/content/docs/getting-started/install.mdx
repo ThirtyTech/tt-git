@@ -3,6 +3,7 @@ title: Install
 description: "What tt-git needs, how to build it, and how to open a repository."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 ## Requirements
@@ -54,7 +55,7 @@ Any folder inside a repository works; tt-git finds the top of it the same way
 git does. Linked worktrees work too. If the folder isn't in a repository,
 tt-git says so and exits.
 
-{/* screenshot: the first screen after `tt-git` starts on the mock repo, full 1080p, no callouts. Same frame as the tour's opening shot. */}
+<Screenshot name="hero" alt="tt-git on a web project: the commit graph on top, the status pane and the branch list below" />
 
 Press <kbd>q</kbd> to quit.
 

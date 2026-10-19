@@ -3,6 +3,7 @@ title: Stash
 description: "The stash list: pop, apply, drop, branch from and inspect stashes."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside } from '@astrojs/starlight/components';
 
 A stash puts your uncommitted changes aside so you can work on something
@@ -13,7 +14,7 @@ one file. Once you have a stash, the [branches pane](/panes/branches/) grows
 a **Stash** tab that lists them, newest first, where you can pop, apply,
 drop, branch from and look inside each one.
 
-{/* screenshot: full 1080p screen with the Stash tab selected in the branches pane (title "Branches 12 · Tags 3 · Unmerged 4 · Merged 9 · Stash 2"), two stashes listed. Callouts: "Stash tab appears once you have a stash", "stash@0 is the newest". */}
+<Screenshot name="stash-tab" alt="The Stash tab listing two stashes" />
 
 ## Making a stash
 
@@ -32,7 +33,7 @@ message if you want one (it's optional) and press <kbd>enter</kbd>, or
 <kbd>esc</kbd> to cancel. With nothing to stash, tt-git says so instead of
 opening the dialog.
 
-{/* screenshot: the Stash dialog over the screen with "Keep staged" underlined, a message typed, and the note line "everything, leaving staged changes in place · message optional". Callouts: "tab picks what to stash", "the selected file is the last choice", "message is optional". */}
+<Screenshot name="status-stash" alt="The Stash dialog with Keep staged chosen and a message typed" />
 
 <Aside>
 **Staged** uses `git stash push --staged`, which needs git 2.35 or newer.
@@ -82,7 +83,7 @@ pane](/panes/details/): its name and message, then a diffstat and the full
 patch of its changes. Untracked files the stash saved are listed after a
 `── untracked ──` line, with their contents. <kbd>esc</kbd> goes back.
 
-{/* screenshot: details fullscreen showing a stash: "stash@0  On main: half-done login form", diffstat, patch with green/red lines, then "── untracked ──" and an untracked file. Callouts: "header: name and message", "diffstat", "untracked files saved with the stash". */}
+<Screenshot name="stash-show" alt="A stash opened fullscreen in details, including its untracked files" />
 
 ## Keys
 

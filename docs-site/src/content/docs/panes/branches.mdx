@@ -3,6 +3,8 @@ title: Branches
 description: "One list for local and remote branches, sorted by recent activity."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
+
 The branches pane (<kbd>3</kbd>) lists every local and remote branch in one
 place. `main`, `origin/main` and `upstream/main` are a single row, the
 branches you're working on sit at the top because the list is sorted by
@@ -12,7 +14,7 @@ you check out, create, rename, delete, fetch, merge and rebase. The same
 pane has tabs for [tags](/panes/tags/), [merged and unmerged
 branches](/panes/merged-unmerged/) and the [stash](/panes/stash/).
 
-{/* screenshot: full 1080p screen, branches pane (bottom right) outlined and focused, the graph above showing the selected branch's tip. Callouts: "one row per branch", "most recently active first", "status column", "* marks the checked-out branch". */}
+<Screenshot name="branches-overview" alt="The branches pane highlighted, with one row per branch and the status and activity columns" />
 
 ## The tabs
 
@@ -37,7 +39,7 @@ Branches 12 · Tags 3 · Unmerged 4 (origin/main) · Merged 9
 Each tab keeps its own cursor, so switching away and back returns you to
 the same row.
 
-{/* screenshot: zoomed crop of the branches pane title bar. Callouts: "current tab (underlined)", "count per tab", "base branch the comparison tabs use". */}
+<Screenshot name="branches-pane" alt="The branches pane with its tabs, the checked-out marker, the status column and activity column called out" />
 
 ## One row per branch
 
@@ -98,7 +100,7 @@ The column answers "can I delete this?" and "did I forget to push this?" at a
 glance: `local` has never been pushed, `gone` was merged and deleted
 upstream, and `=origin` is safe to set an upstream for.
 
-{/* screenshot: zoomed crop of the branches list with one row of each state (✓, ↑2, ↓3, ↑2↓3, local, origin, gone, =origin, ≠origin). Callouts on each badge with its meaning; highlight "gone" in red and the remote-only row in the remote color. */}
+<Screenshot name="branches-states" alt="The branches status column with each state called out" />
 
 ## Checking out
 
@@ -125,7 +127,7 @@ Press <kbd>tab</kbd> in the dialog to switch from **Branch** to
 `.worktrees/<name>` instead of being checked out here. See
 [Worktrees](/git/worktrees/).
 
-{/* screenshot: the "New branch from main" dialog over the screen, Worktree tab selected, a name typed. Callouts: "tab switches Branch / Worktree", "where the worktree goes (checked out in .worktrees/<name>)", footer keys. */}
+<Screenshot name="branches-new" alt="The New branch dialog from the branches pane with Worktree selected" />
 
 ### Rename
 
@@ -146,7 +148,7 @@ Only local branches can be renamed.
 Every confirmation takes <kbd>y</kbd> to go ahead and <kbd>n</kbd> or
 <kbd>esc</kbd> to cancel.
 
-{/* screenshot: the "Delete branch" confirmation dialog for a local branch. Callouts: the force-delete note, "y confirm · n/esc cancel". */}
+<Screenshot name="branches-delete" alt="The Delete branch confirmation dialog" />
 
 ## Fetching
 
@@ -164,7 +166,7 @@ works on subsequences, so `flp` finds `feature/login-page`.
 - <kbd>enter</kbd> stops typing and keeps the filter.
 - <kbd>esc</kbd> clears it.
 
-{/* screenshot: zoomed crop of the branches pane with "/flp" in the title and the narrowed list. Callout on the filter text in the title. */}
+<Screenshot name="branches-filter" alt="The branches pane filtered by typing /fpp" />
 
 ## Merging and rebasing
 

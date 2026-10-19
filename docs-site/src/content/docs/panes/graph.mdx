@@ -3,6 +3,7 @@ title: Graph
 description: "The commit graph: lanes, badges, all vs current branch, filters and commit actions."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 The graph is tt-git's main view. It shows the history of every branch, remote branch and tag as one
@@ -11,7 +12,7 @@ top to bottom, so you can follow a line by eye. From here you open a commit's de
 history down to one author or one file, and start a branch, merge, rebase or cherry-pick at the
 selected commit. Press <kbd>1</kbd> to focus it from anywhere.
 
-{/* screenshot: full 1080p screen, graph pane (top 70%) highlighted, other panes dimmed. Callouts: 1) pane title "[1] Graph [all] 1/N", 2) lanes column on the left, 3) ref badges on a row, 4) subject, 5) author / relative date / short hash columns on the right, 6) selected row highlight */}
+<Screenshot name="graph-overview" alt="The graph pane with its title, lanes, badges, subjects, author and date columns called out" />
 
 ## What it shows
 
@@ -46,7 +47,7 @@ The title tells you what you're looking at: `Graph [all] 12/4031` means every br
 
 ## Reading the lanes
 
-{/* screenshot: zoomed crop of the graph's lane column over ~12 rows with a merge and a branch tip. Callouts: ● commit, ◉ merge commit, ─╯ a lane joining, ─╮ a merge opening a lane, two lanes in different colors */}
+<Screenshot name="graph-lanes" alt="A close-up of graph lanes showing a commit, a merge, a lane ending and a lane opening" />
 
 Every line of history has its own column and color, and keeps that column for as long as it runs.
 Branches go straight down instead of shifting sideways as other branches start and end.
@@ -68,7 +69,7 @@ Only the first 16 lanes are drawn; wider histories collapse into `…`. You can 
 
 ## Branch and tag badges
 
-{/* screenshot: zoomed crop of 3–4 graph rows carrying badges. Callouts: " main " on green (checked out), [feature] local branch, [origin/main] remote branch, <v1.0> tag */}
+<Screenshot name="graph-badges" alt="A close-up of the badges for the checked-out branch, a local branch, a remote branch and a tag" />
 
 Badges sit between the lanes and the subject:
 
@@ -100,7 +101,7 @@ full graph.
 
 ## Filtering by author or file
 
-{/* screenshot: full screen with the "Filter graph" popup open over the graph on the Author tab, "ada" typed. Callouts: 1) the Author · File tabs line showing what's set, 2) the input with the match count, 3) the list with commit counts on the right, 4) the hint line at the bottom */}
+<Screenshot name="graph-filter" alt="The Filter graph popup listing authors with their commit counts" />
 
 Press <kbd>f</kbd> to open **Filter graph**. It has two tabs, **Author** and **File**; <kbd>tab</kbd>
 switches between them. You can set one or both, and a commit has to match both.
@@ -127,7 +128,7 @@ switches between them. You can set one or both, and a commit has to match both.
 When a filter is set, the first entry on its tab is **Any author** or **Any file**, which clears just
 that part. To clear the whole filter, close details and press <kbd>esc</kbd> in the graph.
 
-{/* screenshot: zoomed crop of the graph filtered by a folder. Callouts: the title "Graph [all · file src/] 3/120", lanes still joined up across the filtered commits */}
+<Screenshot name="graph-filter-folder" alt="The graph filtered to a folder, with the filter shown in its title" />
 
 A file filter keeps the lanes joined up: each commit links to the nearest earlier commit that also
 touched the path, so you still get a readable graph. An author filter can't do that, so each run of
@@ -136,7 +137,7 @@ says `no commits match the filter (f to change it, esc to clear it)`.
 
 ## Acting on a commit
 
-{/* screenshot: zoomed crop of the graph with the "New branch at 59f1c2a" dialog open on its Branch tab. Callouts: Branch · Worktree tabs, the note "switches to it here", the hint line */}
+<Screenshot name="graph-new-branch" alt="The New branch dialog opened from the graph" />
 
 These keys act on the selected commit:
 
@@ -161,7 +162,7 @@ Copying uses your terminal's clipboard support (OSC 52), so it also works over S
 Press <kbd>+</kbd> to make the graph fill the screen, and <kbd>+</kbd> again to go back. With the graph
 fullscreen, <kbd>space</kbd> opens details below it at full width.
 
-{/* screenshot: full 1080p screen with the graph zoomed and details open below it at full width. Callouts: zoomed graph, details below */}
+<Screenshot name="graph-zoom" alt="The graph zoomed to fill the screen with details open below it" />
 
 ## Large histories
 

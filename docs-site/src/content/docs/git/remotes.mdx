@@ -3,6 +3,7 @@ title: Push, pull and fetch
 description: "Working with remotes from any pane."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside } from '@astrojs/starlight/components';
 
 The status title always shows how the current branch stands against its
@@ -10,7 +11,7 @@ upstream: `main → origin/main ↑1 ↓2` is one commit to push and two to pull
 The [branches pane](/panes/branches/#the-status-column) shows the same for
 every branch.
 
-{/* screenshot: status pane title zoomed, callouts on "→ origin/main" (the upstream) and "↑1 ↓2" (ahead / behind). */}
+<Screenshot name="remotes-title" alt="The status pane title showing the upstream and one commit ahead" />
 
 ## Push
 

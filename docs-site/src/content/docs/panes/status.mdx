@@ -3,6 +3,7 @@ title: Status
 description: "The status pane: changed files, staging, committing, discarding and stashing."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 The status pane lists every file you've changed, like lazygit's files panel. From here you stage and
@@ -10,7 +11,7 @@ unstage files, commit, amend, discard changes, stash, and finish or abort a merg
 cherry-pick. Its title tells you which branch you're on and how far it is from its upstream. Press
 <kbd>2</kbd> to focus it from anywhere.
 
-{/* screenshot: zoomed crop of the status pane with a mix of files. Callouts: 1) title "[2] Status: repo · main → origin/main ↑1", 2) "M " staged file in green, 3) " M" modified file in red, 4) "??" untracked file, 5) "R " rename shown as "old → new", 6) selected row */}
+<Screenshot name="status-pane" alt="The status pane with its title and each kind of file status code called out" />
 
 ## What it shows
 
@@ -64,7 +65,7 @@ To stage only some of a file's changes, a hunk or a line at a time, press <kbd>e
 
 ## Committing and amending
 
-{/* screenshot: full 1080p screen with the "Commit message" dialog open over the layout, a message typed. Callouts: the dialog, the hint line "enter confirm · esc cancel", the staged files in the status pane behind it */}
+<Screenshot name="status-commit" alt="The Commit message dialog over the screen with a message typed" />
 
 <Steps>
 
@@ -88,6 +89,8 @@ Press <kbd>A</kbd> to add what's staged to the last commit, keeping its message.
 Press <kbd>d</kbd> to throw away every change to the selected file. tt-git asks first, since this
 can't be undone: `Discard all changes to src/app.rs? This cannot be undone.`
 
+<Screenshot name="status-discard" alt="The Discard changes confirmation dialog" />
+
 What discarding does depends on the file:
 
 - an untracked file is deleted,
@@ -99,7 +102,7 @@ To discard only part of a file, use the [staging view](/panes/staging/#discardin
 
 ## Stashing
 
-{/* screenshot: zoomed crop of the Stash dialog. Callouts: 1) tabs "Everything · Staged · Keep staged · app.rs" with the current choice underlined, 2) the optional message input, 3) the note under it describing what will be stashed, 4) the hint line "enter stash · tab what to stash · esc cancel" */}
+<Screenshot name="status-stash" alt="The Stash dialog with Keep staged chosen and a message typed" />
 
 Press <kbd>s</kbd> to stash. The **Stash** dialog asks what to stash; <kbd>tab</kbd> (and
 <kbd>shift+tab</kbd>) moves between the choices:
@@ -119,7 +122,7 @@ and inspect them.
 
 ## Merges, rebases and cherry-picks in progress
 
-{/* screenshot: zoomed crop of the status pane during a rebase with a conflict. Callouts: 1) "REBASING" in the title, 2) the banner row "REBASING: stage fixes · C continue · X abort", 3) a "UU" conflicted file in the error color */}
+<Screenshot name="status-conflict" alt="The status pane during a merge with a conflict: MERGING in the title, the banner, a resolved file and a conflicted one" />
 
 When a merge, rebase, cherry-pick or revert stops, the title shows which one, and a banner across the
 top of the pane tells you what to do next:

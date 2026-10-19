@@ -3,6 +3,7 @@ title: Layout
 description: Arrange the panes with a tree of rows and columns.
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside } from '@astrojs/starlight/components';
 
 The `[layout]` table in [`config.toml`](/configuration/) decides where each
@@ -11,7 +12,7 @@ nodes.
 
 ## The default layout
 
-{/* screenshot: default layout at 1080p; graph (top 70%) and the status | branches row outlined, the bottom row marked "details opens here" */}
+<Screenshot name="layout-default" alt="The default layout: the graph at 70 percent, and a row of status and branches where details opens" />
 
 ```toml title="config.toml"
 [layout]
@@ -83,7 +84,7 @@ it again.
 
 ### The four-pane layout
 
-{/* screenshot: four-pane layout at 1080p; status and branches stacked on the left third, graph over details on the right, each pane outlined */}
+<Screenshot name="layout-four-pane" alt="The four-pane layout with status and branches on the left and the graph over details on the right" />
 
 Earlier versions of tt-git kept details on screen all the time, in a
 four-pane layout. To get it back:

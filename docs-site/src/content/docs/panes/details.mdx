@@ -3,6 +3,7 @@ title: Details
 description: "The details pane: a commit's message and diff, its changed files, and links."
 ---
 
+import Screenshot from '../../../components/Screenshot.astro';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 The details pane shows whatever you have selected in full: a commit's message and diff, the list of
@@ -11,7 +12,7 @@ the graph updates it as you go. In the default layout details is hidden until yo
 then takes the place of the status and branches panes at the bottom of the screen. Press
 <kbd>4</kbd> to focus it from anywhere.
 
-{/* screenshot: full 1080p screen, graph on top, details open in place of the bottom row showing a commit (header, message, --stat, start of the patch). Highlight the details pane; callouts: 1) title "[4] Commit 59f1c2a", 2) author/committer/parents header, 3) message, 4) diffstat, 5) patch with + / - lines and @@ hunk header */}
+<Screenshot name="details-commit" alt="Details open in place of the bottom row, showing a commit header, message and diffstat" />
 
 ## Opening and closing details
 
@@ -54,7 +55,7 @@ Scroll with <kbd>j</kbd> <kbd>k</kbd>, a page at a time with <kbd>ctrl+d</kbd> <
 
 ## Changed files
 
-{/* screenshot: zoomed crop of the details pane in the bottom row with the files list below the diff. Callouts: 1) commit header at the top, 2) the selected file's diff, 3) the "Files (6)" rule, 4) the selected file in the list, with a rename shown as "old → new" */}
+<Screenshot name="details-files" alt="Details showing a commit with its changed files listed below the diff" />
 
 Press <kbd>{'}'}</kbd> in details to switch to the changed-files view. The commit header stays at
 the top, the selected file's diff fills the middle, and the list of files sits below it under a rule
@@ -72,7 +73,7 @@ one arrives, so the layout doesn't jump.
 
 ## Fullscreen files and diff
 
-{/* screenshot: full 1080p screen of a commit opened with enter: file list on the left, diff on the right. Callouts: 1) "Files (N)" list with the selected file, 2) commit header, 3) the selected file's diff, 4) title "[4] Commit 59f1c2a files" */}
+<Screenshot name="details-fullscreen" alt="A commit opened fullscreen with the changed files on the left and the diff on the right" />
 
 Press <kbd>enter</kbd> on a commit in the graph to open it fullscreen. The changed files are listed on
 the left and the selected file's diff fills the right, like a pull request's "Files changed" tab.
@@ -104,7 +105,7 @@ fullscreen moves the file list to the left.
 
 ## Links
 
-{/* screenshot: zoomed crop of details showing a commit message with a GitHub issue URL. Callouts: the link, and the help bar notice after pressing o */}
+<Screenshot name="details-link" alt="A commit message with an issue link in the details pane" />
 
 Commit messages often contain links to a pull request or a ticket. Press <kbd>o</kbd>, or
 <kbd>ctrl</kbd>+click the link, and tt-git hands the first `http://` or `https://` link in view to a
