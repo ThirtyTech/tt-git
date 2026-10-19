@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg5b" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#12151B" />
+      <stop offset="100%" stop-color="#080A0E" />
+    </linearGradient>
+    <!-- Authentic 30t Cyan Gradient (#49c0ea -> #006698 -> #171312) -->
+    <linearGradient id="cyanArc5b" x1="85%" y1="15%" x2="15%" y2="95%">
+      <stop offset="0%" stop-color="#4BC0EB" />
+      <stop offset="60%" stop-color="#006698" />
+      <stop offset="100%" stop-color="#1A232E" />
+    </linearGradient>
+    <!-- Authentic 30t Grey Gradient (#929291 -> #171312) -->
+    <linearGradient id="greyArc5b" x1="0%" y1="0%" x2="90%" y2="100%">
+      <stop offset="0%" stop-color="#A6A6A5" />
+      <stop offset="65%" stop-color="#5C5C5B" />
+      <stop offset="100%" stop-color="#1E1E1E" />
+    </linearGradient>
+    <linearGradient id="hexRim5b" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3A3F4B" />
+      <stop offset="50%" stop-color="#006698" />
+      <stop offset="100%" stop-color="#4BC0EB" />
+    </linearGradient>
+  </defs>
+
+  <!-- Squircle Container -->
+  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#bg5b)" stroke="#1E2530" stroke-width="4" />
+
+  <!-- Outer Isometric Hexagon Shell -->
+  <polygon points="256,56 430,156 430,356 256,456 82,356 82,156" fill="#0B0E14" stroke="url(#hexRim5b)" stroke-width="10" stroke-linejoin="round" />
+
+  <!-- Isometric Cube Shading -->
+  <polygon points="256,74 414,165 256,256 98,165" fill="#18202C" opacity="0.4" />
+  <polygon points="98,165 256,256 256,438 98,347" fill="#10151E" opacity="0.6" />
+  <polygon points="256,256 414,165 414,347 256,438" fill="#070A0F" opacity="0.7" />
+
+  <!-- LEFT SIDE: Subtle '3' from ThirtyTech (Top Bar + Diagonal Slash + Lower Isometric Loop + 2 Grey Dots) -->
+  <!-- Top bar + 7-like diagonal slash into center -->
+  <path d="M 134 156 L 222 122 L 166 204 L 256 256" fill="none" stroke="url(#greyArc5b)" stroke-width="24" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Lower loop of the '3' curving from center down to bottom-left -->
+  <path d="M 256 256 C 236 336, 178 364, 142 332" fill="none" stroke="url(#greyArc5b)" stroke-width="24" stroke-linecap="round" />
+  <!-- ThirtyTech's 2 Grey Dots completing the bottom-left -->
+  <circle cx="118" cy="296" r="12" fill="#929291" />
+  <circle cx="112" cy="252" r="12" fill="#929291" />
+
+  <!-- RIGHT SIDE: Subtle '0' from ThirtyTech (broken C-loop + 2 Cyan Dots at top-right) -->
+  <path d="M 382 220 C 402 292, 348 378, 256 388" fill="none" stroke="url(#cyanArc5b)" stroke-width="26" stroke-linecap="round" />
+  <!-- Isometric Git Branch connecting top-right into Central Merge Core -->
+  <path d="M 374 188 L 256 256 L 256 388" fill="none" stroke="#4BC0EB" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- ThirtyTech's 2 Cyan Dots at the top-right of the '0' -->
+  <circle cx="304" cy="126" r="13" fill="#4BC0EB" />
+  <circle cx="348" cy="146" r="13" fill="#4BC0EB" />
+
+  <!-- Central Isometric Bullseye Merge Node ◉ -->
+  <circle cx="256" cy="256" r="32" fill="#080A0E" stroke="#4BC0EB" stroke-width="14" />
+  <circle cx="256" cy="256" r="12" fill="#7BD938" />
+
+  <!-- Key Git Commit Nodes -->
+  <circle cx="166" cy="204" r="15" fill="#080A0E" stroke="#929291" stroke-width="9" />
+  <circle cx="374" cy="188" r="15" fill="#080A0E" stroke="#4BC0EB" stroke-width="9" />
+  <circle cx="256" cy="388" r="16" fill="#080A0E" stroke="#4BC0EB" stroke-width="9" />
+</svg>

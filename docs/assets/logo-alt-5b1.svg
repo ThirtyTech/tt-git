@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bg5b1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#11151E" />
+      <stop offset="100%" stop-color="#07090D" />
+    </linearGradient>
+    <linearGradient id="hexRim5b1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#929291" />
+      <stop offset="50%" stop-color="#006698" />
+      <stop offset="100%" stop-color="#4BC0EB" />
+    </linearGradient>
+    <!-- Authentic 30t Grey Gradient -->
+    <linearGradient id="grey3_5b1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#C8C8C7" />
+      <stop offset="60%" stop-color="#929291" />
+      <stop offset="100%" stop-color="#3A3A39" />
+    </linearGradient>
+    <!-- Authentic 30t Cyan Gradient -->
+    <linearGradient id="cyan0_5b1" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4BC0EB" />
+      <stop offset="65%" stop-color="#006698" />
+      <stop offset="100%" stop-color="#0B2E46" />
+    </linearGradient>
+  </defs>
+
+  <!-- Squircle Tile -->
+  <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#bg5b1)" stroke="#1E2636" stroke-width="4" />
+
+  <!-- Outer Isometric Hexagon Shell -->
+  <polygon points="256,54 431,155 431,357 256,458 81,357 81,155" fill="#0A0D13" stroke="url(#hexRim5b1)" stroke-width="11" stroke-linejoin="round" />
+
+  <!-- Isometric Cube Faces -->
+  <polygon points="256,74 414,165 256,256 98,165" fill="#1A2232" opacity="0.42" />
+  <polygon points="98,165 256,256 256,438 98,347" fill="#111722" opacity="0.65" />
+  <polygon points="256,256 414,165 414,347 256,438" fill="#06090E" opacity="0.75" />
+
+  <!-- LEFT FACE: Crisp Isometric '3' Branch -->
+  <!-- Top Isometric Bar -> Diagonal Slash -> Center Merge -> Lower Isometric Bowl of '3' -->
+  <path d="M 126 164 L 222 108 L 154 202 L 256 256 L 256 346 L 178 392 L 138 368"
+        fill="none" stroke="url(#grey3_5b1)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Twin Grey Trailing Dots completing the '3' on the bottom-left -->
+  <circle cx="116" cy="330" r="12.5" fill="#929291" />
+  <circle cx="116" cy="284" r="12.5" fill="#929291" />
+
+  <!-- RIGHT FACE: Crisp Isometric '0' Loop -->
+  <!-- Broken Hexagonal Loop on the Right Cube Face -->
+  <path d="M 386 226 L 386 336 L 256 412 L 256 256 L 314 222"
+        fill="none" stroke="url(#cyan0_5b1)" stroke-width="22" stroke-linecap="round" stroke-linejoin="round" />
+  <!-- Twin Cyan Trailing Dots completing the top-right gap of the '0' -->
+  <circle cx="344" cy="164" r="13" fill="#4BC0EB" />
+  <circle cx="380" cy="185" r="13" fill="#4BC0EB" />
+
+  <!-- Central Isometric Merge Core ◉ -->
+  <circle cx="256" cy="256" r="32" fill="#080A0E" stroke="#4BC0EB" stroke-width="14" />
+  <circle cx="256" cy="256" r="12" fill="#7BD938" />
+
+  <!-- Git Commit Nodes on Key Vertices -->
+  <circle cx="222" cy="108" r="15" fill="#080A0E" stroke="#C8C8C7" stroke-width="9" />
+  <circle cx="154" cy="202" r="15" fill="#080A0E" stroke="#929291" stroke-width="9" />
+  <circle cx="386" cy="336" r="15" fill="#080A0E" stroke="#4BC0EB" stroke-width="9" />
+  <circle cx="256" cy="412" r="16" fill="#080A0E" stroke="#4BC0EB" stroke-width="9" />
+</svg>
