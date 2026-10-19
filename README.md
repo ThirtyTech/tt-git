@@ -73,6 +73,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `space` | show / hide the commit's details (they replace the bottom row) |
 | | `esc` | hide details (with details hidden: clear the filter) |
 | | `a` | all branches ↔ current branch |
+| | `t` | dates as age (`3h`) ↔ local date and time (`2026-10-17 01:30 PM`) |
 | | `f` | filter: only one author's commits, or the commits that changed a file or folder (`tab` in the panel switches between the two; both can be set) |
 | | `n` | new branch at the selected commit (`tab` in the dialog: create it in a worktree) |
 | | `M` / `r` / `C` | merge into current / rebase current onto / cherry-pick |

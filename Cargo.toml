@@ -16,6 +16,8 @@ tt-git-plugin = { path = "crates/tt-git-plugin" }
 tt-git-tui = { path = "crates/tt-git-tui" }
 tt-git-testkit = { path = "crates/tt-git-testkit" }
 
+# Only for local time: the UTC offset in effect at a commit's date.
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 clap = { version = "4", features = ["derive", "env"] }
 # No capture-spantrace: tt-git enters no tracing spans and installs no
 # ErrorLayer, so span traces would always be empty.

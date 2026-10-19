@@ -7,7 +7,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use tt_git_core::time::{SharedClock, relative};
+use tt_git_core::time::{SharedClock, clock_time, relative};
 use tt_git_core::{BranchHistory, Commit, GitRef, Head, LogFilter, Oid, RefKind};
 use tt_git_graph::{GraphBuilder, NodeId, RowRef, Rows};
 use unicode_width::UnicodeWidthStr;
@@ -44,6 +44,33 @@ impl GraphScope {
         match self {
             GraphScope::All => GraphScope::Current,
             GraphScope::Current => GraphScope::All,
+        }
+    }
+}
+
+/// How the graph's date column reads.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DateStyle {
+    /// Compact age: `5m`, `3h`, `2d`.
+    #[default]
+    Relative,
+    /// Local date and 12-hour time: `2026-10-17 01:30 PM`.
+    Clock,
+}
+
+impl DateStyle {
+    pub fn toggled(self) -> Self {
+        match self {
+            DateStyle::Relative => DateStyle::Clock,
+            DateStyle::Clock => DateStyle::Relative,
+        }
+    }
+
+    fn width(self) -> usize {
+        match self {
+            DateStyle::Relative => 4,
+            DateStyle::Clock => 19,
         }
     }
 }
@@ -112,7 +139,6 @@ impl LoadToken {
 }
 
 const AUTHOR_WIDTH: usize = 16;
-const DATE_WIDTH: usize = 4;
 const SHA_WIDTH: usize = 7;
 /// Load more commits when the selection gets this close to the end.
 const LOAD_MORE_MARGIN: usize = 200;
@@ -127,6 +153,7 @@ pub struct GraphPane {
     pub filter: LogFilter,
     /// Maximum number of lanes drawn before collapsing into `…`.
     pub max_lanes: usize,
+    pub dates: DateStyle,
     /// Commit limit of the current load; reaching it means more may exist.
     pub limit: usize,
     clock: SharedClock,
@@ -155,7 +182,7 @@ pub struct GraphPane {
     reselect: Option<String>,
     /// Last commit announced through `CommitSelected`.
     announced: Option<Oid>,
-    dates: DrawnDates,
+    drawn_dates: DrawnDates,
 }
 
 impl GraphPane {
@@ -165,6 +192,7 @@ impl GraphPane {
             focus: None,
             filter: LogFilter::default(),
             max_lanes: 16,
+            dates: DateStyle::Relative,
             limit: usize::MAX,
             clock,
             commits: Vec::new(),
@@ -181,7 +209,7 @@ impl GraphPane {
             stale: false,
             reselect: None,
             announced: None,
-            dates: DrawnDates::default(),
+            drawn_dates: DrawnDates::default(),
         }
     }
 
@@ -312,7 +340,7 @@ impl GraphPane {
 
     /// Whether a relative date drawn last frame would read differently at `now`.
     pub fn dates_stale(&self, now: i64) -> bool {
-        self.dates.stale(now)
+        self.drawn_dates.stale(now)
     }
 
     fn clear(&mut self) {
@@ -497,8 +525,9 @@ impl GraphPane {
 
         // Metadata columns, dropped from the right when narrow.
         let graph_cols = lanes * 2 + 1;
-        let meta_full = 1 + AUTHOR_WIDTH + 1 + DATE_WIDTH + 1 + SHA_WIDTH;
-        let meta_small = 1 + DATE_WIDTH + 1 + SHA_WIDTH;
+        let date_width = self.dates.width();
+        let meta_full = 1 + AUTHOR_WIDTH + 1 + date_width + 1 + SHA_WIDTH;
+        let meta_small = 1 + date_width + 1 + SHA_WIDTH;
         let rest = width.saturating_sub(graph_cols);
         let (show_author, meta) = if rest >= meta_full + 20 {
             (true, meta_full)
@@ -539,10 +568,11 @@ impl GraphPane {
                 push_fit(&mut spans, &commit.author_name, AUTHOR_WIDTH, theme.author);
             }
             spans.push(Span::raw(" "));
-            spans.push(Span::styled(
-                fit_right(&relative(now, commit.commit_time), DATE_WIDTH),
-                theme.date,
-            ));
+            let date = match self.dates {
+                DateStyle::Relative => relative(now, commit.commit_time),
+                DateStyle::Clock => clock_time(commit.commit_time, self.clock.utc_offset(commit.commit_time)),
+            };
+            spans.push(Span::styled(fit_right(&date, date_width), theme.date));
             spans.push(Span::raw(" "));
             spans.push(Span::styled(commit.short_oid().to_string(), theme.sha));
         }
@@ -649,6 +679,10 @@ impl Component for GraphPane {
                 ctx.emit(Action::ReloadGraph);
                 EventState::Consumed
             }
+            Command::ToggleDates => {
+                self.dates = self.dates.toggled();
+                EventState::Consumed
+            }
             Command::Merge | Command::Rebase => {
                 if let Some(target) = self.selected_ref() {
                     let short = if target.len() == 40 {
@@ -720,6 +754,7 @@ impl Component for GraphPane {
             Command::ExpandDetails,
             Command::ToggleDetails,
             Command::ToggleScope,
+            Command::ToggleDates,
             Command::NewBranch,
             Command::Merge,
             Command::Rebase,
@@ -734,7 +769,7 @@ impl Component for GraphPane {
         let inner = block.inner(area);
         frame.render_widget(block, area);
         let now = self.clock.now();
-        self.dates = DrawnDates::new(now);
+        self.drawn_dates = DrawnDates::new(now);
 
         if self.commits.is_empty() {
             let msg = match () {
@@ -775,8 +810,11 @@ impl Component for GraphPane {
             .collect();
         frame.render_widget(Paragraph::new(lines), inner);
         // Whether or not the date column fits; extra redraws are harmless.
-        for commit in &self.commits[start..end] {
-            self.dates.add(commit.commit_time);
+        // Clock times don't change as time passes.
+        if self.dates == DateStyle::Relative {
+            for commit in &self.commits[start..end] {
+                self.drawn_dates.add(commit.commit_time);
+            }
         }
     }
 }

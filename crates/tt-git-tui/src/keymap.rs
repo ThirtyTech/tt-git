@@ -218,6 +218,7 @@ pub enum Command {
     Bottom,
     Refresh,
     ToggleScope,
+    ToggleDates,
     Checkout,
     NewBranch,
     DeleteBranch,
@@ -282,6 +283,7 @@ impl Command {
             Command::Bottom => "bottom",
             Command::Refresh => "refresh",
             Command::ToggleScope => "all/current",
+            Command::ToggleDates => "relative/clock dates",
             Command::Checkout => "checkout",
             Command::NewBranch => "new branch",
             Command::DeleteBranch => "delete",
@@ -456,6 +458,7 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Status, Command::Amend, &["A"]),
     (Context::Status, Command::Stash, &["s"]),
     (Context::Graph, Command::ToggleScope, &["a"]),
+    (Context::Graph, Command::ToggleDates, &["t"]),
     (Context::Graph, Command::ExpandDetails, &["enter"]),
     (Context::Graph, Command::ToggleDetails, &["space"]),
     (Context::Graph, Command::CloseDetails, &["esc"]),
@@ -749,7 +752,7 @@ mod tests {
             context = "branches"
 
             [graph]
-            toggle_scope = "t"
+            toggle_scope = "x"
             "#,
         )
         .unwrap();
@@ -763,7 +766,7 @@ mod tests {
             "acme.gh.branch"
         );
         assert!(km.lookup_custom(Context::Graph, k("o")).is_none());
-        assert_eq!(km.lookup(Context::Graph, k("t")), Some(Command::ToggleScope));
+        assert_eq!(km.lookup(Context::Graph, k("x")), Some(Command::ToggleScope));
 
         let bad: KeysConfig =
             toml::from_str("[[command]]\nkey = \"nope+x\"\ntype = \"plugin_action\"\ncommand = \"a.b\"\n").unwrap();

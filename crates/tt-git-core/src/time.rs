@@ -1,4 +1,4 @@
-//! Clocks and compact relative dates.
+//! Clocks, compact relative dates and local clock times.
 
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -7,6 +7,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 pub trait Clock: Send + Sync + std::fmt::Debug {
     /// Current unix time in seconds.
     fn now(&self) -> i64;
+
+    /// Seconds east of UTC that local time was at unix time `t`. UTC
+    /// unless overridden, so test clocks show the same times everywhere.
+    fn utc_offset(&self, _t: i64) -> i64 {
+        0
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -18,6 +24,14 @@ impl Clock for SystemClock {
             .duration_since(UNIX_EPOCH)
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0)
+    }
+
+    fn utc_offset(&self, t: i64) -> i64 {
+        use chrono::{Local, Offset, TimeZone};
+        Local
+            .timestamp_opt(t, 0)
+            .earliest()
+            .map_or(0, |d| d.offset().fix().local_minus_utc().into())
     }
 }
 
@@ -55,6 +69,15 @@ pub fn relative(now: i64, then: i64) -> String {
         s if s < MONTH => format!("{}w", s / WEEK),
         s if s < YEAR => format!("{}mo", s / MONTH),
         s => format!("{}y", s / YEAR),
+    }
+}
+
+/// Date and 12-hour time like `2026-10-17 01:30 PM`, `utc_offset` seconds
+/// east of UTC (see [`Clock::utc_offset`]).
+pub fn clock_time(then: i64, utc_offset: i64) -> String {
+    match chrono::DateTime::from_timestamp(then.saturating_add(utc_offset), 0) {
+        Some(t) => t.naive_utc().format("%Y-%m-%d %I:%M %p").to_string(),
+        None => "?".into(),
     }
 }
 
@@ -111,6 +134,17 @@ mod tests {
             assert!((now..at).all(|t| relative(t, then) == relative(now, then)), "{now}");
             assert_ne!(relative(at, then), relative(now, then), "{now}");
         }
+    }
+
+    #[test]
+    fn clock_times() {
+        // 2026-10-17 13:30:59 UTC.
+        let t = 1_792_243_859;
+        assert_eq!(clock_time(t, 0), "2026-10-17 01:30 PM");
+        assert_eq!(clock_time(t, -4 * HOUR), "2026-10-17 09:30 AM");
+        assert_eq!(clock_time(t, 11 * HOUR), "2026-10-18 12:30 AM");
+        assert_eq!(clock_time(t - 90 * MIN, 0), "2026-10-17 12:00 PM");
+        assert_eq!(clock_time(0, 0), "1970-01-01 12:00 AM");
     }
 
     #[test]

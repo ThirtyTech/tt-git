@@ -6,6 +6,7 @@ use serde::Deserialize;
 
 use crate::keymap::{Keymap, KeymapError, KeysConfig};
 use crate::layout::Layout;
+use crate::panes::DateStyle;
 
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -78,6 +79,8 @@ pub struct GraphConfig {
     pub max_lanes: usize,
     /// Show `HEAD`'s upstream alongside it in current-branch mode.
     pub current_includes_upstream: bool,
+    /// How the date column reads at startup (`t` toggles it).
+    pub dates: DateStyle,
 }
 
 impl Default for GraphConfig {
@@ -86,6 +89,7 @@ impl Default for GraphConfig {
             max_commits: 20_000,
             max_lanes: 16,
             current_includes_upstream: true,
+            dates: DateStyle::Relative,
         }
     }
 }

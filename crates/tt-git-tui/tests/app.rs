@@ -1,7 +1,7 @@
 use tt_git_testkit::{Sandbox, TestDriver};
 use tt_git_tui::Config;
 use tt_git_tui::app::Zoom;
-use tt_git_tui::panes::{DetailsSubject, GraphScope, PaneId};
+use tt_git_tui::panes::{DateStyle, DetailsSubject, GraphScope, PaneId};
 
 #[test]
 fn initial_layout_empty_repo() {
@@ -237,6 +237,40 @@ fn toggle_to_current_branch_hides_other_branches() {
     t.press("a");
     assert_eq!(t.app().graph().commits().len(), 5);
     assert_eq!(&*t.app().graph().selected().unwrap().summary, "main work");
+}
+
+#[test]
+fn t_switches_the_graph_to_clock_times_and_back() {
+    let sb = branchy_repo();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 120, 30);
+    assert!(t.pane_lines(PaneId::Graph)[0].ends_with(" 23h b66496d"));
+
+    // The test clock is UTC; the sandbox's commits are a minute apart from
+    // 2024-01-01 00:00.
+    t.press("t");
+    assert_eq!(t.app().graph().dates, DateStyle::Clock);
+    insta::assert_snapshot!(t.pane_lines(PaneId::Graph).join(
+        "
+"
+    ));
+
+    t.press("t");
+    assert_eq!(t.app().graph().dates, DateStyle::Relative);
+    assert!(t.pane_lines(PaneId::Graph)[0].ends_with(" 23h b66496d"));
+}
+
+#[test]
+fn config_starts_the_graph_on_clock_times() {
+    let sb = branchy_repo();
+    let cfg = Config::parse(
+        "[graph]
+dates = \"clock\"
+",
+    )
+    .unwrap();
+    let t = TestDriver::with_config(cfg, &sb);
+    assert_eq!(t.app().graph().dates, DateStyle::Clock);
+    assert!(t.pane_lines(PaneId::Graph)[0].contains("2024-01-01 12:0"));
 }
 
 #[test]

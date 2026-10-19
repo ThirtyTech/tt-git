@@ -191,6 +191,7 @@ impl App {
             .collect();
         let mut graph = GraphPane::new(clock.clone());
         graph.max_lanes = config.graph.max_lanes;
+        graph.dates = config.graph.dates;
         let app = Self {
             ctx: Ctx::new(tx),
             graph_limit: config.graph.max_commits.max(1),

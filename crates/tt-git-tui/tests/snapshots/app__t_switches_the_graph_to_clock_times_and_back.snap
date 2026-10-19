@@ -1,0 +1,9 @@
+---
+source: crates/tt-git-tui/tests/app.rs
+expression: "t.pane_lines(PaneId::Graph).join(\"\n\")"
+---
+●    [side] side experiment                                               Test User        2024-01-01 12:05 AM b66496d
+◉─╮   main  <v1.0> Merge branch 'feature'                                 Test User        2024-01-01 12:04 AM 59f0f13
+│ ●  [feature] feature work                                               Test User        2024-01-01 12:02 AM 788f5f5
+● │  main work                                                            Test User        2024-01-01 12:03 AM f755a02
+●─╯  base                                                                 Test User        2024-01-01 12:01 AM b290cb5
