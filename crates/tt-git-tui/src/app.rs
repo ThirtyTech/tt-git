@@ -51,6 +51,8 @@ const ALL_GLOBAL: &[Command] = &[
     Command::Top,
     Command::Bottom,
     Command::Refresh,
+    Command::Pull,
+    Command::Push,
     Command::Help,
     Command::Quit,
 ];

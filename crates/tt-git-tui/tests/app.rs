@@ -162,6 +162,16 @@ fn help_popup_filters_as_you_type() {
 }
 
 #[test]
+fn help_popup_lists_push_and_pull() {
+    let sb = Sandbox::new();
+    let mut t = TestDriver::new(&sb);
+    t.press("?");
+    let rows = t.app().help_rows();
+    assert!(rows.contains(&("p".to_string(), "pull")), "{rows:?}");
+    assert!(rows.contains(&("P".to_string(), "push")), "{rows:?}");
+}
+
+#[test]
 fn quit() {
     let sb = Sandbox::new();
     let mut t = TestDriver::new(&sb);
