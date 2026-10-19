@@ -70,6 +70,8 @@ header.header {
 	-webkit-background-clip: text;
 	background-clip: text;
 	color: transparent;
+	/* The gradient only paints inside the box; make room for descenders. */
+	padding-bottom: 0.15em;
 }
 
 /* Keyboard keys in prose: <kbd>j</kbd>. */
