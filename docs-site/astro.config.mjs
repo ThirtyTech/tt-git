@@ -12,7 +12,7 @@ export default defineConfig({
 			logo: { src: './src/assets/logo.svg' },
 			favicon: '/favicon.svg',
 			customCss: ['./src/styles/theme.css'],
-			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/jsheely/tt-git' }],
+			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/thirtytech/tt-git' }],
 			sidebar: [
 				{
 					label: 'Start here',
