@@ -1,23 +1,89 @@
 ---
 title: Install
-description: "What tt-git needs, how to build it, and how to open a repository."
+description: "What tt-git needs, how to install or build it, and how to open a repository."
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
-import { Aside, Steps } from '@astrojs/starlight/components';
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
 
 ## Requirements
 
 - **git 2.31 or newer** on your `PATH`. tt-git runs the `git` you already
   have for everything, so it follows your config, hooks, `.mailmap` and
   credential helpers.
-- **Rust 1.89 or newer** to build it. Get it from [rustup.rs](https://rustup.rs).
 - A terminal with true color and Unicode box drawing. Windows Terminal,
   iTerm2, WezTerm, kitty, Alacritty and GNOME Terminal all work.
 
-tt-git runs on Windows, macOS and Linux.
+tt-git runs on Linux (x64, arm64), macOS (Apple Silicon) and Windows (x64,
+arm64).
+
+## Install script
+
+The install script downloads the latest release for your platform, checks it
+against the release's checksums and puts `tt-git` on your `PATH`.
+
+<Tabs syncKey="os">
+<TabItem label="Linux and macOS">
+
+```sh
+curl -fsSL https://github.com/ThirtyTech/tt-git/releases/latest/download/install.sh | sh
+```
+
+It installs into `~/.local/bin`, and tells you how to add that to your
+`PATH` if it isn't there already.
+
+</TabItem>
+<TabItem label="Windows">
+
+In PowerShell:
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/ThirtyTech/tt-git/releases/latest/download/install.ps1 | iex"
+```
+
+It installs into `%LOCALAPPDATA%\Programs\tt-git\bin` and adds that to your
+user `PATH`. Open a new terminal afterwards.
+
+</TabItem>
+</Tabs>
+
+Run the same command again to update. Two environment variables change what
+it does:
+
+| Variable | Does |
+|---|---|
+| `TTGIT_VERSION` | Install this release, such as `v0.2.0`, instead of the latest |
+| `TTGIT_INSTALL_DIR` | Install into this folder instead |
+
+Each [release](https://github.com/ThirtyTech/tt-git/releases) also shows the
+commands that install exactly that version.
+
+## Download a release
+
+Every [release](https://github.com/ThirtyTech/tt-git/releases) has an archive
+for each platform, named like `tt-git-v0.2.0-linux-x64.tar.gz`:
+
+| Platform | Archive |
+|---|---|
+| Linux x64 | `linux-x64.tar.gz` |
+| Linux arm64 | `linux-arm64.tar.gz` |
+| macOS Apple Silicon | `macos-arm64.tar.gz` |
+| Windows x64 | `windows-x64.zip` |
+| Windows arm64 | `windows-arm64.zip` |
+
+Unpack it and put `tt-git` (`tt-git.exe` on Windows) somewhere on your
+`PATH`. `SHA256SUMS.txt` on the release lists each archive's checksum.
+
+<Aside type="note">
+	The macOS binary isn't notarized, so if you download it with a browser,
+	macOS blocks the first run. Clear the quarantine flag with
+	`xattr -d com.apple.quarantine tt-git`. The install script doesn't need
+	this.
+</Aside>
 
 ## Build from source
+
+You need **Rust 1.89 or newer**, from [rustup.rs](https://rustup.rs).
 
 <Steps>
 
