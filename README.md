@@ -4,6 +4,8 @@
 
 <h1 align="center">tt-git</h1>
 
+![tt-git on a web project: the commit graph on top, the status pane and the branch list below](docs-site/src/assets/screens/hero.webp)
+
 A terminal git client in Rust ([ratatui](https://ratatui.rs)), inspired by
 [lazygit](https://github.com/jesseduffield/lazygit) and
 [gitui](https://github.com/gitui-org/gitui), with:
