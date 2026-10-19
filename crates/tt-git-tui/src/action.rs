@@ -1,7 +1,8 @@
 //! Messages that drive [`App::update`](crate::App::update).
 
 use tt_git_core::{
-    BaseBranches, BranchEntry, BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, Status, StatusEntry,
+    BaseBranches, BranchEntry, BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, StageSide, Stash, Status,
+    StatusEntry,
 };
 use tt_git_plugin::runtime::CommandLog;
 use tt_git_plugin::socket::Call;
@@ -22,6 +23,8 @@ pub struct RefsSnapshot {
     pub branches: Vec<BranchEntry>,
     /// Branches merged and not merged into the base branch, when there is one.
     pub base: Option<BaseBranches>,
+    /// The stash list, newest first.
+    pub stashes: Vec<Stash>,
 }
 
 /// Everything that can change app state. Input, timers, finished background
@@ -90,6 +93,8 @@ pub enum Action {
         refs: bool,
         status: bool,
     },
+    /// The branch list selection moved to this stash.
+    StashSelected(Stash),
     /// The branch list selection moved to a branch whose tip is this commit.
     BranchSelected(String),
     /// The branch the graph should show on its own, or `None` for the
@@ -139,6 +144,12 @@ pub enum Action {
         oid: String,
         path: String,
         text: String,
+    },
+    /// Both sides of a file's changes, for the staging view.
+    StageDiffsLoaded {
+        entry: StatusEntry,
+        unstaged: StageSide,
+        staged: StageSide,
     },
     /// The authors or files for a list in the graph's filter panel.
     FilterChoicesLoaded {

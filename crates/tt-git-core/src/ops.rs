@@ -3,6 +3,7 @@
 
 use crate::branches::CheckoutPlan;
 use crate::git::{GitError, GitOutput, Result};
+use crate::patch::{FileDiff, PatchDirection, untracked_diff};
 use crate::repo::{BASE_BRANCH_KEY, Repo, WORKTREE_DIR};
 
 fn text(out: GitOutput) -> String {
@@ -288,6 +289,107 @@ impl Repo {
     }
 }
 
+/// What applying a partial patch of one file does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PatchOp {
+    /// Adds part of the unstaged changes to the index.
+    Stage,
+    /// Takes part of the staged changes back out of the index.
+    Unstage,
+    /// Throws part of the unstaged changes away from the working tree.
+    Discard,
+}
+
+impl PatchOp {
+    /// Which way to build the patch for this operation.
+    pub fn direction(self) -> PatchDirection {
+        match self {
+            PatchOp::Stage => PatchDirection::Forward,
+            PatchOp::Unstage | PatchOp::Discard => PatchDirection::Reverse,
+        }
+    }
+}
+
+/// One side of a file's changes, for staging by hunk: its diff (empty for
+/// no changes), or why it can't be split into hunks.
+pub type StageSide = std::result::Result<FileDiff, String>;
+
+impl Repo {
+    /// The staged or unstaged changes to `entry` as hunks. An untracked file
+    /// comes back as one hunk adding its content, from
+    /// [`untracked_diff`](crate::patch::untracked_diff).
+    pub fn stage_diff(&self, entry: &crate::model::StatusEntry, staged: bool, max_bytes: usize) -> Result<StageSide> {
+        if entry.is_conflicted() {
+            return Ok(Err("conflicted: resolve it, then stage the whole file".into()));
+        }
+        let changed = if staged {
+            entry.has_staged()
+        } else {
+            entry.has_unstaged()
+        };
+        if !changed {
+            return Ok(Ok(FileDiff::default()));
+        }
+        if entry.is_untracked() {
+            let full = self.root().join(&entry.path);
+            if full.is_dir() {
+                return Ok(Err(format!("{} is an untracked directory", entry.path)));
+            }
+            let bytes = std::fs::read(&full).map_err(GitError::Spawn)?;
+            if bytes.len() > max_bytes {
+                return Ok(Err(format!("too large to split ({} bytes)", bytes.len())));
+            }
+            return Ok(untracked_diff(&entry.path, &bytes)
+                .and_then(|text| FileDiff::parse(&text))
+                .ok_or_else(|| "binary or not UTF-8: stage the whole file".to_string()));
+        }
+        // Pin everything that changes the shape of the output, so patches
+        // built from it apply with `git apply`'s defaults.
+        let mut args = vec![
+            "diff",
+            "--no-ext-diff",
+            "--no-textconv",
+            "--no-color",
+            "--no-renames",
+            "--no-relative",
+            "--src-prefix=a/",
+            "--dst-prefix=b/",
+        ];
+        if staged {
+            args.push("--cached");
+        }
+        args.extend(["--", entry.path.as_str()]);
+        let out = self.git().run(&args)?;
+        let Ok(text) = String::from_utf8(out.stdout) else {
+            return Ok(Err("not UTF-8: stage the whole file".into()));
+        };
+        Ok(FileDiff::parse(&text).ok_or_else(|| "binary: stage the whole file".to_string()))
+    }
+
+    /// Applies `patch` (built from [`stage_diff`](Self::stage_diff) in
+    /// `op`'s [direction](PatchOp::direction)) to the index or working tree.
+    /// Staging part of an untracked file first adds it with `git add -N`,
+    /// taking that back if the patch doesn't apply.
+    pub fn apply_patch(&self, path: &str, patch: &str, op: PatchOp, untracked: bool) -> Result<String> {
+        let intent = untracked && op == PatchOp::Stage;
+        if intent {
+            self.git().run(&["add", "-N", "--", path])?;
+        }
+        let mut args = vec!["apply", "--whitespace=nowarn"];
+        match op {
+            PatchOp::Stage => args.push("--cached"),
+            PatchOp::Unstage => args.extend(["--cached", "-R"]),
+            PatchOp::Discard => args.push("-R"),
+        }
+        args.push("-");
+        let result = self.git().run_with_stdin(&args, Some(patch.as_bytes())).map(text);
+        if result.is_err() && intent {
+            let _ = self.git().run(&["rm", "--cached", "-f", "-q", "--", path]);
+        }
+        result
+    }
+}
+
 impl Repo {
     /// `git merge --no-edit <target>` into the current branch.
     pub fn merge(&self, target: &str) -> Result<String> {
@@ -317,5 +419,59 @@ impl Repo {
 
     pub fn abort_operation(&self, op: crate::model::InProgress) -> Result<String> {
         self.git().run(&[op.command(), "--abort"]).map(text)
+    }
+}
+
+/// Which changes `git stash push` saves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum StashScope {
+    /// Staged, unstaged and untracked changes.
+    All,
+    /// Only what's staged (`--staged`, git 2.35).
+    Staged,
+    /// Everything, leaving the staged changes in place (`--keep-index`).
+    KeepStaged,
+    /// Changes to these paths, untracked ones included.
+    Paths(Vec<String>),
+}
+
+impl Repo {
+    /// Stashes `scope`'s changes, with `message` if given.
+    pub fn stash_push(&self, message: Option<&str>, scope: &StashScope) -> Result<String> {
+        let mut args = vec!["stash", "push"];
+        match scope {
+            StashScope::All => args.push("--include-untracked"),
+            StashScope::Staged => args.push("--staged"),
+            StashScope::KeepStaged => args.extend(["--include-untracked", "--keep-index"]),
+            StashScope::Paths(_) => args.push("--include-untracked"),
+        }
+        if let Some(message) = message {
+            args.extend(["-m", message]);
+        }
+        if let StashScope::Paths(paths) = scope {
+            args.push("--");
+            args.extend(paths.iter().map(String::as_str));
+        }
+        self.git().run(&args).map(text)
+    }
+
+    /// Applies `stash@{index}` to the working tree, dropping it afterwards
+    /// with `pop` (git keeps it if the changes conflict).
+    pub fn stash_apply(&self, index: usize, pop: bool) -> Result<String> {
+        let name = format!("stash@{{{index}}}");
+        let verb = if pop { "pop" } else { "apply" };
+        self.git().run(&["stash", verb, name.as_str()]).map(text)
+    }
+
+    pub fn stash_drop(&self, index: usize) -> Result<String> {
+        let name = format!("stash@{{{index}}}");
+        self.git().run(&["stash", "drop", name.as_str()]).map(text)
+    }
+
+    /// Creates branch `name` at the commit `stash@{index}` was made on,
+    /// switches to it and pops the stash there.
+    pub fn stash_branch(&self, name: &str, index: usize) -> Result<String> {
+        let stash = format!("stash@{{{index}}}");
+        self.git().run(&["stash", "branch", name, stash.as_str()]).map(text)
     }
 }

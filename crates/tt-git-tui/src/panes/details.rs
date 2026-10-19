@@ -5,9 +5,10 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
-use tt_git_core::{CommitFile, FileState};
+use tt_git_core::{CommitFile, FileState, StageSide, StatusEntry};
 use unicode_width::UnicodeWidthStr;
 
+use super::stage::StageView;
 use super::{PaneId, pane_block};
 use crate::action::Action;
 use crate::component::{Component, EventState};
@@ -23,6 +24,10 @@ pub enum DetailsSubject {
     /// A commit as a list of changed files beside the selected file's diff.
     CommitFiles(String),
     File(String),
+    /// One file's changes, staged and unstaged by hunk or line.
+    Stage(String),
+    /// A stash, by its commit.
+    Stash(String),
     /// Free text produced by the app (e.g. plugin logs).
     Text(String),
 }
@@ -54,6 +59,7 @@ pub struct DetailsPane {
     /// The files view lists the files to the left of the diff (fullscreen)
     /// rather than below it.
     files_beside: bool,
+    stage: Option<StageView>,
 }
 
 impl DetailsPane {
@@ -122,6 +128,7 @@ impl DetailsPane {
             }
             _ => self.files = None,
         }
+        self.stage = None;
         self.subject = Some(subject);
         self.title = title;
         self.loading = true;
@@ -156,6 +163,41 @@ impl DetailsPane {
             ..FilesView::default()
         });
         self.show_selected_file(ctx);
+    }
+
+    /// Opens the staging view for `entry`; its diffs arrive via
+    /// [`set_stage_diffs`](Self::set_stage_diffs).
+    pub fn request_stage(&mut self, entry: StatusEntry) {
+        let subject = DetailsSubject::Stage(entry.path.clone());
+        if self.subject.as_ref() == Some(&subject) {
+            return;
+        }
+        self.files = None;
+        self.lines = Arc::default();
+        self.title = format!("Stage {}", entry.path);
+        self.stage = Some(StageView::new(entry));
+        self.subject = Some(subject);
+        self.loading = true;
+        self.cursor = Cursor::default();
+    }
+
+    /// Fills the staging view, if it's still showing `entry`.
+    pub fn set_stage_diffs(&mut self, entry: StatusEntry, unstaged: StageSide, staged: StageSide) {
+        if self.subject != Some(DetailsSubject::Stage(entry.path.clone())) {
+            return;
+        }
+        if let Some(view) = &mut self.stage {
+            view.set_diffs(entry, unstaged, staged);
+            self.loading = false;
+        }
+    }
+
+    pub fn stage(&self) -> Option<&StageView> {
+        self.stage.as_ref()
+    }
+
+    pub fn stage_mut(&mut self) -> Option<&mut StageView> {
+        self.stage.as_mut()
     }
 
     /// Stores a file's diff, showing it if that file is still selected.
@@ -196,6 +238,7 @@ impl DetailsPane {
         self.subject = None;
         self.lines = Arc::default();
         self.files = None;
+        self.stage = None;
         self.loading = false;
     }
 
@@ -368,10 +411,17 @@ fn style_line<'a>(line: &'a str, theme: &Theme) -> Line<'a> {
 
 impl Component for DetailsPane {
     fn context(&self) -> Context {
-        Context::Details
+        if self.stage.is_some() {
+            Context::Stage
+        } else {
+            Context::Details
+        }
     }
 
     fn on_command(&mut self, cmd: Command, ctx: &Ctx) -> EventState {
+        if let Some(view) = &mut self.stage {
+            return view.on_command(cmd, ctx);
+        }
         // In the files view, line movement picks a file and paging scrolls its diff.
         if let Some(view) = &mut self.files
             && matches!(
@@ -390,11 +440,25 @@ impl Component for DetailsPane {
     }
 
     fn commands(&self) -> &[Command] {
+        if self.stage.is_some() {
+            return &[
+                Command::StageToggle,
+                Command::SwitchSide,
+                Command::ToggleLineMode,
+                Command::SelectRange,
+                Command::Discard,
+                Command::Commit,
+                Command::CloseDetails,
+            ];
+        }
         &[Command::OpenLink, Command::ToggleFiles, Command::CloseDetails]
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
-        let title = if self.subject.is_some() {
+        let stage_title = self.stage.as_ref().map(StageView::title);
+        let title = if let Some(t) = &stage_title {
+            t.as_str()
+        } else if self.subject.is_some() {
             self.title.as_str()
         } else {
             "Details"
@@ -413,7 +477,9 @@ impl Component for DetailsPane {
             frame.render_widget(Paragraph::new("nothing selected").style(theme.muted), inner);
             return;
         }
-        if self.files.is_some() {
+        if let Some(view) = &mut self.stage {
+            view.draw(frame, inner, focused, theme);
+        } else if self.files.is_some() {
             self.draw_files(frame, inner, focused, theme);
         } else {
             self.draw_text(frame, inner, theme);

@@ -183,6 +183,10 @@ pub enum Context {
     Branches,
     Graph,
     Details,
+    /// The details pane while it stages a file by hunk.
+    Stage,
+    /// The branches pane on its Stash tab.
+    Stash,
 }
 
 /// Everything a key can be bound to.
@@ -223,8 +227,12 @@ pub enum Command {
     PrevTab,
     NextTab,
     PickBase,
+    OpenStaging,
     StageToggle,
     StageAll,
+    SwitchSide,
+    ToggleLineMode,
+    SelectRange,
     Discard,
     Commit,
     Amend,
@@ -237,6 +245,10 @@ pub enum Command {
     Merge,
     Rebase,
     CherryPick,
+    Stash,
+    StashPop,
+    StashApply,
+    StashDrop,
     Continue,
     Abort,
 }
@@ -279,7 +291,11 @@ impl Command {
             Command::PrevTab => "prev tab",
             Command::NextTab => "next tab",
             Command::PickBase => "base branch",
+            Command::OpenStaging => "stage hunks",
             Command::StageToggle => "stage/unstage",
+            Command::SwitchSide => "unstaged/staged",
+            Command::ToggleLineMode => "hunks/lines",
+            Command::SelectRange => "select lines",
             Command::StageAll => "stage all",
             Command::Discard => "discard",
             Command::Commit => "commit",
@@ -295,6 +311,10 @@ impl Command {
             Command::CherryPick => "cherry-pick",
             Command::Continue => "continue merge/rebase",
             Command::Abort => "abort merge/rebase",
+            Command::Stash => "stash",
+            Command::StashPop => "pop",
+            Command::StashApply => "apply",
+            Command::StashDrop => "drop",
         }
     }
 }
@@ -428,11 +448,13 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Global, Command::Palette, &[":", "ctrl+p"]),
     (Context::Global, Command::Push, &["P"]),
     (Context::Global, Command::Pull, &["p"]),
-    (Context::Status, Command::StageToggle, &["space", "enter"]),
+    (Context::Status, Command::StageToggle, &["space"]),
+    (Context::Status, Command::OpenStaging, &["enter"]),
     (Context::Status, Command::StageAll, &["a"]),
     (Context::Status, Command::Discard, &["d"]),
     (Context::Status, Command::Commit, &["c"]),
     (Context::Status, Command::Amend, &["A"]),
+    (Context::Status, Command::Stash, &["s"]),
     (Context::Graph, Command::ToggleScope, &["a"]),
     (Context::Graph, Command::ExpandDetails, &["enter"]),
     (Context::Graph, Command::ToggleDetails, &["space"]),
@@ -451,6 +473,13 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Details, Command::OpenLink, &["o"]),
     (Context::Details, Command::CloseDetails, &["esc", "space"]),
     (Context::Details, Command::ToggleFiles, &["}"]),
+    (Context::Stage, Command::StageToggle, &["space"]),
+    (Context::Stage, Command::Discard, &["d"]),
+    (Context::Stage, Command::SwitchSide, &["tab"]),
+    (Context::Stage, Command::ToggleLineMode, &["a"]),
+    (Context::Stage, Command::SelectRange, &["v"]),
+    (Context::Stage, Command::CloseDetails, &["esc"]),
+    (Context::Stage, Command::Commit, &["c"]),
     (Context::Branches, Command::Checkout, &["enter", "space"]),
     (Context::Branches, Command::NewBranch, &["n"]),
     (Context::Branches, Command::DeleteBranch, &["d"]),
@@ -460,6 +489,14 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Branches, Command::PrevTab, &["[", "{"]),
     (Context::Branches, Command::NextTab, &["]", "}"]),
     (Context::Branches, Command::PickBase, &["b"]),
+    (Context::Stash, Command::StashPop, &["space"]),
+    (Context::Stash, Command::StashApply, &["a"]),
+    (Context::Stash, Command::StashDrop, &["d"]),
+    (Context::Stash, Command::NewBranch, &["n"]),
+    (Context::Stash, Command::ExpandDetails, &["enter"]),
+    (Context::Stash, Command::NextTab, &["]", "}"]),
+    (Context::Stash, Command::PrevTab, &["[", "{"]),
+    (Context::Stash, Command::Filter, &["/"]),
 ];
 
 impl Default for Keymap {
@@ -782,6 +819,8 @@ mod tests {
             Context::Branches,
             Context::Graph,
             Context::Details,
+            Context::Stage,
+            Context::Stash,
         ];
         let commands: std::collections::HashSet<Command> = DEFAULTS.iter().map(|(_, cmd, _)| *cmd).collect();
         for km in [Keymap::default(), Keymap::with_overrides(&overrides).unwrap()] {

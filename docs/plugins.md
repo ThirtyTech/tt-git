@@ -143,8 +143,9 @@ Event hooks are low-volume events, each run as a fresh process:
 | `branch.created` / `branch.deleted` / `branch.renamed` | `{branch, start, worktree}` (`worktree` is the new worktree's path, or null) / `{branch, remote}` / `{from, to}` |
 | `commit.created` | `{oid, amend, summary}` |
 | `fetch.completed` / `pull.completed` / `push.completed` | `{}` / `{branch, head}` / `{branch}` |
-| `files.staged` / `files.unstaged` / `files.discarded` | `{paths}` (`"all"` for stage-all) / `{paths}` / `{path}` |
+| `files.staged` / `files.unstaged` / `files.discarded` | `{paths}` (`"all"` for stage-all) / `{paths}` / `{path}`, plus `partial: true` when only some hunks or lines changed |
 | `merge.completed` / `rebase.completed` / `cherry_pick.completed` | `{target/onto/picked, head}` |
+| `stash.created` / `stash.applied` / `stash.dropped` | `{message}` / `{stash, pop}` / `{stash}` |
 
 A long-running process can call `events.subscribe` instead (see below) to
 get a stream of events.

@@ -6,7 +6,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use tt_git_core::branches::{matches_filter, tags_newest_first};
 use tt_git_core::time::{SharedClock, relative};
-use tt_git_core::{BaseBranches, BranchEntry, BranchState, GitRef, RefKind};
+use tt_git_core::{BaseBranches, BranchEntry, BranchState, GitRef, RefKind, Stash};
 use unicode_width::UnicodeWidthStr;
 
 use super::{BranchFocus, DrawnDates, PaneId, pane_block};
@@ -36,15 +36,24 @@ pub enum BranchTab {
     Unmerged,
     /// Branches on the base's remote that are merged into it.
     Merged,
+    /// Stashes, newest first.
+    Stash,
 }
 
 impl BranchTab {
-    pub const ALL: [BranchTab; 4] = [BranchTab::All, BranchTab::Tags, BranchTab::Unmerged, BranchTab::Merged];
+    pub const ALL: [BranchTab; 5] = [
+        BranchTab::All,
+        BranchTab::Tags,
+        BranchTab::Unmerged,
+        BranchTab::Merged,
+        BranchTab::Stash,
+    ];
 
     pub fn label(self) -> &'static str {
         match self {
             BranchTab::All => "Branches",
             BranchTab::Tags => "Tags",
+            BranchTab::Stash => "Stash",
             BranchTab::Unmerged => "Unmerged",
             BranchTab::Merged => "Merged",
         }
@@ -69,6 +78,8 @@ pub struct BranchesPane {
     base: Option<BaseBranches>,
     /// Newest first.
     tags: Vec<GitRef>,
+    /// Newest first.
+    stashes: Vec<Stash>,
     tab: BranchTab,
     /// Indices into the current tab's list that pass the filter.
     visible: Vec<usize>,
@@ -86,6 +97,7 @@ impl BranchesPane {
             entries: Vec::new(),
             base: None,
             tags: Vec::new(),
+            stashes: Vec::new(),
             tab: BranchTab::default(),
             visible: Vec::new(),
             filter: String::new(),
@@ -102,11 +114,18 @@ impl BranchesPane {
 
     /// Replaces the lists, keeping the selection on the same row if it
     /// still exists. `refs` may hold any refs; only its tags are listed.
-    pub fn set_entries(&mut self, entries: Vec<BranchEntry>, base: Option<BaseBranches>, refs: &[GitRef]) {
+    pub fn set_entries(
+        &mut self,
+        entries: Vec<BranchEntry>,
+        base: Option<BaseBranches>,
+        refs: &[GitRef],
+        stashes: Vec<Stash>,
+    ) {
         let keep = self.selected_name().map(str::to_string);
         self.entries = entries;
         self.base = base;
         self.tags = tags_newest_first(refs);
+        self.stashes = stashes;
         self.refilter();
         let pos = keep.and_then(|name| (0..self.visible.len()).position(|pos| self.name_at(pos) == name));
         if let Some(pos) = pos {
@@ -152,6 +171,18 @@ impl BranchesPane {
             .and_then(|&i| self.tag_list().get(i))
     }
 
+    /// The stashes passing the filter, in display order, on the stash tab.
+    pub fn visible_stashes(&self) -> impl Iterator<Item = &Stash> {
+        let stashes = self.stash_list();
+        self.visible.iter().filter_map(move |&i| stashes.get(i))
+    }
+
+    pub fn selected_stash(&self) -> Option<&Stash> {
+        self.visible
+            .get(self.cursor().selected)
+            .and_then(|&i| self.stash_list().get(i))
+    }
+
     pub fn filter(&self) -> &str {
         &self.filter
     }
@@ -161,7 +192,7 @@ impl BranchesPane {
             (BranchTab::All, _) => &self.entries,
             (BranchTab::Unmerged, Some(base)) => &base.unmerged,
             (BranchTab::Merged, Some(base)) => &base.merged,
-            (BranchTab::Tags, _) | (_, None) => &[],
+            (BranchTab::Tags | BranchTab::Stash, _) | (_, None) => &[],
         }
     }
 
@@ -169,10 +200,19 @@ impl BranchesPane {
         if self.tab == BranchTab::Tags { &self.tags } else { &[] }
     }
 
+    fn stash_list(&self) -> &[Stash] {
+        if self.tab == BranchTab::Stash {
+            &self.stashes
+        } else {
+            &[]
+        }
+    }
+
     /// How many rows `tab` has before filtering.
     fn len(&self, tab: BranchTab) -> usize {
         match tab {
             BranchTab::Tags => self.tags.len(),
+            BranchTab::Stash => self.stashes.len(),
             _ => self.list(tab).len(),
         }
     }
@@ -181,6 +221,7 @@ impl BranchesPane {
     fn row_name(&self, i: usize) -> &str {
         match self.tab {
             BranchTab::Tags => &self.tags[i].short_name,
+            BranchTab::Stash => &self.stashes[i].message,
             _ => &self.list(self.tab)[i].name,
         }
     }
@@ -210,12 +251,24 @@ impl BranchesPane {
         self.cursor_mut().clamp(len);
     }
 
-    /// Moves `step` tabs along, wrapping round.
+    /// Moves `step` tabs along, wrapping round and skipping hidden ones.
     fn switch_tab(&mut self, step: usize, ctx: &Ctx) {
         let n = BranchTab::ALL.len();
-        self.tab = BranchTab::ALL[(self.tab.index() + step) % n];
+        let mut next = self.tab;
+        loop {
+            next = BranchTab::ALL[(next.index() + step) % n];
+            if self.shows_tab(next) {
+                break;
+            }
+        }
+        self.tab = next;
         self.refilter();
         self.announce(ctx);
+    }
+
+    /// The Stash tab only shows while there are stashes (or it's current).
+    fn shows_tab(&self, tab: BranchTab) -> bool {
+        tab != BranchTab::Stash || !self.stashes.is_empty() || self.tab == BranchTab::Stash
     }
 
     /// On the merged and unmerged tabs, the selected branch for the graph
@@ -236,6 +289,9 @@ impl BranchesPane {
 
     fn announce(&self, ctx: &Ctx) {
         ctx.emit(Action::BranchFocused(self.focus()));
+        if let Some(stash) = self.selected_stash() {
+            ctx.emit(Action::StashSelected(stash.clone()));
+        }
         let oid = match self.tab {
             BranchTab::All => self.selected().and_then(BranchEntry::target),
             BranchTab::Tags => self.selected_tag().map(|t| t.target.as_str()),
@@ -355,6 +411,49 @@ impl BranchesPane {
             _ => return EventState::NotConsumed,
         }
         EventState::Consumed
+    }
+
+    /// Commands that act on the selected stash.
+    fn on_stash_command(&self, cmd: Command, ctx: &Ctx) -> EventState {
+        let Some(stash) = self.selected_stash() else {
+            return EventState::NotConsumed;
+        };
+        let (index, name) = (stash.index, stash.name());
+        match cmd {
+            Command::StashPop | Command::StashApply => ctx.emit(Action::Run(GitOp::StashApply {
+                index,
+                pop: cmd == Command::StashPop,
+            })),
+            Command::StashDrop => ctx.emit(Action::OpenModal(Modal::confirm(
+                "Drop stash",
+                format!("Drop {name} ({})? This cannot be undone.", stash.message),
+                GitOp::StashDrop { index },
+            ))),
+            Command::NewBranch => ctx.emit(Action::OpenModal(Modal::prompt(
+                format!("New branch from {name}"),
+                "",
+                PromptAction::StashBranch { index },
+            ))),
+            _ => return EventState::NotConsumed,
+        }
+        EventState::Consumed
+    }
+
+    /// A stash row: its name, message and age.
+    fn render_stash<'a>(&self, stash: &'a Stash, width: usize, theme: &Theme) -> Line<'a> {
+        let name = stash.name();
+        let message_width = width.saturating_sub(2 + name.width() + 1 + 1 + DATE_WIDTH);
+        Line::from(vec![
+            Span::raw("  "),
+            Span::styled(name, theme.sha),
+            Span::raw(" "),
+            Span::raw(fit(&stash.message, message_width)),
+            Span::raw(" "),
+            Span::styled(
+                fit_right(&relative(self.clock.now(), stash.date), DATE_WIDTH),
+                theme.date,
+            ),
+        ])
     }
 
     /// Commands that act on the selected branch.
@@ -569,7 +668,7 @@ impl BranchesPane {
     /// underlined, then the base everywhere but the full list.
     fn title(&self, theme: &Theme) -> Line<'static> {
         let mut spans = Vec::new();
-        for tab in BranchTab::ALL {
+        for tab in BranchTab::ALL.into_iter().filter(|t| self.shows_tab(*t)) {
             if !spans.is_empty() {
                 spans.push(Span::styled(" · ", theme.muted));
             }
@@ -585,7 +684,7 @@ impl BranchesPane {
             };
             spans.push(Span::styled(format!("{}{count}", tab.label()), style));
         }
-        if self.tab != BranchTab::All
+        if !matches!(self.tab, BranchTab::All | BranchTab::Stash)
             && let Some(base) = &self.base
         {
             spans.push(Span::styled(format!(" ({})", base.base), theme.muted));
@@ -603,6 +702,7 @@ impl BranchesPane {
             _ if self.len(self.tab) > 0 => "no matches".into(),
             (BranchTab::All, _) => "no branches".into(),
             (BranchTab::Tags, _) => "no tags".into(),
+            (BranchTab::Stash, _) => "no stashes (s in the status pane stashes changes)".into(),
             (_, None) => "no base branch found; pick one".into(),
             (BranchTab::Unmerged, Some(base)) => format!("everything is merged into {base}"),
             (BranchTab::Merged, Some(base)) => format!("nothing is merged into {base} yet"),
@@ -636,7 +736,11 @@ fn state_text(state: &BranchState, theme: &Theme) -> (String, Style) {
 
 impl Component for BranchesPane {
     fn context(&self) -> Context {
-        Context::Branches
+        if self.tab == BranchTab::Stash {
+            Context::Stash
+        } else {
+            Context::Branches
+        }
     }
 
     fn on_command(&mut self, cmd: Command, ctx: &Ctx) -> EventState {
@@ -652,12 +756,25 @@ impl Component for BranchesPane {
             Command::PrevTab => self.switch_tab(BranchTab::ALL.len() - 1, ctx),
             Command::PickBase => ctx.emit(Action::OpenModal(self.base_picker())),
             _ if self.tab == BranchTab::Tags => return self.on_tag_command(cmd, ctx),
+            _ if self.tab == BranchTab::Stash => return self.on_stash_command(cmd, ctx),
             _ => return self.on_entry_command(cmd, ctx),
         }
         EventState::Consumed
     }
 
     fn commands(&self) -> &[Command] {
+        if self.tab == BranchTab::Stash {
+            return &[
+                Command::StashPop,
+                Command::StashApply,
+                Command::StashDrop,
+                Command::NewBranch,
+                Command::ExpandDetails,
+                Command::NextTab,
+                Command::PrevTab,
+                Command::Filter,
+            ];
+        }
         &[
             Command::Checkout,
             Command::NextTab,
@@ -745,6 +862,7 @@ impl Component for BranchesPane {
                 let line = match self.tab {
                     BranchTab::All => self.render_entry(&list[i], width, theme),
                     BranchTab::Tags => self.render_tag(&self.tags[i], name_width, distance_width, width, theme),
+                    BranchTab::Stash => self.render_stash(&self.stashes[i], width, theme),
                     _ => self.render_compared(&list[i], name_width, width, theme),
                 };
                 if pos == cursor.selected {
@@ -763,6 +881,7 @@ impl Component for BranchesPane {
         for &i in &self.visible[start..end] {
             dates.add(match self.tab {
                 BranchTab::Tags => self.tags[i].date,
+                BranchTab::Stash => self.stashes[i].date,
                 _ => list[i].activity,
             });
         }

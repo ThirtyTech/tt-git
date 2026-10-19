@@ -8,7 +8,7 @@ use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tt_git_core::branches::matches_filter;
 use tt_git_core::time::SharedClock;
-use tt_git_core::{CommitFile, Head, LogFilter, Repo, StatusEntry};
+use tt_git_core::{CommitFile, Head, LogFilter, Repo, Stash, StatusEntry};
 
 use crate::action::{Action, RefsSnapshot};
 use crate::component::{Component, EventState};
@@ -61,6 +61,8 @@ enum DetailsLoad {
     Commit(String),
     CommitFiles(String),
     File(StatusEntry),
+    Stage(StatusEntry),
+    Stash(Stash),
 }
 
 impl DetailsLoad {
@@ -69,6 +71,8 @@ impl DetailsLoad {
             DetailsLoad::Commit(oid) => DetailsSubject::Commit(oid.clone()),
             DetailsLoad::CommitFiles(oid) => DetailsSubject::CommitFiles(oid.clone()),
             DetailsLoad::File(entry) => DetailsSubject::File(entry.path.clone()),
+            DetailsLoad::Stage(entry) => DetailsSubject::Stage(entry.path.clone()),
+            DetailsLoad::Stash(stash) => DetailsSubject::Stash(stash.oid.clone()),
         }
     }
 
@@ -78,6 +82,8 @@ impl DetailsLoad {
             DetailsLoad::Commit(_) => 0,
             DetailsLoad::CommitFiles(_) => 1,
             DetailsLoad::File(_) => 2,
+            DetailsLoad::Stage(_) => 3,
+            DetailsLoad::Stash(_) => 4,
         }
     }
 }
@@ -158,7 +164,7 @@ pub struct App {
     /// even if that load is running), started once details is on screen.
     details_wanted: Option<(DetailsLoad, bool)>,
     /// Details loads by [`DetailsLoad::kind`].
-    details_jobs: [LatestJob<DetailsLoad>; 3],
+    details_jobs: [LatestJob<DetailsLoad>; 5],
     /// Diffs for the details files view.
     file_diff_job: LatestJob<(String, CommitFile)>,
     /// Branch histories for the graph's focused branch.
@@ -286,6 +292,11 @@ impl App {
 
     pub fn branches(&self) -> &BranchesPane {
         &self.branches
+    }
+
+    /// The key binding context in effect: the focused pane's.
+    pub fn keymap_context(&self) -> Context {
+        self.focused().context()
     }
 
     pub fn modal(&self) -> Option<&Modal> {
@@ -623,9 +634,10 @@ impl App {
                     refs,
                     branches,
                     base,
+                    stashes,
                     ..
                 } = *snapshot;
-                self.branches.set_entries(branches, base, &refs);
+                self.branches.set_entries(branches, base, &refs, stashes);
                 self.head = Some(head);
                 self.track_head();
                 // Follow the focused branch if the list changed under it.
@@ -634,12 +646,18 @@ impl App {
                 }
             }
             Action::BranchSelected(oid) => self.graph.select_when_loaded(oid, &self.ctx),
+            Action::StashSelected(stash) => {
+                if self.focus == PaneId::Branches {
+                    self.show_stash(stash);
+                }
+            }
             Action::BranchFocused(focus) => self.focus_branch(focus),
             Action::OpenModal(modal) => self.modal = Some(modal),
             Action::Run(op) => self.run_op(op),
             Action::OpDone { op, result, head } => self.op_done(op, result, head),
             Action::StatusLoaded(Ok(status)) => {
                 self.status.set_status(status);
+                self.refresh_staging();
                 if self.focus == PaneId::Status {
                     self.refresh_details(true);
                 }
@@ -688,6 +706,9 @@ impl App {
                     DetailsSubject::File(path) => {
                         self.details_finished(2, |l| matches!(l, DetailsLoad::File(e) if e.path == path))
                     }
+                    DetailsSubject::Stash(oid) => {
+                        self.details_finished(4, |l| matches!(l, DetailsLoad::Stash(s) if s.oid == oid))
+                    }
                     _ => {}
                 }
             }
@@ -710,6 +731,15 @@ impl App {
                 if let Some(next) = self.file_diff_job.finished(|(o, f)| *o == oid && f.path == path) {
                     self.spawn_file_diff(next);
                 }
+            }
+            Action::StageDiffsLoaded {
+                entry,
+                unstaged,
+                staged,
+            } => {
+                let path = entry.path.clone();
+                self.details.set_stage_diffs(entry, unstaged, staged);
+                self.details_finished(3, |l| matches!(l, DetailsLoad::Stage(e) if e.path == path));
             }
             Action::FilterChoicesLoaded { tab, choices } => {
                 if let Some(Modal::Filter(panel)) = &mut self.modal {
@@ -867,6 +897,11 @@ impl App {
     }
 
     fn run_op(&mut self, op: GitOp) {
+        if matches!(op, GitOp::ApplyPatch { .. })
+            && let Some(view) = self.details.stage_mut()
+        {
+            view.mark_applying();
+        }
         let label = op.label();
         self.notice = Some(format!("{label}…"));
         self.busy.push(label);
@@ -891,6 +926,7 @@ impl App {
                     | GitOp::CherryPick { .. }
                     | GitOp::Continue(_)
                     | GitOp::Abort(_)
+                    | GitOp::StashBranch { .. }
             )
         {
             self.select_head = true;
@@ -929,7 +965,12 @@ impl App {
                 }
             }
             PaneId::Graph | PaneId::Branches => {
-                if let Some(oid) = self.graph.selected().map(|c| c.oid.to_string()) {
+                let stash = (self.focus == PaneId::Branches)
+                    .then(|| self.branches.selected_stash().cloned())
+                    .flatten();
+                if let Some(stash) = stash {
+                    self.show_stash(stash);
+                } else if let Some(oid) = self.graph.selected().map(|c| c.oid.to_string()) {
                     self.show_commit(oid);
                 }
             }
@@ -944,6 +985,61 @@ impl App {
         }
         self.details.request(subject, format!("Diff {}", entry.path));
         self.want_details(DetailsLoad::File(entry), force);
+    }
+
+    fn show_stash(&mut self, stash: Stash) {
+        let subject = DetailsSubject::Stash(stash.oid.clone());
+        if self.details.subject() == Some(&subject) {
+            return;
+        }
+        self.details.request(subject, stash.name());
+        self.want_details(DetailsLoad::Stash(stash), false);
+    }
+
+    /// Opens the selected stash fullscreen.
+    fn expand_stash(&mut self) {
+        let Some(stash) = self.branches.selected_stash().cloned() else {
+            return;
+        };
+        self.show_stash(stash);
+        self.details_open = true;
+        self.zoom = Zoom::Full(PaneId::Details);
+        self.focus = PaneId::Details;
+    }
+
+    /// Opens the selected file fullscreen to stage it by hunk or line.
+    fn open_staging(&mut self) {
+        let Some(entry) = self.status.selected().cloned() else {
+            return;
+        };
+        self.details.request_stage(entry.clone());
+        self.want_details(DetailsLoad::Stage(entry), true);
+        self.details_open = true;
+        self.zoom = Zoom::Full(PaneId::Details);
+        self.focus = PaneId::Details;
+    }
+
+    /// Leaves the staging view for the status pane.
+    fn close_staging(&mut self) {
+        self.details.clear();
+        self.details_open = false;
+        if self.zoom == Zoom::Full(PaneId::Details) {
+            self.zoom = Zoom::Off;
+        }
+        self.focus = PaneId::Status;
+        self.refresh_details(true);
+    }
+
+    /// Reloads the staging view after the status changed, or goes back to
+    /// the status pane once its file has no changes left.
+    fn refresh_staging(&mut self) {
+        let Some(path) = self.details.stage().map(|v| v.path().to_string()) else {
+            return;
+        };
+        match self.status.entries().iter().find(|e| e.path == path).cloned() {
+            Some(entry) => self.want_details(DetailsLoad::Stage(entry), true),
+            None => self.close_staging(),
+        }
     }
 
     /// Shows `oid` in details, staying in the files view if that's open.
@@ -1019,6 +1115,8 @@ impl App {
             DetailsLoad::Commit(oid) => loaders::load_commit_details(repo, oid),
             DetailsLoad::CommitFiles(oid) => loaders::load_commit_files(repo, oid),
             DetailsLoad::File(entry) => loaders::load_file_diff(repo, entry),
+            DetailsLoad::Stage(entry) => loaders::load_stage_diffs(repo, entry),
+            DetailsLoad::Stash(stash) => loaders::load_stash_details(repo, stash),
         });
         self.details_jobs[kind].started(load, done);
     }
@@ -1127,7 +1225,12 @@ impl App {
             self.zoom = Zoom::Off;
         }
         if self.focus == PaneId::Details {
-            self.focus = PaneId::Graph;
+            // A stash was opened from the branches pane; go back there.
+            self.focus = if matches!(self.details.subject(), Some(DetailsSubject::Stash(_))) {
+                PaneId::Branches
+            } else {
+                PaneId::Graph
+            };
         }
     }
 
@@ -1148,11 +1251,21 @@ impl App {
             Command::Zoom => self.step_zoom(),
             Command::ToggleDetails if self.focus == PaneId::Graph => self.toggle_details(),
             Command::ExpandDetails if self.focus == PaneId::Graph => self.expand_details(),
+            Command::ExpandDetails if self.focus == PaneId::Branches => self.expand_stash(),
             // With details already closed, esc in the graph drops its filter.
             Command::CloseDetails
                 if self.focus == PaneId::Graph && !self.shows(PaneId::Details) && self.graph.is_filtered() =>
             {
                 self.set_graph_filter(LogFilter::default())
+            }
+            Command::OpenStaging if self.focus == PaneId::Status => self.open_staging(),
+            Command::CloseDetails if self.focus == PaneId::Details && self.details.stage().is_some() => {
+                self.close_staging()
+            }
+            // Commit straight from the staging view.
+            Command::Commit if self.focus == PaneId::Details && self.details.stage().is_some() => {
+                let ctx = self.ctx.clone();
+                self.status.on_command(cmd, &ctx);
             }
             Command::CloseDetails if matches!(self.focus, PaneId::Graph | PaneId::Details) => self.close_details(),
             Command::Filter if self.focus == PaneId::Graph => self.open_graph_filter(),
@@ -1315,7 +1428,16 @@ impl App {
                 .display_key_text(context, *cmd)
                 .map(|key| (key, cmd.label()))
         };
-        let globals: Vec<_> = GLOBAL_HELP.iter().filter_map(hint).collect();
+        // A global whose key the pane uses for something else isn't shown.
+        let globals: Vec<_> = GLOBAL_HELP
+            .iter()
+            .filter(|cmd| {
+                self.keymap
+                    .display_key(context, **cmd)
+                    .is_some_and(|key| self.keymap.lookup(context, key) == Some(**cmd))
+            })
+            .filter_map(hint)
+            .collect();
         let width_of = |(k, l): &(&str, &str)| k.width() + 1 + l.width() + 2;
         let mut budget = (keys_area.width as usize).saturating_sub(globals.iter().map(width_of).sum());
         let mut items = Vec::new();

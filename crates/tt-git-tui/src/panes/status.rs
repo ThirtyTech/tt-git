@@ -2,7 +2,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use tt_git_core::{DiscardKind, Status, StatusEntry};
+use tt_git_core::{DiscardKind, StashScope, Status, StatusEntry};
 
 use super::{PaneId, pane_block};
 use crate::action::Action;
@@ -139,6 +139,25 @@ impl Component for StatusPane {
                     ));
                 }
             }
+            Command::Stash => {
+                if self.entries().is_empty() {
+                    ctx.emit(Action::Notify("nothing to stash".into()));
+                } else {
+                    let file = self.selected().map(|e| {
+                        let mut paths = vec![e.path.clone()];
+                        paths.extend(e.orig_path.clone());
+                        paths
+                    });
+                    ctx.emit(Action::OpenModal(Modal::prompt(
+                        "Stash",
+                        "",
+                        PromptAction::Stash {
+                            scope: StashScope::All,
+                            file,
+                        },
+                    )));
+                }
+            }
             Command::Amend => ctx.emit(Action::OpenModal(Modal::confirm(
                 "Amend",
                 "Amend the last commit with the staged changes, keeping its message?",
@@ -192,6 +211,7 @@ impl Component for StatusPane {
             Command::Discard,
             Command::Commit,
             Command::Amend,
+            Command::Stash,
             Command::Continue,
             Command::Abort,
         ]

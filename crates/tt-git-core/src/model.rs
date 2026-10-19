@@ -339,6 +339,27 @@ pub struct Checkout {
     pub time: i64,
 }
 
+/// One entry of `git stash list`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Stash {
+    /// Its place in the list, newest first: `stash@{index}`.
+    pub index: usize,
+    pub oid: String,
+    /// The commit holding the untracked files stashed with it, if any.
+    pub untracked: Option<String>,
+    /// When it was made.
+    pub date: i64,
+    /// `On main: message`, or `WIP on main: <commit> <subject>` without one.
+    pub message: String,
+}
+
+impl Stash {
+    /// `stash@{n}`, how git commands name it.
+    pub fn name(&self) -> String {
+        format!("stash@{{{}}}", self.index)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::sync::Arc;

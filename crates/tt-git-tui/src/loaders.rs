@@ -25,6 +25,10 @@ pub fn load_refs(repo: Repo, config: BranchesConfig) -> Action {
         let RemoteConfig { remotes, base_branch } = repo.remote_config()?;
         let (refs, authors) = repo.refs_with_authors(&remotes)?;
         let checkouts = repo.checkouts(500)?;
+        let stashes = repo.stashes().unwrap_or_else(|e| {
+            tracing::warn!("listing stashes failed: {e}");
+            Vec::new()
+        });
         let branches = tt_git_core::branches::unify(&refs, &head, &checkouts, |r| repo.ref_activity(r));
         let base = match load_base(&repo, &refs, &authors, &branches, base_branch, &config) {
             Ok(base) => base,
@@ -39,6 +43,7 @@ pub fn load_refs(repo: Repo, config: BranchesConfig) -> Action {
             checkouts,
             branches,
             base,
+            stashes,
         })
     })();
     Action::RefsLoaded(result.map(Box::new).map_err(message))
@@ -398,6 +403,13 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::StageAll => repo.stage_all(),
         GitOp::UnstageAll => repo.unstage_all(),
         GitOp::Discard { path, kind } => repo.discard(path, kind),
+        GitOp::ApplyPatch {
+            path,
+            patch,
+            op,
+            untracked,
+            ..
+        } => repo.apply_patch(path, patch, *op, *untracked),
         GitOp::Commit { message, amend } => repo.commit(message.as_deref(), *amend),
         GitOp::Push => repo.push(),
         GitOp::Pull => repo.pull(),
@@ -406,6 +418,10 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::CherryPick { oid, .. } => repo.cherry_pick(oid),
         GitOp::Continue(op) => repo.continue_operation(*op),
         GitOp::Abort(op) => repo.abort_operation(*op),
+        GitOp::StashPush { message, scope } => repo.stash_push(message.as_deref(), scope),
+        GitOp::StashApply { index, pop } => repo.stash_apply(*index, *pop),
+        GitOp::StashDrop { index } => repo.stash_drop(*index),
+        GitOp::StashBranch { name, index } => repo.stash_branch(name, *index),
     };
     let head = match result {
         Ok(_) => repo.head().ok().and_then(|h| h.oid().map(str::to_string)),
@@ -430,6 +446,32 @@ pub fn load_file_diff(repo: Repo, entry: tt_git_core::StatusEntry) -> Action {
     Action::DetailsLoaded {
         subject: DetailsSubject::File(entry.path),
         text,
+    }
+}
+
+/// What a stash holds, for the details pane.
+pub fn load_stash_details(repo: Repo, stash: tt_git_core::Stash) -> Action {
+    let text = match repo.stash_details(&stash) {
+        Ok(t) => cap_lines(t),
+        Err(e) => format!("could not show {}: {e}", stash.name()),
+    };
+    Action::DetailsLoaded {
+        subject: DetailsSubject::Stash(stash.oid),
+        text,
+    }
+}
+
+/// Both sides of `entry`'s changes, for the staging view.
+pub fn load_stage_diffs(repo: Repo, entry: tt_git_core::StatusEntry) -> Action {
+    let side = |staged| {
+        repo.stage_diff(&entry, staged, MAX_UNTRACKED_PREVIEW)
+            .unwrap_or_else(|e| Err(format!("could not diff {}: {e}", entry.path)))
+    };
+    let (unstaged, staged) = (side(false), side(true));
+    Action::StageDiffsLoaded {
+        entry,
+        unstaged,
+        staged,
     }
 }
 

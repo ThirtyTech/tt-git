@@ -1,0 +1,21 @@
+---
+source: crates/tt-git-tui/tests/stage.rs
+expression: "t.pane_lines(PaneId::Details).join(\"\\n\")"
+---
+▌Unstaged  1 hunk                                                        │  Staged  2 hunks
+@@ -1,5 +1,5 @@                                                          │ @@ -1,5 +1,5 @@
+ 1                                                                       │  1
+-two                                                                     │ -2
++TWO                                                                     │ +two
+ 3                                                                       │  3
+ 4                                                                       │  4
+ 5                                                                       │  5
+                                                                         │ @@ -11,5 +11,5 @@
+                                                                         │  11
+                                                                         │  12
+                                                                         │  13
+                                                                         │ -14
+                                                                         │ +fourteen
+                                                                         │  15
+                                                                         │
+                                                                         │

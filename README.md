@@ -9,7 +9,9 @@ A terminal git client in Rust ([ratatui](https://ratatui.rs)), inspired by
   Press `a` to switch between all branches and just the current branch (plus
   its upstream).
 - **A status pane** like lazygit's files panel: stage, unstage, discard,
-  commit and amend. It also handles merge/rebase/cherry-pick conflicts.
+  commit, amend and stash. Press `enter` on a file to see its changes
+  fullscreen and stage, unstage or discard them a hunk or a line at a time.
+  It also handles merge/rebase/cherry-pick conflicts.
 - **One branch list for local and remote branches**, sorted by recent
   activity (commits, fetches, checkouts). If you check out a branch that only
   exists on a remote, tt-git creates the local tracking branch for you
@@ -79,18 +81,32 @@ command palette, which lists built-in commands and plugin actions.
 | | `n` `d` `R` | new (`tab` in the dialog: create it in a worktree under `.worktrees/`) / delete (asks before force-deleting unmerged) / rename |
 | | `f` | `fetch --all --prune` |
 | | `/` | filter as you type (`esc` clears) |
-| | `]` `[` | next / previous tab: all branches, tags, unmerged into the base branch, merged into it |
+| | `]` `[` | next / previous tab: all branches, tags, unmerged into the base branch, merged into it, and stashes (once there are any) |
 | | `b` | pick the base branch (default: the project's primary branch) |
 | | `M` / `r` | merge / rebase onto the selected branch |
 | | `c` | copy the branch name |
-| status | `space` `enter` | stage / unstage the file |
+| status | `space` | stage / unstage the file |
+| | `enter` | open the file's changes fullscreen to stage them by hunk or line (below) |
 | | `a` | stage everything (or unstage, if all staged) |
 | | `d` | discard changes to the file (asks first) |
 | | `c` / `A` | commit / amend keeping the message |
+| | `s` | stash: everything, only what's staged, everything but leave staged changes in place, or just the selected file (`tab` in the dialog picks; the message is optional) |
 | | `C` / `X` | continue / abort a merge, rebase or cherry-pick |
+| stash tab | `space` / `a` | pop / apply the selected stash (pop drops it once applied) |
+| | `d` | drop it (asks first) |
+| | `n` | new branch from it at the commit it was made on (`git stash branch`) |
+| | `enter` | show what it holds fullscreen, untracked files included (`esc` back) |
 | details | `}` | show / hide the commit's changed files below the diff (`j`/`k` pick a file); fullscreen puts them on the left |
 | | `o` | open the link in view with a plugin link handler |
 | | `esc` `space` | close details |
+| staging | `j` / `k` | next / previous hunk (or changed line) |
+| | `space` | stage the selection, or unstage it on the staged side |
+| | `tab` | switch between the unstaged and staged changes |
+| | `a` | pick single lines instead of whole hunks, and back |
+| | `v` | start or end a range of lines |
+| | `d` | discard the selection from the working tree (asks first) |
+| | `c` | commit what's staged |
+| | `esc` | back to the status pane |
 
 The mouse also works: click a pane or row to focus and select it, use the
 wheel to scroll the pane under the pointer, and `ctrl`+click a link in the

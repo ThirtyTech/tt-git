@@ -298,6 +298,11 @@ impl App {
             GitOp::Unstage(paths) => ("files.unstaged", json!({ "paths": paths })),
             GitOp::UnstageAll => ("files.unstaged", json!({ "paths": "all" })),
             GitOp::Discard { path, .. } => ("files.discarded", json!({ "path": path })),
+            GitOp::ApplyPatch { path, op, .. } => match op {
+                tt_git_core::PatchOp::Stage => ("files.staged", json!({ "paths": [path], "partial": true })),
+                tt_git_core::PatchOp::Unstage => ("files.unstaged", json!({ "paths": [path], "partial": true })),
+                tt_git_core::PatchOp::Discard => ("files.discarded", json!({ "path": path, "partial": true })),
+            },
             GitOp::Merge { target } => ("merge.completed", json!({ "target": target, "head": head })),
             GitOp::Rebase { onto } => ("rebase.completed", json!({ "onto": onto, "head": head })),
             GitOp::CherryPick { oid, summary } => (
@@ -312,6 +317,16 @@ impl App {
                     tt_git_core::InProgress::Revert => "commit.created",
                 },
                 json!({ "head": head, "continued": true }),
+            ),
+            GitOp::StashPush { message, .. } => ("stash.created", json!({ "message": message })),
+            GitOp::StashApply { index, pop } => (
+                "stash.applied",
+                json!({ "stash": format!("stash@{{{index}}}"), "pop": pop }),
+            ),
+            GitOp::StashDrop { index } => ("stash.dropped", json!({ "stash": format!("stash@{{{index}}}") })),
+            GitOp::StashBranch { name, index } => (
+                "branch.created",
+                json!({ "branch": name, "start": format!("stash@{{{index}}}"), "worktree": null }),
             ),
             GitOp::Abort(_) | GitOp::SetBaseBranch(_) | GitOp::DeleteTag { .. } => return,
             GitOp::Commit { message, amend } => (

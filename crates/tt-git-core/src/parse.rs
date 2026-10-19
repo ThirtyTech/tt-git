@@ -5,7 +5,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use crate::git::GitError;
-use crate::model::{BranchStatus, Checkout, Commit, CommitFile, FileState, GitRef, Oid, RefKind, Status, StatusEntry};
+use crate::model::{
+    BranchStatus, Checkout, Commit, CommitFile, FileState, GitRef, Oid, RefKind, Stash, Status, StatusEntry,
+};
 
 /// Field separator inside a record (ASCII unit separator).
 pub const FS: char = '\u{1f}';
@@ -334,6 +336,28 @@ pub fn parse_checkouts(out: &[u8]) -> Vec<Checkout> {
                 from: from.to_string(),
                 to: to.to_string(),
                 time: time.trim().parse().ok()?,
+            })
+        })
+        .collect()
+}
+
+/// `git stash list` arguments producing records [`parse_stashes`] understands.
+pub const STASH_FORMAT: &str = "--format=%gd%x1f%H%x1f%P%x1f%ct%x1f%gs";
+
+/// Parses `git stash list` output in [`STASH_FORMAT`].
+pub fn parse_stashes(out: &[u8]) -> Vec<Stash> {
+    String::from_utf8_lossy(out)
+        .lines()
+        .filter_map(|line| {
+            let mut f = line.splitn(5, FS);
+            let (selector, oid, parents, date, message) = (f.next()?, f.next()?, f.next()?, f.next()?, f.next()?);
+            let index = selector.strip_prefix("stash@{")?.strip_suffix('}')?.parse().ok()?;
+            Some(Stash {
+                index,
+                oid: oid.to_string(),
+                untracked: parents.split(' ').nth(2).map(str::to_string),
+                date: date.parse().ok()?,
+                message: message.to_string(),
             })
         })
         .collect()

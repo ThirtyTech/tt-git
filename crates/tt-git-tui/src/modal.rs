@@ -7,7 +7,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
-use tt_git_core::{CheckoutPlan, DiscardKind, InProgress, LogFilter};
+use tt_git_core::{CheckoutPlan, DiscardKind, InProgress, LogFilter, PatchOp, StashScope};
 
 use crate::filter::FilterPanel;
 use crate::keymap::{Command, KeyCombo};
@@ -50,6 +50,15 @@ pub enum GitOp {
         path: String,
         kind: DiscardKind,
     },
+    /// Applies part of one file's changes (`patch`, built for `op`) by hunk, or
+    /// by line with `lines`.
+    ApplyPatch {
+        path: String,
+        patch: String,
+        op: PatchOp,
+        untracked: bool,
+        lines: bool,
+    },
     /// `message: None` with `amend` keeps the previous message.
     Commit {
         message: Option<String>,
@@ -69,6 +78,23 @@ pub enum GitOp {
     },
     Continue(InProgress),
     Abort(InProgress),
+    StashPush {
+        message: Option<String>,
+        scope: StashScope,
+    },
+    /// Applies `stash@{index}`, dropping it afterwards with `pop`.
+    StashApply {
+        index: usize,
+        pop: bool,
+    },
+    StashDrop {
+        index: usize,
+    },
+    /// `git stash branch <name> stash@{index}`.
+    StashBranch {
+        name: String,
+        index: usize,
+    },
 }
 
 impl GitOp {
@@ -99,6 +125,15 @@ impl GitOp {
             GitOp::StageAll => "stage all".into(),
             GitOp::UnstageAll => "unstage all".into(),
             GitOp::Discard { path, .. } => format!("discard {path}"),
+            GitOp::ApplyPatch { path, op, lines, .. } => {
+                let verb = match op {
+                    PatchOp::Stage => "stage",
+                    PatchOp::Unstage => "unstage",
+                    PatchOp::Discard => "discard",
+                };
+                let part = if *lines { "lines" } else { "hunk" };
+                format!("{verb} {part} of {path}")
+            }
             GitOp::Commit { amend: false, .. } => "commit".into(),
             GitOp::Commit { amend: true, .. } => "amend".into(),
             GitOp::Push => "push".into(),
@@ -108,6 +143,16 @@ impl GitOp {
             GitOp::CherryPick { oid, .. } => format!("cherry-pick {}", &oid[..oid.len().min(7)]),
             GitOp::Continue(op) => format!("{} --continue", op.command()),
             GitOp::Abort(op) => format!("{} --abort", op.command()),
+            GitOp::StashPush { scope, .. } => match scope {
+                StashScope::All => "stash".into(),
+                StashScope::Staged => "stash staged changes".into(),
+                StashScope::KeepStaged => "stash, keeping staged changes".into(),
+                StashScope::Paths(paths) => format!("stash {}", paths.join(" ")),
+            },
+            GitOp::StashApply { index, pop: true } => format!("stash pop stash@{{{index}}}"),
+            GitOp::StashApply { index, pop: false } => format!("stash apply stash@{{{index}}}"),
+            GitOp::StashDrop { index } => format!("drop stash@{{{index}}}"),
+            GitOp::StashBranch { name, index } => format!("branch {name} from stash@{{{index}}}"),
         }
     }
 }
@@ -130,11 +175,39 @@ pub enum PromptAction {
         old: String,
     },
     Commit,
+    /// A stash message, which may be left empty. `tab` cycles through what
+    /// to stash; `file` (the selected file's paths) adds it as a choice.
+    Stash {
+        scope: StashScope,
+        file: Option<Vec<String>>,
+    },
+    StashBranch {
+        index: usize,
+    },
 }
 
 impl PromptAction {
+    /// The next choice of what to stash after `scope`.
+    fn next_scope(scope: &StashScope, file: Option<&Vec<String>>, back: bool) -> StashScope {
+        let mut choices = vec![StashScope::All, StashScope::Staged, StashScope::KeepStaged];
+        if let Some(paths) = file {
+            choices.push(StashScope::Paths(paths.clone()));
+        }
+        let at = choices.iter().position(|c| c == scope).unwrap_or(0);
+        let n = choices.len();
+        choices.swap_remove(if back { (at + n - 1) % n } else { (at + 1) % n })
+    }
+
     fn op(&self, input: &str) -> GitOp {
         match self {
+            PromptAction::Stash { scope, .. } => GitOp::StashPush {
+                message: (!input.is_empty()).then(|| input.to_string()),
+                scope: scope.clone(),
+            },
+            PromptAction::StashBranch { index } => GitOp::StashBranch {
+                name: input.to_string(),
+                index: *index,
+            },
             PromptAction::CreateBranch { start, worktree } => GitOp::CreateBranch {
                 name: input.to_string(),
                 start: start.clone(),
@@ -289,7 +362,7 @@ impl Modal {
                 KeyCode::Esc => ModalOutcome::Cancelled,
                 KeyCode::Enter => {
                     let value = input.trim();
-                    if value.is_empty() {
+                    if value.is_empty() && !matches!(action, PromptAction::Stash { .. }) {
                         ModalOutcome::Open
                     } else {
                         ModalOutcome::Run(action.op(value))
@@ -304,8 +377,12 @@ impl Modal {
                     ModalOutcome::Open
                 }
                 KeyCode::Tab | KeyCode::BackTab => {
-                    if let PromptAction::CreateBranch { worktree, .. } = action {
-                        *worktree = !*worktree;
+                    match action {
+                        PromptAction::CreateBranch { worktree, .. } => *worktree = !*worktree,
+                        PromptAction::Stash { scope, file } => {
+                            *scope = PromptAction::next_scope(scope, file.as_ref(), key.code == KeyCode::BackTab);
+                        }
+                        _ => {}
                     }
                     ModalOutcome::Open
                 }
@@ -341,15 +418,41 @@ impl Modal {
             Modal::Palette { .. } | Modal::Filter(_) => unreachable!("handled above"),
             Modal::Prompt { title, input, action } => {
                 let input_line = Line::from(vec![Span::raw(input.as_str()), Span::styled("█", theme.help_key)]);
+                let tab = |label: String, on: bool| {
+                    if on {
+                        Span::styled(label, theme.help_key.add_modifier(Modifier::UNDERLINED))
+                    } else {
+                        Span::styled(label, theme.muted)
+                    }
+                };
                 match action {
-                    PromptAction::CreateBranch { worktree, .. } => {
-                        let tab = |label: &'static str, on: bool| {
-                            if on {
-                                Span::styled(label, theme.help_key.add_modifier(Modifier::UNDERLINED))
-                            } else {
-                                Span::styled(label, theme.muted)
-                            }
+                    PromptAction::Stash { scope, file } => {
+                        let mut tabs = vec![
+                            tab("Everything".into(), *scope == StashScope::All),
+                            Span::styled(" · ", theme.muted),
+                            tab("Staged".into(), *scope == StashScope::Staged),
+                            Span::styled(" · ", theme.muted),
+                            tab("Keep staged".into(), *scope == StashScope::KeepStaged),
+                        ];
+                        if let Some(paths) = file {
+                            let name = paths[0].rsplit('/').next().unwrap_or(&paths[0]).to_string();
+                            tabs.push(Span::styled(" · ", theme.muted));
+                            tabs.push(tab(name, matches!(scope, StashScope::Paths(_))));
+                        }
+                        let note = match scope {
+                            StashScope::All => "staged, unstaged and untracked changes".to_string(),
+                            StashScope::Staged => "only what's staged".to_string(),
+                            StashScope::KeepStaged => "everything, leaving staged changes in place".to_string(),
+                            StashScope::Paths(paths) => format!("only {}", paths.join(", ")),
                         };
+                        let body = vec![
+                            Line::from(tabs),
+                            input_line,
+                            Line::styled(format!("{note} · message optional"), theme.muted),
+                        ];
+                        (title, body, "enter stash · tab what to stash · esc cancel")
+                    }
+                    PromptAction::CreateBranch { worktree, .. } => {
                         let note = if *worktree {
                             let name = input.trim();
                             let name = if name.is_empty() { "<name>" } else { name };
@@ -359,9 +462,9 @@ impl Modal {
                         };
                         let body = vec![
                             Line::from(vec![
-                                tab("Branch", !worktree),
+                                tab("Branch".into(), !worktree),
                                 Span::styled(" · ", theme.muted),
-                                tab("Worktree", *worktree),
+                                tab("Worktree".into(), *worktree),
                             ]),
                             input_line,
                             Line::styled(note, theme.muted),

@@ -261,3 +261,265 @@ fn create_branch_in_a_worktree() {
     let err = repo.create_worktree("y", "main").unwrap_err();
     assert!(err.stderr().unwrap_or_default().contains("already exists"), "{err}");
 }
+
+mod hunks {
+    use tt_git_core::PatchOp;
+    use tt_git_core::patch::{FileDiff, LineKind};
+
+    use super::*;
+
+    const BASE: &str = "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n";
+
+    fn side(repo: &Repo, path: &str, staged: bool) -> FileDiff {
+        let e = entry(repo, path).unwrap_or_else(|| panic!("{path} not in status"));
+        repo.stage_diff(&e, staged, 1 << 20).unwrap().unwrap()
+    }
+
+    /// Builds a patch from `path`'s staged or unstaged diff and applies it.
+    fn apply(repo: &Repo, path: &str, op: PatchOp, pick: impl Fn(usize, usize) -> bool) {
+        let e = entry(repo, path).unwrap();
+        let diff = side(repo, path, op == PatchOp::Unstage);
+        let patch = diff
+            .patch(pick, op.direction(), e.is_untracked())
+            .expect("something picked");
+        repo.apply_patch(path, &patch, op, e.is_untracked())
+            .unwrap_or_else(|err| panic!("{err}\n{patch}"));
+    }
+
+    fn index(sb: &Sandbox, path: &str) -> String {
+        sb.git(&["show", &format!(":{path}")])
+    }
+
+    /// `text` with line `n` (from 1) replaced.
+    fn with_line(text: &str, n: usize, new: &str) -> String {
+        let mut lines: Vec<&str> = text.lines().collect();
+        lines[n - 1] = new;
+        lines.join("\n") + "\n"
+    }
+
+    /// Two hunks: line 2 changed, line 14 changed.
+    fn two_hunks(sb: &Sandbox) {
+        sb.commit_file("f.txt", BASE, "base");
+        sb.write("f.txt", &with_line(&with_line(BASE, 2, "two"), 14, "fourteen"));
+    }
+
+    #[test]
+    fn stage_one_hunk_then_unstage_it() {
+        let sb = Sandbox::new();
+        two_hunks(&sb);
+        let repo = open(&sb);
+        assert_eq!(side(&repo, "f.txt", false).hunks.len(), 2);
+
+        apply(&repo, "f.txt", PatchOp::Stage, |h, _| h == 1);
+        assert!(index(&sb, "f.txt").contains("fourteen") && !index(&sb, "f.txt").contains("two"));
+        assert_eq!(side(&repo, "f.txt", false).hunks.len(), 1);
+        assert_eq!(side(&repo, "f.txt", true).hunks.len(), 1);
+
+        apply(&repo, "f.txt", PatchOp::Unstage, |_, _| true);
+        assert_eq!(index(&sb, "f.txt"), BASE.trim_end());
+        // The working tree never changed.
+        assert!(
+            std::fs::read_to_string(sb.path().join("f.txt"))
+                .unwrap()
+                .contains("two")
+        );
+    }
+
+    #[test]
+    fn stage_a_single_added_line() {
+        let sb = Sandbox::new();
+        sb.commit_file("f.txt", "a\nb\n", "base");
+        sb.write("f.txt", "a\nx\ny\nb\n");
+        let repo = open(&sb);
+        let diff = side(&repo, "f.txt", false);
+        let y = diff.hunks[0]
+            .lines
+            .iter()
+            .position(|l| l.kind == LineKind::Add && l.text == "y")
+            .unwrap();
+        apply(&repo, "f.txt", PatchOp::Stage, |_, l| l == y);
+        assert_eq!(index(&sb, "f.txt"), "a\ny\nb");
+    }
+
+    #[test]
+    fn unstage_a_single_line() {
+        let sb = Sandbox::new();
+        sb.commit_file("f.txt", "a\nb\n", "base");
+        sb.write("f.txt", "a\nx\ny\nb\n");
+        sb.git(&["add", "f.txt"]);
+        let repo = open(&sb);
+        let diff = side(&repo, "f.txt", true);
+        let x = diff.hunks[0].lines.iter().position(|l| l.text == "x").unwrap();
+        apply(&repo, "f.txt", PatchOp::Unstage, |_, l| l == x);
+        assert_eq!(index(&sb, "f.txt"), "a\ny\nb");
+    }
+
+    #[test]
+    fn discard_one_hunk_from_the_working_tree() {
+        let sb = Sandbox::new();
+        two_hunks(&sb);
+        let repo = open(&sb);
+        apply(&repo, "f.txt", PatchOp::Discard, |h, _| h == 0);
+        assert_eq!(
+            std::fs::read_to_string(sb.path().join("f.txt")).unwrap(),
+            with_line(BASE, 14, "fourteen")
+        );
+    }
+
+    #[test]
+    fn stage_part_of_an_untracked_file() {
+        let sb = Sandbox::new();
+        sb.commit("base");
+        sb.write("new.txt", "one\ntwo\nthree\n");
+        let repo = open(&sb);
+        apply(&repo, "new.txt", PatchOp::Stage, |_, l| l == 0);
+        assert_eq!(index(&sb, "new.txt"), "one");
+        let e = entry(&repo, "new.txt").unwrap();
+        assert_eq!((e.index, e.worktree), (FileState::Added, FileState::Modified));
+        // The rest of it is now an ordinary unstaged change.
+        apply(&repo, "new.txt", PatchOp::Stage, |_, _| true);
+        assert!(!entry(&repo, "new.txt").unwrap().has_unstaged());
+    }
+
+    #[test]
+    fn stage_part_of_a_deletion() {
+        let sb = Sandbox::new();
+        sb.commit_file("d.txt", "one\ntwo\n", "base");
+        std::fs::remove_file(sb.path().join("d.txt")).unwrap();
+        let repo = open(&sb);
+        apply(&repo, "d.txt", PatchOp::Stage, |_, l| l == 1);
+        assert_eq!(index(&sb, "d.txt"), "one");
+    }
+
+    #[test]
+    fn crlf_lines_stage_exactly() {
+        let sb = Sandbox::new();
+        sb.git(&["config", "core.autocrlf", "false"]);
+        sb.commit_file("w.txt", "a\r\nb\r\n", "base");
+        sb.write("w.txt", "a\r\nB\r\nb\r\nc\r\n");
+        let repo = open(&sb);
+        let diff = side(&repo, "w.txt", false);
+        let first = diff.hunks[0].lines.iter().position(|l| l.text == "B\r").unwrap();
+        apply(&repo, "w.txt", PatchOp::Stage, |_, l| l == first);
+        let blob = sb.git(&["cat-file", "-p", ":w.txt"]);
+        assert_eq!(blob, "a\r\nB\r\nb");
+    }
+
+    #[test]
+    fn conflicts_and_binaries_are_whole_file_only() {
+        let sb = Sandbox::new();
+        sb.commit("base");
+        std::fs::write(sb.path().join("bin.dat"), b"a\0b").unwrap();
+        let repo = open(&sb);
+        let e = entry(&repo, "bin.dat").unwrap();
+        assert!(repo.stage_diff(&e, false, 1 << 20).unwrap().is_err());
+    }
+}
+
+mod stash {
+    use tt_git_core::StashScope;
+
+    use super::*;
+
+    fn read(sb: &Sandbox, path: &str) -> Option<String> {
+        std::fs::read_to_string(sb.path().join(path)).ok()
+    }
+
+    #[test]
+    fn no_stash_reflog_means_no_stashes() {
+        let sb = Sandbox::new();
+        sb.commit("base");
+        assert!(open(&sb).stashes().unwrap().is_empty());
+    }
+
+    #[test]
+    fn push_everything_then_pop() {
+        let sb = Sandbox::new();
+        sb.commit_file("f.txt", "1\n", "base");
+        sb.write("f.txt", "2\n").write("new.txt", "new\n");
+        let repo = open(&sb);
+        repo.stash_push(Some("wip"), &StashScope::All).unwrap();
+        assert!(repo.status().unwrap().entries.is_empty());
+
+        let stashes = repo.stashes().unwrap();
+        assert_eq!(stashes.len(), 1);
+        assert_eq!(stashes[0].name(), "stash@{0}");
+        assert!(stashes[0].message.ends_with(": wip"), "{}", stashes[0].message);
+        assert!(stashes[0].untracked.is_some());
+        let details = repo.stash_details(&stashes[0]).unwrap();
+        assert!(details.contains("+2") && details.contains("── untracked ──") && details.contains("+new"));
+
+        repo.stash_apply(0, true).unwrap();
+        assert_eq!(read(&sb, "f.txt").as_deref(), Some("2\n"));
+        assert_eq!(read(&sb, "new.txt").as_deref(), Some("new\n"));
+        assert!(repo.stashes().unwrap().is_empty());
+    }
+
+    #[test]
+    fn apply_keeps_and_drop_removes() {
+        let sb = Sandbox::new();
+        sb.commit_file("f.txt", "1\n", "base");
+        sb.write("f.txt", "2\n");
+        let repo = open(&sb);
+        repo.stash_push(None, &StashScope::All).unwrap();
+        sb.write("g.txt", "g\n");
+        repo.stash_push(Some("second"), &StashScope::All).unwrap();
+        let stashes = repo.stashes().unwrap();
+        assert_eq!(stashes.len(), 2);
+        assert!(stashes[1].message.starts_with("WIP on "), "{}", stashes[1].message);
+
+        repo.stash_apply(1, false).unwrap();
+        assert_eq!(read(&sb, "f.txt").as_deref(), Some("2\n"));
+        assert_eq!(repo.stashes().unwrap().len(), 2);
+        repo.stash_drop(0).unwrap();
+        let left = repo.stashes().unwrap();
+        assert_eq!(left.len(), 1);
+        assert!(left[0].message.starts_with("WIP on "));
+    }
+
+    #[test]
+    fn staged_only_and_keep_staged() {
+        let sb = Sandbox::new();
+        sb.commit_file("a.txt", "a\n", "base");
+        sb.commit_file("b.txt", "b\n", "more");
+        sb.write("a.txt", "A\n").write("b.txt", "B\n");
+        sb.git(&["add", "a.txt"]);
+        let repo = open(&sb);
+
+        repo.stash_push(None, &StashScope::Staged).unwrap();
+        assert_eq!(read(&sb, "a.txt").as_deref(), Some("a\n"));
+        assert_eq!(read(&sb, "b.txt").as_deref(), Some("B\n"));
+        repo.stash_apply(0, true).unwrap();
+
+        sb.git(&["add", "a.txt"]);
+        repo.stash_push(None, &StashScope::KeepStaged).unwrap();
+        assert_eq!(read(&sb, "a.txt").as_deref(), Some("A\n"));
+        assert_eq!(read(&sb, "b.txt").as_deref(), Some("b\n"));
+    }
+
+    #[test]
+    fn push_one_untracked_path() {
+        let sb = Sandbox::new();
+        sb.commit_file("f.txt", "1\n", "base");
+        sb.write("f.txt", "2\n").write("new.txt", "new\n");
+        let repo = open(&sb);
+        repo.stash_push(None, &StashScope::Paths(vec!["new.txt".into()]))
+            .unwrap();
+        assert_eq!(read(&sb, "new.txt"), None);
+        assert_eq!(read(&sb, "f.txt").as_deref(), Some("2\n"));
+    }
+
+    #[test]
+    fn branch_from_a_stash() {
+        let sb = Sandbox::new();
+        sb.commit_file("f.txt", "1\n", "base");
+        sb.write("f.txt", "2\n");
+        let repo = open(&sb);
+        repo.stash_push(None, &StashScope::All).unwrap();
+        sb.commit("moved on");
+        repo.stash_branch("rescued", 0).unwrap();
+        assert_eq!(sb.git(&["branch", "--show-current"]), "rescued");
+        assert_eq!(read(&sb, "f.txt").as_deref(), Some("2\n"));
+        assert!(repo.stashes().unwrap().is_empty());
+    }
+}

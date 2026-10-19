@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::branches::AheadBehind;
 use crate::git::{GitCli, GitError, Result};
-use crate::model::{BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, Oid, Status};
+use crate::model::{BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, Oid, Stash, Status};
 use crate::parse;
 
 /// Repo-local git config key holding the picked base branch.
@@ -405,6 +405,55 @@ impl Repo {
             Err(GitError::Failed { .. }) => Ok(Vec::new()),
             Err(e) => Err(e),
         }
+    }
+
+    /// The stash list, newest first. Without a stash reflog there are none,
+    /// and no git process is run to find that out.
+    pub fn stashes(&self) -> Result<Vec<Stash>> {
+        let dir = &self.common_dir;
+        let reflog = dir.join("logs").join("refs").join("stash");
+        if !dir.join("reftable").exists() && std::fs::metadata(&reflog).map_or(true, |m| m.len() == 0) {
+            return Ok(Vec::new());
+        }
+        let out = self.git.run(&["stash", "list", parse::STASH_FORMAT])?;
+        Ok(parse::parse_stashes(&out.stdout))
+    }
+
+    /// What `stash` holds, for the details pane: its message, then the
+    /// changes to tracked files and any untracked files it saved, each as a
+    /// diffstat and patch.
+    pub fn stash_details(&self, stash: &Stash) -> Result<String> {
+        let mut out = format!(
+            "{}  {}
+
+",
+            stash.name(),
+            stash.message
+        );
+        let show = |rev: &str| -> Result<String> {
+            Ok(self
+                .git
+                .run(&[
+                    "show",
+                    "--format=",
+                    "--stat",
+                    "--patch",
+                    "--diff-merges=first-parent",
+                    rev,
+                    "--",
+                ])?
+                .into_stdout_string())
+        };
+        out.push_str(&show(&stash.oid)?);
+        if let Some(untracked) = &stash.untracked {
+            out.push_str(
+                "
+── untracked ──
+",
+            );
+            out.push_str(&show(untracked)?);
+        }
+        Ok(out)
     }
 
     /// Time of the most recent update to `full_ref` according to its reflog

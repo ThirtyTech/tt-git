@@ -3,11 +3,13 @@
 mod branches;
 mod details;
 mod graph;
+mod stage;
 mod status;
 
 pub use branches::{BranchTab, BranchesPane};
 pub use details::{DetailsPane, DetailsSubject};
 pub use graph::{BranchFocus, GraphPane, GraphScope, LabelKind, LoadToken, RefLabel, build_labels};
+pub use stage::{StageSideId, StageView};
 pub use status::StatusPane;
 
 use ratatui::text::{Line, Span};

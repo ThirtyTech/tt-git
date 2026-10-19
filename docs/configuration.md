@@ -29,8 +29,8 @@ pane_release_keys = ["ctrl+\\", "f12"]   # leave/close plugin panes
 
 ## Merged and unmerged branches
 
-The branches pane has four tabs; `]` and `[` (or `}` and `{`) move
-between them:
+The branches pane has four tabs, five once you have stashes; `]` and `[`
+(or `}` and `{`) move between them:
 
 - **Branches**: every local and remote branch, most recently active first.
 - **Tags**: every tag, newest first, with the tag message's subject (or the
@@ -47,6 +47,10 @@ between them:
   `git branch -r --no-merged origin/main`). Names matching
   `unmerged_exclude` are left out.
 - **Merged**: the ones that are.
+- **Stash**: the stash list, newest first, shown once there's a stash.
+  `space` pops the selected one, `a` applies it and keeps it, `d` drops it,
+  `n` makes a branch from it and `enter` shows what it holds. `s` in the
+  status pane stashes.
 
 Neither list includes the base branch itself or the long-lived branches in
 `safe_branches` (by default `master`, `main`, `production` and `prod`),
@@ -115,9 +119,11 @@ graph opens details below it at full width and closes it again.
 
 ## Key bindings
 
-Bindings belong to a context: `global`, `status`, `branches`, `graph` or
-`details`. tt-git looks up a key in the focused pane's context first, then
-in `global`. When you set a command's keys, they replace that command's
+Bindings belong to a context: `global`, `status`, `branches`, `graph`,
+`details`, `stage` (the details pane while it stages a file by hunk) or
+`stash` (the branches pane on its Stash tab, which doesn't fall back to
+`branches`).
+tt-git looks up a key in the focused pane's context first, then in `global`. When you set a command's keys, they replace that command's
 default keys in that context.
 
 ```toml
@@ -149,7 +155,9 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `toggle_scope`, `filter`, `new_branch`, `merge`, `rebase`, `cherry_pick` | `a`, `f`, `n`, `M`, `r`, `C` | graph |
 | `checkout`, `new_branch`, `delete_branch`, `rename_branch`, `fetch`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `d`, `R`, `f`, `/`, `M`, `r` | branches |
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |
-| `stage_toggle`, `stage_all`, `discard`, `commit`, `amend`, `continue`, `abort` | `space`/`enter`, `a`, `d`, `c`, `A`, `C`, `X` | status |
+| `stage_toggle`, `open_staging`, `stage_all`, `discard`, `commit`, `amend`, `stash`, `continue`, `abort` | `space`, `enter`, `a`, `d`, `c`, `A`, `s`, `C`, `X` | status |
+| `stash_pop`, `stash_apply`, `stash_drop`, `new_branch`, `expand_details`, `next_tab`, `prev_tab`, `filter` | `space`, `a`, `d`, `n`, `enter`, `]` `}`, `[` `{`, `/` | stash |
+| `stage_toggle`, `switch_side`, `toggle_line_mode`, `select_range`, `discard`, `commit`, `close_details` | `space`, `tab`, `a`, `v`, `d`, `c`, `esc` | stage |
 | `toggle_files`, `open_link` | `}`, `o` | details |
 | `copy` (commit hash / branch name) | `c` | graph, branches |
 | `plugin_logs` | (palette only) | global |
