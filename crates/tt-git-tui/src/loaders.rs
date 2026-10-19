@@ -381,7 +381,8 @@ fn cap_lines_at(mut text: String, max: usize) -> String {
 
 pub fn run_op(repo: Repo, op: GitOp) -> Action {
     let result = match &op {
-        GitOp::Checkout(plan) => repo.checkout(plan),
+        GitOp::Checkout { plan, stash: false } => repo.checkout(plan),
+        GitOp::Checkout { plan, stash: true } => repo.stash_and_checkout(plan),
         GitOp::CreateBranch {
             name,
             start,

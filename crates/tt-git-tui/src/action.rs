@@ -1,8 +1,8 @@
 //! Messages that drive [`App::update`](crate::App::update).
 
 use tt_git_core::{
-    BaseBranches, BranchEntry, BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, StageSide, Stash, Status,
-    StatusEntry,
+    BaseBranches, BranchEntry, BranchHistory, Checkout, CheckoutPlan, Commit, CommitFile, GitRef, Head, StageSide,
+    Stash, Status, StatusEntry,
 };
 use tt_git_plugin::runtime::CommandLog;
 use tt_git_plugin::socket::Call;
@@ -102,6 +102,9 @@ pub enum Action {
     BranchFocused(Option<BranchFocus>),
     /// Run a git write operation in the background.
     Run(GitOp),
+    /// Check out `plan`, offering to stash first if there are uncommitted
+    /// changes.
+    Checkout(CheckoutPlan),
     /// A write operation finished; `result` is git's output or error text.
     /// `head` is HEAD's commit afterwards.
     OpDone {

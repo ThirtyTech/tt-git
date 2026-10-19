@@ -466,7 +466,7 @@ impl BranchesPane {
                 if !entry.is_head
                     && let Some(plan) = entry.checkout_plan()
                 {
-                    ctx.emit(Action::Run(GitOp::Checkout(plan)));
+                    ctx.emit(Action::Run(GitOp::Checkout { plan, stash: false }));
                 }
             }
             Command::NewBranch => ctx.emit(Action::OpenModal(Modal::prompt(

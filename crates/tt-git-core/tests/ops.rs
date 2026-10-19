@@ -417,7 +417,7 @@ mod hunks {
 }
 
 mod stash {
-    use tt_git_core::StashScope;
+    use tt_git_core::{CheckoutPlan, StashScope};
 
     use super::*;
 
@@ -521,5 +521,46 @@ mod stash {
         assert_eq!(sb.git(&["branch", "--show-current"]), "rescued");
         assert_eq!(read(&sb, "f.txt").as_deref(), Some("2\n"));
         assert!(repo.stashes().unwrap().is_empty());
+    }
+
+    #[test]
+    fn stash_then_check_out_a_commit() {
+        let sb = Sandbox::new();
+        let base = sb.commit_file("f.txt", "1\n", "base");
+        sb.commit_file("f.txt", "2\n", "next");
+        sb.write("f.txt", "local\n").write("new.txt", "new\n");
+        let repo = open(&sb);
+        repo.stash_and_checkout(&CheckoutPlan::Detach(base.clone())).unwrap();
+        assert_eq!(sb.rev_parse("HEAD"), base);
+        assert_eq!(sb.git(&["branch", "--show-current"]), "");
+        assert_eq!(read(&sb, "f.txt").as_deref(), Some("1\n"));
+        assert_eq!(read(&sb, "new.txt"), None);
+        assert_eq!(repo.stashes().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn failed_checkout_pops_the_changes_back() {
+        let sb = Sandbox::new();
+        sb.commit_file("f.txt", "1\n", "base");
+        sb.write("f.txt", "local\n").write("new.txt", "new\n");
+        let repo = open(&sb);
+        repo.stash_and_checkout(&CheckoutPlan::Local("no-such-branch".into()))
+            .unwrap_err();
+        assert_eq!(read(&sb, "f.txt").as_deref(), Some("local\n"));
+        assert_eq!(read(&sb, "new.txt").as_deref(), Some("new\n"));
+        assert!(repo.stashes().unwrap().is_empty());
+    }
+
+    #[test]
+    fn failed_checkout_with_nothing_stashed_leaves_old_stashes() {
+        let sb = Sandbox::new();
+        sb.commit_file("f.txt", "1\n", "base");
+        sb.write("f.txt", "old\n");
+        let repo = open(&sb);
+        repo.stash_push(Some("older"), &StashScope::All).unwrap();
+        repo.stash_and_checkout(&CheckoutPlan::Local("no-such-branch".into()))
+            .unwrap_err();
+        assert_eq!(read(&sb, "f.txt").as_deref(), Some("1\n"));
+        assert_eq!(repo.stashes().unwrap().len(), 1);
     }
 }

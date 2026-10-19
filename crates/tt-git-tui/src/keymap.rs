@@ -459,6 +459,7 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Status, Command::Stash, &["s"]),
     (Context::Graph, Command::ToggleScope, &["a"]),
     (Context::Graph, Command::ToggleDates, &["t"]),
+    (Context::Graph, Command::Checkout, &["o"]),
     (Context::Graph, Command::ExpandDetails, &["enter"]),
     (Context::Graph, Command::ToggleDetails, &["space"]),
     (Context::Graph, Command::CloseDetails, &["esc"]),

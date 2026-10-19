@@ -20,8 +20,8 @@ fn text(out: GitOutput) -> String {
 }
 
 impl Repo {
-    /// Checks out a branch entry. Remote-only branches get a local tracking
-    /// branch created without asking.
+    /// Checks out a branch entry or a commit. Remote-only branches get a
+    /// local tracking branch created without asking.
     pub fn checkout(&self, plan: &CheckoutPlan) -> Result<String> {
         let out = match plan {
             CheckoutPlan::Local(name) => self.git().run(&["switch", name.as_str()])?,
@@ -29,8 +29,35 @@ impl Repo {
                 self.git()
                     .run(&["switch", "-c", name.as_str(), "--track", remote_ref.as_str()])?
             }
+            CheckoutPlan::Detach(oid) => self.git().run(&["switch", "--detach", oid.as_str()])?,
         };
         Ok(text(out))
+    }
+
+    /// Stashes every change, untracked files included, then checks out
+    /// `plan`. If the checkout fails, the changes are popped back.
+    pub fn stash_and_checkout(&self, plan: &CheckoutPlan) -> Result<String> {
+        let before = self.stash_tip();
+        let stashed = self.stash_push(None, &StashScope::All)?;
+        match self.checkout(plan) {
+            Ok(out) => Ok(format!("{stashed}\n{out}")),
+            Err(e) => {
+                // `stash push` with nothing to save makes no stash, and
+                // stash@{0} is then someone else's.
+                if self.stash_tip() != before
+                    && let Err(pop) = self.stash_apply(0, true)
+                {
+                    tracing::warn!("restoring the stash after a failed checkout failed: {pop}");
+                }
+                Err(e)
+            }
+        }
+    }
+
+    /// What `refs/stash` points at, if there is a stash.
+    fn stash_tip(&self) -> Option<String> {
+        let out = self.git().run(&["rev-parse", "-q", "--verify", "refs/stash"]).ok()?;
+        Some(out.into_stdout_string())
     }
 
     /// Creates `name` at `start` (a commit or ref) and switches to it.

@@ -52,7 +52,7 @@ pub enum BranchState {
     Untracked { remotes: Vec<String>, same_commit: bool },
 }
 
-/// What checking out an entry does.
+/// What checking out an entry (or a commit) does.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CheckoutPlan {
     /// `git switch <name>`
@@ -60,6 +60,8 @@ pub enum CheckoutPlan {
     /// `git switch -c <name> --track <remote_ref>`; `remote_ref` is the short
     /// name like `origin/feature`.
     Track { name: String, remote_ref: String },
+    /// `git switch --detach <oid>`
+    Detach(String),
 }
 
 impl BranchEntry {

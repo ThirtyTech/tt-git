@@ -8,7 +8,7 @@ use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tt_git_core::branches::matches_filter;
 use tt_git_core::time::SharedClock;
-use tt_git_core::{CommitFile, Head, LogFilter, Repo, Stash, StatusEntry};
+use tt_git_core::{CheckoutPlan, CommitFile, Head, LogFilter, Repo, Stash, StatusEntry};
 
 use crate::action::{Action, RefsSnapshot};
 use crate::component::{Component, EventState};
@@ -661,6 +661,7 @@ impl App {
             Action::BranchFocused(focus) => self.focus_branch(focus),
             Action::OpenModal(modal) => self.modal = Some(modal),
             Action::Run(op) => self.run_op(op),
+            Action::Checkout(plan) => self.checkout(plan),
             Action::OpDone { op, result, head } => self.op_done(op, result, head),
             Action::StatusLoaded(Ok(status)) => {
                 self.status.set_status(status);
@@ -916,6 +917,32 @@ impl App {
         self.ctx.spawn(move || loaders::run_op(repo, op));
     }
 
+    /// Checks out `plan`, or with uncommitted changes asks to stash them first.
+    fn checkout(&mut self, plan: CheckoutPlan) {
+        let changed = self.status.entries().len();
+        if changed == 0 {
+            self.run_op(GitOp::Checkout { plan, stash: false });
+            return;
+        }
+        let target = match &plan {
+            CheckoutPlan::Local(name) | CheckoutPlan::Track { name, .. } => name.clone(),
+            CheckoutPlan::Detach(oid) => format!("{} (detached HEAD)", &oid[..oid.len().min(7)]),
+        };
+        let files = if changed == 1 {
+            "1 file has".to_string()
+        } else {
+            format!("{changed} files have")
+        };
+        self.modal = Some(Modal::confirm(
+            "Uncommitted changes",
+            format!(
+                "{files} uncommitted changes.\nStash them and check out {target}?\n\n\
+                 They stay on the branches pane's Stash tab to pop back later."
+            ),
+            GitOp::Checkout { plan, stash: true },
+        ));
+    }
+
     fn op_done(&mut self, op: GitOp, result: Result<String, String>, head: Option<String>) {
         let label = op.label();
         if let Some(pos) = self.busy.iter().position(|b| *b == label) {
@@ -925,7 +952,7 @@ impl App {
             && matches!(
                 op,
                 GitOp::Commit { .. }
-                    | GitOp::Checkout(_)
+                    | GitOp::Checkout { .. }
                     | GitOp::CreateBranch { worktree: false, .. }
                     | GitOp::Pull
                     | GitOp::Merge { .. }

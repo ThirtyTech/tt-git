@@ -270,14 +270,26 @@ impl App {
     /// Emits the plugin event for a finished write operation.
     pub(super) fn op_event(&mut self, op: &GitOp, head: Option<&str>) {
         let branch = self.head.as_ref().and_then(|h| h.branch()).map(str::to_string);
+        if let GitOp::Checkout { stash: true, .. } = op {
+            self.emit_event("stash.created", json!({ "message": null }));
+        }
         let (event, data) = match op {
-            GitOp::Checkout(CheckoutPlan::Local(name)) => {
-                ("branch.checked_out", json!({ "branch": name, "created": false }))
-            }
-            GitOp::Checkout(CheckoutPlan::Track { name, remote_ref }) => (
+            GitOp::Checkout {
+                plan: CheckoutPlan::Local(name),
+                ..
+            } => ("branch.checked_out", json!({ "branch": name, "created": false })),
+            GitOp::Checkout {
+                plan: CheckoutPlan::Track { name, remote_ref },
+                ..
+            } => (
                 "branch.checked_out",
                 json!({ "branch": name, "created": true, "tracking": remote_ref }),
             ),
+            // No branch to report; `head.changed` covers it.
+            GitOp::Checkout {
+                plan: CheckoutPlan::Detach(_),
+                ..
+            } => return,
             GitOp::CreateBranch { name, start, worktree } => {
                 let path = worktree.then(|| self.repo.worktree_path(name));
                 (

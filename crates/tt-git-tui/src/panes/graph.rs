@@ -8,7 +8,7 @@ use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use tt_git_core::time::{SharedClock, clock_time, relative};
-use tt_git_core::{BranchHistory, Commit, GitRef, Head, LogFilter, Oid, RefKind};
+use tt_git_core::{BranchHistory, CheckoutPlan, Commit, GitRef, Head, LogFilter, Oid, RefKind};
 use tt_git_graph::{GraphBuilder, NodeId, RowRef, Rows};
 use unicode_width::UnicodeWidthStr;
 
@@ -459,6 +459,25 @@ impl GraphPane {
         Some(branch.unwrap_or_else(|| c.oid.to_string()))
     }
 
+    /// Checks out the selected commit: the local branch pointing at it if
+    /// there is one, else the commit itself with HEAD detached.
+    fn checkout(&self, ctx: &Ctx) {
+        let Some(c) = self.selected() else {
+            return;
+        };
+        let labels = self.labels.get(c.oid.hex().as_str()).map_or(&[][..], Vec::as_slice);
+        let of_kind = |kind| labels.iter().find(|l| l.kind == kind);
+        if let Some(head) = of_kind(LabelKind::Head) {
+            ctx.emit(Action::Notify(format!("already on {}", head.name)));
+        } else if let Some(local) = of_kind(LabelKind::Local) {
+            ctx.emit(Action::Checkout(CheckoutPlan::Local(local.name.clone())));
+        } else if of_kind(LabelKind::DetachedHead).is_some() {
+            ctx.emit(Action::Notify(format!("HEAD is already at {}", c.short_oid())));
+        } else {
+            ctx.emit(Action::Checkout(CheckoutPlan::Detach(c.oid.to_string())));
+        }
+    }
+
     fn announce(&mut self, ctx: &Ctx) {
         let current = self.selected().map(|c| c.oid);
         if current != self.announced {
@@ -683,6 +702,10 @@ impl Component for GraphPane {
                 self.dates = self.dates.toggled();
                 EventState::Consumed
             }
+            Command::Checkout => {
+                self.checkout(ctx);
+                EventState::Consumed
+            }
             Command::Merge | Command::Rebase => {
                 if let Some(target) = self.selected_ref() {
                     let short = if target.len() == 40 {
@@ -755,6 +778,7 @@ impl Component for GraphPane {
             Command::ToggleDetails,
             Command::ToggleScope,
             Command::ToggleDates,
+            Command::Checkout,
             Command::NewBranch,
             Command::Merge,
             Command::Rebase,

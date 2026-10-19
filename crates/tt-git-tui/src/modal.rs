@@ -16,7 +16,12 @@ use crate::theme::Theme;
 /// A git write operation, run as a background job.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GitOp {
-    Checkout(CheckoutPlan),
+    /// With `stash`, every change is stashed first (and popped back if the
+    /// checkout fails).
+    Checkout {
+        plan: CheckoutPlan,
+        stash: bool,
+    },
     /// With `worktree`, the branch is checked out in a new worktree under
     /// `.worktrees/` instead of switching to it here.
     CreateBranch {
@@ -101,9 +106,17 @@ impl GitOp {
     /// Progress text shown while running.
     pub fn label(&self) -> String {
         match self {
-            GitOp::Checkout(CheckoutPlan::Local(name)) => format!("checkout {name}"),
-            GitOp::Checkout(CheckoutPlan::Track { name, remote_ref }) => {
-                format!("checkout {name} (tracking {remote_ref})")
+            GitOp::Checkout { plan, stash } => {
+                let target = match plan {
+                    CheckoutPlan::Local(name) => name.clone(),
+                    CheckoutPlan::Track { name, remote_ref } => format!("{name} (tracking {remote_ref})"),
+                    CheckoutPlan::Detach(oid) => format!("{} (detached)", &oid[..oid.len().min(7)]),
+                };
+                if *stash {
+                    format!("stash and checkout {target}")
+                } else {
+                    format!("checkout {target}")
+                }
             }
             GitOp::CreateBranch {
                 name, worktree: false, ..
