@@ -1,0 +1,66 @@
+name: Docs
+
+# Builds docs-site/ and publishes it to GitHub Pages at
+# https://thirtytech.github.io/tt-git/. The screenshots are committed, so
+# this needs only Node; regenerate them locally (see docs-site/README.md).
+#
+# One-time setup: Settings → Pages → Source → GitHub Actions.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - docs-site/**
+      - .github/workflows/docs.yml
+  pull_request:
+    paths:
+      - docs-site/**
+      - .github/workflows/docs.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One deploy at a time; a newer push replaces a queued one, but a deploy
+# already running finishes.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: docs-site
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: docs-site/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - uses: actions/upload-pages-artifact@v3
+        if: github.event_name != 'pull_request'
+        with:
+          path: docs-site/dist
+
+  # Pull requests only check that the site builds.
+  deploy:
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

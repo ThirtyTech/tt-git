@@ -2,8 +2,46 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
+// Published on GitHub Pages as a project site, under /tt-git/.
+const SITE = 'https://thirtytech.github.io';
+const BASE = '/tt-git';
+
+// Astro's `base` doesn't rewrite absolute links written in the pages, so
+// `[Graph](/panes/graph/)` and `<LinkCard href="/panes/graph/" />` would
+// point outside the site. Prefix them with BASE.
+function rehypePrefixBase() {
+	const rewrite = (value) =>
+		typeof value === 'string' &&
+		value.startsWith('/') &&
+		!value.startsWith('//') &&
+		value !== BASE &&
+		!value.startsWith(`${BASE}/`)
+			? `${BASE}${value}`
+			: value;
+
+	const visit = (node) => {
+		if (node.type === 'element' && node.properties) {
+			for (const attr of ['href', 'src']) node.properties[attr] = rewrite(node.properties[attr]);
+		}
+		// Components in MDX, like <LinkCard href="…" />.
+		if ((node.type === 'mdxJsxFlowElement' || node.type === 'mdxJsxTextElement') && node.attributes) {
+			for (const attr of node.attributes) {
+				if (attr.type === 'mdxJsxAttribute' && attr.name === 'href') attr.value = rewrite(attr.value);
+			}
+		}
+		node.children?.forEach(visit);
+	};
+
+	return (tree) => visit(tree);
+}
+
 // https://astro.build/config
 export default defineConfig({
+	site: SITE,
+	base: BASE,
+	markdown: {
+		rehypePlugins: [rehypePrefixBase],
+	},
 	integrations: [
 		starlight({
 			title: 'tt-git',

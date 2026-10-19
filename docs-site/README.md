@@ -10,10 +10,26 @@ From this directory:
 
 ```sh
 pnpm install
-pnpm dev        # http://localhost:4321, reloads as you edit
+pnpm dev        # http://localhost:4321/tt-git/, reloads as you edit
 pnpm build      # static site in dist/
 pnpm preview    # serve dist/ with search (Pagefind) working
 ```
+
+The site lives under `/tt-git/` (see Publishing), locally too.
+
+## Publishing
+
+`.github/workflows/docs.yml` builds the site on every push to `main` that
+touches `docs-site/` and publishes it with GitHub Pages at
+<https://thirtytech.github.io/tt-git/>. Pull requests only build it. The
+repository's Settings → Pages → Source must be set to **GitHub Actions**.
+
+Because it's a project site, everything is served under `/tt-git/`
+(`site` and `base` in `astro.config.mjs`). Write links between pages as
+absolute paths without the base, like `[Graph](/panes/graph/)` or
+`<LinkCard href="/panes/graph/" />`; a small rehype plugin in
+`astro.config.mjs` adds `/tt-git` to them. Links in frontmatter (the landing
+page's hero buttons) don't go through it, so they're relative.
 
 ## Layout
 
