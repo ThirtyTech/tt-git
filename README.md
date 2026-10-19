@@ -52,7 +52,26 @@ The layout is configurable; see [docs/configuration.md](docs/configuration.md#la
 
 ## Install
 
-You need git 2.31 or newer on `PATH`. To build from source:
+You need git 2.31 or newer on `PATH`.
+
+Linux (x64, arm64) and macOS (Apple Silicon):
+
+```sh
+curl -fsSL https://github.com/ThirtyTech/tt-git/releases/latest/download/install.sh | sh
+```
+
+Windows (x64, arm64):
+
+```powershell
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/ThirtyTech/tt-git/releases/latest/download/install.ps1 | iex"
+```
+
+Both install the latest release; set `TTGIT_VERSION` (such as `v0.2.0`) for
+a specific one, or `TTGIT_INSTALL_DIR` to change where it goes. You can also
+download an archive from
+[Releases](https://github.com/ThirtyTech/tt-git/releases).
+
+To build from source:
 
 ```sh
 cargo install --path crates/tt-git
