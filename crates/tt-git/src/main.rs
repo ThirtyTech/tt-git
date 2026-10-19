@@ -51,6 +51,7 @@ fn main() -> Result<()> {
         }
         Err(e) => return Err(e).wrap_err("opening repository"),
     };
+    let title = format!("{} - tt-git", repo.name());
     let (mut app, mut rx) = App::new(config, repo, tt_git_core::time::system_clock())?;
     if !args.no_plugins {
         app.enable_plugins(PluginOptions {
@@ -72,6 +73,9 @@ fn main() -> Result<()> {
     // Installed after color-eyre so ratatui's panic hook restores the
     // terminal before the report is printed.
     let mut terminal = ratatui::init();
+    // Like lazygit's "<repo> - Lazygit": lets terminal multiplexers and their
+    // plugins tell tt-git is running when the OS only reports the shell.
+    let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::SetTitle(&title));
     let mouse = app.wants_mouse();
     if mouse {
         let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture);

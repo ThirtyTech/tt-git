@@ -28,6 +28,10 @@ Opens the UI on a repository.
 
 If `PATH` isn't in a git repository, tt-git says so and exits with status 1.
 
+While it runs, tt-git sets the terminal title to `<repo> - tt-git`, where
+`<repo>` is the working tree's folder name. Terminal multiplexers and their
+plugins can use it to tell tt-git is open in a pane.
+
 ```sh
 tt-git                       # the repository you're in
 tt-git ~/src/website         # another one
