@@ -85,7 +85,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.name }}
-          path: tt-git-*.*
+          # Not tt-git-*.*: the dots in the version would match the staging
+          # directory too.
+          path: |
+            tt-git-*.tar.gz
+            tt-git-*.zip
           if-no-files-found: error
 
   release:
