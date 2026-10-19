@@ -155,6 +155,12 @@ A local branch runs `git switch <name>`. A remote-only branch runs
 `git switch -c <name> --track <remote>/<name>`, preferring `origin` when
 several remotes have it.
 
+From the graph, a commit with a local branch on it runs `git switch <name>`;
+any other commit runs `git switch --detach <commit>`. When you agree to stash
+your changes first, tt-git runs `git stash push --include-untracked`, then the
+switch. If the switch fails, it runs `git stash pop` to put the changes back
+(only if the push made a stash, so an older one is never popped by mistake).
+
 ### Other branch commands
 
 | Action | Runs |

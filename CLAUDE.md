@@ -4,6 +4,11 @@ A Rust/ratatui git TUI. Cargo workspace under `crates/`. Developer docs:
 README "Development", [docs/configuration.md](docs/configuration.md),
 [docs/plugins.md](docs/plugins.md), [docs/worktrees.md](docs/worktrees.md).
 
+Every user-visible change also updates the doc site in `docs-site/`; see
+[AGENTS.md](AGENTS.md) for where each kind of change is documented.
+
+@AGENTS.md
+
 ## Build and test without touching the user's running tt-git
 
 The user often has `cargo run -p tt-git` open in this checkout for their own

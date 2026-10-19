@@ -145,6 +145,7 @@ These keys act on the selected commit:
 |---|---|
 | <kbd>enter</kbd> | Opens the commit fullscreen: its changed files on the left, the selected file's diff on the right. See [Details](/panes/details/#fullscreen-files-and-diff). |
 | <kbd>space</kbd> | Shows or hides the commit's [details](/panes/details/). |
+| <kbd>o</kbd> | Checks out the commit. See [Checking out a commit](#checking-out-a-commit). |
 | <kbd>n</kbd> | Makes a new branch at the commit and switches to it. <kbd>tab</kbd> in the dialog makes it in a new [worktree](/git/worktrees/) under `.worktrees/` instead. |
 | <kbd>M</kbd> | Merges the commit into the current branch, after asking. |
 | <kbd>r</kbd> | Rebases the current branch onto the commit, after asking. |
@@ -156,6 +157,27 @@ For <kbd>M</kbd> and <kbd>r</kbd>, if a branch points at the commit, tt-git uses
 cherry-pick stops on a conflict, see [Merge, rebase and cherry-pick](/git/merge-rebase/).
 
 Copying uses your terminal's clipboard support (OSC 52), so it also works over SSH.
+
+### Checking out a commit
+
+<kbd>o</kbd> checks out the selected commit:
+
+- If a local branch points at it, tt-git switches to that branch
+  (`git switch <name>`), so you don't end up on a detached HEAD where `main`
+  already is. With several, the first alphabetically wins.
+- Otherwise it checks out the commit itself with HEAD detached
+  (`git switch --detach <commit>`). The graph shows ` HEAD ` on it.
+- If HEAD is already there, tt-git says so and does nothing.
+
+With uncommitted changes, tt-git asks first: **Uncommitted changes** says how
+many files have changes and offers to stash them. <kbd>y</kbd> stashes
+everything, untracked files included, then checks out; the changes wait on
+the [Stash tab](/panes/stash/) to pop back later. <kbd>n</kbd> or
+<kbd>esc</kbd> leaves everything as it was. If the checkout still fails after
+stashing, tt-git pops the stash straight back so your changes aren't left
+behind.
+
+To check out a branch by name, use the [Branches](/panes/branches/#checking-out) pane.
 
 ## Zoom
 
@@ -186,6 +208,7 @@ See [How tt-git uses git](/reference/how-it-works/#graph) for the details, and
 | <kbd>esc</kbd> | Hide details; with details hidden, clear the filter |
 | <kbd>a</kbd> | All branches ↔ current branch |
 | <kbd>f</kbd> | Filter by author or file |
+| <kbd>o</kbd> | Check out the commit (its local branch if it has one) |
 | <kbd>n</kbd> | New branch at the commit (<kbd>tab</kbd> in the dialog: in a worktree) |
 | <kbd>M</kbd> | Merge into the current branch |
 | <kbd>r</kbd> | Rebase the current branch onto it |
