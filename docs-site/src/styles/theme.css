@@ -1,0 +1,86 @@
+/*
+ * tt-git theme, taken from the logo: ThirtyTech cyan (#4bc0eb → #006698),
+ * silver-grey (#929291) and the near-black tile (#11151c → #090b0e), with the
+ * merge node's green (#7bd938) as a second accent.
+ */
+
+/* Dark mode (the default, and what the logo is drawn for). */
+:root {
+	--sl-color-accent-low: #0b2e46;
+	--sl-color-accent: #1a8cc4;
+	--sl-color-accent-high: #a9e3f8;
+
+	--sl-color-white: #ffffff;
+	--sl-color-gray-1: #e6e8ec;
+	--sl-color-gray-2: #c1c5cd;
+	--sl-color-gray-3: #929291;
+	--sl-color-gray-4: #5c6270;
+	--sl-color-gray-5: #2b313d;
+	--sl-color-gray-6: #161b24;
+	--sl-color-black: #0d1016;
+
+	--tt-cyan: #4bc0eb;
+	--tt-cyan-deep: #006698;
+	--tt-silver: #929291;
+	--tt-green: #7bd938;
+	--tt-tile: #11151c;
+
+	--sl-font-system-mono: 'Cascadia Mono', 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo,
+		Consolas, monospace;
+}
+
+:root[data-theme='light'] {
+	--sl-color-accent-low: #d3effb;
+	--sl-color-accent: #006698;
+	--sl-color-accent-high: #003a57;
+
+	--sl-color-white: #0d1016;
+	--sl-color-gray-1: #1a1f28;
+	--sl-color-gray-2: #2f3541;
+	--sl-color-gray-3: #555b66;
+	--sl-color-gray-4: #85898f;
+	--sl-color-gray-5: #c4c7cc;
+	--sl-color-gray-6: #eceef1;
+	--sl-color-gray-7: #f6f7f9;
+	--sl-color-black: #ffffff;
+
+	--tt-green: #3f8f12;
+}
+
+/* Header: a hairline of the logo's cyan under the bar. */
+header.header {
+	border-bottom: 1px solid color-mix(in srgb, var(--tt-cyan) 35%, transparent);
+}
+
+.site-title img {
+	border-radius: 22%;
+}
+
+/* Splash hero: a soft cyan glow behind the logo, like the merge node. */
+.hero > img,
+.hero > picture img {
+	filter: drop-shadow(0 0 3rem color-mix(in srgb, var(--tt-cyan) 35%, transparent));
+}
+
+:root:not([data-theme='light']) .hero h1 {
+	background: linear-gradient(135deg, #ffffff 30%, var(--tt-cyan) 100%);
+	-webkit-background-clip: text;
+	background-clip: text;
+	color: transparent;
+}
+
+/* Keyboard keys in prose: <kbd>j</kbd>. */
+.sl-markdown-content kbd {
+	display: inline-block;
+	min-width: 1.6em;
+	padding: 0.05em 0.4em;
+	border: 1px solid var(--sl-color-gray-4);
+	border-bottom-width: 2px;
+	border-radius: 0.3em;
+	background: var(--sl-color-gray-6);
+	color: var(--sl-color-white);
+	font-family: var(--__sl-font-mono);
+	font-size: 0.85em;
+	line-height: 1.4;
+	text-align: center;
+}
