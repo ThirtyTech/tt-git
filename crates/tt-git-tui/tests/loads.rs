@@ -299,15 +299,18 @@ fn a_refs_load_reads_each_thing_with_one_command() {
 #[test]
 fn a_build_in_an_ignored_dir_does_not_reload_the_status() {
     let sb = Sandbox::new();
-    sb.write(".gitignore", "target/\n");
+    sb.write(
+        ".gitignore",
+        "target/
+",
+    );
     sb.git(&["add", ".gitignore"]);
     sb.commit_staged("base");
     sb.write("target/debug/first", "1");
     let mut t = TestDriver::with_watcher(Config::default(), &sb);
     let runs = |t: &TestDriver, prefix: &str| commands(t).iter().filter(|c| c.args.starts_with(prefix)).count();
 
-    // The first change there reloads as always, and has the files that
-    // decide what's ignored listed, to check before dropping later ones.
+    // The first change there has the watcher load the ignore rules.
     sb.write("target/debug/one", "1");
     t.wait_until(Duration::from_secs(10), |app| {
         app.repo()
@@ -315,12 +318,13 @@ fn a_build_in_an_ignored_dir_does_not_reload_the_status() {
             .log()
             .entries()
             .iter()
-            .any(|c| c.args.starts_with("config --list --show-origin"))
+            .any(|c| c.args.starts_with("ls-files"))
     });
     std::thread::sleep(Duration::from_millis(800));
     t.wait_idle();
 
     let statuses = runs(&t, "status ");
+    let loads = runs(&t, "ls-files");
     for i in 0..5 {
         sb.write(&format!("target/debug/step{i}"), "x");
         sb.write(&format!("target/debug/deps/{i}.o"), "x");
@@ -330,27 +334,25 @@ fn a_build_in_an_ignored_dir_does_not_reload_the_status() {
     std::thread::sleep(Duration::from_millis(1500));
     t.wait_idle();
     assert_eq!(runs(&t, "status "), statuses, "{:#?}", commands(&t));
+    assert_eq!(runs(&t, "ls-files"), loads, "rules loaded once");
 
-    // Anything else still reloads.
+    // Anything else still reloads, with the status as plain as ever.
     sb.write("visible.txt", "x");
     t.wait_until(Duration::from_secs(10), |app| {
         app.status().entries().iter().any(|e| e.path == "visible.txt")
     });
     assert!(runs(&t, "status ") > statuses);
-}
-
-/// Statuses run with `--ignored`, and the `config --list` that comes first.
-fn ignored_dir_lookups(t: &TestDriver) -> Vec<LoggedCommand> {
-    commands(t)
-        .into_iter()
-        .filter(|c| c.args.contains("--ignored") || c.args.starts_with("config --list"))
-        .collect()
+    assert!(commands(&t).iter().all(|c| !c.args.contains("--ignored")));
 }
 
 #[test]
-fn without_a_watcher_the_status_is_plain() {
+fn without_a_watcher_no_rules_are_loaded() {
     let sb = Sandbox::new();
-    sb.write(".gitignore", "target/\n");
+    sb.write(
+        ".gitignore",
+        "target/
+",
+    );
     sb.git(&["add", ".gitignore"]);
     sb.commit_staged("base");
     sb.write("target/debug/first", "1");
@@ -362,36 +364,11 @@ fn without_a_watcher_the_status_is_plain() {
     sb.write("src.txt", "x");
     t.send(Action::Refresh);
     assert!(t.app().status().entries().iter().any(|e| e.path == "src.txt"));
-    assert!(ignored_dir_lookups(&t).is_empty(), "{:#?}", commands(&t));
-}
-
-#[test]
-fn the_untracked_cache_keeps_every_status_plain() {
-    let sb = Sandbox::new();
-    sb.write(".gitignore", "target/\n");
-    sb.git(&["add", ".gitignore"]);
-    sb.commit_staged("base");
-    sb.git(&["config", "core.untrackedCache", "true"]);
-    sb.git(&["config", "status.showUntrackedFiles", "all"]);
-    sb.write("target/debug/first", "1");
-    let mut t = TestDriver::with_watcher(Config::default(), &sb);
-    let statuses = |app: &tt_git_tui::App| {
-        let log = app.repo().git().log().entries();
-        log.iter().filter(|c| c.args.starts_with("status ")).count()
-    };
-
-    // Changes there reload the status, with no --ignored to cost git the
-    // cache.
-    for i in 0..3 {
-        let before = statuses(t.app());
-        sb.write(&format!("target/debug/step{i}"), "x");
-        t.wait_until(Duration::from_secs(10), |app| statuses(app) > before);
-        std::thread::sleep(Duration::from_millis(500));
-        t.wait_idle();
-    }
-    let lookups = ignored_dir_lookups(&t);
-    assert!(lookups.iter().all(|c| !c.args.contains("--ignored")), "{lookups:#?}");
-    assert!(!lookups.is_empty(), "the config was read to know");
+    assert!(
+        commands(&t).iter().all(|c| !c.args.starts_with("ls-files")),
+        "{:#?}",
+        commands(&t)
+    );
 }
 
 /// About 30 commits on three long-lived branches merged back now and then,

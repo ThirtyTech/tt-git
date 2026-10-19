@@ -7,6 +7,7 @@
 
 pub mod branches;
 pub mod git;
+pub mod ignored;
 pub mod model;
 mod oid;
 pub mod ops;
@@ -17,6 +18,7 @@ pub mod time;
 
 pub use branches::{AheadBehind, BaseBranches, BranchEntry, BranchState, CheckoutPlan};
 pub use git::{GitCli, GitError};
+pub use ignored::IgnoreRules;
 pub use model::*;
 pub use ops::DiscardKind;
-pub use repo::{IgnoreRules, LogFilter, LogScope, RemoteConfig, Repo};
+pub use repo::{LogFilter, LogScope, RemoteConfig, Repo};

@@ -8,7 +8,6 @@ use crate::filter::{FilterTab, author_choices, file_choices};
 use crate::jobs::Ctx;
 use crate::modal::GitOp;
 use crate::panes::{BranchFocus, DetailsSubject, GraphScope, LoadToken};
-use crate::watcher::IgnoredDirs;
 
 /// Commits per `GraphBatch`, so the first screenful appears quickly.
 const GRAPH_BATCH: usize = 1000;
@@ -120,19 +119,8 @@ pub fn load_filter_files(repo: Repo) -> Action {
     }
 }
 
-/// Also tells `ignored` which directories git ignores as a whole, when it
-/// wants them.
-pub fn load_status(repo: Repo, ignored: &IgnoredDirs) -> Action {
-    let token = ignored.begin(|| repo.ignore_rules().ok().flatten());
-    let result = if token.wants_dirs() {
-        repo.status_and_ignored_dirs().map(|(status, dirs)| {
-            ignored.finish(token, dirs);
-            status
-        })
-    } else {
-        repo.status()
-    };
-    Action::StatusLoaded(result.map_err(message))
+pub fn load_status(repo: Repo) -> Action {
+    Action::StatusLoaded(repo.status().map_err(message))
 }
 
 /// Where a "load more" picks up: past the `skip` commits shown, which a

@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::branches::AheadBehind;
 use crate::git::{GitCli, GitError, Result};
-use crate::model::{BranchHistory, Checkout, Commit, CommitFile, FileState, GitRef, Head, Oid, Status};
+use crate::model::{BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, Oid, Status};
 use crate::parse;
 
 /// Repo-local git config key holding the picked base branch.
@@ -57,30 +57,6 @@ pub struct Repo {
 struct OldGit {
     /// `for-each-ref`'s `%(ahead-behind:…)` (git 2.41).
     ahead_behind: AtomicBool,
-    /// `git status --ignored=matching` (git 2.16).
-    ignored_matching: AtomicBool,
-}
-
-/// The arguments [`Repo::status`] runs git with.
-const STATUS_ARGS: [&str; 5] = ["status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all"];
-
-/// See [`Repo::ignore_rules`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct IgnoreRules {
-    /// Outside the working tree, sorted.
-    pub files: Vec<PathBuf>,
-    /// [`Repo::status`] may use git's untracked cache, which
-    /// [`Repo::status_and_ignored_dirs`] can't (`--ignored` turns it off).
-    pub untracked_cache: bool,
-}
-
-/// Whether a config value reads as false as a bool (`None` is a key with
-/// no value, which is true).
-fn config_false(value: Option<&str>) -> bool {
-    value.is_some_and(|v| {
-        let v = v.trim();
-        v.is_empty() || ["false", "no", "off"].iter().any(|f| v.eq_ignore_ascii_case(f)) || v.parse::<i64>() == Ok(0)
-    })
 }
 
 impl Repo {
@@ -392,167 +368,12 @@ impl Repo {
     }
 
     pub fn status(&self) -> Result<Status> {
-        let out = self.git.run(&STATUS_ARGS)?;
+        let out = self
+            .git
+            .run(&["status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all"])?;
         let mut status = parse::parse_status(&out.stdout)?;
         status.in_progress = self.in_progress();
         Ok(status)
-    }
-
-    /// [`status`](Self::status), plus the untracked directories that match
-    /// an ignore pattern, relative to the root and without the trailing
-    /// slash (`target`). Git doesn't look inside those, so changes in them
-    /// can't change the status until the ignore rules or the index do.
-    /// No directories when git is too old to say.
-    pub fn status_and_ignored_dirs(&self) -> Result<(Status, Vec<String>)> {
-        if self.old_git.ignored_matching.load(Ordering::Relaxed) {
-            return Ok((self.status()?, Vec::new()));
-        }
-        let mut args = STATUS_ARGS.to_vec();
-        args.push("--ignored=matching");
-        let out = match self.git.run(&args) {
-            Ok(out) => out,
-            Err(GitError::Failed { .. }) => {
-                // Not a status failure if plain status works.
-                let status = self.status()?;
-                self.old_git.ignored_matching.store(true, Ordering::Relaxed);
-                return Ok((status, Vec::new()));
-            }
-            Err(e) => return Err(e),
-        };
-        let mut status = parse::parse_status(&out.stdout)?;
-        // Without --ignored there are no ignored entries.
-        let mut dirs = Vec::new();
-        status.entries.retain(|e| {
-            if e.index != FileState::Ignored {
-                return true;
-            }
-            if let Some(dir) = e.path.strip_suffix('/') {
-                dirs.push(dir.to_string());
-            }
-            false
-        });
-        status.in_progress = self.in_progress();
-        Ok((status, dirs))
-    }
-
-    /// The files outside the working tree whose contents decide what git
-    /// ignores (or could, after an edit): every config file it reads or
-    /// would read (any can set `core.excludesFile` or include another),
-    /// the exclude files, and HEAD (an include can depend on the branch).
-    /// Also whether [`status`](Self::status) may use the untracked cache.
-    /// `None` when a file can't be located, such as an excludes file under
-    /// `%(prefix)`, or the system config with a git older than 2.42.
-    pub fn ignore_rules(&self) -> Result<Option<IgnoreRules>> {
-        let out = self.git.run(&["config", "--list", "--show-origin", "-z"])?;
-        let env = |name: &str| self.git.env_var(name).filter(|v| !v.is_empty());
-        // Where git looks for the system config (whether it's there or not).
-        let system = match self.git.run(&["var", "GIT_CONFIG_SYSTEM"]) {
-            Ok(out) => Some(out.stdout_str().trim_end_matches(['\n', '\r']).to_string()),
-            // Empty and failing with no system config read; or too old to say.
-            Err(GitError::Failed { .. }) => None,
-            Err(e) => return Err(e),
-        };
-        let no_system = env("GIT_CONFIG_NOSYSTEM").is_some_and(|v| !config_false(Some(&v.to_string_lossy())));
-        let system = match system {
-            Some(path) if !path.is_empty() => Some(PathBuf::from(path)),
-            _ if no_system => None,
-            _ => return Ok(None),
-        };
-        let mut homes: Vec<PathBuf> = ["HOME", "USERPROFILE"]
-            .iter()
-            .filter_map(|n| env(n))
-            .map(PathBuf::from)
-            .collect();
-        if let (Some(drive), Some(path)) = (env("HOMEDRIVE"), env("HOMEPATH")) {
-            let mut home = drive;
-            home.push(path);
-            homes.push(home.into());
-        }
-        let mut files: Vec<PathBuf> = Vec::new();
-        for home in &homes {
-            files.push(home.join(".gitconfig"));
-            files.push(home.join(".config/git/config"));
-            files.push(home.join(".config/git/ignore"));
-        }
-        if let Some(xdg) = env("XDG_CONFIG_HOME").map(PathBuf::from) {
-            files.push(xdg.join("git/config"));
-            files.push(xdg.join("git/ignore"));
-        }
-        files.extend(
-            ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"]
-                .iter()
-                .filter_map(|n| env(n))
-                .map(PathBuf::from),
-        );
-        if let Some(data) = env("PROGRAMDATA") {
-            files.push(PathBuf::from(data).join("Git/config"));
-        }
-        files.push("/etc/gitconfig".into());
-        files.extend(system);
-        for (dir, name) in [
-            (&self.common_dir, "config"),
-            (&self.common_dir, "config.worktree"),
-            (&self.common_dir, "info/exclude"),
-            (&self.git_dir, "config.worktree"),
-            (&self.git_dir, "info/exclude"),
-            (&self.git_dir, "HEAD"),
-        ] {
-            files.push(dir.join(name));
-        }
-        // Paths in values: `~/` is a home, a relative excludes file is
-        // relative to the root (where git runs), a relative include to the
-        // file it's in.
-        let expand = |value: &str, relative_to: &Path| -> Option<Vec<PathBuf>> {
-            if let Some(rest) = value.strip_prefix("~/").or_else(|| value.strip_prefix("~\\")) {
-                return Some(homes.iter().map(|h| h.join(rest)).collect());
-            }
-            if value.starts_with('~') || value.starts_with("%(") {
-                return None;
-            }
-            Some(vec![relative_to.join(value)])
-        };
-        // The last value of each wins.
-        let (mut show_all, mut cache_off) = (false, false);
-        let records: Vec<&[u8]> = out.stdout.split(|b| *b == 0).collect();
-        for pair in records.chunks(2) {
-            let [origin, entry] = pair else { continue };
-            let origin = String::from_utf8_lossy(origin);
-            let file = origin.strip_prefix("file:").map(|f| self.root.join(f));
-            let entry = String::from_utf8_lossy(entry);
-            // No newline: a key with no value, which is true as a bool.
-            let (key, value) = match entry.split_once('\n') {
-                Some((key, value)) => (key, Some(value)),
-                None => (&*entry, None),
-            };
-            match key {
-                "status.showuntrackedfiles" => show_all = value == Some("all"),
-                "core.untrackedcache" => cache_off = config_false(value),
-                _ => {}
-            }
-            let value = value.unwrap_or("");
-            let paths = if key == "core.excludesfile" {
-                expand(value, &self.root)
-            } else if key == "include.path" || (key.starts_with("includeif.") && key.ends_with(".path")) {
-                let dir = file.as_deref().and_then(Path::parent).unwrap_or(&self.root);
-                expand(value, dir)
-            } else {
-                Some(Vec::new())
-            };
-            let Some(paths) = paths else {
-                return Ok(None);
-            };
-            files.extend(paths);
-            files.extend(file);
-        }
-        files.sort();
-        files.dedup();
-        Ok(Some(IgnoreRules {
-            files,
-            // git uses the cache with `--untracked-files=all` only when that's
-            // also the configured mode, and with it unset (or `keep`) if the
-            // index has one; never with `--ignored`.
-            untracked_cache: show_all && !cache_off,
-        }))
     }
 
     /// Which multi-step operation, if any, is waiting to be continued.

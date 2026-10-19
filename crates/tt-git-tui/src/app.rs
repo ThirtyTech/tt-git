@@ -1,7 +1,5 @@
 //! Top-level application state, update and draw.
 
-use std::sync::Arc;
-
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -23,7 +21,7 @@ use crate::loaders;
 use crate::modal::{GitOp, Modal, ModalOutcome};
 use crate::panes::{BranchFocus, BranchesPane, DetailsPane, DetailsSubject, GraphPane, LoadToken, PaneId, StatusPane};
 use crate::theme::Theme;
-use crate::watcher::{IgnoredDirs, RepoWatcher};
+use crate::watcher::RepoWatcher;
 
 mod panes;
 mod plugins;
@@ -167,8 +165,6 @@ pub struct App {
     history_job: LatestJob<HistoryLoad>,
     refs_reload: Reload,
     status_reload: Reload,
-    /// What status loads found ignored, for the watcher.
-    ignored: Arc<IgnoredDirs>,
 }
 
 impl App {
@@ -229,7 +225,6 @@ impl App {
             history_job: LatestJob::default(),
             refs_reload: Reload::default(),
             status_reload: Reload::default(),
-            ignored: Arc::default(),
         };
         Ok((app, rx))
     }
@@ -238,12 +233,7 @@ impl App {
     pub fn start(&mut self) {
         self.update(Action::Refresh);
         if self.config.watch && self.watcher.is_none() {
-            match crate::watcher::watch(
-                self.repo.root(),
-                self.repo.git_dir(),
-                self.ignored.clone(),
-                self.ctx.clone(),
-            ) {
+            match crate::watcher::watch(self.repo.clone(), self.ctx.clone()) {
                 Ok(w) => self.watcher = Some(w),
                 Err(e) => tracing::warn!("file watching disabled: {e}"),
             }
@@ -755,10 +745,9 @@ impl App {
 
     fn spawn_status(&mut self, generation: u64) {
         let repo = self.repo.clone();
-        let ignored = self.ignored.clone();
         let done = self.ctx.spawn_watched(move || Action::Reloaded {
             generation,
-            result: Box::new(loaders::load_status(repo, &ignored)),
+            result: Box::new(loaders::load_status(repo)),
         });
         self.status_reload.started(generation, done);
     }

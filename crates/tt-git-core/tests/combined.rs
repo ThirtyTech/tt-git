@@ -1,9 +1,7 @@
 //! Reads done in one git command that used to take several must give what
 //! the separate commands give.
 
-use std::path::PathBuf;
-
-use tt_git_core::{FileState, GitCli, RefKind, Repo};
+use tt_git_core::{GitCli, RefKind, Repo};
 use tt_git_testkit::Sandbox;
 
 fn open(sb: &Sandbox) -> Repo {
@@ -204,102 +202,5 @@ fn ahead_behind_many_matches_one_at_a_time() {
     assert!(!mixed.contains_key("refs/tags/tree-tag"));
     if let Some(d) = mixed.get(&v0.full_name) {
         assert_eq!(*d, repo.ahead_behind("refs/heads/main", v0_target).unwrap());
-    }
-}
-
-#[test]
-fn status_and_ignored_dirs_has_the_plain_status() {
-    let sb = Sandbox::new();
-    sb.write(".gitignore", "target/\n*.o\nbuild/\n/logs\n");
-    sb.write("tracked-build/keep.txt", "x");
-    sb.write("tracked-build/.gitignore", "*\n");
-    sb.git(&["add", "-f", ".gitignore", "tracked-build/keep.txt"]);
-    sb.commit_staged("base");
-    sb.write("target/debug/a.o", "o");
-    sb.write("target/debug/deep/b", "b");
-    sb.write("src/x.o", "o");
-    sb.write("src/new.rs", "new");
-    sb.write("objs/only.o", "o");
-    sb.write("nested/build/out", "out");
-    sb.write("logs/today", "log");
-    sb.write("tracked-build/keep.txt", "changed");
-    sb.write("tracked-build/scratch", "ignored file in a dir with tracked files");
-
-    let repo = open(&sb);
-    let (status, mut dirs) = repo.status_and_ignored_dirs().unwrap();
-    assert_eq!(status, repo.status().unwrap());
-    assert!(status.entries.iter().all(|e| e.index != FileState::Ignored));
-    dirs.sort();
-    // Not objs/ (all of it ignored, but not itself) or tracked-build/
-    // (it has tracked files).
-    assert_eq!(dirs, ["logs", "nested/build", "target"]);
-}
-
-#[test]
-fn ignore_rule_files_cover_config_excludes_and_includes() {
-    let sb = Sandbox::new();
-    sb.commit("base");
-    let repo = open(&sb);
-    let files = repo.ignore_rules().unwrap().expect("all located").files;
-    let home = sb.home();
-    let has = |files: &[PathBuf], p: &PathBuf| files.iter().any(|f| f == p);
-    for p in [
-        home.join(".gitconfig"),
-        home.join(".config/git/ignore"),
-        repo.common_dir().join("config"),
-        repo.git_dir().join("info/exclude"),
-        repo.git_dir().join("HEAD"),
-    ] {
-        assert!(has(&files, &p), "{} not in {files:?}", p.display());
-    }
-
-    sb.git(&["config", "core.excludesFile", "~/my-ignores"]);
-    sb.git(&["config", "include.path", "extra.inc"]);
-    sb.git(&["config", "includeIf.onbranch:main.path", "~/branch.inc"]);
-    let files = repo.ignore_rules().unwrap().expect("all located").files;
-    assert!(has(&files, &home.join("my-ignores")), "{files:?}");
-    // Relative to the file the include is in.
-    assert!(has(&files, &repo.common_dir().join("extra.inc")), "{files:?}");
-    assert!(has(&files, &home.join("branch.inc")), "{files:?}");
-
-    sb.git(&["config", "core.excludesFile", "%(prefix)/etc/ignore"]);
-    assert_eq!(repo.ignore_rules().unwrap(), None);
-}
-
-#[test]
-fn ignore_rules_cover_the_system_config_where_git_looks_for_it() {
-    let sb = Sandbox::new();
-    sb.commit("base");
-    // Not there: creating it could still change what's ignored.
-    let system = sb.root().join("no-such-dir").join("gitconfig");
-    let git = GitCli::new(".").with_env(sb.env()).with_env([
-        ("GIT_CONFIG_NOSYSTEM", std::ffi::OsString::from("0")),
-        ("GIT_CONFIG_SYSTEM", system.clone().into_os_string()),
-    ]);
-    let repo = Repo::discover(sb.path(), &git).expect("discover");
-    let files = repo.ignore_rules().unwrap().expect("all located").files;
-    assert!(files.contains(&system), "{files:?}");
-}
-
-#[test]
-fn ignore_rules_say_when_status_may_use_the_untracked_cache() {
-    let sb = Sandbox::new();
-    sb.commit("base");
-    let repo = open(&sb);
-    let cache = || repo.ignore_rules().unwrap().expect("all located").untracked_cache;
-    assert!(!cache());
-    // Not with -uall unless that's the configured mode too.
-    sb.git(&["config", "core.untrackedCache", "true"]);
-    assert!(!cache());
-    sb.git(&["config", "status.showUntrackedFiles", "all"]);
-    assert!(cache());
-    // Unset or `keep`, it's used if the index has one.
-    sb.git(&["config", "core.untrackedCache", "keep"]);
-    assert!(cache());
-    sb.git(&["config", "--unset", "core.untrackedCache"]);
-    assert!(cache());
-    for off in ["false", "off", "0"] {
-        sb.git(&["config", "core.untrackedCache", off]);
-        assert!(!cache(), "{off}");
     }
 }

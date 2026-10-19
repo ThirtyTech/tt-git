@@ -8,6 +8,7 @@ rust-version.workspace = true
 
 [dependencies]
 etcetera.workspace = true
+ignore.workspace = true
 serde = { workspace = true, features = ["rc"] }
 smallvec = { workspace = true, features = ["serde"] }
 thiserror.workspace = true
