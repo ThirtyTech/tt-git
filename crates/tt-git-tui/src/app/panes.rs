@@ -79,6 +79,8 @@ impl App {
     pub fn close_pane(&mut self, id: pty_pane::PaneId) -> bool {
         let before = self.panes.len();
         self.panes.retain(|p| p.id != id);
+        // A split pane may have been covering details.
+        self.flush_details();
         before != self.panes.len()
     }
 
@@ -140,6 +142,13 @@ impl App {
         false
     }
 
+    /// A pane produced output; the next frame shows it.
+    pub(super) fn pane_output(&mut self, id: pty_pane::PaneId) {
+        if let Some(pane) = self.panes.iter().find(|p| p.id == id) {
+            pane.take_output();
+        }
+    }
+
     pub(super) fn pane_exited(&mut self, id: pty_pane::PaneId, status: String) {
         let Some(pane) = self.panes.iter_mut().find(|p| p.id == id) else {
             return;
@@ -158,23 +167,24 @@ impl App {
         let focused = self.focus == PaneId::Details;
         let hint = self.release_hint();
         let theme = self.theme.clone();
-        match self.split_pane() {
-            Some(pane) => {
-                pane.draw(frame, details, focused, &hint, &theme);
-                true
-            }
-            None => false,
-        }
+        let Some(pane) = self.split_pane() else {
+            return false;
+        };
+        let cursor = pane.draw(frame, details, focused, &hint, &theme);
+        self.cursor_shown |= cursor;
+        true
     }
 
     pub(super) fn draw_modal_panes(&mut self, frame: &mut Frame, main: Rect, details: Rect) {
         let hint = self.release_hint();
         let theme = self.theme.clone();
         let top = self.panes.iter().rposition(|p| p.is_modal());
+        let mut cursor = false;
         for (i, pane) in self.panes.iter_mut().enumerate().filter(|(_, p)| p.is_modal()) {
             let area = pane.area(main, details);
-            pane.draw(frame, area, Some(i) == top, &hint, &theme);
+            cursor |= pane.draw(frame, area, Some(i) == top, &hint, &theme);
         }
+        self.cursor_shown |= cursor;
     }
 
     fn release_hint(&self) -> String {

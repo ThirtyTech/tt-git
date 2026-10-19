@@ -215,7 +215,7 @@ fn selecting_a_branch_moves_the_graph() {
             t.press("j");
         }
     }
-    assert_eq!(t.app().graph().selected().unwrap().summary, "older tip");
+    assert_eq!(&*t.app().graph().selected().unwrap().summary, "older tip");
     t.press("1").press("space");
     t.assert_pane_contains(PaneId::Details, "older tip");
 }
@@ -293,7 +293,7 @@ fn tabs_list_branches_merged_and_unmerged_into_the_primary_branch() {
     // Selecting a row moves the graph to its tip, as in the full list.
     t.press("j");
     let tip = sb.rev_parse("origin/open");
-    assert_eq!(t.app().graph().selected().map(|c| c.oid.clone()), Some(tip));
+    assert_eq!(t.app().graph().selected().map(|c| c.oid.to_string()), Some(tip));
 }
 
 /// The first `n` words of a row.
@@ -340,7 +340,7 @@ fn tags_tab_lists_tags_newest_first() {
 
     // Selecting a tag moves the graph to its commit.
     t.press("j");
-    assert_eq!(t.app().graph().selected().unwrap().summary, "first");
+    assert_eq!(&*t.app().graph().selected().unwrap().summary, "first");
 
     t.press("/").type_text("2").press("enter");
     assert_eq!(tag_names(&t), vec!["v2.0"]);
@@ -473,7 +473,7 @@ fn merged_and_unmerged_tabs_show_one_branch_from_fork_to_merge() {
             .graph()
             .commits()
             .iter()
-            .map(|c| c.summary.clone())
+            .map(|c| c.summary.to_string())
             .collect::<Vec<_>>()
     };
     let all = summaries(&t).len();
@@ -484,7 +484,7 @@ fn merged_and_unmerged_tabs_show_one_branch_from_fork_to_merge() {
     // still main's tip.
     assert_eq!(summaries(&t), vec!["open work", "Merge branch 'done'"]);
     let tip = sb.rev_parse("origin/open");
-    assert_eq!(t.app().graph().selected().map(|c| c.oid.clone()), Some(tip));
+    assert_eq!(t.app().graph().selected().map(|c| c.oid.to_string()), Some(tip));
     t.assert_pane_contains(PaneId::Graph, "(branched off origin/main)");
 
     t.press("]");

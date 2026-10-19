@@ -285,3 +285,77 @@ fn glyph_table_covers_all_bit_patterns() {
         '◉'
     );
 }
+
+#[test]
+fn packed_rows_keep_every_row_as_laid_out() {
+    for seed in 0..100 {
+        let mut rng = Lcg(seed);
+        let n = 20 + rng.below(200) as usize;
+        let dag = random_dag(&mut rng, n);
+        let rows = layout(dag.iter().map(|(i, p)| (*i, p.as_slice())));
+        let mut all = Rows::new(usize::MAX);
+        let mut capped = Rows::new(3);
+        for row in &rows {
+            all.push(row);
+            capped.push(row);
+        }
+        assert_eq!(all.len(), rows.len());
+        for (k, row) in rows.iter().enumerate() {
+            let packed = all.get(k).unwrap();
+            assert_eq!(packed.to_row(), *row, "seed {seed} row {k}");
+            assert_eq!(packed.width(), row.width());
+
+            // A cap keeps the first columns and the rest of the row.
+            let short = capped.get(k).unwrap();
+            assert_eq!(short.width(), row.width(), "seed {seed} row {k}");
+            assert_eq!(short.kept(), row.width().min(3));
+            assert_eq!(short.node_lane(), row.node_lane);
+            assert_eq!(short.node_color(), row.node_color);
+            assert_eq!(short.is_merge(), row.is_merge);
+            for i in 0..short.kept() {
+                assert_eq!(short.cell(i), row.cells[i]);
+                assert_eq!(short.filler(i), row.fillers[i]);
+            }
+        }
+        assert!(all.get(rows.len()).is_none());
+        assert_eq!(all.iter().count(), rows.len());
+    }
+    let mut rows = Rows::new(4);
+    rows.push(&layout([(0, &[][..])])[0]);
+    rows.reset(7);
+    assert!(rows.is_empty());
+    assert_eq!(rows.cap(), 7);
+}
+
+#[test]
+fn every_cell_packs() {
+    for bits in 0..16u8 {
+        for node in [false, true] {
+            for color in 0..PALETTE_SIZE {
+                for filler in [None, Some(color), Some(PALETTE_SIZE - 1 - color)] {
+                    let cell = Cell { bits, node, color };
+                    let row = Row {
+                        node_lane: 0,
+                        node_color: color,
+                        is_merge: node,
+                        cells: SmallVec::from_elem(cell, 1),
+                        fillers: SmallVec::from_elem(filler, 1),
+                    };
+                    let mut rows = Rows::new(usize::MAX);
+                    rows.push(&row);
+                    assert_eq!(rows.get(0).unwrap().to_row(), row);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn glyph_str_reads_as_glyph() {
+    for bits in 0..=255u8 {
+        for node in [false, true] {
+            let cell = Cell { bits, node, color: 0 };
+            assert_eq!(cell.glyph_str("◉"), cell.glyph('◉').to_string(), "bits {bits:08b}");
+        }
+    }
+}

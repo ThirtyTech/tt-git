@@ -2,6 +2,7 @@
 //! from a vt100 emulator into the frame (herdr-style "a pane is a terminal").
 
 use std::io::{Read, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 use crossterm::event::{KeyCode, KeyModifiers};
@@ -21,7 +22,9 @@ use crate::theme::Theme;
 
 pub type PaneId = u64;
 
-const SCROLLBACK: usize = 1000;
+/// Lines the emulator keeps after they scroll off. Panes only ever show the
+/// live screen (nothing scrolls back), so none are kept.
+const SCROLLBACK: usize = 0;
 
 pub struct PtyPane {
     pub id: PaneId,
@@ -36,6 +39,9 @@ pub struct PtyPane {
     master: Box<dyn MasterPty + Send>,
     killer: Box<dyn portable_pty::ChildKiller + Send + Sync>,
     size: (u16, u16),
+    /// A `PaneOutput` was sent and the app hasn't handled it yet, so more
+    /// output needn't send another (one redraw shows it all).
+    output_pending: Arc<AtomicBool>,
     /// Set once the process ended; the text describes how.
     pub exited: Option<String>,
 }
@@ -106,6 +112,8 @@ impl PtyPane {
 
         let p = parser.clone();
         let w = writer.clone();
+        let output_pending = Arc::new(AtomicBool::new(false));
+        let pending = output_pending.clone();
         let exit_ctx = ctx.clone();
         std::thread::Builder::new()
             .name("tt-git-pane-reader".into())
@@ -128,7 +136,11 @@ impl PtyPane {
                                 let _ = w.flush();
                             }
                             drop(parser);
-                            ctx.emit(Action::PaneOutput(id));
+                            // AcqRel pairs with `take_output`, so the redraw it
+                            // leads to sees everything processed above.
+                            if !pending.swap(true, Ordering::AcqRel) {
+                                ctx.emit(Action::PaneOutput(id));
+                            }
                         }
                     }
                 }
@@ -139,6 +151,7 @@ impl PtyPane {
         // pipe open after the process ends, so EOF alone is not enough.
         std::thread::Builder::new()
             .name("tt-git-pane-wait".into())
+            .stack_size(crate::IO_THREAD_STACK)
             .spawn(move || {
                 let status = match child.wait() {
                     Ok(s) if s.success() => "process exited".to_string(),
@@ -162,8 +175,15 @@ impl PtyPane {
             master: pty.master,
             killer,
             size: (rows, cols),
+            output_pending,
             exited: None,
         })
+    }
+
+    /// Notes that the app handled this pane's `PaneOutput`: output after
+    /// this sends a new one. Call before drawing.
+    pub fn take_output(&self) {
+        self.output_pending.swap(false, Ordering::AcqRel);
     }
 
     pub fn is_modal(&self) -> bool {
@@ -247,7 +267,8 @@ impl PtyPane {
         }
     }
 
-    pub fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, release_hint: &str, theme: &Theme) {
+    /// Draws the pane. Returns whether it placed the terminal cursor.
+    pub fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, release_hint: &str, theme: &Theme) -> bool {
         frame.render_widget(Clear, area);
         let mut title = format!(" {} ", self.title);
         if let Some(why) = &self.exited {
@@ -284,8 +305,10 @@ impl PtyPane {
             let (r, c) = screen.cursor_position();
             if r < inner.height && c < inner.width {
                 frame.set_cursor_position(Position::new(inner.x + c, inner.y + r));
+                return true;
             }
         }
+        false
     }
 }
 

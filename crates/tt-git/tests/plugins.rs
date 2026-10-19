@@ -90,7 +90,10 @@ fn keybinding_runs_action_with_host_env_and_context() {
         "runs in the plugin root"
     );
     let ctx: Value = serde_json::from_str(env["TTGIT_PLUGIN_CONTEXT_JSON"].as_str().unwrap()).unwrap();
-    assert_eq!(ctx["selected_commit"], t.app().graph().selected().unwrap().oid);
+    assert_eq!(
+        ctx["selected_commit"],
+        t.app().graph().selected().unwrap().oid.to_string()
+    );
     assert_eq!(ctx["branch"], "main");
     assert_eq!(ctx["focused_pane"], "graph");
     assert_eq!(ctx["invocation_source"], "keybinding");

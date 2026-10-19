@@ -8,11 +8,13 @@ rust-version.workspace = true
 
 [dependencies]
 etcetera.workspace = true
-serde.workspace = true
+serde = { workspace = true, features = ["rc"] }
+smallvec = { workspace = true, features = ["serde"] }
 thiserror.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]
+serde_json.workspace = true
 tempfile.workspace = true
 tt-git-testkit.workspace = true
 

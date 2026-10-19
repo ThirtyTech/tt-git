@@ -53,7 +53,7 @@ fn stage_commit_flow() {
 
     // The new commit is selected in the graph.
     let selected = t.app().graph().selected().unwrap();
-    assert_eq!(selected.summary, "Say hi");
+    assert_eq!(&*selected.summary, "Say hi");
     assert!(t.pane_lines(PaneId::Graph)[0].contains("Say hi"));
 }
 
@@ -181,7 +181,7 @@ fn push_new_branch_then_pull() {
 
     t.press("p");
     assert!(t.app().error().is_none(), "{:?}", t.app().error());
-    assert_eq!(t.app().graph().selected().unwrap().summary, "from elsewhere");
+    assert_eq!(&*t.app().graph().selected().unwrap().summary, "from elsewhere");
 }
 
 #[test]
@@ -213,6 +213,6 @@ fn watcher_refreshes_on_external_changes() {
         app.graph()
             .commits()
             .first()
-            .is_some_and(|c| c.summary == "made outside")
+            .is_some_and(|c| &*c.summary == "made outside")
     });
 }

@@ -2,10 +2,12 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::branches::AheadBehind;
 use crate::git::{GitCli, GitError, Result};
-use crate::model::{BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, Status};
+use crate::model::{BranchHistory, Checkout, Commit, CommitFile, FileState, GitRef, Head, Oid, Status};
 use crate::parse;
 
 /// Repo-local git config key holding the picked base branch.
@@ -45,6 +47,40 @@ pub struct Repo {
     root: PathBuf,
     git_dir: PathBuf,
     common_dir: PathBuf,
+    /// git turned out too old for something tried in one command, so it's
+    /// done the old way from then on.
+    old_git: Arc<OldGit>,
+}
+
+/// What [`Repo::old_git`] found missing.
+#[derive(Debug, Default)]
+struct OldGit {
+    /// `for-each-ref`'s `%(ahead-behind:…)` (git 2.41).
+    ahead_behind: AtomicBool,
+    /// `git status --ignored=matching` (git 2.16).
+    ignored_matching: AtomicBool,
+}
+
+/// The arguments [`Repo::status`] runs git with.
+const STATUS_ARGS: [&str; 5] = ["status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all"];
+
+/// See [`Repo::ignore_rules`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IgnoreRules {
+    /// Outside the working tree, sorted.
+    pub files: Vec<PathBuf>,
+    /// [`Repo::status`] may use git's untracked cache, which
+    /// [`Repo::status_and_ignored_dirs`] can't (`--ignored` turns it off).
+    pub untracked_cache: bool,
+}
+
+/// Whether a config value reads as false as a bool (`None` is a key with
+/// no value, which is true).
+fn config_false(value: Option<&str>) -> bool {
+    value.is_some_and(|v| {
+        let v = v.trim();
+        v.is_empty() || ["false", "no", "off"].iter().any(|f| v.eq_ignore_ascii_case(f)) || v.parse::<i64>() == Ok(0)
+    })
 }
 
 impl Repo {
@@ -79,6 +115,7 @@ impl Repo {
             root,
             git_dir,
             common_dir,
+            old_git: Arc::default(),
         })
     }
 
@@ -151,9 +188,33 @@ impl Repo {
             .collect())
     }
 
+    /// What [`remotes`](Self::remotes) and
+    /// [`base_branch_setting`](Self::base_branch_setting) return, read with
+    /// one `git config` instead of two commands.
+    pub fn remote_config(&self) -> Result<RemoteConfig> {
+        // Keys come out with the section and variable names lowercased.
+        let pattern = "^(remote\\..*|tt-git\\.basebranch)$";
+        match self.git.run(&["config", "-z", "--get-regexp", pattern]) {
+            Ok(out) => {
+                let (remotes, base_branch) = parse::parse_remote_config(&out.stdout);
+                Ok(RemoteConfig { remotes, base_branch })
+            }
+            // Nothing matched.
+            Err(GitError::Failed { code, .. }) if code == "1" => Ok(RemoteConfig::default()),
+            Err(e) => Err(e),
+        }
+    }
+
     /// Local branches, remote-tracking branches and tags.
     pub fn refs(&self) -> Result<Vec<GitRef>> {
         let remotes = self.remotes()?;
+        Ok(self.refs_with_authors(&remotes)?.0)
+    }
+
+    /// [`refs`](Self::refs) given the remote names, plus the author of each
+    /// ref's commit as `Name <email>` (before `.mailmap`), by full ref name,
+    /// for [`ref_authors_of`](Self::ref_authors_of).
+    pub fn refs_with_authors(&self, remotes: &[String]) -> Result<(Vec<GitRef>, parse::RefAuthors)> {
         let out = self.git.run(&[
             "for-each-ref",
             parse::REF_FORMAT,
@@ -161,7 +222,7 @@ impl Repo {
             "refs/remotes",
             "refs/tags",
         ])?;
-        parse::parse_refs(&out.stdout, &remotes)
+        parse::parse_refs_with_authors(&out.stdout, remotes)
     }
 
     /// The base branch picked for this repo (`tt-git.baseBranch`), if any.
@@ -198,6 +259,49 @@ impl Repo {
         }
     }
 
+    /// [`ahead_behind`](Self::ahead_behind) for several refs in one
+    /// `for-each-ref`, given as (full name, target commit) pairs, keyed by
+    /// full name. Refs left out are ones it couldn't compare (or that no
+    /// longer point at the given target), for asking `ahead_behind` about;
+    /// `None` when it can't be done in one go (git before 2.41, or a ref
+    /// that isn't a commit).
+    pub fn ahead_behind_many(&self, base: &str, refs: &[(&str, &str)]) -> Option<HashMap<String, AheadBehind>> {
+        // The atom's argument ends at the first ')'.
+        if self.old_git.ahead_behind.load(Ordering::Relaxed) || base.contains(['(', ')', '%']) {
+            return None;
+        }
+        let format = format!("--format=%(refname)%00%(objectname)%00%(*objectname)%00%(ahead-behind:{base})");
+        let mut args = vec!["for-each-ref", &format];
+        args.extend(refs.iter().map(|(name, _)| *name));
+        let out = match self.git.run(&args) {
+            Ok(out) => out,
+            Err(e) => {
+                if e.stderr().is_some_and(|s| s.contains("unknown field name")) {
+                    self.old_git.ahead_behind.store(true, Ordering::Relaxed);
+                }
+                return None;
+            }
+        };
+        let text = out.stdout_str();
+        let mut found = HashMap::new();
+        for line in text.lines() {
+            let f: Vec<&str> = line.split('\0').collect();
+            let [name, oid, peeled, counts] = f.as_slice() else {
+                continue;
+            };
+            let target = if peeled.is_empty() { oid } else { peeled };
+            // A pattern also matches refs under it, so only exact names count.
+            if !refs.iter().any(|(n, t)| n == name && t == target) {
+                continue;
+            }
+            let mut counts = counts.split_whitespace().map(str::parse::<u32>);
+            if let (Some(Ok(ahead)), Some(Ok(behind)), None) = (counts.next(), counts.next(), counts.next()) {
+                found.insert(name.to_string(), AheadBehind { ahead, behind });
+            }
+        }
+        Some(found)
+    }
+
     /// Author of each tip under `prefix`, keyed by full ref name, with names
     /// mapped through `.mailmap`.
     pub fn ref_authors(&self, prefix: &str) -> Result<HashMap<String, String>> {
@@ -212,31 +316,66 @@ impl Repo {
             .filter_map(|l| {
                 let mut f = l.split('\0');
                 let (name, author, email) = (f.next()?, f.next()?, f.next().unwrap_or(""));
-                let email = if email.starts_with('<') {
-                    email.to_string()
-                } else {
-                    format!("<{email}>")
-                };
-                Some((name, format!("{author} {email}")))
+                Some((name, parse::contact(author, email)))
             })
             .collect();
+        Ok(self.map_ref_authors(&rows))
+    }
+
+    /// [`ref_authors`](Self::ref_authors) from the authors
+    /// [`refs_with_authors`](Self::refs_with_authors) read, which must
+    /// include every ref under `prefix`; only `.mailmap` needs git.
+    pub fn ref_authors_of(&self, authors: &[(String, String)], prefix: &str) -> Result<HashMap<String, String>> {
+        if prefix.contains(['*', '?', '[', '\\']) {
+            // A pattern for-each-ref would glob-match.
+            return self.ref_authors(prefix);
+        }
+        let rows: Vec<(&str, String)> = authors
+            .iter()
+            .filter(|(name, _)| ref_pattern_matches(prefix, name))
+            .map(|(name, contact)| (name.as_str(), contact.clone()))
+            .collect();
+        Ok(self.map_ref_authors(&rows))
+    }
+
+    /// (full name, `Name <email>`) rows to (full name, mapped name).
+    fn map_ref_authors(&self, rows: &[(&str, String)]) -> HashMap<String, String> {
         let mut contacts: Vec<&str> = rows.iter().map(|(_, c)| c.as_str()).collect();
         contacts.sort_unstable();
         contacts.dedup();
         let mapped = self.mailmap(&contacts);
-        Ok(rows
-            .iter()
+        rows.iter()
             .map(|(name, contact)| {
                 let contact = mapped.get(contact.as_str()).map_or(contact.as_str(), String::as_str);
                 let author = contact.rsplit_once(" <").map_or(contact, |(n, _)| n);
                 (name.to_string(), author.to_string())
             })
-            .collect())
+            .collect()
     }
 
     /// `git check-mailmap` for each `Name <email>`; contacts git can't map
     /// are left out.
     fn mailmap(&self, contacts: &[&str]) -> HashMap<String, String> {
+        if contacts.is_empty() {
+            return HashMap::new();
+        }
+        // All at once on stdin. As arguments, a contact starting with '-'
+        // reads as an option and fails its batch, and one git can't parse
+        // fails its batch too; batches keep those results.
+        if !contacts.iter().any(|c| c.starts_with('-')) {
+            let mut input = Vec::new();
+            for contact in contacts {
+                input.extend_from_slice(contact.as_bytes());
+                input.push(b'\n');
+            }
+            if let Ok(out) = self.git.run_with_stdin(&["check-mailmap", "--stdin"], Some(&input)) {
+                return contacts
+                    .iter()
+                    .zip(out.stdout_str().lines())
+                    .map(|(from, to)| (from.to_string(), to.to_string()))
+                    .collect();
+            }
+        }
         let mut mapped = HashMap::new();
         // Batches keep the command line short (Windows caps it at 32K).
         for chunk in contacts.chunks(100) {
@@ -253,12 +392,167 @@ impl Repo {
     }
 
     pub fn status(&self) -> Result<Status> {
-        let out = self
-            .git
-            .run(&["status", "--porcelain=v2", "-z", "--branch", "--untracked-files=all"])?;
+        let out = self.git.run(&STATUS_ARGS)?;
         let mut status = parse::parse_status(&out.stdout)?;
         status.in_progress = self.in_progress();
         Ok(status)
+    }
+
+    /// [`status`](Self::status), plus the untracked directories that match
+    /// an ignore pattern, relative to the root and without the trailing
+    /// slash (`target`). Git doesn't look inside those, so changes in them
+    /// can't change the status until the ignore rules or the index do.
+    /// No directories when git is too old to say.
+    pub fn status_and_ignored_dirs(&self) -> Result<(Status, Vec<String>)> {
+        if self.old_git.ignored_matching.load(Ordering::Relaxed) {
+            return Ok((self.status()?, Vec::new()));
+        }
+        let mut args = STATUS_ARGS.to_vec();
+        args.push("--ignored=matching");
+        let out = match self.git.run(&args) {
+            Ok(out) => out,
+            Err(GitError::Failed { .. }) => {
+                // Not a status failure if plain status works.
+                let status = self.status()?;
+                self.old_git.ignored_matching.store(true, Ordering::Relaxed);
+                return Ok((status, Vec::new()));
+            }
+            Err(e) => return Err(e),
+        };
+        let mut status = parse::parse_status(&out.stdout)?;
+        // Without --ignored there are no ignored entries.
+        let mut dirs = Vec::new();
+        status.entries.retain(|e| {
+            if e.index != FileState::Ignored {
+                return true;
+            }
+            if let Some(dir) = e.path.strip_suffix('/') {
+                dirs.push(dir.to_string());
+            }
+            false
+        });
+        status.in_progress = self.in_progress();
+        Ok((status, dirs))
+    }
+
+    /// The files outside the working tree whose contents decide what git
+    /// ignores (or could, after an edit): every config file it reads or
+    /// would read (any can set `core.excludesFile` or include another),
+    /// the exclude files, and HEAD (an include can depend on the branch).
+    /// Also whether [`status`](Self::status) may use the untracked cache.
+    /// `None` when a file can't be located, such as an excludes file under
+    /// `%(prefix)`, or the system config with a git older than 2.42.
+    pub fn ignore_rules(&self) -> Result<Option<IgnoreRules>> {
+        let out = self.git.run(&["config", "--list", "--show-origin", "-z"])?;
+        let env = |name: &str| self.git.env_var(name).filter(|v| !v.is_empty());
+        // Where git looks for the system config (whether it's there or not).
+        let system = match self.git.run(&["var", "GIT_CONFIG_SYSTEM"]) {
+            Ok(out) => Some(out.stdout_str().trim_end_matches(['\n', '\r']).to_string()),
+            // Empty and failing with no system config read; or too old to say.
+            Err(GitError::Failed { .. }) => None,
+            Err(e) => return Err(e),
+        };
+        let no_system = env("GIT_CONFIG_NOSYSTEM").is_some_and(|v| !config_false(Some(&v.to_string_lossy())));
+        let system = match system {
+            Some(path) if !path.is_empty() => Some(PathBuf::from(path)),
+            _ if no_system => None,
+            _ => return Ok(None),
+        };
+        let mut homes: Vec<PathBuf> = ["HOME", "USERPROFILE"]
+            .iter()
+            .filter_map(|n| env(n))
+            .map(PathBuf::from)
+            .collect();
+        if let (Some(drive), Some(path)) = (env("HOMEDRIVE"), env("HOMEPATH")) {
+            let mut home = drive;
+            home.push(path);
+            homes.push(home.into());
+        }
+        let mut files: Vec<PathBuf> = Vec::new();
+        for home in &homes {
+            files.push(home.join(".gitconfig"));
+            files.push(home.join(".config/git/config"));
+            files.push(home.join(".config/git/ignore"));
+        }
+        if let Some(xdg) = env("XDG_CONFIG_HOME").map(PathBuf::from) {
+            files.push(xdg.join("git/config"));
+            files.push(xdg.join("git/ignore"));
+        }
+        files.extend(
+            ["GIT_CONFIG_GLOBAL", "GIT_CONFIG_SYSTEM"]
+                .iter()
+                .filter_map(|n| env(n))
+                .map(PathBuf::from),
+        );
+        if let Some(data) = env("PROGRAMDATA") {
+            files.push(PathBuf::from(data).join("Git/config"));
+        }
+        files.push("/etc/gitconfig".into());
+        files.extend(system);
+        for (dir, name) in [
+            (&self.common_dir, "config"),
+            (&self.common_dir, "config.worktree"),
+            (&self.common_dir, "info/exclude"),
+            (&self.git_dir, "config.worktree"),
+            (&self.git_dir, "info/exclude"),
+            (&self.git_dir, "HEAD"),
+        ] {
+            files.push(dir.join(name));
+        }
+        // Paths in values: `~/` is a home, a relative excludes file is
+        // relative to the root (where git runs), a relative include to the
+        // file it's in.
+        let expand = |value: &str, relative_to: &Path| -> Option<Vec<PathBuf>> {
+            if let Some(rest) = value.strip_prefix("~/").or_else(|| value.strip_prefix("~\\")) {
+                return Some(homes.iter().map(|h| h.join(rest)).collect());
+            }
+            if value.starts_with('~') || value.starts_with("%(") {
+                return None;
+            }
+            Some(vec![relative_to.join(value)])
+        };
+        // The last value of each wins.
+        let (mut show_all, mut cache_off) = (false, false);
+        let records: Vec<&[u8]> = out.stdout.split(|b| *b == 0).collect();
+        for pair in records.chunks(2) {
+            let [origin, entry] = pair else { continue };
+            let origin = String::from_utf8_lossy(origin);
+            let file = origin.strip_prefix("file:").map(|f| self.root.join(f));
+            let entry = String::from_utf8_lossy(entry);
+            // No newline: a key with no value, which is true as a bool.
+            let (key, value) = match entry.split_once('\n') {
+                Some((key, value)) => (key, Some(value)),
+                None => (&*entry, None),
+            };
+            match key {
+                "status.showuntrackedfiles" => show_all = value == Some("all"),
+                "core.untrackedcache" => cache_off = config_false(value),
+                _ => {}
+            }
+            let value = value.unwrap_or("");
+            let paths = if key == "core.excludesfile" {
+                expand(value, &self.root)
+            } else if key == "include.path" || (key.starts_with("includeif.") && key.ends_with(".path")) {
+                let dir = file.as_deref().and_then(Path::parent).unwrap_or(&self.root);
+                expand(value, dir)
+            } else {
+                Some(Vec::new())
+            };
+            let Some(paths) = paths else {
+                return Ok(None);
+            };
+            files.extend(paths);
+            files.extend(file);
+        }
+        files.sort();
+        files.dedup();
+        Ok(Some(IgnoreRules {
+            files,
+            // git uses the cache with `--untracked-files=all` only when that's
+            // also the configured mode, and with it unset (or `keep`) if the
+            // index has one; never with `--ignored`.
+            untracked_cache: show_all && !cache_off,
+        }))
     }
 
     /// Which multi-step operation, if any, is waiting to be continued.
@@ -297,18 +591,77 @@ impl Repo {
     pub fn ref_activity(&self, full_ref: &str) -> Option<i64> {
         let rel: PathBuf = full_ref.split('/').collect();
         let path = self.common_dir.join("logs").join(rel);
-        std::fs::read(path).ok().and_then(|c| parse::last_reflog_time(&c))
+        // Only the last line counts, so read just the end of the file.
+        const WINDOW: u64 = 4096;
+        let tail = std::fs::File::open(&path).and_then(|mut file| {
+            let len = file.metadata()?.len();
+            parse::tail_reflog_time(&mut file, len, WINDOW)
+        });
+        match tail {
+            Ok(time) => time,
+            // E.g. rewritten shorter (`reflog expire`) while being read.
+            Err(_) => std::fs::read(path).ok().and_then(|c| parse::last_reflog_time(&c)),
+        }
     }
 
     /// Streams commits in topological order, newest first, stopping after
     /// `limit` or when `on_commit` returns `false`.
     pub fn stream_commits(&self, scope: &LogScope, limit: usize, on_commit: impl FnMut(Commit) -> bool) -> Result<()> {
-        let mut args = topo_log_args(limit);
+        self.stream_commits_from(scope, 0, limit, on_commit)
+    }
+
+    /// Like [`stream_commits`](Self::stream_commits), leaving out the first
+    /// `skip` of the `limit` commits: with the same refs, the commits a
+    /// load with a smaller limit stopped before.
+    pub fn stream_commits_from(
+        &self,
+        scope: &LogScope,
+        skip: usize,
+        limit: usize,
+        on_commit: impl FnMut(Commit) -> bool,
+    ) -> Result<()> {
+        let mut args = topo_log_args(limit.saturating_sub(skip));
+        if skip > 0 {
+            // git counts --max-count after skipping.
+            args.push(format!("--skip={skip}"));
+        }
         if !self.push_scope(&mut args, scope)? {
             return Ok(());
         }
         args.push("--".into());
         self.stream_log(&args, on_commit)
+    }
+
+    /// The stored state of everything a log's starting points and history
+    /// are read from: every ref (loose and packed, the stash included),
+    /// every worktree's HEAD and per-worktree refs, and the shallow and
+    /// graft lists that cut history short. Equal results mean a log of HEAD,
+    /// of any ref or of `--all` would list the same commits. Reflogs and
+    /// pseudorefs such as FETCH_HEAD are left out.
+    ///
+    /// Reads files only, with no git process, so it's cheap enough to take
+    /// before every log. `None` when it can't tell: refs stored as a
+    /// reftable, or a file that couldn't be read.
+    pub fn ref_fingerprint(&self) -> Option<Vec<u8>> {
+        let dir = &self.common_dir;
+        if dir.join("reftable").exists() {
+            return None;
+        }
+        let mut out = Vec::new();
+        for name in ["HEAD", "packed-refs", "shallow", "info/grafts"] {
+            fingerprint_file(&mut out, dir, Path::new(name)).ok()?;
+        }
+        fingerprint_tree(&mut out, dir, Path::new("refs")).ok()?;
+        // Linked worktrees' HEADs and their own refs (bisect and the like).
+        for id in sorted_entries(&dir.join("worktrees")).ok()? {
+            if !id.file_type().ok()?.is_dir() {
+                continue;
+            }
+            let rel = Path::new("worktrees").join(id.file_name());
+            fingerprint_file(&mut out, dir, &rel.join("HEAD")).ok()?;
+            fingerprint_tree(&mut out, dir, &rel.join("refs")).ok()?;
+        }
+        Some(out)
     }
 
     /// Up to `limit` commits of `scope` that match `filter`, in topological
@@ -340,7 +693,7 @@ impl Repo {
             commits.push(c);
             true
         })?;
-        let shown: HashSet<String> = commits.iter().map(|c| c.oid.clone()).collect();
+        let shown: HashSet<Oid> = commits.iter().map(|c| c.oid).collect();
         for c in &mut commits {
             c.parents.retain(|p| shown.contains(p));
         }
@@ -386,8 +739,10 @@ impl Repo {
         self.git.stream(&args, 0, |record| {
             let ident = String::from_utf8_lossy(record);
             let ident = ident.trim();
-            if !ident.is_empty() {
-                *counts.entry(ident.to_string()).or_default() += 1;
+            if let Some(n) = counts.get_mut(ident) {
+                *n += 1;
+            } else if !ident.is_empty() {
+                counts.insert(ident.to_string(), 1);
             }
             true
         })?;
@@ -411,11 +766,12 @@ impl Repo {
     /// commit to `on_commit` until it returns `false`.
     fn stream_log(&self, args: &[String], mut on_commit: impl FnMut(Commit) -> bool) -> Result<()> {
         let mut error = None;
+        let mut idents = parse::Idents::default();
         self.git.stream(args, 0, |record| {
             if record.iter().all(|b| b.is_ascii_whitespace()) {
                 return true;
             }
-            match parse::parse_commit(record) {
+            match parse::parse_commit_interned(record, &mut idents) {
                 Ok(c) => on_commit(c),
                 Err(e) => {
                     error = Some(e);
@@ -488,35 +844,39 @@ impl Repo {
         } else {
             None
         };
-        let exclude = format!("^{}", merge.as_ref().map_or(base, |m| m.parents[0].as_str()));
+        let exclude = match &merge {
+            Some(m) => format!("^{}", m.parents[0]),
+            None => format!("^{base}"),
+        };
         let max = format!("--max-count={limit}");
         let mut commits = self.log(&["--first-parent", "--topo-order", &max], &[tip, &exclude])?;
         let fork = match commits.last() {
-            Some(last) if commits.len() < limit => last.parents.first().cloned(),
+            Some(last) if commits.len() < limit => last.parents.first().copied(),
             _ => None,
         };
+        let fork_hex = fork.map(|f| f.hex());
         let mut extras = Vec::new();
-        extras.extend(fork.as_deref());
+        extras.extend(fork_hex.as_deref());
         if merge.is_none() {
             extras.push(base);
         }
         let mut extras = self.log(&["--no-walk=unsorted"], &extras)?.into_iter();
         let fork_commit = fork.as_ref().and_then(|_| extras.next());
-        let shown: HashSet<String> = commits.iter().map(|c| c.oid.clone()).chain(fork.clone()).collect();
+        let shown: HashSet<Oid> = commits.iter().map(|c| c.oid).chain(fork).collect();
         for c in &mut commits {
             c.parents.retain(|p| shown.contains(p));
         }
-        let merge_oid = merge.as_ref().map(|m| m.oid.clone());
+        let merge_oid = merge.as_ref().map(|m| m.oid);
         match merge {
             Some(mut m) => {
-                m.parents = fork.iter().cloned().chain([tip_commit.oid]).collect();
+                m.parents = fork.into_iter().chain([tip_commit.oid]).collect();
                 commits.insert(0, m);
             }
             // While unmerged, the base's tip shows where the base is now,
             // unless it hasn't moved since the fork.
             None => {
-                if let Some(mut b) = extras.next().filter(|b| Some(&b.oid) != fork.as_ref()) {
-                    b.parents = fork.iter().cloned().collect();
+                if let Some(mut b) = extras.next().filter(|b| Some(b.oid) != fork) {
+                    b.parents = fork.into_iter().collect();
                     let at = commits
                         .iter()
                         .position(|c| c.commit_time < b.commit_time)
@@ -566,7 +926,7 @@ impl Repo {
         if let Some(orig) = &file.orig_path {
             args.push(orig);
         }
-        Ok(self.git.run(&args)?.stdout_str())
+        Ok(self.git.run(&args)?.into_stdout_string())
     }
 
     /// Loads up to `limit` commits into a Vec.
@@ -580,6 +940,23 @@ impl Repo {
     }
 }
 
+/// What [`Repo::remote_config`] reads.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RemoteConfig {
+    /// Remote names, as `git remote` lists them.
+    pub remotes: Vec<String>,
+    /// As [`Repo::base_branch_setting`] gives it.
+    pub base_branch: Option<String>,
+}
+
+/// Whether for-each-ref's `pattern` (with no glob characters) selects
+/// `refname`: the same name, or one under it.
+fn ref_pattern_matches(pattern: &str, refname: &str) -> bool {
+    refname
+        .strip_prefix(pattern)
+        .is_some_and(|rest| rest.is_empty() || rest.starts_with('/') || pattern.ends_with('/'))
+}
+
 /// `git log` in topological order with [`parse::LOG_FORMAT`], up to `limit`.
 fn topo_log_args(limit: usize) -> Vec<String> {
     vec![
@@ -589,4 +966,48 @@ fn topo_log_args(limit: usize) -> Vec<String> {
         parse::LOG_FORMAT.into(),
         format!("--max-count={limit}"),
     ]
+}
+
+/// Appends `dir/rel` to a [`Repo::ref_fingerprint`]: its path and length
+/// before its content, so no two different sets of files run together the
+/// same, or a mark that it's missing.
+fn fingerprint_file(out: &mut Vec<u8>, dir: &Path, rel: &Path) -> std::io::Result<()> {
+    out.extend_from_slice(rel.as_os_str().as_encoded_bytes());
+    out.push(0);
+    match std::fs::read(dir.join(rel)) {
+        Ok(content) => {
+            out.push(b'+');
+            out.extend_from_slice(&(content.len() as u64).to_le_bytes());
+            out.extend_from_slice(&content);
+        }
+        // Not there (or deleted while listed): an absent ref.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => out.push(b'-'),
+        Err(e) => return Err(e),
+    }
+    Ok(())
+}
+
+/// Appends every file under `dir/rel` to a [`Repo::ref_fingerprint`], in
+/// name order, leaving out `.lock` files (updates not yet made).
+fn fingerprint_tree(out: &mut Vec<u8>, dir: &Path, rel: &Path) -> std::io::Result<()> {
+    for entry in sorted_entries(&dir.join(rel))? {
+        let rel = rel.join(entry.file_name());
+        if entry.file_type()?.is_dir() {
+            fingerprint_tree(out, dir, &rel)?;
+        } else if !entry.file_name().as_encoded_bytes().ends_with(b".lock") {
+            fingerprint_file(out, dir, &rel)?;
+        }
+    }
+    Ok(())
+}
+
+/// `dir`'s entries by name; none if it doesn't exist.
+fn sorted_entries(dir: &Path) -> std::io::Result<Vec<std::fs::DirEntry>> {
+    let mut entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries.collect::<std::io::Result<Vec<_>>>()?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
+        Err(e) => return Err(e),
+    };
+    entries.sort_by_key(|e| e.file_name());
+    Ok(entries)
 }

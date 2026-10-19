@@ -66,11 +66,29 @@ impl Response {
 /// What the app sends back for a request.
 pub enum Reply {
     Once(Response),
-    /// Send `first`, then forward every value from `events` as a line.
+    /// Send `first`, then forward every line from `events`.
     Stream {
         first: Response,
-        events: Receiver<Value>,
+        events: Receiver<EventLine>,
     },
+}
+
+/// A value as one NDJSON line, serialized once however many connections it
+/// goes to.
+#[derive(Debug, Clone)]
+pub struct EventLine(Arc<[u8]>);
+
+impl EventLine {
+    pub fn new(value: &Value) -> serde_json::Result<Self> {
+        let mut line = serde_json::to_vec(value)?;
+        line.push(b'\n');
+        Ok(Self(line.into()))
+    }
+
+    /// The line, newline included.
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
+    }
 }
 
 /// Handle for answering one request; cheap to clone so it can travel inside
@@ -138,6 +156,7 @@ impl Server {
         let on_call = Arc::new(on_call);
         std::thread::Builder::new()
             .name("tt-git-socket".into())
+            .stack_size(crate::IO_THREAD_STACK)
             .spawn(move || {
                 for conn in listener.incoming() {
                     let Ok(conn) = conn else { continue };
@@ -211,7 +230,8 @@ fn serve(conn: Stream, on_call: &(dyn Fn(Call) + Send + Sync)) {
                     return;
                 }
                 for ev in events {
-                    if write_line(reader.get_mut(), &ev).is_err() {
+                    let w = reader.get_mut();
+                    if w.write_all(ev.as_bytes()).and_then(|()| w.flush()).is_err() {
                         return;
                     }
                 }
@@ -299,7 +319,8 @@ mod tests {
                 "events.subscribe" => {
                     let (tx, rx) = mpsc::channel();
                     for i in 0..3 {
-                        tx.send(json!({"event": "tick", "data": i})).unwrap();
+                        tx.send(EventLine::new(&json!({"event": "tick", "data": i})).unwrap())
+                            .unwrap();
                     }
                     drop(tx);
                     replier.send(Reply::Stream {

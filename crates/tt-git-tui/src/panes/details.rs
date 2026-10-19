@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -34,7 +35,7 @@ struct FilesView {
     files: Vec<CommitFile>,
     cursor: Cursor,
     /// Diff lines already loaded, by file index.
-    diffs: HashMap<usize, Vec<String>>,
+    diffs: HashMap<usize, Arc<Vec<String>>>,
 }
 
 /// Commit details or file diff for the current selection.
@@ -42,8 +43,9 @@ struct FilesView {
 pub struct DetailsPane {
     subject: Option<DetailsSubject>,
     title: String,
-    /// The text shown, or in the files view the selected file's diff.
-    lines: Vec<String>,
+    /// The text shown, or in the files view the selected file's diff
+    /// (shared with its entry in the view's `diffs`).
+    lines: Arc<Vec<String>>,
     cursor: Cursor,
     loading: bool,
     files: Option<FilesView>,
@@ -116,7 +118,7 @@ impl DetailsPane {
                     oid: oid.clone(),
                     ..FilesView::default()
                 });
-                self.lines.clear();
+                self.lines = Arc::default();
             }
             _ => self.files = None,
         }
@@ -130,7 +132,7 @@ impl DetailsPane {
     /// dropped). Text replaces the files view (e.g. its files failed to load).
     pub fn set_content(&mut self, subject: &DetailsSubject, text: &str) {
         if self.subject.as_ref() == Some(subject) {
-            self.lines = split_lines(text);
+            self.lines = Arc::new(split_lines(text));
             self.loading = false;
             self.files = None;
         }
@@ -142,11 +144,11 @@ impl DetailsPane {
             return;
         }
         self.loading = false;
-        self.lines = if files.is_empty() {
+        self.lines = Arc::new(if files.is_empty() {
             vec!["no file changes".into()]
         } else {
             Vec::new()
-        };
+        });
         self.files = Some(FilesView {
             oid: oid.to_string(),
             header: split_lines(header.trim_end()),
@@ -165,7 +167,7 @@ impl DetailsPane {
         let Some(idx) = view.files.iter().position(|f| f.path == path) else {
             return;
         };
-        let lines = split_lines(text);
+        let lines = Arc::new(split_lines(text));
         if idx == view.cursor.selected {
             self.lines = lines.clone();
             self.cursor.offset = 0;
@@ -181,7 +183,7 @@ impl DetailsPane {
         match view.diffs.get(&idx) {
             Some(lines) => self.lines = lines.clone(),
             None => {
-                self.lines = vec!["loading…".into()];
+                self.lines = Arc::new(vec!["loading…".into()]);
                 ctx.emit(Action::CommitFileSelected {
                     oid: view.oid.clone(),
                     file: file.clone(),
@@ -192,7 +194,7 @@ impl DetailsPane {
 
     pub fn clear(&mut self) {
         self.subject = None;
-        self.lines.clear();
+        self.lines = Arc::default();
         self.files = None;
         self.loading = false;
     }
@@ -320,7 +322,15 @@ fn draw_file_list(view: &mut FilesView, frame: &mut Frame, area: Rect, focused: 
 }
 
 fn split_lines(text: &str) -> Vec<String> {
-    text.lines().map(|l| l.replace('\t', "    ")).collect()
+    text.lines()
+        .map(|l| {
+            if l.contains('\t') {
+                l.replace('\t', "    ")
+            } else {
+                l.to_string()
+            }
+        })
+        .collect()
 }
 
 fn file_label(file: &CommitFile) -> String {
@@ -456,5 +466,21 @@ mod tests {
         pane.request(DetailsSubject::CommitFiles("a".into()), "Commit a files".into());
         pane.request(DetailsSubject::Commit("a".into()), "Commit a".into());
         assert_eq!(paths(&pane), None);
+    }
+
+    #[test]
+    fn split_lines_expands_tabs_as_before() {
+        let old = |text: &str| -> Vec<String> { text.lines().map(|l| l.replace('\t', "    ")).collect() };
+        for text in [
+            "",
+            "a",
+            "a\n",
+            "a\r\nb\tc\n\t\n",
+            "no tabs\nat all\n\n",
+            "\t\t",
+            "x\ty\r",
+        ] {
+            assert_eq!(split_lines(text), old(text), "{text:?}");
+        }
     }
 }

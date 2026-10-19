@@ -189,3 +189,23 @@ fn pane_gets_entrypoint_and_custom_env() {
     assert!(err.to_string().contains("plugin_pane_not_found"), "{err}");
     t.press("f12");
 }
+
+#[test]
+fn ticks_keep_redrawing_while_a_pane_shows_the_cursor() {
+    use tt_git_tui::Action;
+    let sb = setup("overlay");
+    let mut t = TestDriver::with_plugins(Config::default(), &sb, Path::new(BIN));
+    t.press(":").type_text("open board").press("enter");
+    until(&mut t, "pane prompt", |t| pane_text(t).contains("hello pane"));
+    // Each frame re-sends show-cursor and its position; ticks always drew
+    // one, so a focused pane's cursor still gets them four times a second.
+    t.app_mut().take_redraw();
+    t.send(Action::Tick);
+    assert!(t.app_mut().take_redraw(), "tick with the pane's cursor shown");
+
+    t.press("f12");
+    assert!(t.app().plugin_panes().is_empty());
+    t.app_mut().take_redraw();
+    t.send(Action::Tick);
+    assert!(!t.app_mut().take_redraw(), "tick with no cursor on screen");
+}

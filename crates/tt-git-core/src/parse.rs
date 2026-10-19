@@ -1,8 +1,11 @@
 //! Parsers for machine-readable git output. Each takes the raw bytes git
 //! printed so they can be unit tested on fixture strings.
 
+use std::collections::HashSet;
+use std::sync::Arc;
+
 use crate::git::GitError;
-use crate::model::{BranchStatus, Checkout, Commit, CommitFile, FileState, GitRef, RefKind, Status, StatusEntry};
+use crate::model::{BranchStatus, Checkout, Commit, CommitFile, FileState, GitRef, Oid, RefKind, Status, StatusEntry};
 
 /// Field separator inside a record (ASCII unit separator).
 pub const FS: char = '\u{1f}';
@@ -13,6 +16,27 @@ pub const LOG_FORMAT: &str = "--format=%H%x1f%P%x1f%aN%x1f%aE%x1f%at%x1f%ct%x1f%
 
 /// Parses one record of [`LOG_FORMAT`].
 pub fn parse_commit(record: &[u8]) -> Result<Commit, GitError> {
+    parse_commit_interned(record, &mut Idents::default())
+}
+
+/// Author names and emails seen so far in one log, so that commits by the
+/// same author share one allocation for each.
+#[derive(Debug, Default)]
+pub struct Idents(HashSet<Arc<str>>);
+
+impl Idents {
+    pub fn intern(&mut self, s: &str) -> Arc<str> {
+        if let Some(known) = self.0.get(s) {
+            return known.clone();
+        }
+        let new: Arc<str> = s.into();
+        self.0.insert(new.clone());
+        new
+    }
+}
+
+/// [`parse_commit`], sharing names and emails through `idents`.
+pub fn parse_commit_interned(record: &[u8], idents: &mut Idents) -> Result<Commit, GitError> {
     let text = String::from_utf8_lossy(record);
     // git separates -z records with NUL but may also leave a newline from the
     // previous record's end; trim only leading line breaks.
@@ -23,16 +47,20 @@ pub fn parse_commit(record: &[u8]) -> Result<Commit, GitError> {
             .next()
             .ok_or_else(|| GitError::Parse(format!("commit record missing {name}: {text:?}")))
     };
-    let oid = next("hash")?.to_string();
-    let parents = next("parents")?.split_whitespace().map(str::to_string).collect();
-    let author_name = next("author name")?.to_string();
-    let author_email = next("author email")?.to_string();
+    let oid = next("hash")?;
+    let parents = next("parents")?;
+    let author_name = idents.intern(next("author name")?);
+    let author_email = idents.intern(next("author email")?);
     let author_time = parse_i64(next("author time")?)?;
     let commit_time = parse_i64(next("commit time")?)?;
-    let summary = next("subject")?.trim_end_matches(['\n', '\r']).to_string();
-    if oid.len() < 40 || !oid.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return Err(GitError::Parse(format!("bad commit hash {oid:?}")));
-    }
+    let summary = next("subject")?.trim_end_matches(['\n', '\r']).into();
+    let oid = Oid::from_hex(oid)
+        .filter(|o| o.hex_len() >= 40)
+        .ok_or_else(|| GitError::Parse(format!("bad commit hash {oid:?}")))?;
+    let parents = parents
+        .split_whitespace()
+        .map(|p| Oid::from_hex(p).ok_or_else(|| GitError::Parse(format!("bad parent hash {p:?}"))))
+        .collect::<Result<_, _>>()?;
     Ok(Commit {
         oid,
         parents,
@@ -51,23 +79,35 @@ fn parse_i64(s: &str) -> Result<i64, GitError> {
 }
 
 /// `for-each-ref` format for [`parse_refs`]: NUL-separated fields, one ref per line.
-pub const REF_FORMAT: &str = "--format=%(refname)%00%(objectname)%00%(*objectname)%00%(creatordate:unix)%00%(upstream)%00%(upstream:track,nobracket)%00%(symref)%00%(HEAD)%00%(subject)";
+pub const REF_FORMAT: &str = "--format=%(refname)%00%(objectname)%00%(*objectname)%00%(creatordate:unix)%00%(upstream)%00%(upstream:track,nobracket)%00%(symref)%00%(HEAD)%00%(authorname)%00%(authoremail)%00%(subject)";
 
 /// Parses `git for-each-ref` output in [`REF_FORMAT`]. `remotes` is the list
 /// of configured remote names, used to split `refs/remotes/<remote>/<branch>`
 /// correctly when remote names contain slashes.
 pub fn parse_refs(out: &[u8], remotes: &[String]) -> Result<Vec<GitRef>, GitError> {
+    parse_refs_with_authors(out, remotes).map(|(refs, _)| refs)
+}
+
+/// Full ref names, each with the author of the commit it points at as
+/// `Name <email>`.
+pub type RefAuthors = Vec<(String, String)>;
+
+/// [`parse_refs`], plus each ref's full name with the author of the commit
+/// it points at as `Name <email>` (before `.mailmap`).
+pub fn parse_refs_with_authors(out: &[u8], remotes: &[String]) -> Result<(Vec<GitRef>, RefAuthors), GitError> {
     let text = String::from_utf8_lossy(out);
     let mut refs = Vec::new();
+    let mut authors = Vec::new();
     for line in text.lines().filter(|l| !l.is_empty()) {
         let f: Vec<&str> = line.split('\0').collect();
-        if f.len() < 9 {
+        if f.len() < 11 {
             return Err(GitError::Parse(format!("ref line has {} fields: {line:?}", f.len())));
         }
         let full_name = f[0].to_string();
         let (kind, short_name) = classify_ref(&full_name, remotes);
         let target = if f[2].is_empty() { f[1] } else { f[2] }.to_string();
         let (ahead, behind, upstream_gone) = parse_track(f[5]);
+        authors.push((full_name.clone(), contact(f[8], f[9])));
         refs.push(GitRef {
             full_name,
             short_name,
@@ -80,10 +120,49 @@ pub fn parse_refs(out: &[u8], remotes: &[String]) -> Result<Vec<GitRef>, GitErro
             upstream_gone,
             is_head: f[7] == "*",
             symref: non_empty(f[6]),
-            subject: f[8..].join("\0"),
+            subject: f[10..].join("\0"),
         });
     }
-    Ok(refs)
+    Ok((refs, authors))
+}
+
+/// Parses `git config -z --get-regexp` output for `remote.*` and
+/// `tt-git.basebranch`: the remote names as `git remote` lists them (every
+/// `<name>` with a `remote.<name>.<key>`, sorted, except git's invalid ones
+/// starting with `/`), and the base branch setting as `git config --get`
+/// gives it (the last value, trimmed; none when empty).
+pub fn parse_remote_config(out: &[u8]) -> (Vec<String>, Option<String>) {
+    let mut remotes = Vec::new();
+    let mut base = None;
+    for record in out.split(|b| *b == 0).filter(|r| !r.is_empty()) {
+        let record = String::from_utf8_lossy(record);
+        // Key, then a newline and the value unless it has none.
+        let (key, value) = match record.split_once('\n') {
+            Some((key, value)) => (key, Some(value)),
+            None => (&*record, None),
+        };
+        if key == "tt-git.basebranch" {
+            base = value.map(str::trim).filter(|v| !v.is_empty()).map(str::to_string);
+        } else if let Some((name, _)) = key.strip_prefix("remote.").and_then(|k| k.rsplit_once('.'))
+            && !name.is_empty()
+            && !name.starts_with('/')
+        {
+            remotes.push(name.to_string());
+        }
+    }
+    remotes.sort();
+    remotes.dedup();
+    (remotes, base)
+}
+
+/// `Name <email>` from `%(authorname)` and `%(authoremail)` (which git
+/// prints with or without the brackets).
+pub fn contact(name: &str, email: &str) -> String {
+    if email.starts_with('<') {
+        format!("{name} {email}")
+    } else {
+        format!("{name} <{email}>")
+    }
 }
 
 fn non_empty(s: &str) -> Option<String> {
@@ -291,7 +370,45 @@ pub fn parse_name_status(out: &[u8]) -> Vec<CommitFile> {
 /// (`<old> <new> <name> <<email>> <time> <tz>\t<message>` per line).
 pub fn last_reflog_time(contents: &[u8]) -> Option<i64> {
     let text = String::from_utf8_lossy(contents);
-    let line = text.lines().rev().find(|l| !l.trim().is_empty())?;
+    reflog_line_time(last_nonblank_line(&text)?)
+}
+
+/// [`last_reflog_time`] of a whole reflog of `len` bytes, reading only as
+/// much of its end as it takes to hold the last line: `window` bytes at
+/// first, doubling until a whole non-blank line fits.
+pub fn tail_reflog_time<R: std::io::Read + std::io::Seek>(
+    file: &mut R,
+    len: u64,
+    window: u64,
+) -> std::io::Result<Option<i64>> {
+    let mut window = window.max(1);
+    loop {
+        let start = len.saturating_sub(window);
+        file.seek(std::io::SeekFrom::Start(start))?;
+        let mut buf = vec![0; (len - start) as usize];
+        file.read_exact(&mut buf)?;
+        if start == 0 {
+            return Ok(last_reflog_time(&buf));
+        }
+        // The window may start mid-line; the lines after its first newline
+        // are whole, and are the file's last lines. (A newline byte is never
+        // part of a multi-byte character, so decoding from there matches
+        // decoding the whole file.)
+        if let Some(nl) = buf.iter().position(|&b| b == b'\n') {
+            let text = String::from_utf8_lossy(&buf[nl + 1..]);
+            if let Some(line) = last_nonblank_line(&text) {
+                return Ok(reflog_line_time(line));
+            }
+        }
+        window = window.saturating_mul(2);
+    }
+}
+
+fn last_nonblank_line(text: &str) -> Option<&str> {
+    text.lines().rev().find(|l| !l.trim().is_empty())
+}
+
+fn reflog_line_time(line: &str) -> Option<i64> {
     let ident = line.split('\t').next()?;
     // After the email's closing '>' come "<time> <tz>".
     let after_email = &ident[ident.rfind('>')? + 1..];
@@ -335,11 +452,11 @@ mod tests {
         let rec = log_record(A, &format!("{B} {C}"), "Merge branch 'x' into main");
         let c = parse_commit(rec.as_bytes()).unwrap();
         assert_eq!(c.oid, A);
-        assert_eq!(c.parents, vec![B, C]);
-        assert_eq!(c.author_name, "Ann Author");
-        assert_eq!(c.author_email, "ann@example.com");
+        assert_eq!(*c.parents, [B, C]);
+        assert_eq!(&*c.author_name, "Ann Author");
+        assert_eq!(&*c.author_email, "ann@example.com");
         assert_eq!((c.author_time, c.commit_time), (100, 200));
-        assert_eq!(c.summary, "Merge branch 'x' into main");
+        assert_eq!(&*c.summary, "Merge branch 'x' into main");
         assert!(c.is_merge());
         assert_eq!(c.short_oid(), "1111111");
     }
@@ -350,19 +467,92 @@ mod tests {
         let c = parse_commit(rec.as_bytes()).unwrap();
         assert!(c.parents.is_empty());
         // The subject is the last field, so a stray separator stays in it.
-        assert_eq!(c.summary, "fix: ünïcode — and a \u{1f}separator");
+        assert_eq!(&*c.summary, "fix: ünïcode — and a \u{1f}separator");
         let empty = log_record(B, A, "");
-        assert_eq!(parse_commit(empty.as_bytes()).unwrap().summary, "");
+        assert_eq!(&*parse_commit(empty.as_bytes()).unwrap().summary, "");
     }
 
     #[test]
     fn rejects_garbage_commit() {
         assert!(parse_commit(b"not a commit").is_err());
         assert!(parse_commit(log_record("abc", "", "x").as_bytes()).is_err());
+        // git prints lowercase ids.
+        assert!(parse_commit(log_record(&A.replace('1', "A"), "", "x").as_bytes()).is_err());
+        assert!(parse_commit(log_record(A, "not-a-parent", "x").as_bytes()).is_err());
     }
 
+    #[test]
+    fn parses_sha256_commits() {
+        let long = "a".repeat(64);
+        let c = parse_commit(log_record(&long, &long, "x").as_bytes()).unwrap();
+        assert_eq!(c.oid, long);
+        assert_eq!(*c.parents, [long.as_str()]);
+        assert_eq!(c.short_oid(), "aaaaaaa");
+    }
+
+    /// A [`REF_FORMAT`] line from its fields before the author's, the
+    /// subject last; the author is "Ann Author <ann@example.com>".
     fn ref_line(fields: [&str; 9]) -> String {
-        fields.join("\0")
+        let mut all = fields.to_vec();
+        all.splice(8..8, ["Ann Author", "<ann@example.com>"]);
+        all.join("\0")
+    }
+
+    #[test]
+    fn parses_ref_authors() {
+        let line = |name: &str, author: &str, email: &str| {
+            [name, A, "", "300", "", "", "", " ", author, email, "subject"].join("\0")
+        };
+        let out = [
+            line("refs/heads/main", "Ann Author", "<ann@example.com>"),
+            line("refs/heads/bare", "Bob", "bob@example.com"),
+            line("refs/tags/v1", "", ""),
+        ]
+        .join("\n");
+        let (refs, authors) = parse_refs_with_authors(out.as_bytes(), &[]).unwrap();
+        assert_eq!(refs.len(), 3);
+        assert_eq!(refs[0].subject, "subject");
+        assert_eq!(
+            authors,
+            [
+                (
+                    "refs/heads/main".to_string(),
+                    "Ann Author <ann@example.com>".to_string()
+                ),
+                ("refs/heads/bare".to_string(), "Bob <bob@example.com>".to_string()),
+                ("refs/tags/v1".to_string(), " <>".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn parses_remote_config() {
+        let out = [
+            "remote.origin.url\nhttps://example.com/a.git",
+            "remote.origin.fetch\n+refs/heads/*:refs/remotes/origin/*",
+            "remote.dotted.name.url\nx",
+            "remote.a/b.fetch\ny",
+            "remote.pushdefault\norigin",
+            "remote./bad.url\nz",
+            "remote..url\nz",
+            "remote.flag.skipdefaultupdate",
+            "tt-git.basebranch\n  first  ",
+            "tt-git.basebranch\nmain",
+        ]
+        .join("\0");
+        let (remotes, base) = parse_remote_config(format!("{out}\0").as_bytes());
+        assert_eq!(remotes, ["a/b", "dotted.name", "flag", "origin"]);
+        assert_eq!(base.as_deref(), Some("main"));
+        // The last value counts, even when it's empty or missing.
+        assert_eq!(
+            parse_remote_config(b"tt-git.basebranch\nmain\0tt-git.basebranch\0").1,
+            None
+        );
+        assert_eq!(
+            parse_remote_config(b"tt-git.basebranch\n  x \n").1.as_deref(),
+            Some("x")
+        );
+        assert_eq!(parse_remote_config(b""), (Vec::new(), None));
     }
 
     #[test]
@@ -526,5 +716,55 @@ mod tests {
         );
         assert_eq!(last_reflog_time(contents.as_bytes()), Some(1_700_000_123));
         assert_eq!(last_reflog_time(b""), None);
+    }
+
+    #[test]
+    fn tail_reflog_time_matches_reading_everything() {
+        let line = |t: u64, msg: &str| format!("{A} {B} Test User <t@e.com> {t} +0000\t{msg}");
+        let long = line(1_700_000_999, &"x".repeat(10_000));
+        let two = format!("{}\n{}", line(1_700_000_000, "one"), line(1_700_000_123, "two"));
+        let crlf = two.replace('\n', "\r\n");
+        let cases: Vec<Vec<u8>> = vec![
+            Vec::new(),
+            b"\n".to_vec(),
+            b"\n\n  \r\n\t\n".to_vec(),
+            line(1_700_000_000, "single").into_bytes(),
+            format!("{}\n", line(1_700_000_000, "single")).into_bytes(),
+            format!("{two}\n").into_bytes(),
+            two.clone().into_bytes(),
+            format!("{two}\n\n   \n").into_bytes(),
+            crlf.clone().into_bytes(),
+            format!("{crlf}\r\n").into_bytes(),
+            format!("{two}\r").into_bytes(),
+            format!("{two}\n{long}\n").into_bytes(),
+            format!("{two}\n{long}").into_bytes(),
+            format!("{long}\n{two}\n").into_bytes(),
+            format!("{two}\ngarbage without a time\n").into_bytes(),
+            format!("{two}\n{A} {B} No Email 1700000500 +0000\tmsg\n").into_bytes(),
+            // Invalid UTF-8 on both sides of a line break, multi-byte
+            // characters a small window cuts through, and a last line that
+            // is only Unicode whitespace (U+2028).
+            [
+                two.as_bytes(),
+                b"\n\xff\xfe",
+                line(1_700_000_777, "caf\u{e9} \u{1f600}").as_bytes(),
+                b"\xc3\n",
+            ]
+            .concat(),
+            [
+                line(1_700_000_001, "\u{1f600}\u{1f600}").as_bytes(),
+                b"\n\xe2\x80\xa8\n",
+            ]
+            .concat(),
+        ];
+        for contents in cases {
+            let want = last_reflog_time(&contents);
+            let len = contents.len() as u64;
+            for window in (0..=len + 2).filter(|w| *w < 200 || w % 97 == 0 || *w + 3 > len) {
+                let mut file = std::io::Cursor::new(&contents);
+                let got = tail_reflog_time(&mut file, len, window).unwrap();
+                assert_eq!(got, want, "window {window} of {:?}", String::from_utf8_lossy(&contents));
+            }
+        }
     }
 }

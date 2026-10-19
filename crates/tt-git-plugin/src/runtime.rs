@@ -233,13 +233,17 @@ fn capture(mut r: impl Read) -> String {
 }
 
 /// Runs plugin commands in the background and keeps their logs.
+/// Called with each command's final log.
+type OnFinish = dyn Fn(&Arc<CommandLog>) + Send + Sync;
+
 #[derive(Clone)]
 pub struct Runner {
     host: Arc<Mutex<HostEnv>>,
-    logs: Arc<Mutex<VecDeque<CommandLog>>>,
+    /// Shared with `on_finish`, so finished output isn't copied for it.
+    logs: Arc<Mutex<VecDeque<Arc<CommandLog>>>>,
     in_flight: Arc<AtomicUsize>,
     next_id: Arc<AtomicU64>,
-    on_finish: Arc<dyn Fn(&CommandLog) + Send + Sync>,
+    on_finish: Arc<OnFinish>,
 }
 
 impl std::fmt::Debug for Runner {
@@ -252,7 +256,7 @@ impl std::fmt::Debug for Runner {
 
 impl Runner {
     /// `on_finish` is called (on the command's thread) when each command ends.
-    pub fn new(host: HostEnv, on_finish: impl Fn(&CommandLog) + Send + Sync + 'static) -> Self {
+    pub fn new(host: HostEnv, on_finish: impl Fn(&Arc<CommandLog>) + Send + Sync + 'static) -> Self {
         Self {
             host: Arc::new(Mutex::new(host)),
             logs: Arc::new(Mutex::new(VecDeque::new())),
@@ -281,11 +285,11 @@ impl Runner {
             .rev()
             .filter(|l| plugin_id.is_none_or(|p| l.plugin_id == p))
             .take(limit)
-            .cloned()
+            .map(|l| CommandLog::clone(l))
             .collect()
     }
 
-    fn store(&self, log: CommandLog) {
+    fn store(&self, log: Arc<CommandLog>) {
         let mut logs = self.logs.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(existing) = logs.iter_mut().find(|l| l.log_id == log.log_id) {
             *existing = log;
@@ -327,12 +331,13 @@ impl Runner {
             stderr: String::new(),
             error: None,
         };
-        self.store(log.clone());
+        self.store(Arc::new(log.clone()));
 
         let runner = self.clone();
         let host = self.host();
         let spawned = std::thread::Builder::new()
             .name("tt-git-plugin-command".into())
+            .stack_size(crate::IO_THREAD_STACK)
             .spawn(move || {
                 match run_to_completion(&host, &req) {
                     Ok((code, stdout, stderr)) => {
@@ -351,6 +356,7 @@ impl Runner {
                     }
                 }
                 log.finished_unix_ms = Some(now_ms());
+                let log = Arc::new(log);
                 runner.store(log.clone());
                 // Notify before decrementing so an idle check never sees
                 // "nothing running" while the result is still unreported.
@@ -373,7 +379,11 @@ fn run_to_completion(host: &HostEnv, req: &CommandRequest) -> Result<(Option<i32
         .map_err(|e| format!("could not start {:?}: {e}", req.argv[0]))?;
     let stdout = child.stdout.take().expect("piped");
     let stderr = child.stderr.take().expect("piped");
-    let err_thread = std::thread::spawn(move || capture(stderr));
+    // As `std::thread::spawn`, with a smaller stack.
+    let err_thread = std::thread::Builder::new()
+        .stack_size(crate::IO_THREAD_STACK)
+        .spawn(move || capture(stderr))
+        .expect("failed to spawn thread");
     let out = capture(stdout);
     let err = err_thread.join().unwrap_or_default();
     let status = child.wait().map_err(|e| e.to_string())?;

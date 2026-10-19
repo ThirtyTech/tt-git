@@ -19,6 +19,10 @@ pub use manifest::{MANIFEST_FILE, Manifest};
 pub use registry::{PluginDirs, PluginRecord, Registry};
 pub use runtime::{CommandLog, CommandStatus, EventEnvelope, HostEnv, InvocationContext, Runner};
 
+/// Stack size for threads that only move bytes between pipes, files and
+/// channels (no parsing or deep calls), instead of the 2 MiB default.
+pub(crate) const IO_THREAD_STACK: usize = 256 * 1024;
+
 /// tt-git's version, compared against `min_tt_git_version`.
 pub fn host_version() -> semver::Version {
     semver::Version::parse(env!("CARGO_PKG_VERSION")).expect("crate version is semver")

@@ -76,7 +76,7 @@ fn cherry_pick_from_graph() {
         .graph()
         .commits()
         .iter()
-        .position(|c| c.summary == "pick me")
+        .position(|c| &*c.summary == "pick me")
         .unwrap();
     for _ in 0..idx {
         t.press("j");
@@ -85,7 +85,7 @@ fn cherry_pick_from_graph() {
     assert!(t.screen().contains("\"pick me\" onto the current branch?"));
     t.press("y");
     assert_eq!(sb.git(&["log", "-1", "--format=%s"]), "pick me");
-    assert_eq!(t.app().graph().selected().unwrap().summary, "pick me");
+    assert_eq!(&*t.app().graph().selected().unwrap().summary, "pick me");
 }
 
 #[test]

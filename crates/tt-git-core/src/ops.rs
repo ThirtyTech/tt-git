@@ -273,7 +273,7 @@ impl Repo {
             let mut args = vec!["diff", "--cached", "-M", "--"];
             args.extend(&paths);
             out.push_str("── staged ──\n");
-            out.push_str(&self.git().run(&args)?.stdout_str());
+            out.push_str(&String::from_utf8_lossy(&self.git().run(&args)?.stdout));
         }
         if entry.has_unstaged() {
             let mut args = vec!["diff", "--"];
@@ -282,7 +282,7 @@ impl Repo {
                 out.push('\n');
             }
             out.push_str("── unstaged ──\n");
-            out.push_str(&self.git().run(&args)?.stdout_str());
+            out.push_str(&String::from_utf8_lossy(&self.git().run(&args)?.stdout));
         }
         Ok(out)
     }

@@ -500,16 +500,19 @@ fn leased_paths(dirs: &PluginDirs) -> Vec<PathBuf> {
 /// The managed checkout of every registered GitHub plugin.
 pub fn registered_paths(dirs: &PluginDirs) -> Vec<PathBuf> {
     Registry::read(dirs)
-        .map(|r| {
-            r.plugins
-                .iter()
-                .filter_map(|p| match &p.source {
-                    Source::Github { managed_path, .. } => Some(managed_path.clone()),
-                    Source::Local => None,
-                })
-                .collect()
-        })
+        .map(|r| managed_paths(&r.plugins))
         .unwrap_or_default()
+}
+
+/// The managed checkouts of those of `plugins` installed from GitHub.
+pub fn managed_paths<'a>(plugins: impl IntoIterator<Item = &'a InstalledPlugin>) -> Vec<PathBuf> {
+    plugins
+        .into_iter()
+        .filter_map(|p| match &p.source {
+            Source::Github { managed_path, .. } => Some(managed_path.clone()),
+            Source::Local => None,
+        })
+        .collect()
 }
 
 /// Deletes installation generations that are neither registered nor leased

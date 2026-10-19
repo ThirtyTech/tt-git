@@ -1,26 +1,40 @@
 //! Plain data types produced by the parsers.
 
+use std::sync::Arc;
+
 use serde::Serialize;
+use smallvec::SmallVec;
+
+pub use crate::oid::{Oid, OidHex, ParseOidError};
+
+/// A commit's parent ids, first parent first. Up to two (every commit but
+/// an octopus merge) are stored inline.
+pub type Parents = SmallVec<[Oid; 2]>;
 
 /// A commit as loaded for the graph.
+///
+/// Kept compact, since the graph holds tens of thousands: ids are bytes,
+/// and a log shares one allocation per distinct author name and email.
+/// It serializes exactly as it did with `String` fields.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Commit {
-    /// Full hex object id.
-    pub oid: String,
+    /// Full object id.
+    pub oid: Oid,
     /// Parent ids, first parent first.
-    pub parents: Vec<String>,
-    pub author_name: String,
-    pub author_email: String,
+    pub parents: Parents,
+    pub author_name: Arc<str>,
+    pub author_email: Arc<str>,
     /// Author time, unix seconds.
     pub author_time: i64,
     /// Committer time, unix seconds.
     pub commit_time: i64,
-    pub summary: String,
+    pub summary: Box<str>,
 }
 
 impl Commit {
-    pub fn short_oid(&self) -> &str {
-        &self.oid[..self.oid.len().min(7)]
+    /// The first 7 hex digits of the id.
+    pub fn short_oid(&self) -> ShortOid {
+        ShortOid(self.oid.hex())
     }
 
     pub fn is_merge(&self) -> bool {
@@ -39,9 +53,46 @@ pub struct BranchHistory {
     /// the fork.
     pub commits: Vec<Commit>,
     /// The base commit the branch branched off.
-    pub fork: Option<String>,
+    pub fork: Option<Oid>,
     /// The base commit that merged the branch in.
-    pub merge: Option<String>,
+    pub merge: Option<Oid>,
+}
+
+/// [`Commit::short_oid`]: up to 7 hex digits, on the stack.
+#[derive(Clone, Copy)]
+pub struct ShortOid(OidHex);
+
+impl ShortOid {
+    pub fn as_str(&self) -> &str {
+        let hex = self.0.as_str();
+        &hex[..hex.len().min(7)]
+    }
+}
+
+impl std::ops::Deref for ShortOid {
+    type Target = str;
+
+    fn deref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl std::fmt::Display for ShortOid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self.as_str(), f)
+    }
+}
+
+impl std::fmt::Debug for ShortOid {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(self.as_str(), f)
+    }
+}
+
+impl PartialEq<&str> for ShortOid {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -286,4 +337,85 @@ pub struct Checkout {
     pub from: String,
     pub to: String,
     pub time: i64,
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use crate::parse::{FS, Idents, parse_commit_interned};
+
+    /// The `String`-based layout `Commit` had before it was made compact.
+    mod before {
+        #[derive(Debug, serde::Serialize)]
+        pub struct Commit {
+            pub oid: String,
+            pub parents: Vec<String>,
+            pub author_name: String,
+            pub author_email: String,
+            pub author_time: i64,
+            pub commit_time: i64,
+            pub summary: String,
+        }
+    }
+
+    const A: &str = "0123456789abcdef0123456789abcdef01234567";
+    const B: &str = "89abcdef0123456789abcdef0123456789abcdef";
+    const C: &str = "fedcba9876543210fedcba9876543210fedcba98";
+
+    fn parse(oid: &str, parents: &str, idents: &mut Idents) -> super::Commit {
+        let rec = format!("{oid}{FS}{parents}{FS}Ann \"A\" Author{FS}ann@example.com{FS}100{FS}200{FS}Say \"hi\" ✓");
+        parse_commit_interned(rec.as_bytes(), idents).unwrap()
+    }
+
+    fn before(c: &super::Commit) -> before::Commit {
+        before::Commit {
+            oid: c.oid.to_string(),
+            parents: c.parents.iter().map(|p| p.to_string()).collect(),
+            author_name: c.author_name.to_string(),
+            author_email: c.author_email.to_string(),
+            author_time: c.author_time,
+            commit_time: c.commit_time,
+            summary: c.summary.to_string(),
+        }
+    }
+
+    #[test]
+    fn serializes_and_debugs_like_the_string_layout() {
+        let mut idents = Idents::default();
+        for parents in [String::new(), B.to_string(), format!("{B} {C}"), format!("{A} {B} {C}")] {
+            let c = parse(A, &parents, &mut idents);
+            let old = before(&c);
+            assert_eq!(old.parents.join(" "), parents);
+            assert_eq!(serde_json::to_string(&c).unwrap(), serde_json::to_string(&old).unwrap());
+            assert_eq!(format!("{c:?}"), format!("{old:?}"));
+            assert_eq!(format!("{c:#?}"), format!("{old:#?}"));
+        }
+    }
+
+    #[test]
+    fn short_oid_is_the_first_seven_digits() {
+        let c = parse(A, "", &mut Idents::default());
+        assert_eq!(c.short_oid(), "0123456");
+        assert_eq!(format!("[{}]", c.short_oid()), "[0123456]");
+    }
+
+    #[test]
+    fn one_log_shares_author_strings() {
+        let mut idents = Idents::default();
+        let a = parse(A, "", &mut idents);
+        let b = parse(B, A, &mut idents);
+        assert!(Arc::ptr_eq(&a.author_name, &b.author_name));
+        assert!(Arc::ptr_eq(&a.author_email, &b.author_email));
+    }
+
+    #[test]
+    fn is_compact() {
+        // Was 136 bytes plus 6 or more heap blocks; now one (the summary).
+        assert!(
+            std::mem::size_of::<super::Commit>() <= 192,
+            "{}",
+            std::mem::size_of::<super::Commit>()
+        );
+    }
 }

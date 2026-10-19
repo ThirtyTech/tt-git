@@ -48,9 +48,22 @@ pub struct Cell {
     pub color: u8,
 }
 
+/// [`Cell::glyph`] of a non-node cell, by its bits.
+const GLYPHS: [&str; 16] = [
+    " ", "╵", "╷", "│", "╴", "╯", "╮", "┤", "╶", "╰", "╭", "├", "─", "┴", "┬", "┼",
+];
+
 impl Cell {
     pub fn is_empty(&self) -> bool {
         self.bits == 0 && !self.node
+    }
+
+    /// [`glyph`](Self::glyph) as a string, without allocating.
+    pub fn glyph_str(&self, node_glyph: &'static str) -> &'static str {
+        if self.node {
+            return node_glyph;
+        }
+        GLYPHS.get(usize::from(self.bits)).copied().unwrap_or("╶")
     }
 
     /// Box-drawing glyph for the cell's connections (rounded corners).
@@ -124,6 +137,9 @@ struct Lane {
 pub struct GraphBuilder {
     lanes: Vec<Option<Lane>>,
     next_color: u8,
+    /// Which lanes were open before the commit being pushed; kept between
+    /// pushes so wide graphs don't allocate it every row.
+    before: Vec<bool>,
 }
 
 impl GraphBuilder {
@@ -155,8 +171,15 @@ impl GraphBuilder {
     /// Lays out the next commit. `parents` must be in git order (first
     /// parent first); ids may refer to commits not pushed yet.
     pub fn push(&mut self, id: NodeId, parents: &[NodeId]) -> Row {
-        let before: SmallVec<[bool; 8]> = self.lanes.iter().map(Option::is_some).collect();
+        let mut before = std::mem::take(&mut self.before);
+        before.clear();
+        before.extend(self.lanes.iter().map(Option::is_some));
+        let row = self.lay_out(id, parents, &before);
+        self.before = before;
+        row
+    }
 
+    fn lay_out(&mut self, id: NodeId, parents: &[NodeId], before: &[bool]) -> Row {
         let matching: SmallVec<[usize; 4]> = self
             .lanes
             .iter()
@@ -281,6 +304,163 @@ impl GraphBuilder {
             is_merge: distinct.len() > 1,
             cells,
             fillers,
+        }
+    }
+}
+
+// A packed cell keeps its color in three bits.
+const _: () = assert!(PALETTE_SIZE <= 8);
+
+/// [`Row`]s stored compactly, for keeping one per commit of a long history:
+/// two bytes per lane column, in one buffer shared by every row, and at
+/// most [`cap`](Self::cap) columns per row. Columns past that are left out
+/// (though counted in the row's [`width`](RowRef::width)), for a caller that
+/// never draws them. Colors must be below [`PALETTE_SIZE`], as the builder's
+/// are.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Rows {
+    heads: Vec<RowHead>,
+    cells: Vec<u16>,
+    cap: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct RowHead {
+    /// Where the row's cells start in `cells`.
+    start: usize,
+    width: u32,
+    node_lane: u32,
+    node_color: u8,
+    is_merge: bool,
+}
+
+/// Packed [`Cell`] and filler: bits 0-3 [`bits`], 4 node, 5-7 color,
+/// 8 filler present, 9-11 its color.
+fn pack(cell: Cell, filler: Option<u8>) -> u16 {
+    debug_assert!(cell.color < PALETTE_SIZE && filler.is_none_or(|c| c < PALETTE_SIZE));
+    let mut v = u16::from(cell.bits & 0xf) | u16::from(cell.node) << 4 | u16::from(cell.color & 7) << 5;
+    if let Some(c) = filler {
+        v |= 1 << 8 | u16::from(c & 7) << 9;
+    }
+    v
+}
+
+impl Rows {
+    /// Keeps up to `cap` columns of each row; `usize::MAX` keeps them all.
+    pub fn new(cap: usize) -> Self {
+        Self {
+            heads: Vec::new(),
+            cells: Vec::new(),
+            cap,
+        }
+    }
+
+    /// Most columns kept per row.
+    pub fn cap(&self) -> usize {
+        self.cap
+    }
+
+    pub fn len(&self) -> usize {
+        self.heads.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.heads.is_empty()
+    }
+
+    /// Removes every row (keeping the memory) and sets a new `cap`.
+    pub fn reset(&mut self, cap: usize) {
+        self.heads.clear();
+        self.cells.clear();
+        self.cap = cap;
+    }
+
+    pub fn push(&mut self, row: &Row) {
+        let start = self.cells.len();
+        let kept = row.cells.len().min(self.cap);
+        self.cells.extend(
+            row.cells[..kept]
+                .iter()
+                .zip(&row.fillers[..kept])
+                .map(|(cell, filler)| pack(*cell, *filler)),
+        );
+        self.heads.push(RowHead {
+            start,
+            width: u32::try_from(row.cells.len()).unwrap_or(u32::MAX),
+            node_lane: u32::try_from(row.node_lane).unwrap_or(u32::MAX),
+            node_color: row.node_color,
+            is_merge: row.is_merge,
+        });
+    }
+
+    pub fn get(&self, i: usize) -> Option<RowRef<'_>> {
+        let head = self.heads.get(i)?;
+        let end = self.heads.get(i + 1).map_or(self.cells.len(), |next| next.start);
+        Some(RowRef {
+            head,
+            cells: &self.cells[head.start..end],
+        })
+    }
+
+    pub fn iter(&self) -> impl ExactSizeIterator<Item = RowRef<'_>> + '_ {
+        (0..self.len()).map(|i| self.get(i).expect("in range"))
+    }
+}
+
+/// One row of [`Rows`].
+#[derive(Debug, Clone, Copy)]
+pub struct RowRef<'a> {
+    head: &'a RowHead,
+    cells: &'a [u16],
+}
+
+impl RowRef<'_> {
+    /// Number of lane columns, as [`Row::width`] (kept or not).
+    pub fn width(&self) -> usize {
+        self.head.width as usize
+    }
+
+    /// Number of columns kept: the width, up to the rows' cap.
+    pub fn kept(&self) -> usize {
+        self.cells.len()
+    }
+
+    pub fn node_lane(&self) -> usize {
+        self.head.node_lane as usize
+    }
+
+    pub fn node_color(&self) -> u8 {
+        self.head.node_color
+    }
+
+    pub fn is_merge(&self) -> bool {
+        self.head.is_merge
+    }
+
+    /// Column `i`, which must be one of the [`kept`](Self::kept) ones.
+    pub fn cell(&self, i: usize) -> Cell {
+        let v = self.cells[i];
+        Cell {
+            bits: (v & 0xf) as u8,
+            node: v & 1 << 4 != 0,
+            color: (v >> 5 & 7) as u8,
+        }
+    }
+
+    /// The gap after column `i`, as [`Row::fillers`]; `i` must be kept.
+    pub fn filler(&self, i: usize) -> Option<u8> {
+        let v = self.cells[i];
+        (v & 1 << 8 != 0).then_some((v >> 9 & 7) as u8)
+    }
+
+    /// The kept columns as a [`Row`].
+    pub fn to_row(&self) -> Row {
+        Row {
+            node_lane: self.node_lane(),
+            node_color: self.node_color(),
+            is_merge: self.is_merge(),
+            cells: (0..self.kept()).map(|i| self.cell(i)).collect(),
+            fillers: (0..self.kept()).map(|i| self.filler(i)).collect(),
         }
     }
 }

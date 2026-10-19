@@ -304,6 +304,19 @@ impl Command {
 pub struct Keymap {
     bindings: HashMap<Context, HashMap<KeyCombo, Command>>,
     custom: Vec<CustomKey>,
+    /// What the help bar and popup show, worked out once from `bindings`
+    /// (which never change after building).
+    shown: HashMap<(Context, Command), ShownKeys>,
+}
+
+/// A command's keys in one context, as [`Keymap::keys_for`] lists them.
+#[derive(Debug, Clone)]
+struct ShownKeys {
+    keys: Vec<KeyCombo>,
+    /// The first key, displayed.
+    first: String,
+    /// All of them displayed, comma-separated.
+    all: String,
 }
 
 /// One or many key strings, so config can say `quit = "q"` or `quit = ["q", "ctrl+c"]`.
@@ -491,9 +504,32 @@ impl Keymap {
                 map.entry(combo).or_insert(cmd);
             }
         }
+        let mut keys: HashMap<(Context, Command), Vec<KeyCombo>> = HashMap::new();
+        for (ctx, map) in &bindings {
+            for (key, cmd) in map {
+                keys.entry((*ctx, *cmd)).or_default().push(*key);
+            }
+        }
+        let shown = keys
+            .into_iter()
+            .map(|(at, mut keys)| {
+                keys.sort_by_cached_key(|k| {
+                    let s = k.to_string();
+                    (k.modifiers.bits(), s.chars().count() > 1, s)
+                });
+                let names: Vec<String> = keys.iter().map(ToString::to_string).collect();
+                let shown = ShownKeys {
+                    first: names[0].clone(),
+                    all: names.join(", "),
+                    keys,
+                };
+                (at, shown)
+            })
+            .collect();
         Ok(Self {
             bindings,
             custom: Vec::new(),
+            shown,
         })
     }
 
@@ -543,25 +579,33 @@ impl Keymap {
 
     /// All keys bound to `command` in `context`, sorted for stable display.
     pub fn keys_for(&self, context: Context, command: Command) -> Vec<KeyCombo> {
-        let mut keys: Vec<KeyCombo> = self
-            .bindings
-            .get(&context)
-            .into_iter()
-            .flat_map(|m| m.iter())
-            .filter(|(_, c)| **c == command)
-            .map(|(k, _)| *k)
-            .collect();
-        keys.sort_by_key(|k| (k.modifiers.bits(), k.to_string().chars().count() > 1, k.to_string()));
-        keys
+        self.shown
+            .get(&(context, command))
+            .map(|s| s.keys.clone())
+            .unwrap_or_default()
+    }
+
+    /// [`keys_for`](Self::keys_for), displayed and comma-separated; empty
+    /// when there are none.
+    pub fn keys_text(&self, context: Context, command: Command) -> &str {
+        self.shown.get(&(context, command)).map_or("", |s| s.all.as_str())
     }
 
     /// The key shown in the help bar for `command`: the first binding in
     /// `context`, else in the global context.
     pub fn display_key(&self, context: Context, command: Command) -> Option<KeyCombo> {
-        self.keys_for(context, command)
-            .into_iter()
-            .next()
-            .or_else(|| self.keys_for(Context::Global, command).into_iter().next())
+        self.shown_keys(context, command).map(|s| s.keys[0])
+    }
+
+    /// [`display_key`](Self::display_key), displayed.
+    pub fn display_key_text(&self, context: Context, command: Command) -> Option<&str> {
+        self.shown_keys(context, command).map(|s| s.first.as_str())
+    }
+
+    fn shown_keys(&self, context: Context, command: Command) -> Option<&ShownKeys> {
+        self.shown
+            .get(&(context, command))
+            .or_else(|| self.shown.get(&(Context::Global, command)))
     }
 }
 
@@ -701,5 +745,63 @@ mod tests {
             .insert(Command::ToggleScope, KeyList::One("hyper+x".into()));
         let err = Keymap::with_overrides(&overrides).unwrap_err();
         assert_eq!(err.to_string(), "keys.graph.toggle_scope: invalid key 'hyper+x'");
+    }
+
+    /// What `keys_for` and `display_key` worked out on every call before
+    /// they were cached.
+    fn uncached_keys_for(km: &Keymap, context: Context, command: Command) -> Vec<KeyCombo> {
+        let mut keys: Vec<KeyCombo> = km
+            .bindings
+            .get(&context)
+            .into_iter()
+            .flat_map(|m| m.iter())
+            .filter(|(_, c)| **c == command)
+            .map(|(k, _)| *k)
+            .collect();
+        keys.sort_by_key(|k| (k.modifiers.bits(), k.to_string().chars().count() > 1, k.to_string()));
+        keys
+    }
+
+    #[test]
+    fn cached_key_display_matches_working_it_out() {
+        let overrides: KeyOverrides = toml::from_str::<HashMap<Context, HashMap<Command, KeyList>>>(
+            r#"
+            [global]
+            quit = ["x", "ctrl+q", "f10", "Q", "esc"]
+            help = "x"
+            [graph]
+            toggle_scope = ["b", "ctrl+a", "alt+shift+b", "enter", "B"]
+            [status]
+            quit = "z"
+            "#,
+        )
+        .unwrap();
+        let contexts = [
+            Context::Global,
+            Context::Status,
+            Context::Branches,
+            Context::Graph,
+            Context::Details,
+        ];
+        let commands: std::collections::HashSet<Command> = DEFAULTS.iter().map(|(_, cmd, _)| *cmd).collect();
+        for km in [Keymap::default(), Keymap::with_overrides(&overrides).unwrap()] {
+            for ctx in contexts {
+                for cmd in &commands {
+                    let want = uncached_keys_for(&km, ctx, *cmd);
+                    assert_eq!(km.keys_for(ctx, *cmd), want, "{ctx:?} {cmd:?}");
+                    let text = want.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
+                    assert_eq!(km.keys_text(ctx, *cmd), text);
+                    let display = want
+                        .first()
+                        .copied()
+                        .or_else(|| uncached_keys_for(&km, Context::Global, *cmd).first().copied());
+                    assert_eq!(km.display_key(ctx, *cmd), display, "{ctx:?} {cmd:?}");
+                    assert_eq!(
+                        km.display_key_text(ctx, *cmd).map(str::to_string),
+                        display.map(|k| k.to_string())
+                    );
+                }
+            }
+        }
     }
 }

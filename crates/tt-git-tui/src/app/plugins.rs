@@ -2,6 +2,7 @@
 
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::mpsc::Sender;
 
 use serde_json::{Value, json};
@@ -10,7 +11,7 @@ use tt_git_plugin::host::PluginHost;
 use tt_git_plugin::manifest::ActionContext;
 use tt_git_plugin::registry::{self, PluginDirs};
 use tt_git_plugin::runtime::{CommandLog, CommandStatus, EventEnvelope, HostEnv, InvocationContext, Runner};
-use tt_git_plugin::socket::{Call, Reply, Response, Server};
+use tt_git_plugin::socket::{Call, EventLine, Reply, Response, Server};
 
 use super::App;
 use crate::action::Action;
@@ -31,7 +32,7 @@ pub struct PluginOptions {
 }
 
 struct Subscriber {
-    tx: Sender<Value>,
+    tx: Sender<EventLine>,
     /// Only these event names, or everything when `None`.
     events: Option<Vec<String>>,
 }
@@ -99,15 +100,24 @@ impl App {
                 bin_path: opts.bin_path,
                 extra: opts.extra_env,
             },
-            move |log: &CommandLog| ctx.emit(Action::PluginFinished(log.clone())),
+            move |log: &Arc<CommandLog>| ctx.emit(Action::PluginFinished(log.clone())),
         );
         let host = PluginHost::new(opts.dirs.clone(), tt_git_plugin::host_version(), runner);
-        // Claim our plugins' checkouts, then clear out unclaimed old ones.
-        let lease =
-            tt_git_plugin::install::Lease::acquire(&opts.dirs, &tt_git_plugin::install::registered_paths(&opts.dirs))
-                .map_err(|e| tracing::warn!("plugin lease: {e}"))
-                .ok();
-        tt_git_plugin::install::gc(&opts.dirs);
+        // Claim our plugins' checkouts, then clear out unclaimed old ones
+        // (off the main thread: it can delete whole checkouts).
+        let lease = tt_git_plugin::install::Lease::acquire(&opts.dirs, &host.registered_paths())
+            .map_err(|e| tracing::warn!("plugin lease: {e}"))
+            .ok();
+        let dirs = opts.dirs.clone();
+        let gc = std::thread::Builder::new()
+            .name("plugin-gc".into())
+            .stack_size(crate::IO_THREAD_STACK)
+            .spawn(move || {
+                tt_git_plugin::install::gc(&dirs);
+            });
+        if let Err(e) = gc {
+            tracing::warn!("plugin gc: {e}");
+        }
         self.plugins = Some(PluginState {
             host,
             lease,
@@ -165,13 +175,18 @@ impl App {
     }
 
     /// Re-reads plugins when the registry changed (called on ticks).
-    pub(super) fn poll_plugins(&mut self) {
-        if let Some(state) = &mut self.plugins
-            && state.host.reload_if_changed()
-            && let Some(lease) = &state.lease
-        {
-            let _ = lease.set_paths(&tt_git_plugin::install::registered_paths(state.host.dirs()));
+    /// Returns whether it did.
+    pub(super) fn poll_plugins(&mut self) -> bool {
+        let Some(state) = &mut self.plugins else {
+            return false;
+        };
+        if !state.host.reload_if_changed() {
+            return false;
         }
+        if let Some(lease) = &state.lease {
+            let _ = lease.set_paths(&state.host.registered_paths());
+        }
+        true
     }
 
     pub(super) fn invocation_context(&mut self, source: &str) -> InvocationContext {
@@ -180,14 +195,14 @@ impl App {
             format!("tt-{}-{}", std::process::id(), p.correlation)
         });
         let status = self.status.status();
-        let head = self.refs.as_ref().map(|r| &r.head);
+        let head = self.head.as_ref();
         InvocationContext {
             repo_path: Some(self.repo.root().display().to_string()),
             repo_name: Some(self.repo.name()),
             head: head.and_then(|h| h.oid()).map(str::to_string),
             branch: head.and_then(|h| h.branch()).map(str::to_string),
             upstream: status.and_then(|s| s.branch.upstream.clone()),
-            selected_commit: self.graph.selected().map(|c| c.oid.clone()),
+            selected_commit: self.graph.selected().map(|c| c.oid.to_string()),
             selected_branch: self.branches.selected().map(|b| b.name.clone()),
             selected_file: self.status.selected().map(|e| e.path.clone()),
             selected_text: None,
@@ -220,6 +235,9 @@ impl App {
 
     /// Delivers an event to hooks and socket subscribers.
     pub(super) fn emit_event(&mut self, event: &str, data: Value) {
+        if self.plugins.is_none() {
+            return;
+        }
         let envelope = EventEnvelope {
             event: event.to_string(),
             data,
@@ -233,16 +251,25 @@ impl App {
                 tracing::warn!(event, "plugin hook not run: {e}");
             }
         }
-        let value = to_json(&envelope);
+        if state.subscribers.is_empty() {
+            return;
+        }
+        let line = match EventLine::new(&to_json(&envelope)) {
+            Ok(line) => line,
+            Err(e) => {
+                tracing::warn!(event, "event not sent to subscribers: {e}");
+                return;
+            }
+        };
         state.subscribers.retain(|s| {
             let wanted = s.events.as_ref().is_none_or(|names| names.iter().any(|n| n == event));
-            !wanted || s.tx.send(value.clone()).is_ok()
+            !wanted || s.tx.send(line.clone()).is_ok()
         });
     }
 
     /// Emits the plugin event for a finished write operation.
     pub(super) fn op_event(&mut self, op: &GitOp, head: Option<&str>) {
-        let branch = self.refs.as_ref().and_then(|r| r.head.branch()).map(str::to_string);
+        let branch = self.head.as_ref().and_then(|h| h.branch()).map(str::to_string);
         let (event, data) = match op {
             GitOp::Checkout(CheckoutPlan::Local(name)) => {
                 ("branch.checked_out", json!({ "branch": name, "created": false }))
@@ -307,7 +334,7 @@ impl App {
 
     /// Fires `head.changed` when a refs reload shows HEAD moved.
     pub(super) fn track_head(&mut self) {
-        let Some(head) = self.refs.as_ref().map(|r| r.head.clone()) else {
+        let Some(head) = self.head.clone() else {
             return;
         };
         // Switching between branches at the same commit is a HEAD change too.
@@ -326,7 +353,7 @@ impl App {
         }
     }
 
-    pub(super) fn plugin_finished(&mut self, log: CommandLog) {
+    pub(super) fn plugin_finished(&mut self, log: Arc<CommandLog>) {
         if log.status == CommandStatus::Failed {
             let what = log.action_id.as_deref().or(log.event.as_deref()).unwrap_or("command");
             let why = match (&log.error, log.exit_code) {
@@ -548,7 +575,7 @@ impl App {
             "ping" => ok(json!({ "pong": true, "version": env!("CARGO_PKG_VERSION") })),
             "repo.info" => {
                 let status = self.status.status();
-                let head = self.refs.as_ref().map(|r| &r.head);
+                let head = self.head.as_ref();
                 ok(json!({
                     "path": self.repo.root(),
                     "name": self.repo.name(),

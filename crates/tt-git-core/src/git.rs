@@ -110,6 +110,12 @@ impl GitOutput {
     pub fn stdout_str(&self) -> String {
         String::from_utf8_lossy(&self.stdout).into_owned()
     }
+
+    /// Like [`stdout_str`](Self::stdout_str) (the same text), but takes the
+    /// buffer instead of copying it when it's valid UTF-8.
+    pub fn into_stdout_string(self) -> String {
+        String::from_utf8(self.stdout).unwrap_or_else(|e| String::from_utf8_lossy(e.as_bytes()).into_owned())
+    }
 }
 
 /// A git command runner bound to a working directory.
@@ -148,6 +154,15 @@ impl GitCli {
 
     pub fn log(&self) -> &CommandLog {
         &self.log
+    }
+
+    /// An environment variable as git sees it: one set by
+    /// [`with_env`](Self::with_env), else this process's.
+    pub fn env_var(&self, name: &str) -> Option<OsString> {
+        match self.env.iter().rev().find(|(k, _)| env_name_eq(k, name)) {
+            Some((_, v)) => Some(v.clone()),
+            None => std::env::var_os(name),
+        }
     }
 
     /// Same runner (sharing the log) in another directory.
@@ -191,11 +206,26 @@ impl GitCli {
         }
         let result = (|| {
             let mut child = cmd.spawn().map_err(GitError::Spawn)?;
-            if let Some(input) = stdin {
-                let mut pipe = child.stdin.take().expect("stdin piped");
-                pipe.write_all(input).map_err(GitError::Spawn)?;
-            }
-            child.wait_with_output().map_err(GitError::Spawn)
+            let Some(input) = stdin else {
+                return child.wait_with_output().map_err(GitError::Spawn);
+            };
+            // Write on a thread while this one reads the output: writing it
+            // all first would deadlock once git fills its output pipe.
+            let mut pipe = child.stdin.take().expect("stdin piped");
+            std::thread::scope(|scope| {
+                let writer = scope.spawn(move || {
+                    let written = pipe.write_all(input);
+                    drop(pipe);
+                    written
+                });
+                let output = child.wait_with_output().map_err(GitError::Spawn);
+                let written = writer
+                    .join()
+                    .unwrap_or_else(|_| Err(std::io::Error::other("stdin writer panicked")));
+                let output = output?;
+                written.map_err(GitError::Spawn)?;
+                Ok(output)
+            })
         })();
 
         let output = match result {
@@ -275,6 +305,15 @@ impl GitCli {
                 stderr: String::from_utf8_lossy(&stderr).trim().to_string(),
             })
         }
+    }
+}
+
+/// Whether environment variable names match (case-insensitively on Windows).
+fn env_name_eq(key: &OsStr, name: &str) -> bool {
+    if cfg!(windows) {
+        key.to_string_lossy().eq_ignore_ascii_case(name)
+    } else {
+        key == name
     }
 }
 

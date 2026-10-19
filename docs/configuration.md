@@ -170,3 +170,7 @@ tt-git writes its own log to `<state>/logs/tt-git.log`. `<state>` is
 `$TTGIT_STATE_DIR` or the platform's state/data directory. Set the log
 level with `TTGIT_LOG`, for example `TTGIT_LOG=debug` or
 `TTGIT_LOG=tt_git_core=trace`.
+
+Every running tt-git appends to the same file. When it has grown past
+10 MB, the next tt-git to start renames it to `tt-git.log.1` (replacing
+an older one) and starts a fresh `tt-git.log`.

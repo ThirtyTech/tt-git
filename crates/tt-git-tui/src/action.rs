@@ -53,13 +53,34 @@ pub enum Action {
         generation: u64,
         error: String,
     },
+    /// Graph load `generation`, started to continue the one before it,
+    /// found the refs changed: it lists every commit instead, so its first
+    /// batch replaces the rows shown.
+    GraphRestarted {
+        generation: u64,
+    },
     /// The history for graph load `generation` of a focused branch.
     BranchHistoryLoaded {
         generation: u64,
         history: BranchHistory,
     },
-    RefsLoaded(Result<RefsSnapshot, String>),
+    /// What a whole-graph load would walk from now (`None` if that couldn't
+    /// be listed), checked after refs changed while load `generation` was
+    /// the graph's latest.
+    GraphTipsChecked {
+        generation: u64,
+        tips: Option<Vec<u8>>,
+    },
+    /// Boxed, being several times the size of any other action.
+    RefsLoaded(Result<Box<RefsSnapshot>, String>),
     StatusLoaded(Result<Status, String>),
+    /// Refs or status load `generation` finished with `result`, its
+    /// `RefsLoaded` or `StatusLoaded`. These loads run one at a time each,
+    /// and only the newest result is applied.
+    Reloaded {
+        generation: u64,
+        result: Box<Action>,
+    },
     /// The graph selection moved to this commit.
     CommitSelected(String),
     /// The status pane selection moved to this file.
@@ -86,7 +107,7 @@ pub enum Action {
     /// A request arrived on the API socket.
     Socket(Call),
     /// A plugin command finished.
-    PluginFinished(CommandLog),
+    PluginFinished(std::sync::Arc<CommandLog>),
     /// A plugin pane produced output (redraw).
     PaneOutput(u64),
     /// A plugin pane's process ended.

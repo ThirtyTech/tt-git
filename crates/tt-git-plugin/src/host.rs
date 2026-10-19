@@ -76,6 +76,12 @@ impl PluginHost {
         &self.records
     }
 
+    /// [`install::registered_paths`](crate::install::registered_paths) as
+    /// of the last (re)load, without reading the registry again.
+    pub fn registered_paths(&self) -> Vec<std::path::PathBuf> {
+        crate::install::managed_paths(self.records.iter().map(|r| &r.installed))
+    }
+
     fn registry_mtime(&self) -> Option<SystemTime> {
         std::fs::metadata(self.dirs.registry_file())
             .and_then(|m| m.modified())
@@ -269,9 +275,11 @@ impl PluginHost {
     pub fn link_handlers_for(&self, url: &str) -> Vec<(String, String, String)> {
         let mut out = Vec::new();
         for rec in self.runnable() {
-            let m = &rec.manifest.as_ref().expect("runnable").manifest;
-            for l in &m.link_handlers {
-                if regex::Regex::new(&l.pattern).is_ok_and(|re| re.is_match(url)) {
+            let loaded = rec.manifest.as_ref().expect("runnable");
+            let m = &loaded.manifest;
+            // Compiled when the manifest was validated, one per handler.
+            for (l, re) in m.link_handlers.iter().zip(&loaded.link_patterns.0) {
+                if re.is_match(url) {
                     out.push((m.id.clone(), l.id.clone(), format!("{}.{}", m.id, l.action)));
                 }
             }

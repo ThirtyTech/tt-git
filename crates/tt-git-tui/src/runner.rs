@@ -21,7 +21,9 @@ pub async fn run(
     let mut events = crossterm::event::EventStream::new();
     let mut ticker = tokio::time::interval(TICK);
     app.start();
+    app.take_redraw();
     terminal.draw(|f| app.draw(f))?;
+    let mut size = terminal.size().ok();
     loop {
         tokio::select! {
             ev = events.next() => match ev {
@@ -44,7 +46,14 @@ pub async fn run(
         {
             app.update(Action::Notify(format!("couldn't copy: {e}")));
         }
-        terminal.draw(|f| app.draw(f))?;
+        // Skip frames nothing could have changed (key releases, mouse moves,
+        // most ticks): they'd draw the same screen. A size change is caught
+        // here too, in case it came without a resize event.
+        let now_size = terminal.size().ok();
+        if app.take_redraw() || now_size != size {
+            terminal.draw(|f| app.draw(f))?;
+            size = now_size;
+        }
     }
     Ok(())
 }

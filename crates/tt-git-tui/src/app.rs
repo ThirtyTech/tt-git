@@ -1,5 +1,7 @@
 //! Top-level application state, update and draw.
 
+use std::sync::Arc;
+
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
@@ -8,20 +10,20 @@ use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tt_git_core::branches::matches_filter;
 use tt_git_core::time::SharedClock;
-use tt_git_core::{LogFilter, Repo};
+use tt_git_core::{CommitFile, Head, LogFilter, Repo, StatusEntry};
 
 use crate::action::{Action, RefsSnapshot};
 use crate::component::{Component, EventState};
 use crate::config::Config;
 use crate::filter::FilterPanel;
-use crate::jobs::{Ctx, JobTracker};
+use crate::jobs::{Ctx, JobTracker, LatestJob, Reload};
 use crate::keymap::{Command, Context, KeyCombo, Keymap, KeymapError};
 use crate::layout::View;
 use crate::loaders;
 use crate::modal::{GitOp, Modal, ModalOutcome};
-use crate::panes::{BranchFocus, BranchesPane, DetailsPane, DetailsSubject, GraphPane, PaneId, StatusPane};
+use crate::panes::{BranchFocus, BranchesPane, DetailsPane, DetailsSubject, GraphPane, LoadToken, PaneId, StatusPane};
 use crate::theme::Theme;
-use crate::watcher::RepoWatcher;
+use crate::watcher::{IgnoredDirs, RepoWatcher};
 
 mod panes;
 mod plugins;
@@ -55,6 +57,47 @@ const ALL_GLOBAL: &[Command] = &[
     Command::Quit,
 ];
 
+/// A git load for the details pane's subject.
+#[derive(Debug, Clone, PartialEq)]
+enum DetailsLoad {
+    Commit(String),
+    CommitFiles(String),
+    File(StatusEntry),
+}
+
+impl DetailsLoad {
+    fn subject(&self) -> DetailsSubject {
+        match self {
+            DetailsLoad::Commit(oid) => DetailsSubject::Commit(oid.clone()),
+            DetailsLoad::CommitFiles(oid) => DetailsSubject::CommitFiles(oid.clone()),
+            DetailsLoad::File(entry) => DetailsSubject::File(entry.path.clone()),
+        }
+    }
+
+    /// Index into [`App::details_jobs`]: one at a time of each kind.
+    fn kind(&self) -> usize {
+        match self {
+            DetailsLoad::Commit(_) => 0,
+            DetailsLoad::CommitFiles(_) => 1,
+            DetailsLoad::File(_) => 2,
+        }
+    }
+}
+
+/// A focused branch's history load, waiting for or holding its slot.
+#[derive(Debug, Clone)]
+struct HistoryLoad {
+    load: LoadToken,
+    focus: BranchFocus,
+    limit: usize,
+}
+
+impl PartialEq for HistoryLoad {
+    fn eq(&self, other: &Self) -> bool {
+        self.load.generation() == other.load.generation()
+    }
+}
+
 /// How much of the screen the graph and details panes take. `+` toggles
 /// between [`Zoom::Off`] and [`Zoom::Full`]; `space` in a fullscreen graph
 /// opens details below it in [`Zoom::Wide`].
@@ -82,7 +125,9 @@ pub struct App {
     branches: BranchesPane,
     graph: GraphPane,
     details: DetailsPane,
-    refs: Option<RefsSnapshot>,
+    /// HEAD as of the last refs load.
+    head: Option<Head>,
+    clock: SharedClock,
     graph_limit: usize,
     modal: Option<Modal>,
     /// Labels of write operations in flight.
@@ -105,6 +150,25 @@ pub struct App {
     clipboard: Option<String>,
     should_quit: bool,
     pane_areas: Vec<(PaneId, Rect)>,
+    /// Something on screen may have changed since the last frame.
+    dirty: bool,
+    /// The last frame showed the terminal cursor (in a focused plugin pane).
+    /// Every frame re-sends show-cursor and its position, so such frames keep
+    /// coming on ticks, as they always have.
+    cursor_shown: bool,
+    /// The load the details subject still needs (and whether it must rerun
+    /// even if that load is running), started once details is on screen.
+    details_wanted: Option<(DetailsLoad, bool)>,
+    /// Details loads by [`DetailsLoad::kind`].
+    details_jobs: [LatestJob<DetailsLoad>; 3],
+    /// Diffs for the details files view.
+    file_diff_job: LatestJob<(String, CommitFile)>,
+    /// Branch histories for the graph's focused branch.
+    history_job: LatestJob<HistoryLoad>,
+    refs_reload: Reload,
+    status_reload: Reload,
+    /// What status loads found ignored, for the watcher.
+    ignored: Arc<IgnoredDirs>,
 }
 
 impl App {
@@ -136,10 +200,11 @@ impl App {
             focus: PaneId::Graph,
             zoom: Zoom::Off,
             details_open: false,
-            branches: BranchesPane::new(clock),
+            branches: BranchesPane::new(clock.clone()),
             graph,
             details: DetailsPane::default(),
-            refs: None,
+            head: None,
+            clock,
             modal: None,
             busy: Vec::new(),
             select_head: false,
@@ -156,6 +221,15 @@ impl App {
             clipboard: None,
             should_quit: false,
             pane_areas: Vec::new(),
+            dirty: true,
+            cursor_shown: false,
+            details_wanted: None,
+            details_jobs: Default::default(),
+            file_diff_job: LatestJob::default(),
+            history_job: LatestJob::default(),
+            refs_reload: Reload::default(),
+            status_reload: Reload::default(),
+            ignored: Arc::default(),
         };
         Ok((app, rx))
     }
@@ -164,7 +238,12 @@ impl App {
     pub fn start(&mut self) {
         self.update(Action::Refresh);
         if self.config.watch && self.watcher.is_none() {
-            match crate::watcher::watch(self.repo.root(), self.repo.git_dir(), self.ctx.clone()) {
+            match crate::watcher::watch(
+                self.repo.root(),
+                self.repo.git_dir(),
+                self.ignored.clone(),
+                self.ctx.clone(),
+            ) {
                 Ok(w) => self.watcher = Some(w),
                 Err(e) => tracing::warn!("file watching disabled: {e}"),
             }
@@ -223,10 +302,6 @@ impl App {
         self.modal.as_ref()
     }
 
-    pub fn refs(&self) -> Option<&RefsSnapshot> {
-        self.refs.as_ref()
-    }
-
     pub fn jobs(&self) -> &JobTracker {
         self.ctx.jobs()
     }
@@ -237,6 +312,13 @@ impl App {
 
     pub fn notice(&self) -> Option<&str> {
         self.notice.as_deref()
+    }
+
+    /// Whether a new frame could differ from the last one, clearing the flag.
+    /// Input and actions that may change what's shown set it; the runner
+    /// skips drawing while it's clear.
+    pub fn take_redraw(&mut self) -> bool {
+        std::mem::take(&mut self.dirty)
     }
 
     /// Takes the text a command copied, for the runner to send to the terminal.
@@ -256,8 +338,22 @@ impl App {
         }
         match event {
             // Windows reports releases too; only act on presses (and repeats).
-            Event::Key(key) if key.kind != KeyEventKind::Release => self.handle_key(key),
-            Event::Mouse(m) if self.config.mouse => self.handle_mouse(m),
+            Event::Key(key) if key.kind != KeyEventKind::Release => {
+                self.dirty = true;
+                self.handle_key(key);
+            }
+            Event::Mouse(m) if self.config.mouse => {
+                // Only these do anything; any-motion capture also reports
+                // every move.
+                if matches!(
+                    m.kind,
+                    MouseEventKind::Down(MouseButton::Left) | MouseEventKind::ScrollDown | MouseEventKind::ScrollUp
+                ) {
+                    self.dirty = true;
+                }
+                self.handle_mouse(m);
+            }
+            Event::Resize(..) => self.dirty = true,
             _ => {}
         }
     }
@@ -268,6 +364,11 @@ impl App {
     }
 
     pub fn handle_mouse(&mut self, m: MouseEvent) {
+        self.mouse(m);
+        self.flush_details();
+    }
+
+    fn mouse(&mut self, m: MouseEvent) {
         // Popups and floating plugin panes own the screen.
         if self.modal.is_some() || self.error.is_some() || self.show_help || self.panes.iter().any(|p| p.is_modal()) {
             return;
@@ -330,6 +431,11 @@ impl App {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) {
+        self.key(key);
+        self.flush_details();
+    }
+
+    fn key(&mut self, key: KeyEvent) {
         let combo = KeyCombo::from(key);
         if self.error.is_none() && self.modal.is_none() && self.pane_key(combo) {
             return;
@@ -427,24 +533,52 @@ impl App {
         let mut rows = Vec::new();
         for (ctx, cmds) in sections {
             for cmd in cmds {
-                let keys = self.keymap.keys_for(ctx, *cmd);
-                if keys.is_empty() {
-                    continue;
+                let keys = self.keymap.keys_text(ctx, *cmd);
+                if !keys.is_empty() {
+                    rows.push((keys.to_string(), cmd.label()));
                 }
-                let keys = keys.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
-                rows.push((keys, cmd.label()));
             }
         }
         rows
     }
 
+    /// How many rows [`all_help_rows`](Self::all_help_rows) has.
+    fn all_help_row_count(&self) -> usize {
+        let context = self.focused().context();
+        let sections: [(Context, &[Command]); 2] =
+            [(context, self.focused().commands()), (Context::Global, ALL_GLOBAL)];
+        sections
+            .iter()
+            .map(|(ctx, cmds)| {
+                cmds.iter()
+                    .filter(|cmd| !self.keymap.keys_text(*ctx, **cmd).is_empty())
+                    .count()
+            })
+            .sum()
+    }
+
     pub fn update(&mut self, action: Action) {
+        self.apply(action);
+        self.flush_details();
+    }
+
+    fn apply(&mut self, action: Action) {
+        // A tick only matters if plugins reloaded, the last frame showed the
+        // cursor, or a relative date drawn ("now", "5m") would read
+        // differently; anything else may change what's shown.
+        if !matches!(action, Action::Tick) {
+            self.dirty = true;
+        }
         match action {
             Action::Command(cmd) => self.run_command(cmd),
-            Action::Tick => self.poll_plugins(),
+            Action::Tick => {
+                if self.poll_plugins() || self.cursor_shown || self.dates_stale() {
+                    self.dirty = true;
+                }
+            }
             Action::Socket(call) => self.handle_call(call),
             Action::PluginFinished(log) => self.plugin_finished(log),
-            Action::PaneOutput(_) => {}
+            Action::PaneOutput(id) => self.pane_output(id),
             Action::PaneExited { id, status } => self.pane_exited(id, status),
             Action::Notify(msg) => self.notice = Some(msg),
             Action::Error(msg) => self.error = Some(msg),
@@ -463,16 +597,29 @@ impl App {
                 done,
             } => self.graph.apply_batch(generation, commits, done, &self.ctx),
             Action::BranchHistoryLoaded { generation, history } => {
-                self.graph.apply_history(generation, history, &self.ctx)
+                self.graph.apply_history(generation, history, &self.ctx);
+                self.history_finished(generation);
             }
             Action::GraphFailed { generation, error } => {
                 self.graph.load_failed(generation);
                 self.error = Some(error);
+                self.history_finished(generation);
+            }
+            Action::GraphTipsChecked { generation, tips } => {
+                // A newer load started after the change, so it shows it.
+                if generation == self.graph.generation() {
+                    if tips.is_some_and(|t| self.graph.same_tips(&t)) {
+                        self.graph.reload_unchanged(&self.ctx);
+                    } else {
+                        self.load_graph();
+                    }
+                }
             }
             Action::ReloadGraph => self.load_graph(),
+            Action::GraphRestarted { generation } => self.graph.restart(generation),
             Action::LoadMoreCommits => {
                 self.graph_limit = self.graph_limit.saturating_add(self.config.graph.max_commits.max(1));
-                self.load_graph();
+                self.load_more_commits();
             }
             Action::RefsLoaded(Ok(snapshot)) => {
                 if std::mem::take(&mut self.select_head)
@@ -481,9 +628,15 @@ impl App {
                     self.graph.select_when_loaded(oid.to_string(), &self.ctx);
                 }
                 self.graph.set_refs(&snapshot);
-                self.branches
-                    .set_entries(snapshot.branches.clone(), snapshot.base.clone(), &snapshot.refs);
-                self.refs = Some(snapshot);
+                let RefsSnapshot {
+                    head,
+                    refs,
+                    branches,
+                    base,
+                    ..
+                } = *snapshot;
+                self.branches.set_entries(branches, base, &refs);
+                self.head = Some(head);
                 self.track_head();
                 // Follow the focused branch if the list changed under it.
                 if self.graph.focus.is_some() {
@@ -505,30 +658,69 @@ impl App {
             Action::RepoChanged { refs, status } => {
                 if refs {
                     self.load_refs();
-                    self.load_graph();
+                    self.check_graph();
                 }
                 if status {
                     self.load_status();
                 }
             }
             Action::RefsLoaded(Err(e)) | Action::StatusLoaded(Err(e)) => self.error = Some(e),
+            Action::Reloaded { generation, result } => {
+                let refs = matches!(*result, Action::RefsLoaded(_));
+                let reload = if refs {
+                    &mut self.refs_reload
+                } else {
+                    &mut self.status_reload
+                };
+                let (apply, next) = reload.finished(generation);
+                if apply {
+                    self.apply(*result);
+                }
+                if let Some(generation) = next {
+                    if refs {
+                        self.spawn_refs(generation);
+                    } else {
+                        self.spawn_status(generation);
+                    }
+                }
+            }
             Action::CommitSelected(oid) => {
                 if matches!(self.focus, PaneId::Graph | PaneId::Branches) {
                     self.show_commit(oid);
                 }
             }
-            Action::DetailsLoaded { subject, text } => self.details.set_content(&subject, &text),
-            Action::CommitFilesLoaded { oid, header, files } => match files {
-                Ok(files) => self.details.set_commit_files(&oid, &header, files, &self.ctx),
-                Err(e) => self
-                    .details
-                    .set_content(&DetailsSubject::CommitFiles(oid), &format!("{header}\n{e}")),
-            },
-            Action::CommitFileSelected { oid, file } => {
-                let repo = self.repo.clone();
-                self.ctx.spawn(move || loaders::load_commit_file_diff(repo, oid, file));
+            Action::DetailsLoaded { subject, text } => {
+                self.details.set_content(&subject, &text);
+                match subject {
+                    DetailsSubject::Commit(oid) => {
+                        self.details_finished(0, |l| matches!(l, DetailsLoad::Commit(o) if *o == oid))
+                    }
+                    DetailsSubject::File(path) => {
+                        self.details_finished(2, |l| matches!(l, DetailsLoad::File(e) if e.path == path))
+                    }
+                    _ => {}
+                }
             }
-            Action::CommitFileDiffLoaded { oid, path, text } => self.details.set_file_diff(&oid, &path, &text),
+            Action::CommitFilesLoaded { oid, header, files } => {
+                match files {
+                    Ok(files) => self.details.set_commit_files(&oid, &header, files, &self.ctx),
+                    Err(e) => self
+                        .details
+                        .set_content(&DetailsSubject::CommitFiles(oid.clone()), &format!("{header}\n{e}")),
+                }
+                self.details_finished(1, |l| matches!(l, DetailsLoad::CommitFiles(o) if *o == oid));
+            }
+            Action::CommitFileSelected { oid, file } => {
+                if let Some(item) = self.file_diff_job.request((oid, file), false) {
+                    self.spawn_file_diff(item);
+                }
+            }
+            Action::CommitFileDiffLoaded { oid, path, text } => {
+                self.details.set_file_diff(&oid, &path, &text);
+                if let Some(next) = self.file_diff_job.finished(|(o, f)| *o == oid && f.path == path) {
+                    self.spawn_file_diff(next);
+                }
+            }
             Action::FilterChoicesLoaded { tab, choices } => {
                 if let Some(Modal::Filter(panel)) = &mut self.modal {
                     panel.set_choices(tab, choices);
@@ -537,27 +729,118 @@ impl App {
         }
     }
 
-    fn load_refs(&self) {
-        let repo = self.repo.clone();
-        let config = self.config.branches.clone();
-        self.ctx.spawn(move || loaders::load_refs(repo, config));
+    /// Reloads refs, after the load running now if there is one.
+    fn load_refs(&mut self) {
+        if let Some(generation) = self.refs_reload.request() {
+            self.spawn_refs(generation);
+        }
     }
 
-    fn load_status(&self) {
+    fn spawn_refs(&mut self, generation: u64) {
         let repo = self.repo.clone();
-        self.ctx.spawn(move || loaders::load_status(repo));
+        let config = self.config.branches.clone();
+        let done = self.ctx.spawn_watched(move || Action::Reloaded {
+            generation,
+            result: Box::new(loaders::load_refs(repo, config)),
+        });
+        self.refs_reload.started(generation, done);
+    }
+
+    /// Reloads the status, after the load running now if there is one.
+    fn load_status(&mut self) {
+        if let Some(generation) = self.status_reload.request() {
+            self.spawn_status(generation);
+        }
+    }
+
+    fn spawn_status(&mut self, generation: u64) {
+        let repo = self.repo.clone();
+        let ignored = self.ignored.clone();
+        let done = self.ctx.spawn_watched(move || Action::Reloaded {
+            generation,
+            result: Box::new(loaders::load_status(repo, &ignored)),
+        });
+        self.status_reload.started(generation, done);
+    }
+
+    /// Whether a relative date on screen would read differently now.
+    fn dates_stale(&self) -> bool {
+        let now = self.clock.now();
+        (self.pane_area(PaneId::Graph).is_some() && self.graph.dates_stale(now))
+            || (self.pane_area(PaneId::Branches).is_some() && self.branches.dates_stale(now))
     }
 
     fn load_graph(&mut self) {
-        let generation = self.graph.begin_load();
+        let load = self.graph.begin_load();
         self.graph.limit = self.graph_limit;
+        let limit = self.graph_limit;
+        if let Some(focus) = self.graph.focus.clone() {
+            // Histories don't stream, so can't stop early: run one at a
+            // time, skipping those replaced while waiting.
+            let history = HistoryLoad { load, focus, limit };
+            if let Some(history) = self.history_job.request(history, false) {
+                self.spawn_history(history);
+            }
+            return;
+        }
         let repo = self.repo.clone();
         let scope = self.graph.scope;
-        let focus = self.graph.focus.clone();
         let filter = self.graph.filter.clone();
-        let limit = self.graph_limit;
         self.ctx
-            .spawn_streaming(move |ctx| loaders::load_graph(repo, scope, focus, filter, generation, limit, ctx));
+            .spawn_streaming(move |ctx| loaders::load_graph(repo, scope, None, filter, load, limit, None, ctx));
+    }
+
+    /// Loads up to the raised limit: only the commits after those shown
+    /// when it can, otherwise all of them again.
+    fn load_more_commits(&mut self) {
+        let Some((load, skip, tips)) = self.graph.begin_more() else {
+            self.load_graph();
+            return;
+        };
+        self.graph.limit = self.graph_limit;
+        let limit = self.graph_limit;
+        let repo = self.repo.clone();
+        let scope = self.graph.scope;
+        let filter = self.graph.filter.clone();
+        let from = Some(loaders::Continue { skip, tips });
+        self.ctx
+            .spawn_streaming(move |ctx| loaders::load_graph(repo, scope, None, filter, load, limit, from, ctx));
+    }
+
+    fn spawn_history(&mut self, history: HistoryLoad) {
+        if !history.load.is_current() {
+            return;
+        }
+        let repo = self.repo.clone();
+        let scope = self.graph.scope;
+        let filter = self.graph.filter.clone();
+        let ctx = self.ctx.clone();
+        let HistoryLoad { load, focus, limit } = history.clone();
+        let done = self
+            .ctx
+            .spawn_watched(move || loaders::load_graph(repo, scope, Some(focus), filter, load, limit, None, &ctx));
+        self.history_job.started(history, done);
+    }
+
+    /// Graph load `generation` ended; starts the history waiting on it.
+    fn history_finished(&mut self, generation: u64) {
+        if let Some(next) = self.history_job.finished(|h| h.load.generation() == generation) {
+            self.spawn_history(next);
+        }
+    }
+
+    /// After refs changed: reloads the graph unless what it walks from is
+    /// the same as for its current load. Focused histories and loads that
+    /// haven't noted that (yet) reload as always.
+    fn check_graph(&mut self) {
+        if self.graph.focus.is_some() || !self.graph.has_tips() {
+            self.load_graph();
+            return;
+        }
+        let repo = self.repo.clone();
+        let scope = self.graph.scope;
+        let generation = self.graph.generation();
+        self.ctx.spawn(move || loaders::graph_tips(repo, scope, generation));
     }
 
     /// Opens the graph's filter panel and loads the authors and files it lists.
@@ -657,7 +940,7 @@ impl App {
                 }
             }
             PaneId::Graph | PaneId::Branches => {
-                if let Some(oid) = self.graph.selected().map(|c| c.oid.clone()) {
+                if let Some(oid) = self.graph.selected().map(|c| c.oid.to_string()) {
                     self.show_commit(oid);
                 }
             }
@@ -665,14 +948,13 @@ impl App {
         }
     }
 
-    fn show_file(&mut self, entry: tt_git_core::StatusEntry, force: bool) {
+    fn show_file(&mut self, entry: StatusEntry, force: bool) {
         let subject = DetailsSubject::File(entry.path.clone());
         if !force && self.details.subject() == Some(&subject) {
             return;
         }
         self.details.request(subject, format!("Diff {}", entry.path));
-        let repo = self.repo.clone();
-        self.ctx.spawn(move || loaders::load_file_diff(repo, entry));
+        self.want_details(DetailsLoad::File(entry), force);
     }
 
     /// Shows `oid` in details, staying in the files view if that's open.
@@ -691,8 +973,7 @@ impl App {
         }
         let short = oid.chars().take(7).collect::<String>();
         self.details.request(subject, format!("Commit {short}"));
-        let repo = self.repo.clone();
-        self.ctx.spawn(move || loaders::load_commit_details(repo, oid));
+        self.want_details(DetailsLoad::Commit(oid), false);
     }
 
     fn show_commit_files(&mut self, oid: String) {
@@ -702,13 +983,83 @@ impl App {
         }
         let short = oid.chars().take(7).collect::<String>();
         self.details.request(subject, format!("Commit {short} files"));
+        self.want_details(DetailsLoad::CommitFiles(oid), false);
+    }
+
+    /// Notes the load the details subject now needs. It starts at the end
+    /// of the current input or action, once details is on screen.
+    fn want_details(&mut self, load: DetailsLoad, force: bool) {
+        let force = force || matches!(&self.details_wanted, Some((w, true)) if w.subject() == load.subject());
+        self.details_wanted = Some((load, force));
+    }
+
+    /// Whether the details pane is drawn (a split plugin pane takes its place).
+    fn details_visible(&self) -> bool {
+        self.shows(PaneId::Details) && !self.has_split_pane()
+    }
+
+    /// Starts the wanted details load if details is on screen.
+    fn flush_details(&mut self) {
+        if self.details_wanted.is_none() || !self.details_visible() {
+            return;
+        }
+        if let Some((load, force)) = self.details_wanted.take() {
+            self.start_details(load, force);
+        }
+    }
+
+    /// Starts `load` if it's still for the subject and details is on screen,
+    /// one at a time per kind; otherwise keeps it until details shows.
+    fn start_details(&mut self, load: DetailsLoad, force: bool) {
+        if self.details.subject() != Some(&load.subject()) {
+            return;
+        }
+        if !self.details_visible() {
+            if self.details_wanted.is_none() {
+                self.details_wanted = Some((load, true));
+            }
+            return;
+        }
+        let kind = load.kind();
+        let Some(load) = self.details_jobs[kind].request(load, force) else {
+            return;
+        };
         let repo = self.repo.clone();
-        self.ctx.spawn(move || loaders::load_commit_files(repo, oid));
+        let job = load.clone();
+        let done = self.ctx.spawn_watched(move || match job {
+            DetailsLoad::Commit(oid) => loaders::load_commit_details(repo, oid),
+            DetailsLoad::CommitFiles(oid) => loaders::load_commit_files(repo, oid),
+            DetailsLoad::File(entry) => loaders::load_file_diff(repo, entry),
+        });
+        self.details_jobs[kind].started(load, done);
+    }
+
+    /// The running details load of `kind` reported back, if `is_it` says
+    /// so; starts the one waiting on it.
+    fn details_finished(&mut self, kind: usize, is_it: impl FnOnce(&DetailsLoad) -> bool) {
+        if let Some(next) = self.details_jobs[kind].finished(is_it) {
+            self.start_details(next, false);
+        }
+    }
+
+    /// Loads a files-view diff, unless the view has moved on from it.
+    fn spawn_file_diff(&mut self, item: (String, CommitFile)) {
+        let (oid, file) = item.clone();
+        let wanted = self.details.subject() == Some(&DetailsSubject::CommitFiles(oid.clone()))
+            && self.details.selected_file().is_some_and(|f| f.path == file.path);
+        if !wanted {
+            return;
+        }
+        let repo = self.repo.clone();
+        let done = self
+            .ctx
+            .spawn_watched(move || loaders::load_commit_file_diff(repo, oid, file));
+        self.file_diff_job.started(item, done);
     }
 
     /// Opens the selected commit fullscreen as changed files beside a diff.
     fn expand_details(&mut self) {
-        let Some(oid) = self.graph.selected().map(|c| c.oid.clone()) else {
+        let Some(oid) = self.graph.selected().map(|c| c.oid.to_string()) else {
             return;
         };
         self.show_commit_files(oid);
@@ -903,6 +1254,7 @@ impl App {
     }
 
     pub fn draw(&mut self, frame: &mut Frame) {
+        self.cursor_shown = false;
         let [main, help] = Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(frame.area());
         self.pane_areas = match self.zoom {
             Zoom::Full(pane) => vec![(pane, main)],
@@ -971,11 +1323,11 @@ impl App {
         let context = self.focused().context();
         let hint = |cmd: &Command| {
             self.keymap
-                .display_key(context, *cmd)
-                .map(|key| (key.to_string(), cmd.label()))
+                .display_key_text(context, *cmd)
+                .map(|key| (key, cmd.label()))
         };
         let globals: Vec<_> = GLOBAL_HELP.iter().filter_map(hint).collect();
-        let width_of = |(k, l): &(String, &str)| k.width() + 1 + l.width() + 2;
+        let width_of = |(k, l): &(&str, &str)| k.width() + 1 + l.width() + 2;
         let mut budget = (keys_area.width as usize).saturating_sub(globals.iter().map(width_of).sum());
         let mut items = Vec::new();
         for item in self.focused().commands().iter().filter_map(hint) {
@@ -1022,7 +1374,7 @@ impl App {
         }
 
         // Size for the unfiltered list so the popup holds still while typing.
-        let popup = centered(area, 50, self.all_help_rows().len() as u16 + 3);
+        let popup = centered(area, 50, self.all_help_row_count() as u16 + 3);
         frame.render_widget(Clear, popup);
         let block = Block::bordered()
             .border_type(BorderType::Rounded)

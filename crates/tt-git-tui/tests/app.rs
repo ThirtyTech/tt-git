@@ -204,7 +204,7 @@ fn graph_shows_all_branches_with_labels() {
     let t = TestDriver::with_size(Config::default(), &sb, 120, 30);
     let graph = t.app().graph();
     assert_eq!(graph.commits().len(), 5);
-    assert_eq!(graph.commits()[0].summary, "side experiment");
+    assert_eq!(&*graph.commits()[0].summary, "side experiment");
     insta::assert_snapshot!(t.pane_lines(PaneId::Graph).join("\n"));
     assert!(t.pane_title(PaneId::Graph).contains("Graph [all] 1/5"));
 }
@@ -219,24 +219,24 @@ fn toggle_to_current_branch_hides_other_branches() {
         .graph()
         .commits()
         .iter()
-        .position(|c| c.summary == "main work")
+        .position(|c| &*c.summary == "main work")
         .unwrap();
     for _ in 0..target {
         t.press("j");
     }
-    assert_eq!(t.app().graph().selected().unwrap().summary, "main work");
+    assert_eq!(&*t.app().graph().selected().unwrap().summary, "main work");
 
     t.press("a");
     let graph = t.app().graph();
     assert_eq!(graph.scope, GraphScope::Current);
-    assert!(graph.commits().iter().all(|c| c.summary != "side experiment"));
+    assert!(graph.commits().iter().all(|c| &*c.summary != "side experiment"));
     assert_eq!(graph.commits().len(), 4);
-    assert_eq!(graph.selected().unwrap().summary, "main work", "selection kept");
+    assert_eq!(&*graph.selected().unwrap().summary, "main work", "selection kept");
     assert!(t.pane_title(PaneId::Graph).contains("Graph [current]"));
 
     t.press("a");
     assert_eq!(t.app().graph().commits().len(), 5);
-    assert_eq!(t.app().graph().selected().unwrap().summary, "main work");
+    assert_eq!(&*t.app().graph().selected().unwrap().summary, "main work");
 }
 
 #[test]
@@ -247,7 +247,7 @@ fn details_follow_the_selection() {
     t.assert_pane_contains(PaneId::Details, "side experiment");
     t.assert_pane_contains(PaneId::Details, "Author: Test User <test@example.com>");
     t.press("j");
-    let selected = t.app().graph().selected().unwrap().summary.clone();
+    let selected = t.app().graph().selected().unwrap().summary.to_string();
     t.assert_pane_contains(PaneId::Details, &selected);
     assert!(t.pane_title(PaneId::Details).contains("Commit "));
 

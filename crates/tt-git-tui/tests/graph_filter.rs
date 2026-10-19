@@ -26,7 +26,12 @@ fn two_authors() -> Sandbox {
 }
 
 fn summaries(t: &TestDriver) -> Vec<String> {
-    t.app().graph().commits().iter().map(|c| c.summary.clone()).collect()
+    t.app()
+        .graph()
+        .commits()
+        .iter()
+        .map(|c| c.summary.to_string())
+        .collect()
 }
 
 #[test]
@@ -66,7 +71,7 @@ fn filter_graph_by_author_then_file_then_clear() {
     assert_eq!(summaries(&t), ["test lib", "alice lib"]);
     // Path filters keep the history connected.
     let commits = t.app().graph().commits();
-    assert_eq!(commits[0].parents, vec![commits[1].oid.clone()]);
+    assert_eq!(*commits[0].parents, [commits[1].oid]);
 
     // The filter applies to the current branch too.
     t.press("a");

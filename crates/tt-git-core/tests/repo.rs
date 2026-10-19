@@ -69,7 +69,7 @@ fn loads_commits_in_topo_order() {
 
     let repo = open(&sb);
     let all = repo.commits(&LogScope::All, 100).unwrap();
-    let ids: Vec<&str> = all.iter().map(|c| c.oid.as_str()).collect();
+    let ids: Vec<String> = all.iter().map(|c| c.oid.to_string()).collect();
     assert_eq!(ids.len(), 5);
     assert_eq!(ids[0], side);
     let pos = |id: &str| ids.iter().position(|x| *x == id).unwrap();
@@ -78,8 +78,8 @@ fn loads_commits_in_topo_order() {
     assert!(pos(&m1) < pos(&base) && pos(&f1) < pos(&base));
 
     let merge_commit = &all[pos(&merge)];
-    assert_eq!(merge_commit.parents, vec![m1.clone(), f1.clone()]);
-    assert_eq!(merge_commit.author_name, "Test User");
+    assert_eq!(*merge_commit.parents, vec![m1.clone(), f1.clone()]);
+    assert_eq!(&*merge_commit.author_name, "Test User");
     assert!(merge_commit.commit_time > BASE_TIME);
 
     // Current-branch scope excludes "side".
@@ -89,6 +89,18 @@ fn loads_commits_in_topo_order() {
 
     // Limit is honoured.
     assert_eq!(repo.commits(&LogScope::All, 2).unwrap().len(), 2);
+
+    // Streaming from an offset continues where a smaller limit stopped.
+    for (skip, limit) in [(2, 4), (2, 100), (0, 3), (5, 100), (4, 2)] {
+        let mut rest = Vec::new();
+        repo.stream_commits_from(&LogScope::All, skip, limit, |c| {
+            rest.push(c.oid.to_string());
+            true
+        })
+        .unwrap();
+        let want: Vec<String> = ids.iter().take(limit).skip(skip).cloned().collect();
+        assert_eq!(rest, want, "skip {skip}, limit {limit}");
+    }
 }
 
 #[test]
@@ -115,7 +127,7 @@ fn head_scope_includes_upstream_commits() {
         .unwrap();
     assert_eq!(without.len(), 1);
     assert_eq!(with.len(), 2);
-    assert_eq!(with[0].summary, "incoming");
+    assert_eq!(&*with[0].summary, "incoming");
 }
 
 #[test]
@@ -260,8 +272,8 @@ fn author_names_respect_mailmap() {
 
     let repo = open(&sb);
     let commits = repo.commits(&LogScope::All, 100).unwrap();
-    assert_eq!(commits[0].author_name, "Real Name");
-    assert_eq!(commits[0].author_email, "real@example.com");
+    assert_eq!(&*commits[0].author_name, "Real Name");
+    assert_eq!(&*commits[0].author_email, "real@example.com");
 }
 
 #[test]
@@ -370,13 +382,13 @@ fn branch_history_from_fork_to_merge() {
     let base_tip = sb.commit("m5");
 
     let repo = open(&sb);
-    let summaries = |h: &BranchHistory| h.commits.iter().map(|c| c.summary.clone()).collect::<Vec<_>>();
+    let summaries = |h: &BranchHistory| h.commits.iter().map(|c| c.summary.to_string()).collect::<Vec<_>>();
 
     // Only the branch's first-parent commits: neither `main`'s commits it
     // pulled in nor `sub`'s.
     let h = repo.branch_history(&sb.rev_parse("feat"), "main", 100).unwrap();
-    assert_eq!(h.merge.as_deref(), Some(merge.as_str()));
-    assert_eq!(h.fork.as_deref(), Some(fork.as_str()));
+    assert_eq!(h.merge.map(|o| o.to_string()).as_deref(), Some(merge.as_str()));
+    assert_eq!(h.fork.map(|o| o.to_string()).as_deref(), Some(fork.as_str()));
     assert_eq!(
         summaries(&h),
         vec![
@@ -387,19 +399,19 @@ fn branch_history_from_fork_to_merge() {
             "m2"
         ]
     );
-    assert_eq!(h.commits[0].parents, vec![fork.clone(), sub_merge.clone()]);
-    assert_eq!(h.commits[1].parents, vec![sync.clone()], "sub's side is dropped");
-    assert_eq!(h.commits[2].parents, vec![f1.clone()], "main's side is dropped");
-    assert_eq!(h.commits[3].parents, vec![fork.clone()]);
+    assert_eq!(*h.commits[0].parents, vec![fork.clone(), sub_merge.clone()]);
+    assert_eq!(*h.commits[1].parents, vec![sync.clone()], "sub's side is dropped");
+    assert_eq!(*h.commits[2].parents, vec![f1.clone()], "main's side is dropped");
+    assert_eq!(*h.commits[3].parents, vec![fork.clone()]);
     assert!(h.commits[4].parents.is_empty());
 
     // Unmerged: the base's tip, joined to the fork.
     let h = repo.branch_history(&o1, "main", 100).unwrap();
     assert_eq!(h.merge, None);
-    assert_eq!(h.fork.as_deref(), Some(merge.as_str()));
+    assert_eq!(h.fork.map(|o| o.to_string()).as_deref(), Some(merge.as_str()));
     assert_eq!(summaries(&h), vec!["m5", "o1", "Merge branch 'feat'"]);
     assert_eq!(h.commits[0].oid, base_tip);
-    assert_eq!(h.commits[0].parents, vec![merge.clone()]);
+    assert_eq!(*h.commits[0].parents, vec![merge.clone()]);
 
     // A branch with nothing of its own left is just its tip.
     let h = repo.branch_history(&base_tip, "main", 100).unwrap();
@@ -410,7 +422,7 @@ fn branch_history_from_fork_to_merge() {
     let h = repo.branch_history(&sb.rev_parse("feat"), "main", 2).unwrap();
     assert_eq!(h.fork, None);
     assert_eq!(h.commits.len(), 3);
-    assert_eq!(h.commits[0].parents, vec![sub_merge]);
+    assert_eq!(*h.commits[0].parents, vec![sub_merge]);
 }
 
 /// Commits a change to `file` as `author` (`Name <email>`).
@@ -434,7 +446,7 @@ fn filters_commits_by_author_and_path() {
     sb.checkout("main");
     let a3 = commit_as(&sb, alice, "c.txt", "a3");
     let repo = open(&sb);
-    let oids = |commits: &[tt_git_core::Commit]| commits.iter().map(|c| c.oid.clone()).collect::<Vec<_>>();
+    let oids = |commits: &[tt_git_core::Commit]| commits.iter().map(|c| c.oid.to_string()).collect::<Vec<_>>();
 
     let by_alice = LogFilter {
         author: Some(alice.into()),
@@ -456,7 +468,7 @@ fn filters_commits_by_author_and_path() {
     };
     let commits = repo.filtered_commits(&LogScope::All, &in_src, 100).unwrap();
     assert_eq!(oids(&commits), vec![a2.clone(), a1.clone()]);
-    assert_eq!(commits[0].parents, vec![a1.clone()]);
+    assert_eq!(*commits[0].parents, vec![a1.clone()]);
 
     let both = LogFilter {
         author: Some(alice.into()),
@@ -516,7 +528,7 @@ fn author_filter_includes_every_mailmapped_account() {
         .filtered_commits(&LogScope::All, &filter, 100)
         .unwrap()
         .into_iter()
-        .map(|c| c.oid)
+        .map(|c| c.oid.to_string())
         .collect();
     got.sort();
     let mut want = vec![work, home, github];
@@ -539,4 +551,62 @@ fn ahead_behind_counts_both_sides() {
     assert_eq!((d.ahead, d.behind), (1, 2));
     let d = repo.ahead_behind("refs/heads/main", "main").unwrap();
     assert_eq!((d.ahead, d.behind), (0, 0));
+}
+
+#[test]
+fn ref_fingerprint_changes_with_anything_a_log_starts_from() {
+    let sb = Sandbox::new();
+    let repo = open(&sb);
+    let git_dir = sb.path().join(".git");
+    let fp = || repo.ref_fingerprint().expect("files backend");
+    let unborn = fp();
+    let base = sb.commit("base");
+    let main = sb.commit("main work");
+    let before = fp();
+    assert_ne!(unborn, before);
+
+    // Pseudorefs and reflogs aren't walked.
+    std::fs::write(git_dir.join("FETCH_HEAD"), format!("{main}\t\tbranch 'main' of x\n")).unwrap();
+    std::fs::write(git_dir.join("ORIG_HEAD"), format!("{base}\n")).unwrap();
+    assert_eq!(fp(), before);
+
+    // A new ref on a commit already shown changes it, and deleting it
+    // changes it back.
+    sb.git(&["branch", "side", &base]);
+    assert_ne!(fp(), before);
+    sb.git(&["branch", "-q", "-D", "side"]);
+    assert_eq!(fp(), before);
+
+    // HEAD moving to a commit another ref already points at.
+    sb.git(&["branch", "other", &main]);
+    let with_other = fp();
+    sb.git(&["switch", "-q", "other"]);
+    assert_ne!(fp(), with_other);
+    sb.git(&["switch", "-q", "main"]);
+    assert_eq!(fp(), with_other);
+
+    // Packed refs.
+    sb.git(&["pack-refs", "--all"]);
+    let packed = fp();
+    sb.git(&["update-ref", "refs/heads/other", &base]);
+    assert_ne!(fp(), packed);
+
+    // Another worktree's detached HEAD isn't a ref, but --all walks it.
+    let wt = sb.root().join("wt");
+    sb.git(&["worktree", "add", "-q", "--detach", wt.to_str().unwrap(), &base]);
+    let added = fp();
+    sb.git_in(&wt, &["commit", "-q", "--allow-empty", "-m", "worktree only"]);
+    assert_ne!(fp(), added);
+
+    // The stash.
+    let unstashed = fp();
+    sb.write("dirty.txt", "x");
+    sb.git(&["add", "dirty.txt"]);
+    sb.git(&["stash", "-q"]);
+    assert_ne!(fp(), unstashed);
+
+    // Where shallow history stops.
+    let deep = fp();
+    std::fs::write(git_dir.join("shallow"), format!("{base}\n")).unwrap();
+    assert_ne!(fp(), deep);
 }

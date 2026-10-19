@@ -9,7 +9,7 @@ use tt_git_core::time::{SharedClock, relative};
 use tt_git_core::{BaseBranches, BranchEntry, BranchState, GitRef, RefKind};
 use unicode_width::UnicodeWidthStr;
 
-use super::{BranchFocus, PaneId, pane_block};
+use super::{BranchFocus, DrawnDates, PaneId, pane_block};
 use crate::action::Action;
 use crate::component::{Component, EventState};
 use crate::jobs::Ctx;
@@ -76,6 +76,7 @@ pub struct BranchesPane {
     editing_filter: bool,
     /// One per tab, so switching back returns to the same row.
     cursors: [Cursor; BranchTab::ALL.len()],
+    dates: DrawnDates,
 }
 
 impl BranchesPane {
@@ -90,7 +91,13 @@ impl BranchesPane {
             filter: String::new(),
             editing_filter: false,
             cursors: [Cursor::default(); BranchTab::ALL.len()],
+            dates: DrawnDates::default(),
         }
+    }
+
+    /// Whether a relative date drawn last frame would read differently at `now`.
+    pub fn dates_stale(&self, now: i64) -> bool {
+        self.dates.stale(now)
     }
 
     /// Replaces the lists, keeping the selection on the same row if it
@@ -713,6 +720,7 @@ impl Component for BranchesPane {
         let block = pane_block(PaneId::Branches, self.title(theme), focused, theme);
         let inner = block.inner(area);
         frame.render_widget(block, area);
+        self.dates = DrawnDates::new(self.clock.now());
         if self.visible.is_empty() {
             frame.render_widget(Paragraph::new(self.empty_message()).style(theme.muted), inner);
             return;
@@ -725,7 +733,12 @@ impl Component for BranchesPane {
         let width = inner.width as usize;
         let list = self.list(self.tab);
         let name_width = self.compared_name_width(&self.visible[start..end], width);
-        let distance_width = self.tag_distance_width(theme);
+        // Only the tags tab draws distances (and it can list hundreds).
+        let distance_width = if matches!(self.tab, BranchTab::Tags) {
+            self.tag_distance_width(theme)
+        } else {
+            0
+        };
         let lines: Vec<Line> = (start..end)
             .map(|pos| {
                 let i = self.visible[pos];
@@ -746,5 +759,13 @@ impl Component for BranchesPane {
             })
             .collect();
         frame.render_widget(Paragraph::new(lines), inner);
+        let mut dates = self.dates;
+        for &i in &self.visible[start..end] {
+            dates.add(match self.tab {
+                BranchTab::Tags => self.tags[i].date,
+                _ => list[i].activity,
+            });
+        }
+        self.dates = dates;
     }
 }

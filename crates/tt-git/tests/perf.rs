@@ -29,23 +29,46 @@ fn load_and_layout() {
 
     let t = Instant::now();
     let mut ids = std::collections::HashMap::new();
-    let mut intern = |oid: &str| {
+    let mut intern = |oid: tt_git_core::Oid| {
         let n = ids.len() as u32;
-        *ids.entry(oid.to_string()).or_insert(n)
+        *ids.entry(oid).or_insert(n)
     };
     let mut g = GraphBuilder::new();
-    let mut max_lanes = 0;
+    let mut rows = Vec::with_capacity(commits.len());
     for c in &commits {
-        let id = intern(&c.oid);
-        let parents: Vec<u32> = c.parents.iter().map(|p| intern(p)).collect();
-        max_lanes = max_lanes.max(g.push(id, &parents).cells.len());
+        let id = intern(c.oid);
+        let parents: Vec<u32> = c.parents.iter().map(|p| intern(*p)).collect();
+        rows.push(g.push(id, &parents));
     }
     let layout_time = t.elapsed();
+    let max_lanes = rows.iter().map(|r| r.cells.len()).max().unwrap_or(0);
+    // Rows wider than their inline capacity keep their cells on the heap.
+    let spilled: Vec<_> = rows.iter().filter(|r| r.cells.spilled()).collect();
+    let heap: usize = spilled
+        .iter()
+        .map(|r| r.cells.capacity() * size_of::<tt_git_graph::Cell>() + r.fillers.capacity() * size_of::<Option<u8>>())
+        .sum();
 
     println!(
         "{} refs in {refs_time:?}; {} commits in {log_time:?}; layout {layout_time:?} (max {max_lanes} lanes)",
         refs.len(),
         commits.len()
+    );
+    // As the graph pane keeps them: packed, up to the 16 lanes it draws.
+    let mut packed = tt_git_graph::Rows::new(16);
+    for row in &rows {
+        packed.push(row);
+    }
+    let kept: usize = packed.iter().map(|r| r.kept()).sum();
+    println!(
+        "rows: {} x {} bytes inline; {} spilled to the heap ({heap} bytes); packed: {kept} cells ({} bytes) + {} row heads; commits: {} x {} bytes",
+        rows.len(),
+        size_of::<tt_git_graph::Row>(),
+        spilled.len(),
+        kept * 2,
+        packed.len(),
+        commits.len(),
+        size_of::<tt_git_core::Commit>()
     );
     assert!(layout_time < Duration::from_millis(500));
 }

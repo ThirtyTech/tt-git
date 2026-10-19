@@ -7,13 +7,51 @@ mod status;
 
 pub use branches::{BranchTab, BranchesPane};
 pub use details::{DetailsPane, DetailsSubject};
-pub use graph::{BranchFocus, GraphPane, GraphScope, LabelKind, RefLabel, build_labels};
+pub use graph::{BranchFocus, GraphPane, GraphScope, LabelKind, LoadToken, RefLabel, build_labels};
 pub use status::StatusPane;
 
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders};
+use tt_git_core::time::relative_changes_at;
 
 use crate::theme::Theme;
+
+/// When the relative dates last drawn were drawn, and when the first of
+/// them changes.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct DrawnDates {
+    at: i64,
+    until: i64,
+}
+
+impl Default for DrawnDates {
+    fn default() -> Self {
+        Self {
+            at: i64::MIN,
+            until: i64::MAX,
+        }
+    }
+}
+
+impl DrawnDates {
+    /// Starts tracking a frame drawn at `now`.
+    pub(crate) fn new(now: i64) -> Self {
+        Self {
+            at: now,
+            until: i64::MAX,
+        }
+    }
+
+    /// Notes a date shown as `relative(now, then)`.
+    pub(crate) fn add(&mut self, then: i64) {
+        self.until = self.until.min(relative_changes_at(self.at, then));
+    }
+
+    /// Whether some date drawn would read differently at `now`.
+    pub(crate) fn stale(&self, now: i64) -> bool {
+        now < self.at || now >= self.until
+    }
+}
 
 /// Identifies a pane for focus and layout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Deserialize)]

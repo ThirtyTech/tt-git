@@ -225,7 +225,21 @@ pub struct LoadedManifest {
     /// Directory containing the manifest (commands run here).
     pub root: PathBuf,
     pub warnings: Vec<String>,
+    /// `manifest.link_handlers`' patterns, compiled.
+    pub link_patterns: LinkPatterns,
 }
+
+/// Compiled link handler patterns, one per handler in manifest order.
+#[derive(Debug, Clone, Default)]
+pub struct LinkPatterns(pub Vec<regex::Regex>);
+
+impl PartialEq for LinkPatterns {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.len() == other.0.len() && self.0.iter().zip(&other.0).all(|(a, b)| a.as_str() == b.as_str())
+    }
+}
+
+impl Eq for LinkPatterns {}
 
 /// The current OS as used in `platforms` lists.
 pub fn current_platform() -> &'static str {
@@ -264,11 +278,12 @@ pub fn load(path: &Path, host_version: &semver::Version) -> Result<LoadedManifes
         .map(Path::to_path_buf)
         .unwrap_or_else(|| PathBuf::from("."));
     let manifest = parse(&text)?;
-    let warnings = validate(&manifest, host_version)?;
+    let (warnings, link_patterns) = validate_compiling(&manifest, host_version)?;
     Ok(LoadedManifest {
         manifest,
         root,
         warnings,
+        link_patterns: LinkPatterns(link_patterns),
     })
 }
 
@@ -296,7 +311,16 @@ fn valid_local_id(id: &str) -> bool {
 
 /// Validates a parsed manifest, returning warnings for soft problems.
 pub fn validate(m: &Manifest, host_version: &semver::Version) -> Result<Vec<String>, ManifestError> {
+    validate_compiling(m, host_version).map(|(warnings, _)| warnings)
+}
+
+/// [`validate`], also returning the link handlers' compiled patterns.
+fn validate_compiling(
+    m: &Manifest,
+    host_version: &semver::Version,
+) -> Result<(Vec<String>, Vec<regex::Regex>), ManifestError> {
     let mut warnings = Vec::new();
+    let mut link_patterns = Vec::with_capacity(m.link_handlers.len());
     if !valid_plugin_id(&m.id) {
         return Err(ManifestError::new(
             "invalid_plugin_id",
@@ -436,11 +460,14 @@ pub fn validate(m: &Manifest, host_version: &semver::Version) -> Result<Vec<Stri
                 format!("duplicate link handler id {:?}", l.id),
             ));
         }
-        if let Err(e) = regex::Regex::new(&l.pattern) {
-            return Err(ManifestError::new(
-                "invalid_plugin_link_pattern",
-                format!("link handler {}: {e}", l.id),
-            ));
+        match regex::Regex::new(&l.pattern) {
+            Ok(re) => link_patterns.push(re),
+            Err(e) => {
+                return Err(ManifestError::new(
+                    "invalid_plugin_link_pattern",
+                    format!("link handler {}: {e}", l.id),
+                ));
+            }
         }
         if !ids.contains(l.action.as_str()) {
             return Err(ManifestError::new(
@@ -449,7 +476,7 @@ pub fn validate(m: &Manifest, host_version: &semver::Version) -> Result<Vec<Stri
             ));
         }
     }
-    Ok(warnings)
+    Ok((warnings, link_patterns))
 }
 
 #[cfg(test)]

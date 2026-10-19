@@ -8,6 +8,7 @@
 pub mod branches;
 pub mod git;
 pub mod model;
+mod oid;
 pub mod ops;
 pub mod parse;
 pub mod paths;
@@ -18,4 +19,4 @@ pub use branches::{AheadBehind, BaseBranches, BranchEntry, BranchState, Checkout
 pub use git::{GitCli, GitError};
 pub use model::*;
 pub use ops::DiscardKind;
-pub use repo::{LogFilter, LogScope, Repo};
+pub use repo::{IgnoreRules, LogFilter, LogScope, RemoteConfig, Repo};

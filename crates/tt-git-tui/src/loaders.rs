@@ -1,13 +1,14 @@
 //! Background jobs that read from git and report back as actions.
 
-use tt_git_core::{BaseBranches, BranchEntry, CommitFile, GitError, GitRef, LogFilter, LogScope, Repo};
+use tt_git_core::{BaseBranches, BranchEntry, CommitFile, GitError, GitRef, LogFilter, LogScope, RemoteConfig, Repo};
 
 use crate::action::{Action, RefsSnapshot};
 use crate::config::BranchesConfig;
 use crate::filter::{FilterTab, author_choices, file_choices};
 use crate::jobs::Ctx;
 use crate::modal::GitOp;
-use crate::panes::{BranchFocus, DetailsSubject, GraphScope};
+use crate::panes::{BranchFocus, DetailsSubject, GraphScope, LoadToken};
+use crate::watcher::IgnoredDirs;
 
 /// Commits per `GraphBatch`, so the first screenful appears quickly.
 const GRAPH_BATCH: usize = 1000;
@@ -22,10 +23,11 @@ fn message(e: GitError) -> String {
 pub fn load_refs(repo: Repo, config: BranchesConfig) -> Action {
     let result = (|| {
         let head = repo.head()?;
-        let refs = repo.refs()?;
+        let RemoteConfig { remotes, base_branch } = repo.remote_config()?;
+        let (refs, authors) = repo.refs_with_authors(&remotes)?;
         let checkouts = repo.checkouts(500)?;
         let branches = tt_git_core::branches::unify(&refs, &head, &checkouts, |r| repo.ref_activity(r));
-        let base = match load_base(&repo, &refs, &branches, &config) {
+        let base = match load_base(&repo, &refs, &authors, &branches, base_branch, &config) {
             Ok(base) => base,
             Err(e) => {
                 tracing::warn!("comparing branches with the base failed: {e}");
@@ -40,21 +42,24 @@ pub fn load_refs(repo: Repo, config: BranchesConfig) -> Action {
             base,
         })
     })();
-    Action::RefsLoaded(result.map_err(message))
+    Action::RefsLoaded(result.map(Box::new).map_err(message))
 }
 
 /// Splits the branches by whether they're merged into the base branch.
+/// `authors` are the refs' authors as [`Repo::refs_with_authors`] read
+/// them; `setting` is the picked base branch.
 fn load_base(
     repo: &Repo,
     refs: &[GitRef],
+    authors: &[(String, String)],
     branches: &[BranchEntry],
+    setting: Option<String>,
     config: &BranchesConfig,
 ) -> Result<Option<BaseBranches>, GitError> {
     use tt_git_core::branches::{
         TAGS_COMPARED, base_scope, compare_with_base, default_base, resolve_base, tags_newest_first,
     };
 
-    let setting = repo.base_branch_setting();
     let Some(base) = resolve_base(refs, setting.as_deref()) else {
         return Ok(None);
     };
@@ -63,14 +68,27 @@ fn load_base(
     let merged = repo.merged_refs(&base.full_name, &scope)?;
     let (unmerged, merged) =
         compare_with_base(branches, base, &merged, &config.unmerged_exclude, &config.safe_branches);
-    let tags = tags_newest_first(refs)
+    let tags: Vec<GitRef> = tags_newest_first(refs).into_iter().take(TAGS_COMPARED).collect();
+    // All in one git when it can, one each otherwise.
+    let pairs: Vec<(&str, &str)> = tags.iter().map(|t| (t.full_name.as_str(), t.target.as_str())).collect();
+    let compared = if pairs.is_empty() {
+        None
+    } else {
+        repo.ahead_behind_many(&base.full_name, &pairs)
+    }
+    .unwrap_or_default();
+    let tags = tags
         .into_iter()
-        .take(TAGS_COMPARED)
-        .filter_map(|tag| match repo.ahead_behind(&base.full_name, &tag.target) {
-            Ok(distance) => Some((tag.full_name, distance)),
-            Err(e) => {
-                tracing::warn!("comparing {} with the base failed: {e}", tag.short_name);
-                None
+        .filter_map(|tag| {
+            if let Some(distance) = compared.get(&tag.full_name) {
+                return Some((tag.full_name, *distance));
+            }
+            match repo.ahead_behind(&base.full_name, &tag.target) {
+                Ok(distance) => Some((tag.full_name, distance)),
+                Err(e) => {
+                    tracing::warn!("comparing {} with the base failed: {e}", tag.short_name);
+                    None
+                }
             }
         })
         .collect();
@@ -81,7 +99,7 @@ fn load_base(
         detected,
         unmerged,
         merged,
-        authors: repo.ref_authors(&scope)?,
+        authors: repo.ref_authors_of(authors, &scope)?,
         tags,
     }))
 }
@@ -102,23 +120,51 @@ pub fn load_filter_files(repo: Repo) -> Action {
     }
 }
 
-pub fn load_status(repo: Repo) -> Action {
-    Action::StatusLoaded(repo.status().map_err(message))
+/// Also tells `ignored` which directories git ignores as a whole, when it
+/// wants them.
+pub fn load_status(repo: Repo, ignored: &IgnoredDirs) -> Action {
+    let token = ignored.begin(|| repo.ignore_rules().ok().flatten());
+    let result = if token.wants_dirs() {
+        repo.status_and_ignored_dirs().map(|(status, dirs)| {
+            ignored.finish(token, dirs);
+            status
+        })
+    } else {
+        repo.status()
+    };
+    Action::StatusLoaded(result.map_err(message))
+}
+
+/// Where a "load more" picks up: past the `skip` commits shown, which a
+/// load that walked from `tips` listed.
+#[derive(Debug, Clone)]
+pub struct Continue {
+    pub skip: usize,
+    pub tips: Vec<u8>,
 }
 
 /// Streams the graph's commits in batches, ending with a `done` batch; or,
 /// with a `focus`, loads just that branch's history in one go. A `filter`
 /// (ignored with a `focus`) also loads in one go, since parents it leaves
-/// out are only known at the end.
+/// out are only known at the end. Streaming stops early (killing git) once
+/// `load` is superseded, since its batches would be dropped. Without a
+/// `focus`, the load first records on `load` what it walks from.
+///
+/// With `from` (whole graph, no filter), streams only the commits after
+/// those already shown if it still walks from the same tips; otherwise it
+/// sends [`Action::GraphRestarted`] and loads them all.
+#[allow(clippy::too_many_arguments)]
 pub fn load_graph(
     repo: Repo,
     scope: GraphScope,
     focus: Option<BranchFocus>,
     filter: LogFilter,
-    generation: u64,
+    load: LoadToken,
     limit: usize,
+    from: Option<Continue>,
     ctx: &Ctx,
 ) -> Action {
+    let generation = load.generation();
     if let Some(focus) = focus {
         return match repo.branch_history(&focus.tip, &focus.base_ref, limit) {
             Ok(history) => Action::BranchHistoryLoaded { generation, history },
@@ -128,14 +174,46 @@ pub fn load_graph(
             },
         };
     }
+    let upstream = match scope {
+        GraphScope::All => None,
+        GraphScope::Current => head_upstream(&repo),
+    };
+    let tips = tips_of(&repo, scope, upstream.as_deref());
+    let skip = match from {
+        Some(from) if filter.is_empty() && tips.as_deref() == Some(from.tips.as_slice()) => from.skip,
+        Some(_) => {
+            ctx.emit(Action::GraphRestarted { generation });
+            0
+        }
+        None => 0,
+    };
+    load.set_tips(tips);
     let scope = match scope {
         GraphScope::All => LogScope::All,
-        GraphScope::Current => LogScope::Head {
-            upstream: head_upstream(&repo),
-        },
+        GraphScope::Current => LogScope::Head { upstream },
     };
+    let result = log_graph(&repo, &scope, &filter, &load, skip, limit, ctx);
+    if matches!(result, Action::GraphFailed { .. }) {
+        // So the next refs change tries again.
+        load.set_tips(None);
+    }
+    result
+}
+
+/// The rest of [`load_graph`] for a whole-graph `scope`, leaving out the
+/// first `skip` commits (only without a `filter`).
+fn log_graph(
+    repo: &Repo,
+    scope: &LogScope,
+    filter: &LogFilter,
+    load: &LoadToken,
+    skip: usize,
+    limit: usize,
+    ctx: &Ctx,
+) -> Action {
+    let generation = load.generation();
     if !filter.is_empty() {
-        return match repo.filtered_commits(&scope, &filter, limit) {
+        return match repo.filtered_commits(scope, filter, limit) {
             Ok(commits) => Action::GraphBatch {
                 generation,
                 commits,
@@ -148,7 +226,10 @@ pub fn load_graph(
         };
     }
     let mut batch = Vec::with_capacity(GRAPH_BATCH);
-    let result = repo.stream_commits(&scope, limit, |commit| {
+    let result = repo.stream_commits_from(scope, skip, limit, |commit| {
+        if !load.is_current() {
+            return false;
+        }
         batch.push(commit);
         if batch.len() == GRAPH_BATCH {
             ctx.emit(Action::GraphBatch {
@@ -170,6 +251,38 @@ pub fn load_graph(
             error: message(e),
         },
     }
+}
+
+/// Checks what a whole-graph load of `scope` would walk from now, for
+/// comparing with what load `generation` did.
+pub fn graph_tips(repo: Repo, scope: GraphScope, generation: u64) -> Action {
+    let upstream = match scope {
+        GraphScope::All => None,
+        GraphScope::Current => head_upstream(&repo),
+    };
+    Action::GraphTipsChecked {
+        generation,
+        tips: tips_of(&repo, scope, upstream.as_deref()),
+    }
+}
+
+/// Everything a whole-graph log of `scope` depends on besides the commits
+/// themselves: the refs it starts from (HEAD, its upstream and every other
+/// ref, as stored) and where history is cut short, plus the scope and the
+/// upstream's name. Files only, so it adds no git process before the log.
+fn tips_of(repo: &Repo, scope: GraphScope, upstream: Option<&str>) -> Option<Vec<u8>> {
+    let Some(refs) = repo.ref_fingerprint() else {
+        tracing::debug!("couldn't fingerprint the graph's refs");
+        return None;
+    };
+    let head = match scope {
+        GraphScope::All => "all".to_string(),
+        GraphScope::Current => format!("current {}", upstream.unwrap_or("")),
+    };
+    let mut tips = head.into_bytes();
+    tips.push(0);
+    tips.extend(refs);
+    Some(tips)
 }
 
 /// Full ref name of HEAD's upstream, if it has one that still exists.
@@ -197,7 +310,7 @@ pub fn load_commit_details(repo: Repo, oid: String) -> Action {
         &oid,
         "--",
     ]) {
-        Ok(out) => cap_lines(&out.stdout_str()),
+        Ok(out) => cap_lines(out.into_stdout_string()),
         Err(e) => format!("could not load commit: {e}"),
     };
     Action::DetailsLoaded {
@@ -216,7 +329,7 @@ pub fn load_commit_files(repo: Repo, oid: String) -> Action {
         &oid,
         "--",
     ]) {
-        Ok(out) => out.stdout_str(),
+        Ok(out) => out.into_stdout_string(),
         Err(e) => format!("could not load commit: {e}"),
     };
     let files = repo.commit_files(&oid).map_err(|e| e.to_string());
@@ -226,7 +339,7 @@ pub fn load_commit_files(repo: Repo, oid: String) -> Action {
 pub fn load_commit_file_diff(repo: Repo, oid: String, file: CommitFile) -> Action {
     let text = match repo.commit_file_diff(&oid, &file) {
         Ok(t) if t.trim().is_empty() => format!("{}: no textual changes", file.path),
-        Ok(t) => cap_lines(&t),
+        Ok(t) => cap_lines(t),
         Err(e) => format!("could not diff {}: {e}", file.path),
     };
     Action::CommitFileDiffLoaded {
@@ -236,16 +349,41 @@ pub fn load_commit_file_diff(repo: Repo, oid: String, file: CommitFile) -> Actio
     }
 }
 
-fn cap_lines(text: &str) -> String {
-    let mut lines = text.lines();
-    let mut out: Vec<&str> = lines.by_ref().take(MAX_DETAIL_LINES).collect();
-    let rest = lines.count();
-    let note;
-    if rest > 0 {
-        note = format!("… {rest} more lines not shown");
-        out.push(&note);
+/// `text`'s lines (as [`str::lines`] splits them) joined with `\n`, cut off
+/// after [`MAX_DETAIL_LINES`] with a note of how many more there were.
+fn cap_lines(text: String) -> String {
+    cap_lines_at(text, MAX_DETAIL_LINES)
+}
+
+fn cap_lines_at(mut text: String, max: usize) -> String {
+    // Without a '\r' each line ends at a '\n' with nothing to strip, so
+    // text short enough just loses its final line ending, in place.
+    if !text.contains('\r') {
+        let newlines = text.bytes().filter(|&b| b == b'\n').count();
+        let lines = newlines + usize::from(!text.is_empty() && !text.ends_with('\n'));
+        if lines <= max {
+            if text.ends_with('\n') {
+                text.pop();
+            }
+            return text;
+        }
     }
-    out.join("\n")
+    let mut out = String::with_capacity(text.len());
+    let mut lines = text.lines();
+    for (i, line) in lines.by_ref().take(max).enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        out.push_str(line);
+    }
+    let rest = lines.count();
+    if rest > 0 {
+        if max > 0 {
+            out.push('\n');
+        }
+        out.push_str(&format!("… {rest} more lines not shown"));
+    }
+    out
 }
 
 pub fn run_op(repo: Repo, op: GitOp) -> Action {
@@ -298,11 +436,61 @@ const MAX_UNTRACKED_PREVIEW: usize = 256 * 1024;
 pub fn load_file_diff(repo: Repo, entry: tt_git_core::StatusEntry) -> Action {
     let text = match repo.file_diff(&entry, MAX_UNTRACKED_PREVIEW) {
         Ok(t) if t.trim().is_empty() => format!("{}: no textual changes", entry.path),
-        Ok(t) => cap_lines(&t),
+        Ok(t) => cap_lines(t),
         Err(e) => format!("could not diff {}: {e}", entry.path),
     };
     Action::DetailsLoaded {
         subject: DetailsSubject::File(entry.path),
         text,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// `cap_lines_at` as it was: collect the lines, then join them.
+    fn joined(text: &str, max: usize) -> String {
+        let mut lines = text.lines();
+        let mut out: Vec<&str> = lines.by_ref().take(max).collect();
+        let rest = lines.count();
+        let note;
+        if rest > 0 {
+            note = format!("… {rest} more lines not shown");
+            out.push(&note);
+        }
+        out.join("\n")
+    }
+
+    #[test]
+    fn cap_lines_matches_joining_the_lines() {
+        let texts = [
+            "",
+            "\n",
+            "\n\n",
+            "a",
+            "a\n",
+            "a\nb",
+            "a\nb\n",
+            "a\n\n",
+            "a\nb\nc\n",
+            "a\r\nb\r\n",
+            "a\r\nb",
+            "a\rb\n",
+            "a\r",
+            "\r\n",
+            "\r",
+            "a\nb\r\nc\n\n\nd",
+            "ü\n€\n\u{1f600}\n",
+        ];
+        for text in texts {
+            for max in 0..6 {
+                assert_eq!(
+                    cap_lines_at(text.to_string(), max),
+                    joined(text, max),
+                    "{text:?} max {max}"
+                );
+            }
+        }
     }
 }
