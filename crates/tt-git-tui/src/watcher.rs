@@ -6,8 +6,11 @@ use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
-use notify_debouncer_mini::notify::{RecommendedWatcher, RecursiveMode};
-use notify_debouncer_mini::{DebounceEventResult, Debouncer, new_debouncer};
+use notify_debouncer_mini::notify::event::{AccessKind, AccessMode};
+use notify_debouncer_mini::notify::{
+    self, Event, EventHandler, EventKind, RecommendedWatcher, RecursiveMode, Watcher, WatcherKind,
+};
+use notify_debouncer_mini::{Config, DebounceEventResult, Debouncer, new_debouncer_opt};
 
 use tt_git_core::{IgnoreRules, Repo};
 
@@ -18,7 +21,48 @@ const DEBOUNCE: Duration = Duration::from_millis(300);
 
 /// Keeps the watch alive; dropping it stops watching.
 pub struct RepoWatcher {
-    _debouncer: Debouncer<RecommendedWatcher>,
+    _debouncer: Debouncer<WriteWatcher>,
+}
+
+/// The platform's watcher, minus reads. Linux reports files being opened,
+/// so every git command reading the index would look like a change to it,
+/// and the reload that follows reads it again.
+struct WriteWatcher(RecommendedWatcher);
+
+impl Watcher for WriteWatcher {
+    fn new<F: EventHandler>(mut handler: F, config: notify::Config) -> notify::Result<Self> {
+        let inner = RecommendedWatcher::new(
+            move |res: notify::Result<Event>| {
+                if !res.as_ref().is_ok_and(|ev| only_reads(&ev.kind)) {
+                    handler.handle_event(res);
+                }
+            },
+            config,
+        )?;
+        Ok(Self(inner))
+    }
+
+    fn watch(&mut self, path: &Path, recursive_mode: RecursiveMode) -> notify::Result<()> {
+        self.0.watch(path, recursive_mode)
+    }
+
+    fn unwatch(&mut self, path: &Path) -> notify::Result<()> {
+        self.0.unwatch(path)
+    }
+
+    fn configure(&mut self, option: notify::Config) -> notify::Result<bool> {
+        self.0.configure(option)
+    }
+
+    fn kind() -> WatcherKind {
+        RecommendedWatcher::kind()
+    }
+}
+
+/// Whether `kind` says a file was only read: opened, read, or closed
+/// without writing. Closing after a write still counts.
+fn only_reads(kind: &EventKind) -> bool {
+    matches!(kind, EventKind::Access(access) if *access != AccessKind::Close(AccessMode::Write))
 }
 
 /// What a changed path means for the UI.
@@ -198,7 +242,8 @@ pub fn watch(repo: Repo, ctx: Ctx) -> notify_debouncer_mini::notify::Result<Repo
         repo,
         rules: Rules::Unknown,
     };
-    let mut debouncer = new_debouncer(DEBOUNCE, move |res: DebounceEventResult| {
+    let config = Config::default().with_timeout(DEBOUNCE);
+    let mut debouncer = new_debouncer_opt::<_, WriteWatcher>(config, move |res: DebounceEventResult| {
         let Ok(events) = res else {
             return;
         };
@@ -258,6 +303,29 @@ mod tests {
         assert_eq!(c("/r/.git/index.lock"), Change::default());
         assert_eq!(c("/r/.git/refs/heads/main.lock"), Change::default());
         assert_eq!(c("/elsewhere/x"), Change::default());
+    }
+
+    #[test]
+    fn reads_are_not_changes() {
+        use notify::event::{CreateKind, DataChange, ModifyKind};
+        let read = [
+            AccessKind::Open(AccessMode::Any),
+            AccessKind::Read,
+            AccessKind::Close(AccessMode::Read),
+            AccessKind::Any,
+        ];
+        for access in read {
+            assert!(only_reads(&EventKind::Access(access)), "{access:?}");
+        }
+        let written = [
+            EventKind::Access(AccessKind::Close(AccessMode::Write)),
+            EventKind::Modify(ModifyKind::Data(DataChange::Any)),
+            EventKind::Create(CreateKind::File),
+            EventKind::Any,
+        ];
+        for kind in written {
+            assert!(!only_reads(&kind), "{kind:?}");
+        }
     }
 
     const BOTH: Change = Change {

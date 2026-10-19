@@ -205,6 +205,9 @@ fn ticks_keep_redrawing_while_a_pane_shows_the_cursor() {
 
     t.press("f12");
     assert!(t.app().plugin_panes().is_empty());
+    // The pane's process dies after it closes; its late exit must not
+    // count as a change either.
+    std::thread::sleep(std::time::Duration::from_millis(300));
     t.app_mut().take_redraw();
     t.send(Action::Tick);
     assert!(!t.app_mut().take_redraw(), "tick with no cursor on screen");

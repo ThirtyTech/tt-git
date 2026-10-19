@@ -567,8 +567,14 @@ impl App {
     fn apply(&mut self, action: Action) {
         // A tick only matters if plugins reloaded, the last frame showed the
         // cursor, or a relative date drawn ("now", "5m") would read
-        // differently; anything else may change what's shown.
-        if !matches!(action, Action::Tick) {
+        // differently. Word from a pane already closed (its process dies
+        // after) changes nothing; anything else may change what's shown.
+        let quiet = match &action {
+            Action::Tick => true,
+            Action::PaneOutput(id) | Action::PaneExited { id, .. } => !self.panes.iter().any(|p| p.id == *id),
+            _ => false,
+        };
+        if !quiet {
             self.dirty = true;
         }
         match action {

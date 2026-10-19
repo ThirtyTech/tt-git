@@ -85,8 +85,10 @@ fn shows_graph_of_a_real_repo() {
 #[test]
 fn outside_a_repo_exits_with_error() {
     let sb = Sandbox::without_repo();
+    // Wide enough that the message, which names the (temp, so on CI long)
+    // path, doesn't wrap.
     let mut t = termlens::Terminal::builder()
-        .size(80, 10)
+        .size(400, 10)
         .env_clear()
         .timeout(Duration::from_secs(20))
         .current_dir(sb.path())
