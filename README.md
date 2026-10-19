@@ -1,4 +1,4 @@
-# tt-git
+# <img src="docs/assets/logo.svg" alt="" width="36" height="36" align="top" /> tt-git
 
 A terminal git client in Rust ([ratatui](https://ratatui.rs)), inspired by
 [lazygit](https://github.com/jesseduffield/lazygit) and
