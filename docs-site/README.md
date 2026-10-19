@@ -38,7 +38,8 @@ src/
 ├── assets/           logo and screenshots (screenshots under assets/screens/)
 ├── content/docs/     one .md/.mdx file per page; the path is the URL
 └── styles/theme.css  colors taken from the logo
-astro.config.mjs      site title, logo, sidebar
+public/               favicon, PNG icons and the link-preview card (og.png)
+astro.config.mjs      site title, logo, sidebar, meta tags
 ```
 
 The sidebar is set in `astro.config.mjs`.
@@ -73,3 +74,16 @@ them with `<Screenshot name="…" alt="…" />` (`src/components/Screenshot.astr
 a zoomed region, and callouts that point at text found on screen (so they
 survive small layout changes). After a UI change, run both steps and look
 over the images before committing them.
+
+## Link previews
+
+When someone pastes a link to the site in Discord, Slack or X, the preview
+shows the page's title and description, the card in `public/og.png` and the
+`theme-color` (cyan) down the side. The tags are the `head` list in
+`astro.config.mjs`; Starlight adds the title, description and URL per page
+from each page's frontmatter, so give every page a `description`.
+
+`pnpm screens:social` (`screens/social.mjs`) draws `og.png` from the logo and
+`src/assets/screens/hero.webp`, and the PNG icons (`apple-touch-icon.png` and
+`icon-192.png`) from `public/favicon.svg`. Run it after the
+hero shot or the logo changes.

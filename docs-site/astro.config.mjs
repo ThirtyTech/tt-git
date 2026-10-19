@@ -35,6 +35,26 @@ function rehypePrefixBase() {
 	return (tree) => visit(tree);
 }
 
+// Link previews (Discord, Slack, X…) and icons. Starlight already writes the
+// title, description, og:url, og:site_name and twitter:card for each page;
+// these add the picture, the icons and the embed color. The images in
+// public/ come from `pnpm screens:social`.
+const OG_IMAGE = `${SITE}${BASE}/og.png`;
+const OG_ALT = 'The tt-git logo next to its commit graph, status and branches panes.';
+const head = [
+	{ tag: 'meta', attrs: { property: 'og:image', content: OG_IMAGE } },
+	{ tag: 'meta', attrs: { property: 'og:image:type', content: 'image/png' } },
+	{ tag: 'meta', attrs: { property: 'og:image:width', content: '1200' } },
+	{ tag: 'meta', attrs: { property: 'og:image:height', content: '630' } },
+	{ tag: 'meta', attrs: { property: 'og:image:alt', content: OG_ALT } },
+	{ tag: 'meta', attrs: { name: 'twitter:image', content: OG_IMAGE } },
+	{ tag: 'meta', attrs: { name: 'twitter:image:alt', content: OG_ALT } },
+	// The color of the bar down the side of a Discord embed.
+	{ tag: 'meta', attrs: { name: 'theme-color', content: '#4bc0eb' } },
+	{ tag: 'link', attrs: { rel: 'icon', type: 'image/png', sizes: '192x192', href: `${BASE}/icon-192.png` } },
+	{ tag: 'link', attrs: { rel: 'apple-touch-icon', sizes: '180x180', href: `${BASE}/apple-touch-icon.png` } },
+];
+
 // https://astro.build/config
 export default defineConfig({
 	site: SITE,
@@ -49,6 +69,7 @@ export default defineConfig({
 				'A terminal git client with a GitLens-style commit graph, a lazygit-style status pane and herdr-style plugins.',
 			logo: { src: './src/assets/logo.svg' },
 			favicon: '/favicon.svg',
+			head,
 			customCss: ['./src/styles/theme.css'],
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/thirtytech/tt-git' }],
 			sidebar: [
