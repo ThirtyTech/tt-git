@@ -1,10 +1,202 @@
 ---
 title: Example plugins
-description: "The example plugins that ship with tt-git."
+description: The example plugins that ship with tt-git.
 ---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The tt-git repository has three small, working plugins in
+[`examples/plugins`](https://github.com/jsheely/tt-git/tree/main/examples/plugins).
+Each shows a different part of the plugin model:
+
+| Plugin | Shows |
+|---|---|
+| [open-on-github](#open-on-github) | Actions offered on commits and branches, and a link handler. |
+| [notify-on-push](#notify-on-push) | Event hooks that call back through `tt-git ui notify`. |
+| [pr-list](#pr-list) | A popup pane, and an action that opens the pane through the CLI. |
+
+The examples need [Node.js](https://nodejs.org). `pr-list` also needs the
+[GitHub CLI](https://cli.github.com) (`gh`).
+
+## Trying one
+
+<Steps>
+
+1. From a clone of the tt-git repository, link the plugin:
+
+   ```sh
+   tt-git plugin link examples/plugins/open-on-github
+   ```
+
+2. Start tt-git in a repository whose `origin` is on GitHub.
+3. Press <kbd>:</kbd> and type `github`.
+
+</Steps>
+
+When you're done, `tt-git plugin unlink examples.open-on-github` removes it.
 
 ## open-on-github
 
+Opens the selected commit or branch on GitHub in your browser, and opens
+GitHub issue and pull request links from the details pane.
+
+```toml title="examples/plugins/open-on-github/tt-git-plugin.toml"
+id = "examples.open-on-github"
+name = "Open on GitHub"
+version = "0.1.0"
+min_tt_git_version = "0.1.0"
+description = "Open the selected commit or branch on GitHub in your browser"
+platforms = ["linux", "macos", "windows"]
+
+[[actions]]
+id = "commit"
+title = "Open commit on GitHub"
+contexts = ["commit"]
+command = ["node", "open.mjs", "commit"]
+
+[[actions]]
+id = "branch"
+title = "Open branch on GitHub"
+contexts = ["branch"]
+command = ["node", "open.mjs", "branch"]
+
+[[actions]]
+id = "url"
+title = "Open link in browser"
+command = ["node", "open.mjs", "url"]
+
+# `o` in the details pane on a GitHub issue/PR link opens it.
+[[link_handlers]]
+id = "github"
+title = "Open GitHub link"
+pattern = '^https://github\.com/[^/]+/[^/]+/(issues|pull)/[0-9]+$'
+action = "url"
+```
+
+What to notice:
+
+- **Contexts.** *Open commit on GitHub* is offered in the palette only while
+  the graph is focused, and *Open branch on GitHub* only in the branches pane.
+  *Open link in browser* has no `contexts`, so it's `global`.
+- **One script, three actions.** Each action passes a different argument to
+  `open.mjs`, which reads `TTGIT_PLUGIN_CONTEXT_JSON` for the selected commit
+  or branch, or `TTGIT_PLUGIN_CLICKED_URL` for a link.
+- **A link handler.** With a commit message that mentions
+  `https://github.com/owner/repo/issues/12`, pressing <kbd>o</kbd> in the
+  details pane (or <kbd>ctrl</kbd>+clicking the link) runs the `url` action.
+- **Reporting back.** The script reports what it opened, or what went wrong,
+  with `tt-git ui notify`, and exits non-zero on failure so the run shows as
+  failed in the plugin log.
+
+```js title="open.mjs (excerpt)"
+const ctx = JSON.parse(process.env.TTGIT_PLUGIN_CONTEXT_JSON ?? "{}");
+const bin = process.env.TTGIT_BIN_PATH ?? "tt-git";
+const notify = (msg) => execFileSync(bin, ["ui", "notify", msg]);
+
+const what = process.argv[2];
+let url;
+if (what === "commit" && ctx.selected_commit) url = `${repoUrl()}/commit/${ctx.selected_commit}`;
+else if (what === "branch" && ctx.selected_branch) url = `${repoUrl()}/tree/${ctx.selected_branch}`;
+else if (what === "url") url = process.env.TTGIT_PLUGIN_CLICKED_URL;
+```
+
+`repoUrl()` turns `git remote get-url origin` into a GitHub URL, and fails if
+`origin` isn't on GitHub.
+
 ## notify-on-push
 
+Shows a message in the help bar after every push and every commit.
+
+```toml title="examples/plugins/notify-on-push/tt-git-plugin.toml"
+id = "examples.notify-on-push"
+name = "Notify on push"
+version = "0.1.0"
+min_tt_git_version = "0.1.0"
+description = "Shows a message after pushes and commits (demonstrates event hooks calling back through the CLI)"
+platforms = ["linux", "macos", "windows"]
+
+[[events]]
+on = "push.completed"
+command = ["node", "notify.mjs"]
+
+[[events]]
+on = "commit.created"
+command = ["node", "notify.mjs"]
+```
+
+The script reads the event from `TTGIT_PLUGIN_EVENT_JSON` and calls back into
+tt-git:
+
+```js title="notify.mjs"
+const { event, data } = JSON.parse(process.env.TTGIT_PLUGIN_EVENT_JSON ?? "{}");
+const bin = process.env.TTGIT_BIN_PATH ?? "tt-git";
+
+const message =
+  event === "push.completed" ? `🚀 pushed ${data.branch ?? "HEAD"}`
+  : event === "commit.created" ? `✔ committed ${String(data.oid ?? "").slice(0, 7)} ${data.summary ?? ""}`
+  : `event ${event}`;
+
+execFileSync(bin, ["ui", "notify", message]);
+```
+
+Commit something in tt-git and the help bar shows
+`✔ committed 3f9c2e1 Fix the parser`. See [Events](/plugins/events/) for
+every event you can hook.
+
 ## pr-list
+
+Lists open pull requests, using `gh pr list`, in a popup pane.
+
+```toml title="examples/plugins/pr-list/tt-git-plugin.toml"
+id = "examples.pr-list"
+name = "Pull requests"
+version = "0.1.0"
+min_tt_git_version = "0.1.0"
+description = "Lists open pull requests (via the gh CLI) in a popup pane"
+platforms = ["linux", "macos", "windows"]
+
+# A pane is a terminal program: tt-git runs it in a PTY and draws it.
+[[panes]]
+id = "list"
+title = "Pull requests"
+placement = "popup"
+width = "80%"
+height = "70%"
+command = ["node", "pr-list.mjs"]
+
+# Actions can open panes too, by calling the CLI.
+[[actions]]
+id = "for-branch"
+title = "Pull requests for this branch"
+contexts = ["branch"]
+command = ["node", "open-for-branch.mjs"]
+```
+
+{/* screenshot: the pr-list popup pane over the tt-git layout, the popup's border and the release-key hint called out */}
+
+What to notice:
+
+- **A pane.** The palette lists it as **Open Pull requests**. It opens in a
+  popup 80% wide and 70% tall. `pr-list.mjs` is an ordinary terminal program:
+  it prints the list, then waits for a key and exits, which closes the popup.
+- **An action that opens a pane.** *Pull requests for this branch*, offered
+  in the branches pane, runs a script that opens the same pane through the CLI
+  and passes the selected branch in an extra variable:
+
+```js title="open-for-branch.mjs"
+const ctx = JSON.parse(process.env.TTGIT_PLUGIN_CONTEXT_JSON ?? "{}");
+execFileSync(process.env.TTGIT_BIN_PATH ?? "tt-git", [
+  "plugin", "pane", "open",
+  "--plugin", process.env.TTGIT_PLUGIN_ID,
+  "--entrypoint", "list",
+  "--env", `PR_BRANCH=${ctx.selected_branch ?? ""}`,
+]);
+```
+
+`pr-list.mjs` reads `PR_BRANCH` and, if it's set, passes `--head <branch>` to
+`gh pr list`.
+
+<Aside>
+Press <kbd>ctrl+\\</kbd> or <kbd>f12</kbd> to close the popup without waiting
+for the program to exit. See [Plugin panes](/panes/plugin-panes/).
+</Aside>

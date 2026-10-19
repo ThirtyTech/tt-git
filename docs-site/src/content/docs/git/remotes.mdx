@@ -3,10 +3,59 @@ title: Push, pull and fetch
 description: "Working with remotes from any pane."
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
+The status title always shows how the current branch stands against its
+upstream: `main → origin/main ↑1 ↓2` is one commit to push and two to pull.
+The [branches pane](/panes/branches/#the-status-column) shows the same for
+every branch.
+
+{/* screenshot: status pane title zoomed, callouts on "→ origin/main" (the upstream) and "↑1 ↓2" (ahead / behind). */}
+
 ## Push
+
+Press <kbd>P</kbd> (shift+p) from any pane to push the current branch.
+
+- If the branch has an upstream, tt-git runs `git push`.
+- If it doesn't, tt-git pushes it to `origin` and sets that as its upstream,
+  like `git push -u origin HEAD`. With no remote called `origin`, it uses the
+  first remote. With no remotes at all, it tells you there's nothing to push
+  to.
+
+The help bar shows `push…` while it runs and `✓ push` when it's done. If git
+refuses, for example because the remote has commits you don't, the error box
+shows git's message. Pull, then push again.
 
 ## Pull
 
+Press <kbd>p</kbd> from any pane. tt-git runs `git pull --no-edit`, so
+whether it merges or rebases is up to your git config (`pull.rebase`,
+`pull.ff`), and a merge commit keeps git's default message instead of
+opening an editor.
+
+If the pull stops on a conflict, the status pane shows a banner and the
+conflicted files. See [Resolving conflicts](/git/merge-rebase/#resolving-conflicts).
+
 ## Fetch
 
+Press <kbd>f</kbd> in the branches pane to run `git fetch --all --prune`. It
+fetches every remote and removes remote branches that were deleted on the
+server. A local branch whose upstream was deleted then shows `gone` in red in
+the branch list, which usually means it was merged and can be deleted.
+
+<Aside>
+	In the graph, <kbd>f</kbd> opens the author and file filter instead. Fetch
+	from the branches pane (<kbd>3</kbd>, then <kbd>f</kbd>).
+</Aside>
+
+A fetch that brings nothing new doesn't reload the graph.
+
 ## Credentials
+
+tt-git runs git with its terminal prompts turned off
+(`GIT_TERMINAL_PROMPT=0`), so a username or password prompt can't hang the
+screen. Git still uses your credential helper (Git Credential Manager, the
+macOS keychain, `gh auth` and so on) and SSH still uses your `ssh-agent`.
+If git needs a credential it can't get on its own, the push, pull or fetch
+fails with git's message. Run the same command once in a terminal, or set up
+a credential helper, and it'll work from tt-git after that.

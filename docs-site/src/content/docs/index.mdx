@@ -19,10 +19,97 @@ hero:
       variant: minimal
 ---
 
-{/* screenshot: full 1080p hero screenshot */}
+import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+{/* screenshot: full 1080p hero screenshot of the default layout on a busy mock repo: graph on top with several colored lanes, branch/tag badges and a merge; status below left with staged, modified and untracked files; branches below right with the status column showing ✓, ↑2, local and gone. No callouts; this is the hero image. */}
 
 ## What it does
 
+<CardGrid>
+	<Card title="A commit graph as the main view" icon="seti:git">
+		Every branch, remote and tag in one `git log --all` graph with stable,
+		colored lanes. Branches run straight down instead of shifting sideways.
+		Filter it to one author or one file or folder.
+	</Card>
+	<Card title="Stage by file, hunk or line" icon="pencil">
+		Stage, unstage, discard, commit, amend and stash from the status pane.
+		Open a file to stage its changes a hunk or a single line at a time.
+	</Card>
+	<Card title="One list for all branches" icon="list-format">
+		Local and remote branches share a row, sorted by when you last touched
+		them. A status column tells you what's been pushed, what's behind and
+		what's gone upstream.
+	</Card>
+	<Card title="Merged, unmerged, tags and stashes" icon="approve-check">
+		See which branches are merged into your main branch, how far each
+		release tag is from it, and every stash, each on its own tab.
+	</Card>
+	<Card title="Plugins built like herdr's" icon="puzzle">
+		Plugins are plain programs with a TOML manifest. They add actions, react
+		to events, open terminal panes inside tt-git and talk back through the
+		CLI or a JSON socket.
+	</Card>
+	<Card title="Light enough to leave open" icon="rocket">
+		It redraws only when something changes and runs no git processes at
+		idle. With a 28,000-commit repository open, it uses about 30 MiB.
+	</Card>
+</CardGrid>
+
 ## Pane by pane
 
+<CardGrid>
+	<LinkCard
+		title="Graph"
+		href="/panes/graph/"
+		description="Lanes, badges, all branches or just yours, filters by author or file, and actions on a commit."
+	/>
+	<LinkCard
+		title="Details"
+		href="/panes/details/"
+		description="A commit's message and diff, its changed files side by side with the diff, and links."
+	/>
+	<LinkCard
+		title="Status"
+		href="/panes/status/"
+		description="Changed files, staging, commits, amends, discards, stashes and conflict handling."
+	/>
+	<LinkCard
+		title="Staging hunks and lines"
+		href="/panes/staging/"
+		description="Stage, unstage or discard part of a file, a hunk or a line at a time."
+	/>
+	<LinkCard
+		title="Branches"
+		href="/panes/branches/"
+		description="Local and remote branches in one list, sorted by activity, with a status column."
+	/>
+	<LinkCard
+		title="Merged and unmerged"
+		href="/panes/merged-unmerged/"
+		description="What's merged into your base branch, and each branch's own history in the graph."
+	/>
+	<LinkCard
+		title="Tags"
+		href="/panes/tags/"
+		description="Every tag, newest first, and how many commits each release is behind the base."
+	/>
+	<LinkCard
+		title="Stash"
+		href="/panes/stash/"
+		description="Pop, apply, drop, inspect or branch from a stash."
+	/>
+	<LinkCard
+		title="Plugin panes"
+		href="/panes/plugin-panes/"
+		description="Terminal programs from plugins, drawn inside tt-git as overlays, popups or splits."
+	/>
+</CardGrid>
+
 ## Next steps
+
+<CardGrid>
+	<LinkCard title="Install" href="/getting-started/install/" description="Build tt-git and open your first repository." />
+	<LinkCard title="A tour of the screen" href="/getting-started/tour/" description="What each pane is for, and the help bar." />
+	<LinkCard title="Keyboard shortcuts" href="/reference/keys/" description="Every default key, by pane." />
+	<LinkCard title="Configuration" href="/configuration/" description="Settings, layout and key bindings." />
+</CardGrid>

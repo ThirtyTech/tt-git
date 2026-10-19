@@ -1,10 +1,141 @@
 ---
 title: CLI and socket API
-description: "Talk back to tt-git from a plugin with the CLI or the JSON socket."
+description: Talk back to tt-git from a plugin with the CLI or the JSON socket.
 ---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+A plugin talks to the tt-git it runs under in one of two ways:
+
+- **Run the CLI.** `$TTGIT_BIN_PATH ui notify "done"`. This is the simplest
+  way, and works from any language that can start a process.
+- **Use the socket.** Connect to `$TTGIT_SOCKET_PATH` and exchange JSON lines.
+  This suits a long-running program that makes many calls or subscribes to
+  events.
+
+Both reach the same API. Every CLI command that needs a running tt-git is a
+thin wrapper over one socket method.
 
 ## The CLI
 
+Plugins get `TTGIT_BIN_PATH` (the running executable) and `TTGIT_SOCKET_PATH`,
+so these commands find the right tt-git without any flags:
+
+```sh
+"$TTGIT_BIN_PATH" ui notify "Deployed main"     # a message in the help bar
+"$TTGIT_BIN_PATH" ui error "Deploy failed"      # an error popup
+"$TTGIT_BIN_PATH" ui refresh                    # reload everything
+"$TTGIT_BIN_PATH" ui focus branches             # status, branches, graph or details
+
+"$TTGIT_BIN_PATH" plugin pane open --plugin "$TTGIT_PLUGIN_ID" --entrypoint list --env PR_BRANCH=main
+"$TTGIT_BIN_PATH" plugin action invoke acme.github.open-commit
+"$TTGIT_BIN_PATH" events --event push.completed  # stream events, one JSON object per line
+"$TTGIT_BIN_PATH" api repo.info                  # any socket method, printed as JSON
+```
+
+Two commands read the repository directly instead, and don't need a running
+tt-git. They use `TTGIT_REPO_PATH`, or `--repo`:
+
+```sh
+"$TTGIT_BIN_PATH" status --json
+"$TTGIT_BIN_PATH" branch list --json
+```
+
+[Command line](/reference/cli/) lists every command and option.
+
+<Aside type="tip">
+Outside a plugin, pass `--socket ADDRESS` to reach a running tt-git. Without
+`TTGIT_SOCKET_PATH` or `--socket`, these commands stop with
+"no running tt-git".
+</Aside>
+
 ## The socket
 
+The socket is a Unix domain socket, or a named pipe on Windows. Its address is
+in `TTGIT_SOCKET_PATH`, and it's unique to each running tt-git. A tt-git
+started with `--no-plugins` doesn't open one.
+
+Messages are newline-delimited JSON. Send a request with an `id`, a `method`
+and optional `params`; the reply carries the same `id` and either a `result`
+or an `error`:
+
+```text
+→ {"id":"req_1","method":"ui.notify","params":{"message":"hi"}}
+← {"id":"req_1","result":{}}
+→ {"id":"req_2","method":"ui.notify","params":{}}
+← {"id":"req_2","error":{"code":"invalid_params","message":"message is required"}}
+```
+
+<Tabs>
+<TabItem label="Node">
+
+```js
+import net from "node:net";
+
+const sock = net.createConnection(process.env.TTGIT_SOCKET_PATH);
+sock.write(JSON.stringify({ id: "1", method: "repo.info" }) + "\n");
+sock.on("data", (buf) => {
+  for (const line of buf.toString().split("\n").filter(Boolean)) {
+    console.log(JSON.parse(line).result);
+  }
+  sock.end();
+});
+```
+
+</TabItem>
+<TabItem label="Shell">
+
+```sh
+# The api command does the connecting for you.
+"$TTGIT_BIN_PATH" api repo.info
+"$TTGIT_BIN_PATH" api ui.notify '{"message":"hi"}'
+```
+
+</TabItem>
+</Tabs>
+
 ## Methods
+
+| Method | Params | Result |
+|---|---|---|
+| `ping` | | `{pong, version}` |
+| `repo.info` | | `{path, name, head, branch, upstream, ahead, behind}` |
+| `status.get` | | Branch headers, file entries and any merge, rebase or cherry-pick in progress. |
+| `branch.list` | | The unified branch list, each row with its `state`. |
+| `graph.selection` | | `{scope, branch, index, commit}`. `branch` is set while the graph shows one branch from the Merged or Unmerged tab. |
+| `ui.notify` | `{message}` | `{}`. Shows the message in the help bar. |
+| `ui.error` | `{message}` | `{}`. Shows an error popup. |
+| `ui.refresh` | | `{}`. Reloads everything. |
+| `ui.focus` | `{pane}`: `status`, `branches`, `graph` or `details` | `{}` |
+| `plugin.list` | | Installed plugins. |
+| `plugin.link` | `{path, enabled?}` | |
+| `plugin.unlink`, `plugin.enable`, `plugin.disable` | `{plugin_id}` | |
+| `plugin.action.list` | `{plugin_id?}` | Actions. |
+| `plugin.action.invoke` | `{action_id, plugin_id?}` | `{log_id}` |
+| `plugin.log.list` | `{plugin_id?, limit?}` | Command logs, newest first; `limit` defaults to 50. |
+| `plugin.pane.open` | `{plugin_id, entrypoint, placement?, width?, height?, env?, focus?}` | `{pane_id}` |
+| `plugin.pane.focus` | `{pane_id}` | `{}` |
+| `plugin.pane.close` | `{pane_id}` | `{}` |
+| `plugin.pane.screen` | `{pane_id}` | `{text}`: what the pane shows right now. |
+| `plugin.pane.list` | | Open panes. |
+| `popup.close` | | `{closed}` |
+| `events.subscribe` | `{events?: [names]}` | `{subscribed}`, then one event envelope per line. See [Events](/plugins/events/#subscribing-to-a-stream). |
+
+`plugin.action.invoke` accepts a local action id when you also pass
+`plugin_id`; otherwise give the qualified id. `plugin.pane.open` fails with
+`ui_busy` if a popup is already open, since only one can be open at a time.
+
+### Errors
+
+Errors have a `code` and a `message`. Codes you may see:
+
+| Code | Means |
+|---|---|
+| `invalid_request` | The line isn't a valid request. |
+| `unknown_method` | No such method. |
+| `invalid_params` | A required param is missing or has the wrong type. |
+| `plugins_disabled` | tt-git runs without plugins. |
+| `plugin_action_failed` | The action couldn't start: for example, no such action, or 32 plugin commands are already running. The message says which. |
+| `plugin_pane_failed`, `ui_busy` | The pane couldn't open, or a popup is already open. |
+| `plugin_registry_error` | Linking, unlinking, enabling or disabling failed. |
+| `server_shutting_down` | tt-git is quitting. |

@@ -3,16 +3,94 @@ title: A tour of the screen
 description: "The four panes, the help bar and how they fit together on first launch."
 ---
 
-{/* screenshot: full 1080p screen, each pane outlined and numbered */}
+import { Aside } from '@astrojs/starlight/components';
+
+{/* screenshot: full 1080p screen, each pane outlined and numbered: [1] graph (top 70%), [2] status (bottom left), [3] branches (bottom right), and the help bar on the last line. Callout boxes name each region and link to the sections below. */}
 
 ## The default layout
 
+When tt-git starts, the screen is split in two:
+
+- The **graph** takes the top 70%.
+- **Status** and **branches** sit side by side below it.
+- The **help bar** is the last line.
+
+The **details** pane is hidden until you ask for it. When you press
+<kbd>space</kbd> on a commit, details takes the place of the bottom row, and
+<kbd>space</kbd> again puts status and branches back.
+
+Each pane's title starts with its number. Press <kbd>1</kbd>, <kbd>2</kbd>,
+<kbd>3</kbd> or <kbd>4</kbd> to focus it, or <kbd>tab</kbd> to move to the
+next one. The focused pane has a green border and a bold title.
+
+<Aside type="tip">
+	The layout is yours to change. You can move the panes, resize them, or keep
+	details on screen all the time. See [Layout](/configuration/layout/).
+</Aside>
+
 ## Graph
+
+{/* screenshot: zoom on the graph pane (top region), callouts on: the title "[1] Graph [all] 1/120" (scope and position), a lane line, a merge ◉, the green current-branch badge, a [local] badge, an [origin/…] badge, a <tag>, and the author / date / hash columns on the right. */}
+
+The graph shows the history of every branch, remote branch and tag, newest
+commit first. Each line of development keeps its own column and color, merges
+are drawn as `◉` and other commits as `●`. Badges on a row name the branches
+and tags that point at it: the checked-out branch on a green background,
+local branches in `[brackets]`, remote branches like `[origin/main]`, and tags
+like `<v1.0>`.
+
+The title shows what's loaded and where you are: `Graph [all] 1/120` means
+all branches, first of 120 commits. Press <kbd>a</kbd> to show only the
+current branch and its upstream.
+
+Read more in [Graph](/panes/graph/).
 
 ## Status
 
+{/* screenshot: zoom on the status pane, callouts on the title "Status: repo · main → origin/main ↑1" (branch, upstream, ahead/behind) and on the two-letter codes: "M " staged (green), " M" modified (red), "??" untracked. */}
+
+The status pane lists every changed file with the same two-letter code as
+`git status -s`. The title shows the repository, the current branch, its
+upstream and how far ahead or behind it is.
+
+Press <kbd>space</kbd> to stage or unstage a file, <kbd>c</kbd> to commit,
+and <kbd>enter</kbd> to open a file and stage it a hunk or line at a time.
+Read more in [Status](/panes/status/).
+
 ## Branches
+
+{/* screenshot: zoom on the branches pane, callouts on the tab row in the title (Branches · Tags · Unmerged · Merged), the "* " marker on the current branch, and the status column values ✓, ↑2, local, origin, gone. */}
+
+One list holds your local and remote branches, with `main` and `origin/main`
+on a single row. The branches you've used most recently are at the top. The
+column after the name says how each one relates to its remote: `✓` in sync,
+`↑2` two commits to push, `local` never pushed, `gone` deleted upstream.
+
+Press <kbd>enter</kbd> to check a branch out. <kbd>]</kbd> and <kbd>[</kbd>
+switch to the Tags, Unmerged, Merged and Stash tabs. Read more in
+[Branches](/panes/branches/).
 
 ## Details
 
+{/* screenshot: full screen with details open in place of the bottom row after pressing space on a commit; callouts on the commit message, the author/hash line and a diff hunk. */}
+
+Details shows whatever is selected: a commit's message and diff, a stash, or
+the diff of a file in the status pane. It follows your selection as you move.
+
+Press <kbd>space</kbd> in the graph to show or hide it, or <kbd>enter</kbd>
+to open the commit fullscreen with its changed files beside the diff. Read
+more in [Details](/panes/details/).
+
 ## The help bar
+
+{/* screenshot: zoom on the bottom line, callouts on the pane's key hints (left), the global hints (tab next pane, ? help, q quit), and a "✓ commit" notice on the right. */}
+
+The last line lists the most useful keys for the focused pane, followed by
+<kbd>tab</kbd>, <kbd>?</kbd> and <kbd>q</kbd>, which work everywhere. It
+changes as you move between panes. Keys that don't fit are left off; press
+<kbd>?</kbd> for the full list.
+
+On the right, the help bar shows what tt-git is doing: `push…` while a push
+runs, then `✓ push` when it's done. When something fails, an **Error** box
+opens with git's own message. Press <kbd>enter</kbd> or <kbd>esc</kbd> to
+close it.

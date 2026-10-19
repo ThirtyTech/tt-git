@@ -3,12 +3,320 @@ title: How tt-git uses git
 description: "Which git commands each pane runs, and why."
 ---
 
+This page is for when you want to know exactly what tt-git does to your
+repository: which git commands each pane runs, with which options, and why.
+You don't need any of it to use tt-git. The pane pages
+([Graph](/panes/graph/), [Status](/panes/status/),
+[Branches](/panes/branches/) and so on) cover what you see and what the keys
+do.
+
 ## Always the git CLI
+
+Every pane reads from the `git` command line, never from a library that
+parses the repository itself. So tt-git always agrees with the git you run
+by hand: hooks, config, `.mailmap`, worktrees and partial clones all behave
+the same way.
+
+Every git call runs with:
+
+| Setting | Why |
+|---|---|
+| `-c color.ui=never` | Output is always plain text to parse |
+| `-c core.quotepath=false` | Non-ASCII file names come through as they are |
+| `-c log.showSignature=false` | Signature checks don't add lines to `log` and `show` |
+| `-c core.pager=cat` | Nothing waits for a pager |
+| `GIT_TERMINAL_PROMPT=0` | A credential prompt fails instead of hanging the UI |
+| `GIT_OPTIONAL_LOCKS=0` | Reads never take the index lock away from a git command you're running |
+
+Each kind of load keeps at most one git process in flight, with only the
+newest request waiting behind it. See [Memory and
+speed](/reference/performance/).
 
 ## Graph
 
+### The log
+
+The graph is `git log --topo-order` of every ref, newest first. In **all**
+mode that's `--exclude=refs/stash --all`. `--all` is used rather than `HEAD`
+because it still works on a detached HEAD and doesn't fail on an unborn
+branch. In **current** mode it's `HEAD` plus its upstream, found with
+`git rev-parse --symbolic-full-name @{upstream}`, so you can see what you'd
+push or pull.
+
+### Lanes
+
+The lane layout is GitLens/GitKraken style: once a line has a column it
+keeps it, so branches run straight down instead of shifting sideways as
+other lines start and end.
+
+- A commit takes the leftmost lane that's waiting for it. Other lanes
+  waiting for it end there and join it with `╯`. A commit nobody is waiting
+  for is a branch tip and takes the first free column.
+- The first parent continues in the commit's column. Each further parent
+  joins a lane already waiting for it, or opens a new one.
+- A column freed in a row isn't reused in that same row, so a line never
+  looks like it passes straight through a merge.
+- Each new tip and merge lane gets the next of 8 colors. Merges are `◉`,
+  other commits `●`.
+- Only `max_lanes` columns (default 16) are drawn and stored; anything wider
+  collapses into `…`. Rows are packed at 2 bytes a column.
+
+The layout only looks at the current lane state, never ahead, so rows are
+built while `git log` is still streaming.
+
+### Badges
+
+The checked-out branch is ` name ` on green (` HEAD ` when detached), local
+branches `[name]`, remote branches `[origin/name]` and tags `<v1.0>`.
+Symbolic refs like `origin/HEAD` are skipped, since they only repeat another
+badge. Badges that don't fit are dropped before the subject is.
+
+### Loading
+
+Commits stream in batches of 1,000, up to `max_commits` (default 20,000).
+
+- The old rows stay on screen until the first new batch arrives, so a
+  refresh never flashes empty.
+- A load that's been replaced kills its `git log` instead of finishing it.
+- When the selection gets within 200 commits of the end, the next
+  `max_commits` load with `--skip`, and the existing lanes carry on.
+
+Loading more only continues the old lanes if the refs the graph started
+from are unchanged. tt-git checks that by fingerprinting the ref files
+(`HEAD`, `refs/`, `packed-refs`, `shallow`, worktree HEADs) without running
+git. If they changed, it reloads from the top. The same fingerprint means a
+fetch that brings nothing new doesn't reload the graph at all.
+
+### Filters
+
+The [author and file filter](/panes/graph/#filtering-by-author-or-file)
+gets its lists from:
+
+- **Authors**: `git log --use-mailmap --format='%aN <%aE>' --all`, counted
+  per person, most commits first. Because of `.mailmap`, one person who
+  committed under several emails is one entry.
+- **Files**: `git ls-files`, with each folder listed (ending in `/`) just
+  before the first file in it. Since `ls-files` only knows files that still
+  exist, if nothing matches, what you typed is used as the path, so you can
+  still find a deleted file's history.
+
+The filtered log adds:
+
+- for an author, `--use-mailmap --fixed-strings --author=<Name <email>>`.
+  `--use-mailmap` makes git match the same mapped identity the list showed,
+  and `--fixed-strings` means names with regex characters match literally.
+  The match is git's own: a case-sensitive substring of the author line.
+- for a path, `-- <path>` and `--parents`. That turns on git's parent
+  rewriting: each commit's parent becomes the nearest ancestor that also
+  touched the path, so the lanes still join up into a readable graph
+  instead of hundreds of disconnected dots.
+
+An author filter can't rewrite parents that way, so a line ends where the
+next commit is by someone else, and the next match starts a new lane.
+Renames aren't followed (no `--follow`), and git's default history
+simplification applies.
+
+A filtered load comes back in one batch rather than streaming, because which
+parents drop out is only known once the whole log is in.
+
 ## Branches and tags
+
+### One process for every ref
+
+Everything on every tab of the branches pane comes from one
+`git for-each-ref` over `refs/heads refs/remotes refs/tags`. It returns each
+ref's target, date, upstream, ahead/behind counts, author and subject in a
+single process, so the pane never runs a `rev-list` per branch. A full
+refresh is 6 to 8 git processes however many branches and tags you have.
+
+### Grouping and sorting
+
+Local and remote branches are grouped into one row: a remote branch joins
+the local branch that tracks it, else the one with the same name, else
+becomes a remote-only row. Remote names that contain `/` are handled: the
+longest configured remote name that prefixes the ref wins.
+
+A row's activity, which the list is sorted by, is the newest of each ref's
+tip commit date, the last entry in each ref's reflog, and for local
+branches the last `checkout: moving from A to B` entry naming it in
+`HEAD`'s reflog. Reflogs are read straight from `.git/logs/`, and only from
+the end of the file, so this costs no git processes.
+
+### The status column
+
+The ahead and behind counts come from git's own `%(upstream:track)`. `gone`
+is checked first (git reports the upstream gone, usually after
+`fetch --prune`), then tracking, then the rest: `local`, the remotes that
+have it, or `=origin` / `≠origin` for a same-named branch you don't track.
+
+### Checking out
+
+A local branch runs `git switch <name>`. A remote-only branch runs
+`git switch -c <name> --track <remote>/<name>`, preferring `origin` when
+several remotes have it.
+
+### Other branch commands
+
+| Action | Runs |
+|---|---|
+| Fetch | `git fetch --all --prune` |
+| New branch | `git switch -c <name> <start>` |
+| New branch in a worktree | `git worktree add -b <name> .worktrees/<name> <start>`, and `.worktrees/` is added to `.git/info/exclude` |
+| Rename | `git branch -m <old> <new>` |
+| Delete local | `git branch -d`, then `git branch -D` if you confirm a force delete |
+| Delete remote | `git push <remote> --delete <branch>` |
+| Merge | `git merge --no-edit <target>` |
+| Pull | `git pull --no-edit` |
+| Push | `git push`, or `git push -u <remote> HEAD` the first time, to set the upstream |
+| Cherry-pick | `git cherry-pick <commit>` |
+| Rebase | `git -c core.editor=: rebase <onto>`, non-interactive |
+| Copy | OSC 52 escape sequence to the terminal, which also works over SSH |
+
+### Merged and unmerged
+
+*Merged* means reachable: `git for-each-ref --merged=<base>`. A branch is
+merged when its tip is the base or one of the base's ancestors, which is why
+squash-merged and rebase-merged branches stay on Unmerged.
+
+The base branch is whatever a remote's `HEAD` points at (`origin` first),
+else the first of `main`, `master`, `development`, `develop` or `trunk` on a
+remote, then locally. A base you pick is stored as `tt-git.baseBranch` in
+the repository's own git config.
+
+### The branch history in the graph
+
+On the Unmerged and Merged tabs, the graph shows only the selected branch:
+
+1. `git merge-base --is-ancestor <tip> <base>` says whether it's merged.
+2. If it is, `git rev-list --first-parent --ancestry-path <tip>..<base>`
+   finds the base commit that merged it in. If that commit isn't a merge,
+   the branch was fast-forwarded and only its tip is shown.
+3. The branch's own commits are
+   `git log --first-parent <tip> ^<merge's first parent>`, or `^<base>` if
+   it's unmerged. First-parent leaves out commits it pulled in from other
+   branches.
+4. The parent of its oldest commit is where it branched off.
+5. The graph draws the branch as a loop off the base: the fork commit at the
+   bottom, the branch's commits, then the merge (or, for an unmerged branch,
+   the base's current tip). Base commits in between are left out.
+
+### Tags
+
+Tags are sorted by creation date: the tagger date for annotated tags, the
+commit date for lightweight ones.
+
+The five newest tags are compared with the base branch. On git 2.41 and
+later, all five come from one `git for-each-ref --format=%(ahead-behind:<base>)`.
+On older git, each is `git rev-list --left-right --count <base>...<tag>`,
+and tt-git remembers the old version so it doesn't try the new form again.
+Only five are compared because each one walks history, which gets slower
+the older the tag is.
+
+Deleting a tag runs `git tag -d <tag>`, which only removes it locally.
+
+### Stashes
+
+The stash list is only loaded when a stash reflog exists, so a repository
+without stashes pays nothing for it.
+
+| Action | Runs |
+|---|---|
+| Stash everything | `git stash push --include-untracked [-m <message>]` |
+| Stash staged | `git stash push --staged` |
+| Stash, keep staged | `git stash push --include-untracked --keep-index` |
+| Stash one file | `git stash push --include-untracked -- <paths>` |
+| Pop / apply | `git stash pop stash@{n}` / `git stash apply stash@{n}` |
+| Drop | `git stash drop stash@{n}` |
+| Branch | `git stash branch <name> stash@{n}` |
+| Show | `git show --stat --patch` of the stash commit, then of its untracked-files commit if it has one |
 
 ## Status and staging
 
+### The file list
+
+The status pane is
+`git status --porcelain=v2 -z --branch --untracked-files=all`. Porcelain v2
+is used because its format is stable across git versions, and `-z` keeps odd
+file names intact. The upstream and ahead/behind counts in the title come
+from the same `--branch` output, so they cost no extra git call.
+
+A merge, rebase, cherry-pick or revert in progress is detected from the
+files git leaves behind (`rebase-merge/`, `rebase-apply/`, `MERGE_HEAD`,
+`CHERRY_PICK_HEAD`, `REVERT_HEAD`), with no git call.
+
+### File actions
+
+| Action | Runs |
+|---|---|
+| Stage | `git add -- <path>` |
+| Unstage | `git restore --staged -- <path>`, or `git rm --cached` before the first commit, when there's no `HEAD` |
+| Stage all / unstage all | `git add -A` / `git reset -q` (`git rm --cached -r .` before the first commit) |
+| Discard an untracked file | Deletes it |
+| Discard a new file | `git rm -f` |
+| Discard a rename | Undone on both paths |
+| Discard anything else | `git restore --source=HEAD --staged --worktree` |
+| Commit | `git commit -F -`, with the message on stdin, so multi-line messages and ones starting with `-` are safe |
+| Amend | `git commit --amend --no-edit` |
+| Continue a merge | `git commit --no-edit` |
+| Continue a rebase, cherry-pick or revert | `git <op> --continue` |
+| Abort | `git <op> --abort` |
+
+Continue runs with `core.editor=:`, so git keeps the message it prepared
+rather than opening an editor inside the TUI.
+
+### Staging hunks and lines
+
+Each side of the [staging view](/panes/staging/) is
+
+```sh
+git diff [--cached] --no-ext-diff --no-textconv --no-renames --no-relative \
+  --src-prefix=a/ --dst-prefix=b/
+```
+
+pinning every option that would change the output's shape, so the patch
+tt-git builds from it always applies. tt-git then writes a patch with only
+the lines you picked:
+
+- An unpicked `+` line is dropped when staging; an unpicked `-` line becomes
+  context. Unstaging and discarding apply the patch in reverse, so there
+  it's the other way round. Lines you didn't pick stay as they are.
+- Hunk headers are recomputed from the lines written, and each later hunk's
+  start moves by what the earlier ones added or removed. That's why tt-git
+  doesn't need `git apply --recount`, and full context is kept so the patch
+  applies only where it should.
+- CRLF line endings and `\ No newline at end of file` are kept exactly.
+- Picking part of a new or deleted file turns it into a change to the file
+  rather than creating or deleting it. An untracked file is first marked
+  with `git add -N` so a part of it can be staged; if the patch then fails,
+  that's undone.
+
+The patch goes to `git apply --cached` (stage), `--cached -R` (unstage) or
+`-R` (discard) on stdin. Binary files, conflicted files and untracked files
+over 256 KiB can't be split.
+
 ## Details
+
+### A commit
+
+One `git show --stat --patch --diff-merges=first-parent -M`, with the full
+message, author, committer and parents. `--diff-merges=first-parent` shows a
+merge as what it brought into the branch, which is what you usually want to
+review, and `-M` shows renames as renames. Long diffs stop at 5,000 lines
+with a count of what's left, so a huge generated file can't stall the UI.
+
+### Changed files
+
+`git show --name-status -M` lists the files, with renames as `old → new`.
+The selected file's diff is loaded one file at a time and cached while the
+view is open.
+
+### Loading
+
+Nothing loads while details is hidden, and at most one load of each kind is
+in flight. Hold <kbd>j</kbd> in the graph and tt-git loads only the commit
+you stop on, not every commit you passed.
+
+## Refreshing
+
+What reloads when, and how file watching skips ignored paths, is covered in
+[Refreshing](/git/refreshing/).

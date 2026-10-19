@@ -3,10 +3,70 @@ title: Your first commit
 description: "A walk through staging, committing and pushing a change from tt-git."
 ---
 
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+This page walks through one change from edit to push. You don't need to
+refresh anything along the way: tt-git notices when files change and updates
+itself.
+
 ## Make a change
+
+Edit a file in your repository with your usual editor and save it. In a
+moment it appears in the status pane with ` M` (modified, not staged) in red.
+A new file shows `??` (untracked).
+
+{/* screenshot: status pane zoomed with one " M src/app.rs" (red) and one "?? notes.md", details showing the selected file's diff; callouts on the red " M" code and on the diff in details. */}
 
 ## Stage it
 
+<Steps>
+
+1. Press <kbd>2</kbd> to focus the status pane.
+
+2. Move to the file with <kbd>j</kbd> and <kbd>k</kbd>. Its diff shows in the
+   details pane if details is open.
+
+3. Press <kbd>space</kbd> to stage it. The code turns to `M ` in green:
+   staged, nothing left unstaged.
+
+</Steps>
+
+<kbd>a</kbd> stages every file at once. Press <kbd>space</kbd> on a staged
+file to unstage it.
+
+To stage only part of a file, press <kbd>enter</kbd> on it instead and pick
+the hunks or lines you want. See [Staging hunks and lines](/panes/staging/).
+
+{/* screenshot: status pane after staging, "M  src/app.rs" in green; callout on the green code. */}
+
 ## Commit
 
+<Steps>
+
+1. Press <kbd>c</kbd>. A **Commit message** box opens.
+
+2. Type the message and press <kbd>enter</kbd>. <kbd>esc</kbd> cancels.
+
+</Steps>
+
+{/* screenshot: the "Commit message" prompt over the screen with a message typed; callouts on the input line and the "enter confirm · esc cancel" hint. */}
+
+The help bar shows `✓ commit`, the file leaves the status list, and the graph
+jumps to your new commit. The status title now shows `↑1`: one commit your
+upstream doesn't have.
+
+<Aside>
+	Forgot something? Stage it and press <kbd>A</kbd> to amend the last commit
+	with it, keeping the message. tt-git asks before it amends.
+</Aside>
+
 ## Push
+
+Press <kbd>P</kbd> (shift+p) from any pane. tt-git runs `git push`, and the
+`↑1` goes away when it's done.
+
+If the branch has never been pushed, tt-git pushes it to `origin` (or to the
+first remote, if there's no `origin`) and sets it as the upstream, like `git push -u origin HEAD`.
+
+Press <kbd>p</kbd> to pull. See [Push, pull and fetch](/git/remotes/) for
+details.

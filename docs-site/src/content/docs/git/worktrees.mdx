@@ -3,8 +3,84 @@ title: Worktrees
 description: "Create a branch in its own worktree under .worktrees/."
 ---
 
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+A [git worktree](https://git-scm.com/docs/git-worktree) is a second working
+folder for the same repository, with its own branch checked out. You can
+work on a fix in one while a long build or a half-finished change sits in the
+other, without stashing or switching branches.
+
+tt-git can create a new branch straight into a worktree.
+
 ## Creating a branch in a worktree
+
+<Steps>
+
+1. Select where the branch should start: a commit in the graph, a branch in
+   the branch list, or a tag on the Tags tab.
+
+2. Press <kbd>n</kbd>. The **New branch** box opens on its *Branch* tab.
+
+3. Press <kbd>tab</kbd> to switch to the *Worktree* tab. The line under the
+   name shows where it will go, for example
+   `checked out in .worktrees/fix-login`.
+
+4. Type the branch name and press <kbd>enter</kbd>.
+
+</Steps>
+
+{/* screenshot: the "New branch at b66496d" box with the Worktree tab underlined, "fix-login" typed and "checked out in .worktrees/fix-login" under it; callouts on the Branch · Worktree tabs and on the path line. */}
+
+tt-git runs `git worktree add -b <name> .worktrees/<name> <start>`. Your
+current checkout stays as it was: you stay on the same branch with the same
+files. The new branch appears in the branch list and the graph.
+
+On the *Branch* tab instead, `enter` creates the branch and switches to it
+here, like `git switch -c`.
 
 ## Where worktrees go
 
+Worktrees go in a `.worktrees` folder at the top of your main checkout, one
+folder per branch:
+
+```
+my-project/
+├── .worktrees/
+│   ├── fix-login/
+│   └── spike-cache/
+├── src/
+└── ...
+```
+
+When tt-git makes the first one, it adds `/.worktrees/` to the repository's
+`.git/info/exclude`, so the folder never shows up as untracked. That file is
+local to your clone and isn't committed. Creating a worktree from inside
+another worktree still puts it in the main checkout's `.worktrees/`.
+
 ## Using a worktree
+
+Open the worktree in your editor and in a second tt-git:
+
+```sh
+tt-git .worktrees/fix-login
+```
+
+Everything that lives in `.git` is shared between worktrees: commits,
+branches, tags, remotes, stashes and config, including the
+[base branch](/panes/merged-unmerged/#the-base-branch) you picked. A commit
+in one shows up in the other's graph right away. The checked-out branch, the
+staged changes and any merge or rebase in progress are separate.
+
+<Aside type="caution">
+	Git only lets a branch be checked out in one worktree at a time. Checking
+	out `fix-login` in your main checkout fails while `.worktrees/fix-login`
+	has it.
+</Aside>
+
+When you're done, remove it from a terminal. `git worktree remove` refuses if
+the worktree has uncommitted changes:
+
+```sh
+git worktree remove .worktrees/fix-login
+git branch -d fix-login        # once it's merged
+```

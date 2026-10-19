@@ -1,12 +1,171 @@
 ---
 title: Command line
-description: "Every tt-git command and option."
+description: Every tt-git command and option.
 ---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`tt-git` on its own opens the UI. With a subcommand, it does that one thing
+and exits; those subcommands are also how [plugins](/plugins/api/) talk to a
+running tt-git. `tt-git --help`, or `--help` after any subcommand, prints the
+same information.
 
 ## tt-git
 
+```sh
+tt-git [PATH] [--config FILE] [--no-plugins]
+```
+
+Opens the UI on a repository.
+
+| Argument | |
+|---|---|
+| `PATH` | The repository to open, or any folder inside it. Default: the current directory. |
+| `--config FILE` | Read this config file instead of the [default one](/configuration/#where-it-lives). |
+| `--no-plugins` | Don't load plugins or open the API socket. |
+| `--version`, `-V` | Print the version. |
+| `--help`, `-h` | Print help. |
+
+If `PATH` isn't in a git repository, tt-git says so and exits with status 1.
+
+```sh
+tt-git                       # the repository you're in
+tt-git ~/src/website         # another one
+tt-git --no-plugins          # without plugins, for example to rule one out
+```
+
+## Commands that need a running tt-git
+
+Most subcommands talk to a running tt-git through its API socket. They find it
+in `TTGIT_SOCKET_PATH`, which every plugin process has, or in `--socket`:
+
+| Option | |
+|---|---|
+| `--socket ADDRESS` | The socket of the tt-git to talk to. Default: `$TTGIT_SOCKET_PATH`. |
+
+Without either, they stop with "no running tt-git". These are marked
+**socket** below.
+
+Two commands read the repository directly instead, and take `--repo`:
+
+| Option | |
+|---|---|
+| `--repo PATH` | The repository. Default: `$TTGIT_REPO_PATH`, then the current directory. |
+
 ## tt-git plugin
 
-## tt-git ui
+Manage plugins. See [Plugins overview](/plugins/).
 
-## tt-git events, status, branch, api
+| Command | |
+|---|---|
+| `tt-git plugin install SOURCE [--ref REF] [--yes]` | Install from GitHub. `SOURCE` is `owner/repo`, or `owner/repo/subdir…` for a plugin in a subfolder. `--ref` picks a branch, tag or commit (default: the repository's default branch). Shows what will run and asks first, unless `--yes` (`-y`). |
+| `tt-git plugin update [TARGET…] [--yes]` | Update plugins installed from GitHub: the ones named by id or `owner/repo`, or all of them. Skips unchanged plugins and linked ones. |
+| `tt-git plugin uninstall TARGET` | Remove an installed plugin, by id or `owner/repo`. |
+| `tt-git plugin link PATH [--disabled]` | Register a local plugin directory (or its manifest file), for development. No build step runs. `--disabled` registers it turned off. |
+| `tt-git plugin unlink ID` | Remove a plugin from the registry. Its files are kept. |
+| `tt-git plugin list [--json] [--plugin ID]` | List installed plugins: id, version, whether it's enabled, disabled or unavailable, where its manifest is, and any warnings. |
+| `tt-git plugin enable ID` | Turn a plugin on. |
+| `tt-git plugin disable ID` | Turn a plugin off, keeping it installed. |
+| `tt-git plugin config-dir ID` | Print the plugin's config directory. |
+
+### tt-git plugin action **socket**
+
+| Command | |
+|---|---|
+| `tt-git plugin action list [--plugin ID]` | List actions as JSON. |
+| `tt-git plugin action invoke ACTION [--plugin ID]` | Run an action. `ACTION` is the qualified id, or the local id with `--plugin`. Prints `{log_id}`. |
+
+### tt-git plugin log **socket**
+
+| Command | |
+|---|---|
+| `tt-git plugin log list [--plugin ID] [--limit N]` | Recent plugin command runs as JSON, newest first, with exit codes and output. `--limit` defaults to 50. |
+
+### tt-git plugin pane **socket**
+
+| Command | |
+|---|---|
+| `tt-git plugin pane open --plugin ID --entrypoint ID [options]` | Open a `[[panes]]` entry point. Prints `{pane_id}`. |
+| `tt-git plugin pane focus PANE_ID` | Focus an open pane. |
+| `tt-git plugin pane close PANE_ID` | Close an open pane. |
+
+Options for `pane open`:
+
+| Option | |
+|---|---|
+| `--placement PLACEMENT` | `overlay`, `popup`, `split`, `tab` or `zoomed`. Default: the manifest's. |
+| `--width SIZE`, `--height SIZE` | Popup size: cells, or `N%`. |
+| `--env KEY=VALUE` | Extra environment for the pane. Repeat for more. |
+| `--focus` / `--no-focus` | Focus the pane when it opens (default), or not. |
+
+See [Plugin panes](/panes/plugin-panes/).
+
+## tt-git ui **socket**
+
+Control the running UI.
+
+| Command | |
+|---|---|
+| `tt-git ui notify MESSAGE` | Show a message in the help bar. |
+| `tt-git ui error MESSAGE` | Show an error popup. |
+| `tt-git ui refresh` | Reload everything. |
+| `tt-git ui focus PANE` | Focus a pane: `status`, `branches`, `graph` or `details`. |
+
+## tt-git events **socket**
+
+```sh
+tt-git events [--event NAME]…
+```
+
+Stream events from the running tt-git as JSON lines, one per event, until you
+stop it. `--event` limits it to the named events; repeat it for more. See
+[Events](/plugins/events/).
+
+## tt-git api **socket**
+
+```sh
+tt-git api METHOD [PARAMS_JSON]
+```
+
+Send any [socket method](/plugins/api/#methods) and print the result as JSON:
+
+```sh
+tt-git api repo.info
+tt-git api ui.notify '{"message":"hi"}'
+```
+
+## tt-git status
+
+```sh
+tt-git status [--json] [--repo PATH]
+```
+
+Print the working tree status, one `XY path` line per file, the same codes as
+`git status -s`. `--json` prints the full status: branch, upstream,
+ahead/behind and every entry.
+
+## tt-git branch list
+
+```sh
+tt-git branch list [--json] [--repo PATH]
+```
+
+Print the [unified branch list](/panes/branches/#one-row-per-branch), most
+recently active first, with `*` on the checked-out branch. `--json` adds each
+branch's refs, dates and `state` (the status column).
+
+## Environment variables
+
+| Variable | |
+|---|---|
+| `TTGIT_CONFIG_DIR` | Where `config.toml`, `plugins.json` and plugin config folders live. See [Configuration file](/configuration/#where-it-lives). |
+| `TTGIT_STATE_DIR` | Where logs and plugin state live. See [Logs](/configuration/#logs). |
+| `TTGIT_LOG` | The log level, as an `EnvFilter` string. Default `info`. |
+| `TTGIT_SOCKET_PATH` | The socket the **socket** commands use. |
+| `TTGIT_REPO_PATH` | The repository `status` and `branch list` read. |
+
+<Aside type="caution">
+If you start a terminal from inside a tt-git plugin pane, it inherits
+`TTGIT_SOCKET_PATH` and `TTGIT_REPO_PATH`, so the commands above act on that
+tt-git and its repository.
+</Aside>

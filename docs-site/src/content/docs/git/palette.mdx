@@ -3,10 +3,57 @@ title: Command palette
 description: "Run any built-in command or plugin action by name."
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 {/* screenshot: palette open with a filter typed */}
 
 ## Opening the palette
 
+Press <kbd>:</kbd> or <kbd>ctrl+p</kbd> from any pane. A **Commands** box
+opens near the top of the screen with a search line and the list below it.
+
+{/* screenshot: the Commands palette open over the screen with the status pane focused and nothing typed; callouts on the search line, the focused pane's commands at the top of the list, a plugin action with its plugin name on the right, and the key hints on the right of built-in commands. */}
+
 ## What it lists
 
+The list depends on which pane is focused. In order, it shows:
+
+1. **The focused pane's commands**, such as *Stage/unstage*, *Commit* and
+   *Stash* in the status pane, or *Checkout*, *New branch* and *Fetch* in the
+   branches pane.
+2. **Plugin actions** for what you're looking at. An action shows up when its
+   plugin offers it everywhere, or for the focused pane: commits in the graph,
+   branches in the branch list, files in the status pane.
+3. **Plugin panes**, as *Open &lt;title&gt;*.
+4. **Common commands** that aren't already listed: continue or abort a merge
+   or rebase, pull, push, refresh, switch the graph between all and current
+   branch, focus a pane, zoom, *Plugin logs* and help.
+
+The right side of each row shows its key, if it has one, so the palette
+doubles as a way to learn the keys. For a plugin action it shows the
+plugin's name.
+
+*Plugin logs* is only in the palette. It opens a list of recent plugin runs
+with their exit codes and output; see [Plugins](/plugins/#plugin-logs).
+
 ## Searching
+
+Type to narrow the list. The match ignores case and the letters only have to
+appear in order, so `nbr` finds *New branch* and `plo` finds *Plugin logs*.
+
+| Key | Does |
+|---|---|
+| <kbd>↓</kbd> / <kbd>ctrl+n</kbd> | Next entry |
+| <kbd>↑</kbd> / <kbd>ctrl+p</kbd> | Previous entry |
+| <kbd>backspace</kbd> | Delete the last character typed |
+| <kbd>enter</kbd> | Run the selected entry |
+| <kbd>esc</kbd> | Close the palette |
+
+<Aside type="tip">
+	Run a plugin action often? Give it a key in your config instead. See
+	[Binding plugin actions](/configuration/keys/#binding-plugin-actions).
+</Aside>
+
+The same kind of list is used elsewhere in tt-git, for example to pick a
+[base branch](/panes/merged-unmerged/#the-base-branch), and it works the
+same way.

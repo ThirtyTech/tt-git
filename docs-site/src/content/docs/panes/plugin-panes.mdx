@@ -3,8 +3,74 @@ title: Plugin panes
 description: "Terminal panes that plugins open inside tt-git: overlays, popups and splits."
 ---
 
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+A plugin can bring its own screen into tt-git. A plugin pane runs one of the plugin's programs in a
+terminal inside tt-git and shows it live: a list of pull requests, a project board, a log tailer,
+anything that runs in a terminal. You keep tt-git's panes and keys; the plugin draws only inside its
+own box. Panes come from installed [plugins](/plugins/), so you'll only see them once you have one
+that provides them.
+
+{/* screenshot: full 1080p screen with the example "Pull requests" popup pane (80% × 70%) open over the layout, mock PR list inside. Callouts: 1) pane title "Pull requests", 2) the plugin's own UI inside the box, 3) the bottom hint "ctrl+\ to leave", 4) tt-git's layout dimmed behind it */}
+
 ## Placements
+
+A plugin decides where its pane goes. There are three kinds:
+
+| Placement | Where it goes | Keys |
+|---|---|---|
+| **overlay** | Covers the whole screen | All keys go to the pane |
+| **popup** | A centred box over the layout, sized by the plugin (in cells or a percentage) | All keys go to the pane |
+| **split** | Takes the place of the [details pane](/panes/details/) | Keys go to the pane while it's focused |
+
+Plugins written for herdr may ask for `tab` or `zoomed`; tt-git has neither, so those open as
+overlays. Only one popup can be open at a time.
+
+The pane's border carries its title, and the bottom edge reminds you how to leave it, for example
+`ctrl+\ to leave`.
 
 ## Opening a pane
 
+<Steps>
+
+1. Press <kbd>:</kbd> or <kbd>ctrl+p</kbd> to open the [command palette](/git/palette/).
+2. Type part of the pane's name. Panes are listed as **Open** and their title, for example
+   *Open Pull requests*, with the plugin's name on the right.
+3. Press <kbd>enter</kbd>.
+
+</Steps>
+
+Plugins can also open panes from their own actions, and you can open one from a script with
+`tt-git plugin pane open`. See [CLI and socket API](/plugins/api/).
+
 ## Leaving and closing a pane
+
+<kbd>{'ctrl+\\'}</kbd> or <kbd>F12</kbd> gets you out of a pane:
+
+- **Overlay and popup**: closes the pane. It also closes by itself when its program exits.
+- **Split**: gives focus back to tt-git and leaves the program running. Press <kbd>4</kbd> to go back
+  to it. When the program exits, the pane shows its exit status in the title, for example
+  `[process exited with code 1]`, and any key closes it.
+
+When a pane's program ends, the help bar also says so, for example `Pull requests: process exited`.
+
+You can change the keys that leave a pane with `pane_release_keys` in the
+[configuration file](/configuration/).
+
+{/* screenshot: full 1080p screen with a split plugin pane in the bottom row (in place of details), graph above. Callouts: 1) the split pane in details' place, focused, 2) the graph still usable above, 3) the "ctrl+\ to leave" hint */}
+
+<Aside>
+  Panes show only the live screen. There's no scrollback, so a program that prints a long log scrolls
+  it off the top just like a plain terminal would without a scrollback buffer.
+</Aside>
+
+Writing your own pane is covered in [Writing a plugin](/plugins/manifest/#panes).
+
+## Keys
+
+| Key | Does |
+|---|---|
+| <kbd>:</kbd> <kbd>ctrl+p</kbd> | Command palette, where panes are listed as *Open …* |
+| <kbd>{'ctrl+\\'}</kbd> <kbd>F12</kbd> | Leave the pane (closes an overlay or popup) |
+| <kbd>4</kbd> | Focus a split pane again |
+| any key | Close a split pane whose program has exited |

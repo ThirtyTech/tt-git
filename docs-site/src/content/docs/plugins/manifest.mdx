@@ -3,16 +3,285 @@ title: Writing a plugin
 description: "The tt-git-plugin.toml manifest: actions, events, startup commands, panes and link handlers."
 ---
 
+import { Aside, Steps, FileTree } from '@astrojs/starlight/components';
+
+A plugin is a directory with a `tt-git-plugin.toml` manifest in it, plus
+whatever programs the manifest runs. Those programs can be written in
+anything: a shell script, Node, Python, a compiled binary.
+
 ## A minimal plugin
+
+<Steps>
+
+1. Make a directory with a manifest and a script:
+
+   <FileTree>
+   - hello/
+     - tt-git-plugin.toml
+     - hello.mjs
+   </FileTree>
+
+   ```toml title="hello/tt-git-plugin.toml"
+   id = "me.hello"
+   name = "Hello"
+   version = "0.1.0"
+   min_tt_git_version = "0.1.0"
+   platforms = ["linux", "macos", "windows"]
+
+   [[actions]]
+   id = "greet"
+   title = "Say hello"
+   contexts = ["commit"]
+   command = ["node", "hello.mjs"]
+   ```
+
+   ```js title="hello/hello.mjs"
+   import { execFileSync } from "node:child_process";
+
+   const ctx = JSON.parse(process.env.TTGIT_PLUGIN_CONTEXT_JSON);
+   execFileSync(process.env.TTGIT_BIN_PATH, [
+     "ui", "notify", `hello from ${ctx.selected_commit?.slice(0, 7)}`,
+   ]);
+   ```
+
+2. Link it, so tt-git runs it straight from that directory:
+
+   ```sh
+   tt-git plugin link ./hello
+   ```
+
+3. Start tt-git, select a commit in the graph, press <kbd>:</kbd> and pick
+   **Say hello**. The message shows in the help bar.
+
+</Steps>
+
+The script learns what you had selected from `TTGIT_PLUGIN_CONTEXT_JSON`, and
+talks back by running tt-git's own CLI. See
+[Environment and context](/plugins/environment/) and
+[CLI and socket API](/plugins/api/).
 
 ## The manifest
 
+Here's a manifest that uses every section:
+
+```toml title="tt-git-plugin.toml"
+id = "acme.github"               # required: ASCII letters, digits, . : _ -  (max 120)
+name = "GitHub helpers"          # required
+version = "0.1.0"                # required (semver; a warning otherwise)
+min_tt_git_version = "0.1.0"     # required; refused if newer than this tt-git
+description = "…"                # optional
+platforms = ["linux", "macos", "windows"]   # optional; missing gives a warning
+
+[[build]]                        # runs only on `plugin install` / `update`
+command = ["npm", "ci"]
+platforms = ["linux", "macos"]   # any item can narrow platforms
+
+[[startup]]                      # runs once each time tt-git starts
+command = ["node", "dist/restore.js"]
+
+[[actions]]
+id = "open-commit"               # local id: no dots (qualified as acme.github.open-commit)
+title = "Open commit on GitHub"
+description = "…"
+contexts = ["commit"]            # global | commit | branch | file | selection (default: global)
+command = ["node", "open.mjs", "commit"]
+
+[[events]]
+on = "push.completed"
+command = ["node", "notify.mjs"]
+
+[[panes]]
+id = "board"
+title = "Project board"
+placement = "popup"              # overlay (default) | popup | split | tab | zoomed
+width = "80%"                    # popup only: cells or "N%"
+height = 20
+command = ["board"]
+
+[[link_handlers]]
+id = "issue"
+title = "Open GitHub issue"
+pattern = '^https://github\.com/[^/]+/[^/]+/issues/[0-9]+$'   # Rust regex
+action = "open-commit"           # an action in this plugin
+```
+
+### Top-level fields
+
+| Field | | |
+|---|---|---|
+| `id` | required | 1 to 120 ASCII letters, digits, `.`, `:`, `_` or `-`. Use a prefix you own, like `acme.github`. |
+| `name` | required | Shown in the palette and in `plugin list`. |
+| `version` | required | The plugin's version. Not being semver is a warning, not an error. |
+| `min_tt_git_version` | required | The oldest tt-git the plugin works with. A newer tt-git is required to load it. |
+| `description` | optional | |
+| `platforms` | optional | Any of `linux`, `macos`, `windows`. Leave it out and tt-git assumes all, with a warning. On a platform that isn't listed, the plugin shows as unavailable. |
+
+Every item in `[[build]]`, `[[startup]]`, `[[actions]]`, `[[events]]` and
+`[[panes]]` can have its own `platforms` list too, to run only on some
+systems.
+
+### Commands
+
+Every `command` is an argument array. It never goes through a shell, so
+there's no quoting to get wrong and no shell syntax to rely on: to use pipes or
+`&&`, run a script.
+
+- A program path with a `/` in it, like `./bin/run` or `dist/main.js`, is
+  resolved against the plugin directory.
+- A bare program name like `node` is looked up on `PATH`. On Windows `PATHEXT`
+  applies too, so `npm` finds `npm.cmd`.
+- Commands run with the plugin directory as their working directory. The
+  repository's path is in `TTGIT_REPO_PATH`.
+
+### Build and startup
+
+`[[build]]` commands run only when the plugin is installed or updated from
+GitHub, after you confirm, and before the plugin is registered. They get none
+of the `TTGIT_*` runtime variables. If one fails, or changes the manifest,
+nothing is installed. Linking a plugin skips them.
+
+`[[startup]]` commands run each time tt-git starts, once the API socket is
+ready. They get `TTGIT_PLUGIN_EVENT=startup`. The `app.started` and
+`repo.opened` events follow.
+
 ## Actions
+
+An action is a command you run on demand.
+
+| Field | |
+|---|---|
+| `id` | A local id: letters, digits, `:`, `_`, `-`, no dots. tt-git qualifies it with the plugin id, so `open-commit` in `acme.github` is `acme.github.open-commit`. |
+| `title` | What the [palette](/git/palette/) shows. |
+| `description` | Optional. |
+| `contexts` | Where the palette offers it (below). Default: `global`. |
+| `command` | What to run. |
+
+The palette lists an action when one of its contexts is `global`, or matches
+the focused pane:
+
+| Context | Offered when |
+|---|---|
+| `global` | Always. |
+| `commit` | The graph is focused. `selected_commit` in the context JSON is the selected commit. |
+| `branch` | The branches pane is focused. `selected_branch` is the selected branch. |
+| `file` | The status pane is focused. `selected_file` is the selected file. |
+| `selection` | Accepted for compatibility with herdr; no pane offers it in the palette yet. |
+
+You can run an action four ways:
+
+- From the palette (<kbd>:</kbd> or <kbd>ctrl+p</kbd>).
+- With a key: see [Binding plugin actions](/configuration/keys/#binding-plugin-actions).
+- From the CLI or socket: `tt-git plugin action invoke acme.github.open-commit`,
+  or the socket method `plugin.action.invoke`.
+- Through a [link handler](#link-handlers).
+
+Each run is a fresh process with `TTGIT_PLUGIN_ACTION_ID` set to the qualified
+id.
 
 ## Events
 
+An `[[events]]` hook runs a command each time an event happens:
+
+```toml
+[[events]]
+on = "commit.created"
+command = ["node", "notify.mjs"]
+```
+
+The command gets `TTGIT_PLUGIN_EVENT` (the event's name) and
+`TTGIT_PLUGIN_EVENT_JSON`, set to `{"event": …, "data": …}`.
+See [Events](/plugins/events/) for every event and its data.
+
+Hooks are for low-volume events and start a new process each time. A
+long-running program can subscribe to a stream of events instead; see
+[Subscribing to a stream](/plugins/events/#subscribing-to-a-stream).
+
 ## Panes
+
+A pane runs a terminal program inside tt-git, in a pseudo-terminal (ConPTY on
+Windows). The program draws its own UI and tt-git shows it.
+
+| Field | |
+|---|---|
+| `id` | A local id, like an action's. |
+| `title` | The pane's title. The palette lists it as **Open &lt;title&gt;**. |
+| `description` | Optional. |
+| `placement` | Where it opens (below). Default: `overlay`. |
+| `width`, `height` | For `popup` only: a cell count like `20`, or a percentage like `"80%"`. |
+| `command` | The program to run. |
+
+| Placement | Opens |
+|---|---|
+| `overlay` | Over the whole screen. It gets every key. |
+| `popup` | In a centred box, sized by `width` and `height`. It gets every key. Only one popup can be open at a time. |
+| `split` | In the details pane's place. Keys go to it while it has focus. |
+| `tab`, `zoomed` | tt-git has no tabs or zoomed panes, so these open as overlays. |
+
+Open a pane from the palette, with
+`tt-git plugin pane open --plugin ID --entrypoint ID`, or with the socket
+method `plugin.pane.open`. The program gets `TTGIT_PLUGIN_ENTRYPOINT_ID`, plus
+any `--env KEY=VALUE` the opener passed. See
+[Plugin panes](/panes/plugin-panes/) for how they look and how to leave them.
 
 ## Link handlers
 
+A link handler runs one of the plugin's actions for links that match a
+pattern. When you press <kbd>o</kbd> in the details pane, or
+<kbd>ctrl</kbd>+click a link, tt-git takes the link and runs the first handler,
+across all plugins, whose `pattern` matches it.
+
+| Field | |
+|---|---|
+| `id` | A local id. |
+| `title` | |
+| `pattern` | A [Rust regex](https://docs.rs/regex/latest/regex/#syntax) matched against the URL. Use a TOML literal string (`'…'`) so backslashes stay as they are. |
+| `action` | The local id of an action in the same plugin. |
+
+The action runs with `TTGIT_PLUGIN_CLICKED_URL` and
+`TTGIT_PLUGIN_LINK_HANDLER_ID` set. If no handler matches, tt-git says so
+rather than guessing which program should open the link.
+
+## Validation
+
+tt-git checks a manifest when you install or link the plugin, and again when
+it loads it. Some problems stop it from loading; others are warnings that
+`tt-git plugin list` shows.
+
+| Code | Problem |
+|---|---|
+| `plugin_manifest_not_found`, `plugin_manifest_parse_failed` | No `tt-git-plugin.toml`, or it isn't valid TOML (unknown fields included). |
+| `invalid_plugin_id`, `invalid_plugin_name` | A bad `id`, or an empty `name`. |
+| `invalid_plugin_min_tt_git_version`, `plugin_requires_newer_tt_git` | `min_tt_git_version` isn't a version, or is newer than this tt-git. |
+| `invalid_plugin_platform` | A platform other than `linux`, `macos` or `windows`. |
+| `invalid_plugin_command` | An empty `command`. |
+| `invalid_plugin_action_id`, `invalid_plugin_pane_id`, `invalid_plugin_link_handler_id` | A local id with a dot or another character that isn't allowed. |
+| `duplicate_plugin_action_id`, `duplicate_plugin_pane_id`, `duplicate_plugin_link_handler_id` | The same id twice. |
+| `invalid_plugin_pane_size` | A `width` or `height` that isn't a positive cell count or `"1%"` to `"100%"`. |
+| `invalid_plugin_link_pattern`, `unknown_plugin_link_action` | A pattern that isn't a valid regex, or a link handler that names an action that doesn't exist. |
+
+Warnings: a `version` that isn't semver, no `platforms` list, an empty
+`platforms` list (nothing will run), and an `on` that isn't a known event.
+
+The codes match herdr's where one exists.
+
 ## Testing
+
+<Steps>
+
+1. Link the plugin from its directory: `tt-git plugin link .`
+2. Start tt-git, and run your action from the palette.
+3. Open **Plugin logs** from the palette to see each run's exit code, stdout
+   and stderr.
+4. To see the events your hooks would receive, run `tt-git events` from a
+   plugin pane or another plugin (it needs the running tt-git's socket).
+
+</Steps>
+
+Edits to a linked plugin's programs take effect on the next run. After
+changing the manifest, run `tt-git plugin link .` again: a running tt-git
+reloads its plugins within a second of the registry changing. Restarting
+tt-git works too.
+
+<Aside>
+For working examples, see [Example plugins](/plugins/examples/).
+</Aside>

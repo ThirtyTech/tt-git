@@ -1,10 +1,94 @@
 ---
 title: Environment and context
-description: "The variables every plugin process gets, and the context JSON."
+description: The variables every plugin process gets, and the context JSON.
 ---
+
+import { Aside } from '@astrojs/starlight/components';
+
+tt-git gives a plugin everything it needs through environment variables. There
+is no SDK to import: read the variables, and run `$TTGIT_BIN_PATH` to talk
+back.
 
 ## Variables
 
+Every plugin process gets these:
+
+| Variable | |
+|---|---|
+| `TTGIT_ENV` | `1`, so a program can tell it's running under tt-git. |
+| `TTGIT_BIN_PATH` | The running `tt-git` executable. Use it rather than `tt-git` from `PATH`, so you talk to the same version. |
+| `TTGIT_SOCKET_PATH` | This tt-git's API socket. The CLI commands that need a running tt-git use it automatically. |
+| `TTGIT_PLUGIN_ID` | The plugin's id. |
+| `TTGIT_PLUGIN_ROOT` | The plugin's directory. |
+| `TTGIT_PLUGIN_CONFIG_DIR` | A directory for files the user edits, like a `.env`. tt-git creates it and never touches what's in it. |
+| `TTGIT_PLUGIN_STATE_DIR` | A directory for the plugin's own state. tt-git creates it and never touches what's in it. |
+| `TTGIT_REPO_PATH` | The repository's working tree. |
+| `TTGIT_PLUGIN_CONTEXT_JSON` | What the user was looking at (below). |
+
+Some entry points add more:
+
+| Entry point | Adds |
+|---|---|
+| action | `TTGIT_PLUGIN_ACTION_ID`, the qualified action id. |
+| event hook | `TTGIT_PLUGIN_EVENT`, the event name, and `TTGIT_PLUGIN_EVENT_JSON`, set to `{"event": …, "data": …}`. |
+| startup command | `TTGIT_PLUGIN_EVENT=startup`. |
+| pane | `TTGIT_PLUGIN_ENTRYPOINT_ID`, plus any `--env KEY=VALUE` the opener passed. |
+| link handler | `TTGIT_PLUGIN_CLICKED_URL` and `TTGIT_PLUGIN_LINK_HANDLER_ID`. |
+
+tt-git sets its own variables last, so they win over any variable of the same
+name in the environment it was started from.
+
+<Aside>
+`[[build]]` commands are the exception: they run at install time, before the
+plugin is registered, and get none of these variables.
+</Aside>
+
 ## Context JSON
 
+`TTGIT_PLUGIN_CONTEXT_JSON` is a JSON object describing the moment the plugin
+ran: which repository, which branch, and what was selected.
+
+| Field | |
+|---|---|
+| `repo_path` | The repository's working tree. |
+| `repo_name` | Its folder name. |
+| `head` | The commit `HEAD` points at. |
+| `branch` | The checked-out branch, if any. |
+| `upstream` | Its upstream, like `origin/main`, if it has one. |
+| `selected_commit` | The full hash of the commit selected in the graph. |
+| `selected_branch` | The branch selected in the branches pane. |
+| `selected_file` | The file selected in the status pane. |
+| `selected_text` | Not set yet; kept for compatibility with herdr. |
+| `focused_pane` | The pane that had focus: `graph`, `status`, `branches` or `details`. |
+| `invocation_source` | How the plugin was started: `keybinding`, `palette`, `socket`, `event`, `startup`, `link_click` or `pane`. |
+| `correlation_id` | An id for this run. |
+| `clicked_url` | For a link handler, the link. |
+| `link_handler_id` | For a link handler, its id. |
+
+The three `selected_*` fields hold each pane's selection whichever pane has
+focus, so an action can use the selected commit even when it was run from the
+branches pane. Fields that don't apply are `null`, so check before you use
+one.
+For example, the [open-on-github](/plugins/examples/#open-on-github) example
+reads it like this:
+
+```js
+const ctx = JSON.parse(process.env.TTGIT_PLUGIN_CONTEXT_JSON ?? "{}");
+if (what === "commit" && ctx.selected_commit) {
+  url = `${repoUrl()}/commit/${ctx.selected_commit}`;
+}
+```
+
+For live state rather than a snapshot, ask the socket: `repo.info`,
+`status.get`, `branch.list` and `graph.selection`. See
+[CLI and socket API](/plugins/api/).
+
 ## Limits
+
+- Each action, hook and startup command is a fresh process.
+- Up to 32 can run at once. Past that, a run fails with
+  `plugin_command_limit_reached`.
+- tt-git keeps up to 64 KiB of each command's stdout and of its stderr, then
+  adds a note that the rest was cut.
+- The last 200 runs are kept in the [plugin log](/plugins/#plugin-logs). A
+  command that fails shows a ✗ notice in the help bar.

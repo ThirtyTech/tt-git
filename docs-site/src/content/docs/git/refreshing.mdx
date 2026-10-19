@@ -3,8 +3,54 @@ title: Refreshing
 description: "How tt-git notices changes made outside it and keeps every pane current."
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
+tt-git is meant to stay open next to your editor. When you save a file,
+commit from the command line, or your editor's git integration stages
+something, tt-git catches up on its own.
+
 ## Watching for changes
+
+With `watch = true` (the default), tt-git watches your working tree and the
+repository's `.git` folder. It waits until things have been quiet for 300 ms
+and then reloads what changed, so a burst of saves or a checkout that touches
+hundreds of files causes one refresh, not hundreds.
+
+Files git ignores are ignored here too. tt-git reads the same rules git does
+(every `.gitignore`, `.git/info/exclude` and your `core.excludesFile`), so a
+build writing into `node_modules/`, `dist/` or `target/` doesn't keep
+reloading the status pane. When you edit a `.gitignore`, tt-git picks up the
+new rules.
+
+To turn watching off, set this in your [configuration file](/configuration/):
+
+```toml
+watch = false
+```
 
 ## What reloads when
 
+| What changed | What reloads |
+|---|---|
+| A file in the working tree (not ignored) | Status |
+| `.git/index` (something was staged or unstaged) | Status |
+| `HEAD`, `refs/`, `packed-refs`, `logs/` or `FETCH_HEAD` (a commit, checkout, fetch, branch change) | Branches and status, and the graph if the branches and tags it starts from actually moved |
+| Lock files, `objects/`, hooks | Nothing |
+
+A fetch that brings nothing new leaves the graph alone. While the graph
+reloads, the old rows stay on screen until the new ones arrive, so it never
+flashes empty.
+
 ## Refreshing by hand
+
+Press <kbd>ctrl+r</kbd> to reload everything. You'd only need it with
+`watch = false`, or on a file system that doesn't report changes (some
+network drives and container mounts).
+
+Every git command tt-git runs itself, such as a commit, checkout or push,
+refreshes everything when it finishes.
+
+<Aside>
+	If several refreshes are asked for while one is running, they're combined
+	into exactly one more, so a busy moment never queues up a pile of reloads.
+</Aside>

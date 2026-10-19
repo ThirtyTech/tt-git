@@ -3,20 +3,194 @@ title: Graph
 description: "The commit graph: lanes, badges, all vs current branch, filters and commit actions."
 ---
 
-{/* screenshot: full screen with graph highlighted; zoomed crops of lanes, badges, title */}
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The graph is tt-git's main view. It shows the history of every branch, remote branch and tag as one
+GitLens-style graph, newest commit first, with one row per commit. Branches keep their column from
+top to bottom, so you can follow a line by eye. From here you open a commit's details, filter the
+history down to one author or one file, and start a branch, merge, rebase or cherry-pick at the
+selected commit. Press <kbd>1</kbd> to focus it from anywhere.
+
+{/* screenshot: full 1080p screen, graph pane (top 70%) highlighted, other panes dimmed. Callouts: 1) pane title "[1] Graph [all] 1/N", 2) lanes column on the left, 3) ref badges on a row, 4) subject, 5) author / relative date / short hash columns on the right, 6) selected row highlight */}
 
 ## What it shows
 
+Each row is one commit:
+
+```text
+●    [side] side experiment                                   Test User      2h b66
+◉─╮   main  <v1.0> Merge 'feature'                            Test User      3h 59f
+│ ●  [feature] feature work                                   Test User      1d 788
+● │  main work                                                Test User      1d f75
+●─╯  base                                                     Test User      2d b29
+```
+
+From left to right:
+
+- **Lanes**: where the commit sits in the history, and how it connects to its parents.
+- **Badges** for the branches and tags that point at it.
+- **The subject**, the first line of the commit message.
+- **The author**, **how long ago** it was committed (`now`, `5m`, `3h`, `2d`, `3w`, `4mo`, `2y`) and
+  **the short hash**.
+
+On a narrow pane the author moves ahead of the other columns, so the subject stays readable.
+
+The title tells you what you're looking at: `Graph [all] 12/4031` means every branch is shown and the
+12th of 4,031 loaded commits is selected. A filter adds to it, for example
+`Graph [all · author Ada · file src/] 3/120`. While a load is running the title ends in `loading…`.
+
+<Aside type="tip">
+  The graph follows your selection in the other panes: pick a branch or a tag in the
+  [branches pane](/panes/branches/) and the graph jumps to its commit.
+</Aside>
+
 ## Reading the lanes
+
+{/* screenshot: zoomed crop of the graph's lane column over ~12 rows with a merge and a branch tip. Callouts: ● commit, ◉ merge commit, ─╯ a lane joining, ─╮ a merge opening a lane, two lanes in different colors */}
+
+Every line of history has its own column and color, and keeps that column for as long as it runs.
+Branches go straight down instead of shifting sideways as other branches start and end.
+
+| Glyph | Means |
+|---|---|
+| `●` | A commit |
+| `◉` | A merge commit (more than one parent) |
+| `│` | A line of history passing through this row |
+| `─╯` | A line ending here: it joins this commit |
+| `─╮` | A merge opening a new line for its other parent |
+| `…` | More lanes than fit (see `max_lanes` below) |
+
+A commit with nothing above it in its column is a branch tip. Each new tip and each merge's extra
+parent gets the next of eight colors.
+
+Only the first 16 lanes are drawn; wider histories collapse into `…`. You can change that with
+`max_lanes` in the [configuration file](/configuration/).
 
 ## Branch and tag badges
 
+{/* screenshot: zoomed crop of 3–4 graph rows carrying badges. Callouts: " main " on green (checked out), [feature] local branch, [origin/main] remote branch, <v1.0> tag */}
+
+Badges sit between the lanes and the subject:
+
+| Badge | Means |
+|---|---|
+| ` main ` on green | The branch you have checked out |
+| ` HEAD ` on red | A detached HEAD |
+| `[feature]` (green) | A local branch |
+| `[origin/main]` (magenta) | A remote branch |
+| `<v1.0>` (yellow) | A tag |
+
+Symbolic refs like `origin/HEAD` are left out, since they only repeat another badge. When a row is
+too narrow for everything, badges are dropped before the subject is.
+
 ## All branches or just the current one
+
+Press <kbd>a</kbd> to switch between two views:
+
+- **all** shows every branch, remote branch and tag.
+- **current** shows only `HEAD` and its upstream, so you can see what you'd push or pull without the
+  rest of the repository in the way.
+
+The title shows which one you're in: `Graph [all]` or `Graph [current]`. To leave the upstream out of
+the current view, set `current_includes_upstream = false` in the [configuration file](/configuration/).
+
+The [Unmerged and Merged tabs](/panes/merged-unmerged/) of the branches pane use the graph to show a
+single branch. While they do, the title shows that branch's name, and <kbd>a</kbd> goes back to the
+full graph.
 
 ## Filtering by author or file
 
+{/* screenshot: full screen with the "Filter graph" popup open over the graph on the Author tab, "ada" typed. Callouts: 1) the Author · File tabs line showing what's set, 2) the input with the match count, 3) the list with commit counts on the right, 4) the hint line at the bottom */}
+
+Press <kbd>f</kbd> to open **Filter graph**. It has two tabs, **Author** and **File**; <kbd>tab</kbd>
+switches between them. You can set one or both, and a commit has to match both.
+
+<Steps>
+
+1. Press <kbd>f</kbd>.
+2. Type part of a name or path. The list narrows as you type.
+3. Pick an entry with <kbd>↑</kbd> <kbd>↓</kbd>.
+4. Press <kbd>enter</kbd>. The graph reloads with only the matching commits.
+
+</Steps>
+
+- **Authors** are listed with the most commits first. Each person appears once, even if they've
+  committed under several email addresses, as long as your `.mailmap` says they're the same person.
+- **Files** lists every tracked file, with each folder listed just before the first file in it. Pick
+  a folder, such as `src/components/`, to see every commit that touched anything under it.
+- **Matching** ignores case. Entries that contain what you typed come first, then entries that only
+  match it as a sequence of letters, so `apcmp` still finds `app/components/`.
+- **Deleted files** aren't in the list, since only files that still exist are. If nothing matches on
+  the File tab, <kbd>enter</kbd> uses what you typed as the path, so you can still see the history of
+  a file that's gone. The popup says so: `no matches · enter shows commits that changed …`.
+
+When a filter is set, the first entry on its tab is **Any author** or **Any file**, which clears just
+that part. To clear the whole filter, close details and press <kbd>esc</kbd> in the graph.
+
+{/* screenshot: zoomed crop of the graph filtered by a folder. Callouts: the title "Graph [all · file src/] 3/120", lanes still joined up across the filtered commits */}
+
+A file filter keeps the lanes joined up: each commit links to the nearest earlier commit that also
+touched the path, so you still get a readable graph. An author filter can't do that, so each run of
+one person's commits is its own short line. Renames aren't followed. If no commits match, the graph
+says `no commits match the filter (f to change it, esc to clear it)`.
+
 ## Acting on a commit
+
+{/* screenshot: zoomed crop of the graph with the "New branch at 59f1c2a" dialog open on its Branch tab. Callouts: Branch · Worktree tabs, the note "switches to it here", the hint line */}
+
+These keys act on the selected commit:
+
+| Key | Does |
+|---|---|
+| <kbd>enter</kbd> | Opens the commit fullscreen: its changed files on the left, the selected file's diff on the right. See [Details](/panes/details/#fullscreen-files-and-diff). |
+| <kbd>space</kbd> | Shows or hides the commit's [details](/panes/details/). |
+| <kbd>n</kbd> | Makes a new branch at the commit and switches to it. <kbd>tab</kbd> in the dialog makes it in a new [worktree](/git/worktrees/) under `.worktrees/` instead. |
+| <kbd>M</kbd> | Merges the commit into the current branch, after asking. |
+| <kbd>r</kbd> | Rebases the current branch onto the commit, after asking. |
+| <kbd>C</kbd> | Cherry-picks the commit onto the current branch, after asking. |
+| <kbd>c</kbd> | Copies the full commit hash to the clipboard. |
+
+For <kbd>M</kbd> and <kbd>r</kbd>, if a branch points at the commit, tt-git uses the branch name
+(`Merge feature into the current branch?`); otherwise it uses the hash. If a merge, rebase or
+cherry-pick stops on a conflict, see [Merge, rebase and cherry-pick](/git/merge-rebase/).
+
+Copying uses your terminal's clipboard support (OSC 52), so it also works over SSH.
 
 ## Zoom
 
+Press <kbd>+</kbd> to make the graph fill the screen, and <kbd>+</kbd> again to go back. With the graph
+fullscreen, <kbd>space</kbd> opens details below it at full width.
+
+{/* screenshot: full 1080p screen with the graph zoomed and details open below it at full width. Callouts: zoomed graph, details below */}
+
 ## Large histories
+
+The graph loads 1,000 commits at a time while `git log` is still running, so the first rows appear
+straight away. It loads up to 20,000 commits (`max_commits`), and when you scroll within 200 commits
+of the end, it loads the next batch. On a refresh the old rows stay on screen until the new ones
+arrive, so the graph never flashes empty. A fetch that brings nothing new doesn't reload it at all.
+
+See [How tt-git uses git](/reference/how-it-works/#graph) for the details, and
+[Memory and speed](/reference/performance/) for what this costs on a large repository.
+
+## Keys
+
+| Key | Does |
+|---|---|
+| <kbd>j</kbd> <kbd>k</kbd> <kbd>↓</kbd> <kbd>↑</kbd> | Next / previous commit |
+| <kbd>ctrl+d</kbd> <kbd>ctrl+u</kbd> | Page down / up |
+| <kbd>g</kbd> <kbd>G</kbd> | First / last loaded commit |
+| <kbd>enter</kbd> | The commit fullscreen: changed files beside the diff |
+| <kbd>space</kbd> | Show / hide details |
+| <kbd>esc</kbd> | Hide details; with details hidden, clear the filter |
+| <kbd>a</kbd> | All branches ↔ current branch |
+| <kbd>f</kbd> | Filter by author or file |
+| <kbd>n</kbd> | New branch at the commit (<kbd>tab</kbd> in the dialog: in a worktree) |
+| <kbd>M</kbd> | Merge into the current branch |
+| <kbd>r</kbd> | Rebase the current branch onto it |
+| <kbd>C</kbd> | Cherry-pick |
+| <kbd>c</kbd> | Copy the commit hash |
+| <kbd>+</kbd> | Zoom the graph fullscreen and back |
+
+The mouse works too: click a row to select it, and use the wheel to scroll. Every key can be changed;
+see [Key bindings](/configuration/keys/).

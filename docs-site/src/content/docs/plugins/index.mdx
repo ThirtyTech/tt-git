@@ -3,10 +3,151 @@ title: Plugins overview
 description: What plugins can do, and how to install, update and manage them.
 ---
 
+import { Aside, FileTree } from '@astrojs/starlight/components';
+
+tt-git plugins work the same way as
+[herdr's plugins](https://herdr.dev/docs/plugins/). A plugin is a directory
+with a `tt-git-plugin.toml` manifest and whatever programs it lists. There's no
+SDK, no embedded runtime and no sandbox: tt-git starts plugin programs as
+ordinary processes, in any language, and **the tt-git CLI is the plugin API**.
+A plugin talks back by running `$TTGIT_BIN_PATH <command>`, or by writing JSON
+to the socket at `$TTGIT_SOCKET_PATH`.
+
+<Aside type="caution" title="Plugins aren't sandboxed">
+Plugins run with your user's permissions. Install only code you trust.
+`tt-git plugin install` shows the source, the commit and the commands it will
+run at install and at startup, then asks before doing anything.
+</Aside>
+
 ## What a plugin can do
+
+| Feature | What it is | Example |
+|---|---|---|
+| **Actions** | Commands you run from the [palette](/git/palette/), a key, or the CLI. Each one can be offered on commits, branches, files or everywhere. | Open the selected commit on GitHub. |
+| **Event hooks** | Programs tt-git runs when something happens: a push, a commit, a checkout. | Show a message after every push. |
+| **Startup commands** | Programs that run once each time tt-git starts. | Restore state, start a helper. |
+| **Panes** | Terminal programs tt-git runs in a pseudo-terminal and draws inside its own screen. | A list of open pull requests in a popup. |
+| **Link handlers** | Actions that run when you open a link in the details pane that matches a pattern. | Open a GitHub issue link in the browser. |
+| **Build steps** | Commands run once, when the plugin is installed or updated. | `npm ci`. |
+
+[Writing a plugin](/plugins/manifest/) covers each of these.
 
 ## Installing
 
+Install a plugin from GitHub with `owner/repo`. If the plugin lives in a
+subdirectory, add the path:
+
+```sh
+tt-git plugin install acme/tt-git-github
+tt-git plugin install acme/plugins/github        # a plugin in the github/ folder
+tt-git plugin install acme/tt-git-github --ref v1.2.0
+```
+
+tt-git fetches the repository at its default branch (or `--ref`, a branch, tag
+or commit), checks the manifest, and prints what it's about to install:
+
+```text
+Plugin acme.github 0.1.0 (GitHub helpers)
+Source: github acme/tt-git-github
+Commit: 3f9c2e1…
+Build commands (run now, as you):
+  $ npm ci
+Startup commands (run when tt-git starts):
+  $ node dist/restore.js
+Plugins run with your user's permissions and are not sandboxed.
+Install acme.github? [y/N]
+```
+
+Nothing runs until you answer `y`. Then it runs the build commands and
+registers the plugin.
+
+If a build step fails, or changes the manifest, nothing is installed.
+Pass `--yes` (`-y`) to skip the question, for example in a script.
+
+A running tt-git picks up the new plugin within a second; you don't need to
+restart it.
+
+### Linking a local plugin
+
+For a plugin on your own disk, link it instead:
+
+```sh
+tt-git plugin link ./my-plugin
+tt-git plugin link ./my-plugin --disabled   # register it, but don't turn it on yet
+```
+
+A linked plugin runs straight from its directory, so your edits take effect
+without reinstalling. Linking doesn't run build steps.
+
+### Updating
+
+```sh
+tt-git plugin update                  # every plugin installed from GitHub
+tt-git plugin update acme.github      # one, by id or owner/repo
+```
+
+An update fetches the repository again, skips plugins whose commit hasn't
+changed, and asks before installing the new version, the same way install
+does. Linked plugins aren't updated.
+
+Every install or update goes into a new folder, so plugin programs that are
+already running keep their files. Old folders are deleted once no running
+tt-git still uses them.
+
 ## Managing plugins
 
+```sh
+tt-git plugin list                 # id, version, enabled/disabled/unavailable, and where it lives
+tt-git plugin list --json
+tt-git plugin disable acme.github  # keep it installed, but don't run it
+tt-git plugin enable acme.github
+tt-git plugin uninstall acme.github   # by id or owner/repo
+tt-git plugin unlink my.plugin        # remove a linked plugin (its files are kept)
+tt-git plugin config-dir acme.github  # where to put the plugin's config files
+```
+
+A plugin shows as *unavailable* when it's enabled but can't run here: for
+example, its manifest is missing or invalid, it needs a newer tt-git, or it
+doesn't list your platform. `plugin list` prints the reason as a warning.
+
+To start tt-git without any plugins (and without the API socket), run
+`tt-git --no-plugins`.
+
+See [Command line](/reference/cli/#tt-git-plugin) for every option.
+
+## Where plugins live
+
+Plugin files live under your [config directory](/configuration/#where-it-lives):
+
+<FileTree>
+- tt-git/ your config directory
+  - config.toml
+  - plugins.json installed plugins and their sources
+  - plugins/
+    - github-installations/
+      - acme.github/
+        - …/checkout/ one folder per install or update
+    - config/
+      - acme.github/ the plugin's config directory, for files you edit
+</FileTree>
+
+Each plugin also gets a state directory for its own data, under
+`<state>/plugins/<id>/` (see [Logs](/configuration/#logs) for where `<state>` is).
+tt-git creates both directories and never touches what's in them.
+
 ## Plugin logs
+
+Every plugin command tt-git runs, whether an action, an event hook or a
+startup command, is logged with its exit code, stdout and stderr. tt-git keeps
+the last 200 runs.
+
+{/* screenshot: the Plugin logs view in the details pane, with a plugin's status line, a run's exit code and its stdout called out */}
+
+- In tt-git, open the [palette](/git/palette/) (<kbd>:</kbd>) and pick
+  **Plugin logs**. Details shows each plugin with its state and any warnings,
+  then the most recent runs with their output.
+- From a plugin, or a terminal pointed at a running tt-git with `--socket`:
+  `tt-git plugin log list [--plugin ID] [--limit N]`. It prints JSON, the 50
+  most recent runs by default.
+
+When a command fails, the help bar shows a ✗ notice, so you know to look.

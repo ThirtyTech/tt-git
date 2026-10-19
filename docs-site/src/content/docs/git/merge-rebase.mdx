@@ -3,12 +3,89 @@ title: Merge, rebase and cherry-pick
 description: "Bring commits from one branch into another, and resolve conflicts."
 ---
 
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+All three act on the **current branch**: you pick the other side in the graph,
+the branch list or the tag list. tt-git asks before it starts each one.
+
+| Where | <kbd>M</kbd> | <kbd>r</kbd> | <kbd>C</kbd> |
+|---|---|---|---|
+| Graph | Merge the selected commit into the current branch | Rebase the current branch onto the selected commit | Cherry-pick the selected commit |
+| Branches | Merge the selected branch | Rebase onto the selected branch | |
+| Tags | Merge the selected tag | Rebase onto the selected tag | |
+
+In the graph, if the selected commit has a branch badge, tt-git uses the
+branch name rather than the hash, so the merge commit says `Merge branch
+'feature'`. In the branch list it uses your local branch if you have one,
+and the remote branch otherwise.
+
+{/* screenshot: the "Merge" confirm box over the screen with "Merge feature into the current branch?" and the "y confirm · n/esc cancel" hint; callout on the hint. */}
+
+Press <kbd>y</kbd> or <kbd>enter</kbd> to go ahead, <kbd>n</kbd> or
+<kbd>esc</kbd> to cancel. When it's done, the graph moves to the new head.
+
 ## Merge
+
+tt-git runs `git merge --no-edit <branch>`. A fast-forward just moves the
+branch; otherwise git makes a merge commit with its default message.
 
 ## Rebase
 
+tt-git runs `git rebase <onto>`, not interactively: every commit of the
+current branch that isn't on the target is replayed on top of it. Git's
+editor is turned off for the rebase, so it never opens one inside the
+terminal.
+
 ## Cherry-pick
+
+<kbd>C</kbd> in the graph applies the selected commit on top of the current
+branch with `git cherry-pick <commit>`. The confirm box shows the commit's
+hash and subject.
 
 ## Resolving conflicts
 
+When a merge, rebase or cherry-pick stops on a conflict, the status pane
+shows what's going on:
+
+- The title adds `MERGING`, `REBASING`, `CHERRY-PICKING` or `REVERTING`.
+- A banner row at the top says what to do next, for example
+  `REBASING: stage fixes · C continue · X abort`.
+- Conflicted files show `UU` (or another `U` code) in the error color.
+
+{/* screenshot: status pane during a rebase with a conflict: title with REBASING, the banner row, one "UU src/app.rs" in red and one resolved "M " file; callouts on the banner, the UU row and the title. */}
+
+<Steps>
+
+1. Open each conflicted file in your editor and fix the conflict markers.
+   The selected file's diff shows in details.
+
+2. Back in tt-git, press <kbd>space</kbd> on the file to stage it. Staging a
+   conflicted file marks it resolved.
+
+3. When every file is staged, press <kbd>C</kbd> to continue.
+
+</Steps>
+
+Conflicted files can't be staged a hunk at a time; stage the whole file once
+it's fixed.
+
 ## Continue or abort
+
+Press <kbd>C</kbd> or <kbd>X</kbd> in the status pane. From any other pane,
+open the [command palette](/git/palette/) and pick *Continue merge/rebase* or
+*Abort merge/rebase*. (In the graph, <kbd>C</kbd> is cherry-pick.)
+
+- **<kbd>C</kbd> continue.** tt-git refuses while a file is still conflicted.
+  A merge is finished with `git commit --no-edit`; a rebase or cherry-pick
+  with `git rebase --continue` or `git cherry-pick --continue`. Git's prepared
+  message is kept and no editor opens. A rebase may stop again on a later
+  commit; resolve and continue the same way.
+- **<kbd>X</kbd> abort.** tt-git asks first, then runs `git merge --abort`
+  (or `rebase`, `cherry-pick`) and puts everything back as it was before you
+  started.
+
+<Aside>
+	tt-git tells which operation is in progress from the files git leaves in
+	`.git`, so it also picks up a merge or rebase you started from the command
+	line.
+</Aside>

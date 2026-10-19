@@ -1,10 +1,113 @@
 ---
 title: Events
-description: "Every event tt-git emits and the data it carries."
+description: Every event tt-git emits and the data it carries.
 ---
+
+import { Aside } from '@astrojs/starlight/components';
+
+tt-git emits an event when something happens in the repository: a commit, a
+push, a checkout. A plugin can react in two ways: an `[[events]]` hook, which
+runs a command for each event, or a subscription, which streams events to a
+program that's already running.
+
+Every event is a JSON envelope with the event's name and its data:
+
+```json
+{"event": "commit.created", "data": {"oid": "3f9c2e1…", "amend": false, "summary": "Fix the parser"}}
+```
 
 ## Event hooks
 
+Add an `[[events]]` entry to the manifest for each event you want:
+
+```toml title="tt-git-plugin.toml"
+[[events]]
+on = "push.completed"
+command = ["node", "notify.mjs"]
+
+[[events]]
+on = "commit.created"
+command = ["node", "notify.mjs"]
+```
+
+Each time the event happens, tt-git runs the command as a fresh process with:
+
+- `TTGIT_PLUGIN_EVENT`: the event name.
+- `TTGIT_PLUGIN_EVENT_JSON`: the envelope, `{"event": …, "data": …}`.
+- The usual [environment and context](/plugins/environment/), with
+  `invocation_source` set to `event`.
+
+```js title="notify.mjs"
+import { execFileSync } from "node:child_process";
+
+const { event, data } = JSON.parse(process.env.TTGIT_PLUGIN_EVENT_JSON ?? "{}");
+const message =
+  event === "push.completed" ? `🚀 pushed ${data.branch ?? "HEAD"}`
+  : event === "commit.created" ? `✔ committed ${String(data.oid ?? "").slice(0, 7)} ${data.summary ?? ""}`
+  : `event ${event}`;
+
+execFileSync(process.env.TTGIT_BIN_PATH, ["ui", "notify", message]);
+```
+
+Hooks start a process per event, so they suit events that happen now and then.
+Their runs show up in the [plugin log](/plugins/#plugin-logs).
+
 ## Subscribing to a stream
 
+A program that's already running, such as a [pane](/panes/plugin-panes/) or a
+background helper started by `[[startup]]`, can subscribe instead and read
+events as they happen. From the command line:
+
+```sh
+tt-git events                                   # every event, one JSON object per line
+tt-git events --event push.completed --event fetch.completed
+```
+
+Or over the [socket](/plugins/api/#the-socket), with
+`events.subscribe`. The reply is `{"subscribed": …}`, and then one envelope per
+line for as long as the connection stays open:
+
+```text
+→ {"id":"req_1","method":"events.subscribe","params":{"events":["push.completed"]}}
+← {"id":"req_1","result":{"subscribed":true}}
+← {"event":"push.completed","data":{"branch":"main"}}
+```
+
+Leave out `events` to get every event.
+
+`tt-git events` is also the easiest way to see what your hooks will receive.
+
 ## Event reference
+
+| Event | When | `data` |
+|---|---|---|
+| `app.started` | tt-git started, after the startup commands. | `{version}` |
+| `repo.opened` | The repository was opened, right after `app.started`. | `{path, name}` |
+| `head.changed` | `HEAD` moved, from tt-git or outside it. This includes switching between two branches at the same commit. | `{from, from_branch, to, branch}` |
+| `branch.checked_out` | You checked out a branch, or created one (without a worktree). | `{branch, created, tracking?}`. `created` is `true` for a new branch, including tracking branches made for a remote-only branch; `tracking` is the remote branch then. |
+| `branch.created` | A branch was created, from a commit, a tag, a branch or a stash. | `{branch, start, worktree}`. `worktree` is the new worktree's path, or `null`. |
+| `branch.deleted` | A branch was deleted, locally or on a remote. | `{branch, remote}`. `remote` is `null` for a local branch. |
+| `branch.renamed` | A branch was renamed. | `{from, to}` |
+| `commit.created` | A commit was made or amended. | `{oid, amend, summary}` |
+| `fetch.completed` | A fetch finished. | `{}` |
+| `pull.completed` | A pull finished. | `{branch, head}` |
+| `push.completed` | A push finished. | `{branch}` |
+| `files.staged` | Files were staged. | `{paths}`, or `"all"` for stage all. `partial: true` when only some hunks or lines were staged. |
+| `files.unstaged` | Files were unstaged. | `{paths}`, plus `partial: true` as above. |
+| `files.discarded` | A file's changes were discarded. | `{path}`, plus `partial: true` as above. |
+| `merge.completed` | A merge finished. | `{target, head}` |
+| `rebase.completed` | A rebase finished. | `{onto, head}` |
+| `cherry_pick.completed` | A cherry-pick finished. | `{picked, summary, head}` |
+| `stash.created` | A stash was made. | `{message}` (`null` when you left it empty) |
+| `stash.applied` | A stash was applied or popped. | `{stash, pop}`, where `stash` is like `stash@{0}` |
+| `stash.dropped` | A stash was dropped. | `{stash}` |
+
+When you finish a merge, rebase or cherry-pick that stopped on conflicts
+(<kbd>C</kbd> in the status pane), the matching `*.completed` event fires with
+`{head, continued: true}`.
+
+<Aside type="note">
+The `stash.*` events reach hooks and subscribers like the others, but the
+manifest check doesn't know their names yet, so a hook on one shows an
+"unknown event" warning in `tt-git plugin list`. The hook still runs.
+</Aside>

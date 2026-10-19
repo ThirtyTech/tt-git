@@ -3,22 +3,202 @@ title: Branches
 description: "One list for local and remote branches, sorted by recent activity."
 ---
 
-{/* screenshot: branches pane zoomed, status column called out */}
+The branches pane (<kbd>3</kbd>) lists every local and remote branch in one
+place. `main`, `origin/main` and `upstream/main` are a single row, the
+branches you're working on sit at the top because the list is sorted by
+recent activity rather than by name, and a short status column tells you
+whether each branch is pushed, behind, or gone from the remote. From here
+you check out, create, rename, delete, fetch, merge and rebase. The same
+pane has tabs for [tags](/panes/tags/), [merged and unmerged
+branches](/panes/merged-unmerged/) and the [stash](/panes/stash/).
+
+{/* screenshot: full 1080p screen, branches pane (bottom right) outlined and focused, the graph above showing the selected branch's tip. Callouts: "one row per branch", "most recently active first", "status column", "* marks the checked-out branch". */}
 
 ## The tabs
 
+<kbd>]</kbd> and <kbd>[</kbd> (or <kbd>&#125;</kbd> and <kbd>&#123;</kbd>)
+move between the tabs:
+
+| Tab | Lists |
+|---|---|
+| **Branches** | Every local and remote branch, most recently active first. This page. |
+| **Tags** | Every tag, newest first. See [Tags](/panes/tags/). |
+| **Unmerged** | Branches not yet merged into the base branch. See [Merged and unmerged](/panes/merged-unmerged/). |
+| **Merged** | Branches that are. |
+| **Stash** | Your stashes, once you have any. See [Stash](/panes/stash/). |
+
+The title shows every tab with its count, the current one underlined, and
+the base branch on the tabs that compare against it:
+
+```
+Branches 12 · Tags 3 · Unmerged 4 (origin/main) · Merged 9
+```
+
+Each tab keeps its own cursor, so switching away and back returns you to
+the same row.
+
+{/* screenshot: zoomed crop of the branches pane title bar. Callouts: "current tab (underlined)", "count per tab", "base branch the comparison tabs use". */}
+
 ## One row per branch
+
+Local and remote branches with the same name are grouped into one row:
+
+- Each local branch is a row.
+- A remote branch joins the local branch that tracks it, so a local `x`
+  tracking `origin/feature-x` is one row. If nothing tracks it, it joins the
+  local branch with the same name.
+- A remote branch with no local counterpart gets a row of its own, shown in
+  the remote color.
+- `origin/HEAD` and other symbolic refs are left out, since they only repeat
+  another branch.
+
+Each row shows a marker (`*` for the checked-out branch, in green), the name,
+the status column and how long ago the branch was last active:
+
+```
+* main            ✓          2h
+  feature/login   ↑2         3h
+  fix-typo        local      1d
+  release/2.0     origin     4d
+  old-spike       gone       3w
+```
+
+Moving the selection moves the [graph](/panes/graph/) to that branch's tip.
 
 ## Sorted by activity
 
+The list is sorted by when you last did something with each branch, not by
+name. A row's activity is the newest of:
+
+- the tip commit's date on each of its refs,
+- the last time the branch moved, from its reflog: a commit, a reset, a
+  rebase, or a fetch that moved the remote branch,
+- for local branches, the last time you checked it out.
+
+Checking out an old branch today puts it at the top, even though its newest
+commit is old. The branches you're working with are always in view without
+scrolling or typing. Reading reflogs costs no git processes; see [How tt-git
+uses git](/reference/how-it-works/#branches-and-tags).
+
 ## The status column
+
+Each row says how the branch relates to its remote:
+
+| Shown | Means | When |
+|---|---|---|
+| `local` | Local only: nothing on any remote | No upstream, and no remote branch of the same name |
+| `origin` / `origin,upstream` | Remote only: you don't have it locally | No local branch; lists every remote that has it |
+| `✓` (green) | In sync with its upstream | Upstream set, 0 ahead and 0 behind |
+| `↑2` `↓3` `↑2↓3` | Ahead / behind its upstream | git's own ahead and behind counts |
+| `gone` (red) | Its upstream was deleted on the remote | Usually seen after a fetch with `--prune` |
+| `=origin` | Not tracking, but `origin` has the same name at the same commit | No upstream configured |
+| `≠origin` | Not tracking, and `origin`'s same-named branch is elsewhere | No upstream configured |
+
+The column answers "can I delete this?" and "did I forget to push this?" at a
+glance: `local` has never been pushed, `gone` was merged and deleted
+upstream, and `=origin` is safe to set an upstream for.
+
+{/* screenshot: zoomed crop of the branches list with one row of each state (✓, ↑2, ↓3, ↑2↓3, local, origin, gone, =origin, ≠origin). Callouts on each badge with its meaning; highlight "gone" in red and the remote-only row in the remote color. */}
 
 ## Checking out
 
+<kbd>enter</kbd> or <kbd>space</kbd> checks out the selected branch.
+
+- A local branch is switched to (`git switch <name>`).
+- A remote-only branch gets a local tracking branch, created and checked
+  out without asking (`git switch -c <name> --track <remote>/<name>`). If
+  several remotes have it, `origin` is preferred. Checking out a remote
+  branch nearly always means "give me a local copy of it".
+
+Selecting the branch that's already checked out does nothing.
+
 ## Creating, renaming and deleting
+
+### New branch
+
+<kbd>n</kbd> opens **New branch from &lt;name&gt;**, starting at the selected
+branch (the local one if there is one, else the remote). Type a name and
+press <kbd>enter</kbd>; tt-git creates it and switches to it.
+
+Press <kbd>tab</kbd> in the dialog to switch from **Branch** to
+**Worktree**: the branch is then created in a new worktree under
+`.worktrees/<name>` instead of being checked out here. See
+[Worktrees](/git/worktrees/).
+
+{/* screenshot: the "New branch from main" dialog over the screen, Worktree tab selected, a name typed. Callouts: "tab switches Branch / Worktree", "where the worktree goes (checked out in .worktrees/<name>)", footer keys. */}
+
+### Rename
+
+<kbd>R</kbd> opens **Rename &lt;name&gt;** with the current name filled in.
+Only local branches can be renamed.
+
+### Delete
+
+<kbd>d</kbd> deletes the selected branch, after asking:
+
+- **A local branch** is deleted with `git branch -d`. If git says it isn't
+  fully merged, tt-git asks again (**Force delete?**) before running
+  `git branch -D`.
+- **A remote-only branch** is deleted on the remote: the dialog shows the
+  command it will run, `git push <remote> --delete <branch>`.
+- The checked-out branch can't be deleted.
+
+Every confirmation takes <kbd>y</kbd> to go ahead and <kbd>n</kbd> or
+<kbd>esc</kbd> to cancel.
+
+{/* screenshot: the "Delete branch" confirmation dialog for a local branch. Callouts: the force-delete note, "y confirm · n/esc cancel". */}
 
 ## Fetching
 
+<kbd>f</kbd> runs `git fetch --all --prune`. `--prune` is what removes
+remote branches that were deleted on the remote, and turns the local
+branches that tracked them `gone`. See [Push, pull and fetch](/git/remotes/).
+
 ## Filtering the list
 
+<kbd>/</kbd> starts a filter on the current tab. The title shows what you've
+typed (`/flp█`) and the list narrows as you type. Matching ignores case and
+works on subsequences, so `flp` finds `feature/login-page`.
+
+- <kbd>↑</kbd> <kbd>↓</kbd> move the selection while you type.
+- <kbd>enter</kbd> stops typing and keeps the filter.
+- <kbd>esc</kbd> clears it.
+
+{/* screenshot: zoomed crop of the branches pane with "/flp" in the title and the narrowed list. Callout on the filter text in the title. */}
+
 ## Merging and rebasing
+
+- <kbd>M</kbd> merges the selected branch into the current one
+  (`git merge --no-edit`).
+- <kbd>r</kbd> rebases the current branch onto the selected one,
+  non-interactively.
+
+Both ask first. If the result has conflicts, the [status
+pane](/panes/status/#merges-rebases-and-cherry-picks-in-progress) shows them
+and how to continue or abort. See [Merge, rebase and
+cherry-pick](/git/merge-rebase/).
+
+## Copying the name
+
+<kbd>c</kbd> copies the branch name to the clipboard. It uses the terminal's
+OSC 52 clipboard support, so it also works over SSH.
+
+## Keys
+
+| Key | Does |
+|---|---|
+| <kbd>enter</kbd> <kbd>space</kbd> | Check out (a remote-only branch gets a tracking branch) |
+| <kbd>]</kbd> <kbd>[</kbd> | Next / previous tab |
+| <kbd>n</kbd> | New branch from the selection (<kbd>tab</kbd> in the dialog: in a worktree) |
+| <kbd>R</kbd> | Rename a local branch |
+| <kbd>d</kbd> | Delete (asks; asks again before force-deleting unmerged) |
+| <kbd>f</kbd> | `git fetch --all --prune` |
+| <kbd>/</kbd> | Filter as you type (<kbd>esc</kbd> clears) |
+| <kbd>b</kbd> | Pick the base branch for the Unmerged, Merged and Tags tabs |
+| <kbd>M</kbd> | Merge the selection into the current branch |
+| <kbd>r</kbd> | Rebase the current branch onto the selection |
+| <kbd>c</kbd> | Copy the branch name |
+
+The keys that work everywhere ([push, pull](/git/remotes/), focus, zoom)
+work here too. Every key can be changed; see [Key
+bindings](/configuration/keys/).

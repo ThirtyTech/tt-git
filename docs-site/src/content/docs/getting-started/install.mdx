@@ -3,12 +3,75 @@ title: Install
 description: "What tt-git needs, how to build it, and how to open a repository."
 ---
 
-{/* outline: requirements, build from source, first launch, command line options */}
+import { Aside, Steps } from '@astrojs/starlight/components';
 
 ## Requirements
 
+- **git 2.31 or newer** on your `PATH`. tt-git runs the `git` you already
+  have for everything, so it follows your config, hooks, `.mailmap` and
+  credential helpers.
+- **Rust 1.89 or newer** to build it. Get it from [rustup.rs](https://rustup.rs).
+- A terminal with true color and Unicode box drawing. Windows Terminal,
+  iTerm2, WezTerm, kitty, Alacritty and GNOME Terminal all work.
+
+tt-git runs on Windows, macOS and Linux.
+
 ## Build from source
+
+<Steps>
+
+1. Clone the repository:
+
+   ```sh
+   git clone https://github.com/jsheely/tt-git
+   cd tt-git
+   ```
+
+2. Build and install the `tt-git` binary into `~/.cargo/bin`:
+
+   ```sh
+   cargo install --path crates/tt-git
+   ```
+
+3. Check that it's on your `PATH`:
+
+   ```sh
+   tt-git --version
+   ```
+
+</Steps>
 
 ## Open a repository
 
+Run `tt-git` inside a repository, or give it a path:
+
+```sh
+tt-git                 # the repository in the current directory
+tt-git path/to/repo    # another repository
+```
+
+Any folder inside a repository works; tt-git finds the top of it the same way
+git does. Linked worktrees work too. If the folder isn't in a repository,
+tt-git says so and exits.
+
+{/* screenshot: the first screen after `tt-git` starts on the mock repo, full 1080p, no callouts. Same frame as the tour's opening shot. */}
+
+Press <kbd>q</kbd> to quit.
+
+<Aside type="tip">
+	Press <kbd>?</kbd> at any time to see the keys for the pane you're in, or
+	<kbd>:</kbd> to search every command by name.
+</Aside>
+
 ## Command line options
+
+| Option | Does |
+|---|---|
+| `PATH` | Open this repository instead of the current directory |
+| `--config FILE` | Read settings from this file instead of the default `config.toml` (see [Configuration file](/configuration/)) |
+| `--no-plugins` | Start without plugins and without the plugin API socket |
+| `--version`, `--help` | Print the version or help and exit |
+
+`tt-git` also has subcommands for managing plugins and scripting a running
+instance, such as `tt-git plugin list` and `tt-git status --json`. They're
+listed in [Command line](/reference/cli/).

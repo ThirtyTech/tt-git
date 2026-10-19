@@ -1,18 +1,195 @@
 ---
 title: Keyboard shortcuts
-description: "Every default key, by pane."
+description: Every default key, by pane.
 ---
 
-## Everywhere
+import { Aside } from '@astrojs/starlight/components';
 
-## Graph
+These are the default keys. Press <kbd>?</kbd> in tt-git to see the keys for
+the focused pane, including any you've changed; type to search them. To change
+a key, see [Key bindings](/configuration/keys/). The name in brackets after
+each pane is its context in `config.toml`.
 
-## Details
+Uppercase letters mean <kbd>shift</kbd>: <kbd>P</kbd> is <kbd>shift+p</kbd>.
 
-## Status
+## Everywhere `global`
 
-## Staging
+These work in every pane unless the pane uses the same key for something
+else.
 
-## Branches
+| Key | Does |
+|---|---|
+| <kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> <kbd>4</kbd> | Focus the graph / status / branches / details. |
+| <kbd>tab</kbd> / <kbd>shift+tab</kbd> | Focus the next / previous pane. |
+| <kbd>ctrl+h</kbd> <kbd>ctrl+j</kbd> <kbd>ctrl+k</kbd> <kbd>ctrl+l</kbd> | Focus the pane to the left / below / above / to the right. |
+| <kbd>+</kbd> | Zoom: the focused pane (details, or else the graph) fullscreen, and back. |
+| <kbd>j</kbd> <kbd>↓</kbd> / <kbd>k</kbd> <kbd>↑</kbd> | Move down / up. |
+| <kbd>ctrl+d</kbd> <kbd>pagedown</kbd> / <kbd>ctrl+u</kbd> <kbd>pageup</kbd> | Page down / up. |
+| <kbd>g</kbd> <kbd>home</kbd> / <kbd>G</kbd> <kbd>end</kbd> | Top / bottom. |
+| <kbd>P</kbd> | Push. Sets the upstream on the first push. |
+| <kbd>p</kbd> | Pull. |
+| <kbd>ctrl+r</kbd> | Refresh everything. |
+| <kbd>:</kbd> <kbd>ctrl+p</kbd> | Command palette. |
+| <kbd>?</kbd> | Help: the focused pane's keys. |
+| <kbd>q</kbd> <kbd>ctrl+c</kbd> | Quit. |
 
-## Stash
+## Graph `graph`
+
+| Key | Does |
+|---|---|
+| <kbd>enter</kbd> | Open the commit fullscreen: changed files on the left, the selected file's diff on the right. |
+| <kbd>space</kbd> | Show / hide the commit's details. |
+| <kbd>esc</kbd> | Hide details. With details already hidden: clear the filter. |
+| <kbd>a</kbd> | All branches ↔ the current branch (and its upstream). |
+| <kbd>f</kbd> | Filter by author or by file or folder. |
+| <kbd>n</kbd> | New branch at the selected commit. |
+| <kbd>M</kbd> | Merge the commit into the current branch. |
+| <kbd>r</kbd> | Rebase the current branch onto the commit. |
+| <kbd>C</kbd> | Cherry-pick the commit. |
+| <kbd>c</kbd> | Copy the commit hash. |
+
+See [Graph](/panes/graph/).
+
+### The filter panel
+
+| Key | Does |
+|---|---|
+| type | Narrow the list. |
+| <kbd>tab</kbd> <kbd>shift+tab</kbd> <kbd>←</kbd> <kbd>→</kbd> | Switch between the Author and File tabs. |
+| <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>ctrl+p</kbd> <kbd>ctrl+n</kbd> | Move. |
+| <kbd>pageup</kbd> <kbd>pagedown</kbd> | Page. |
+| <kbd>backspace</kbd>, <kbd>ctrl+u</kbd> | Delete a character, clear what you typed. |
+| <kbd>enter</kbd> | Apply. On the File tab with no match, uses what you typed as the path. |
+| <kbd>esc</kbd> | Close without changing the filter. |
+
+## Details `details`
+
+| Key | Does |
+|---|---|
+| <kbd>j</kbd> <kbd>k</kbd>, <kbd>pageup</kbd> <kbd>pagedown</kbd> | Scroll. In the files view, <kbd>j</kbd> <kbd>k</kbd> pick a file. |
+| <kbd>{'}'}</kbd> | Show / hide the commit's changed files below the diff. Fullscreen puts them on the left. |
+| <kbd>o</kbd> | Open the link in view with a plugin link handler. |
+| <kbd>esc</kbd> <kbd>space</kbd> | Close details. |
+
+See [Details](/panes/details/).
+
+## Status `status`
+
+| Key | Does |
+|---|---|
+| <kbd>space</kbd> | Stage / unstage the file. On a conflicted file, mark it resolved. |
+| <kbd>enter</kbd> | Open the file's changes to stage them by hunk or line. |
+| <kbd>a</kbd> | Stage everything, or unstage everything if it's all staged. |
+| <kbd>d</kbd> | Discard the file's changes (asks first). |
+| <kbd>c</kbd> | Commit what's staged. |
+| <kbd>A</kbd> | Amend the last commit with what's staged, keeping its message. |
+| <kbd>s</kbd> | Stash. |
+| <kbd>C</kbd> | Continue a merge, rebase or cherry-pick. |
+| <kbd>X</kbd> | Abort a merge, rebase or cherry-pick (asks first). |
+
+See [Status](/panes/status/).
+
+## Staging `stage`
+
+The staging view, opened with <kbd>enter</kbd> on a file in the status pane.
+
+| Key | Does |
+|---|---|
+| <kbd>j</kbd> / <kbd>k</kbd> | Next / previous hunk, or changed line in line mode. |
+| <kbd>space</kbd> | Stage the selection, or unstage it on the staged side. |
+| <kbd>tab</kbd> | Switch between the unstaged and staged changes. |
+| <kbd>a</kbd> | Pick single lines instead of whole hunks, and back. |
+| <kbd>v</kbd> | Start or end a range of lines. |
+| <kbd>d</kbd> | Discard the selection from the working tree (asks first). |
+| <kbd>c</kbd> | Commit what's staged. |
+| <kbd>esc</kbd> | Back to the status pane. |
+
+See [Staging hunks and lines](/panes/staging/).
+
+## Branches `branches`
+
+On the Branches, Tags, Unmerged and Merged tabs.
+
+| Key | Does |
+|---|---|
+| <kbd>enter</kbd> <kbd>space</kbd> | Check out. A remote-only branch gets a local tracking branch. |
+| <kbd>n</kbd> | New branch from the selection. |
+| <kbd>d</kbd> | Delete. Asks before force-deleting an unmerged branch, or deleting a remote branch or a tag. |
+| <kbd>R</kbd> | Rename a local branch. |
+| <kbd>f</kbd> | `git fetch --all --prune`. |
+| <kbd>/</kbd> | Filter the tab as you type. |
+| <kbd>]</kbd> <kbd>{'}'}</kbd> / <kbd>[</kbd> <kbd>{'{'}</kbd> | Next / previous tab. |
+| <kbd>b</kbd> | Pick the base branch. |
+| <kbd>M</kbd> | Merge the selection into the current branch. |
+| <kbd>r</kbd> | Rebase the current branch onto the selection. |
+| <kbd>c</kbd> | Copy the name. |
+
+While you type a filter: <kbd>enter</kbd> keeps it and goes back to the keys
+above, <kbd>esc</kbd> clears it, <kbd>↑</kbd> <kbd>↓</kbd> move, and
+<kbd>backspace</kbd> deletes a character.
+
+See [Branches](/panes/branches/), [Merged and unmerged](/panes/merged-unmerged/)
+and [Tags](/panes/tags/).
+
+## Stash `stash`
+
+The branches pane on its Stash tab. These keys don't fall back to the
+branches pane's.
+
+| Key | Does |
+|---|---|
+| <kbd>space</kbd> | Pop: apply the stash, then drop it. |
+| <kbd>a</kbd> | Apply it and keep it. |
+| <kbd>d</kbd> | Drop it (asks first). |
+| <kbd>n</kbd> | New branch from it, at the commit it was made on. |
+| <kbd>enter</kbd> | Show what it holds, untracked files included. |
+| <kbd>/</kbd> | Filter as you type. |
+| <kbd>]</kbd> <kbd>{'}'}</kbd> / <kbd>[</kbd> <kbd>{'{'}</kbd> | Next / previous tab. |
+
+See [Stash](/panes/stash/).
+
+## Dialogs and popups
+
+These are fixed and can't be rebound.
+
+| Where | Key | Does |
+|---|---|---|
+| Text prompts (commit message, branch name, stash) | <kbd>enter</kbd> | Confirm. |
+| | <kbd>esc</kbd> | Cancel. |
+| | <kbd>tab</kbd> <kbd>shift+tab</kbd> | New branch: create it in a worktree, or not. Stash: what to stash. |
+| | <kbd>backspace</kbd>, <kbd>ctrl+u</kbd> | Delete a character, clear the text. |
+| Yes/no questions | <kbd>y</kbd> <kbd>enter</kbd> | Yes. |
+| | <kbd>n</kbd> <kbd>esc</kbd> | No. |
+| Palette and pickers | type | Narrow the list. |
+| | <kbd>↑</kbd> <kbd>↓</kbd>, <kbd>ctrl+p</kbd> <kbd>ctrl+n</kbd> | Move. |
+| | <kbd>enter</kbd> / <kbd>esc</kbd> | Run / close. |
+| Help popup | type | Search the keys. |
+| | <kbd>backspace</kbd>, <kbd>ctrl+u</kbd> | Edit the search. |
+| | <kbd>esc</kbd>, or <kbd>?</kbd> with nothing typed | Close. |
+| Error popup | <kbd>esc</kbd> <kbd>enter</kbd> <kbd>q</kbd> | Dismiss. |
+
+## Plugin panes
+
+| Key | Does |
+|---|---|
+| <kbd>ctrl+\\</kbd> <kbd>f12</kbd> | Leave a split pane (it keeps running), or close an overlay or popup. |
+| any other key | Goes to the plugin. |
+
+Change these with `[plugins] pane_release_keys`. See
+[Plugin panes](/panes/plugin-panes/).
+
+## Mouse
+
+With `mouse = true` (the default):
+
+| Action | Does |
+|---|---|
+| Click a pane or row | Focus the pane and select the row. |
+| Scroll the wheel | Scroll the pane under the pointer. |
+| <kbd>ctrl</kbd>+click a link in details | Open it with a plugin link handler. |
+
+<Aside type="tip">
+The [command palette](/git/palette/) lists the focused pane's commands by
+name, with their keys, so if you forget one, press <kbd>:</kbd> and type what
+you want to do.
+</Aside>

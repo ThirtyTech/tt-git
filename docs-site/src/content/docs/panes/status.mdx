@@ -3,18 +3,171 @@ title: Status
 description: "The status pane: changed files, staging, committing, discarding and stashing."
 ---
 
-{/* screenshot: status pane zoomed, codes and title called out */}
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The status pane lists every file you've changed, like lazygit's files panel. From here you stage and
+unstage files, commit, amend, discard changes, stash, and finish or abort a merge, rebase or
+cherry-pick. Its title tells you which branch you're on and how far it is from its upstream. Press
+<kbd>2</kbd> to focus it from anywhere.
+
+{/* screenshot: zoomed crop of the status pane with a mix of files. Callouts: 1) title "[2] Status: repo · main → origin/main ↑1", 2) "M " staged file in green, 3) " M" modified file in red, 4) "??" untracked file, 5) "R " rename shown as "old → new", 6) selected row */}
 
 ## What it shows
 
+One row per changed file, with the same two-letter code as `git status -s`. The first letter is the
+staged state (the index), the second the unstaged state (the working tree):
+
+```text
+M  src/app.rs          staged
+ M src/lib.rs          modified, not staged
+MM README.md           staged, then changed again
+A  docs/new.md         new file, staged
+ D old.txt             deleted, not staged
+R  a.rs → b.rs         renamed, staged
+?? notes.md            untracked
+UU src/merge.rs        conflicted
+```
+
+The code is colored so you can tell at a glance what's left to do:
+
+- **green**: fully staged, nothing left to stage
+- **red**: has changes that aren't staged
+- **error color**: a conflict to resolve
+
+Untracked files are listed one by one, even inside new folders. With nothing changed, the pane says
+`working tree clean`.
+
 ## The title
+
+```text
+[2] Status: tt-git · main → origin/main ↑1 ↓2
+```
+
+- the repository's name,
+- the branch you're on, or `(detached)`,
+- `MERGING`, `REBASING`, `CHERRY-PICKING` or `REVERTING` while one is in progress,
+- the upstream branch, and how many commits you're ahead (`↑`) and behind (`↓`) it. Nothing is shown
+  for a count of zero.
 
 ## Staging and unstaging files
 
+| Key | Does |
+|---|---|
+| <kbd>space</kbd> | Stages the selected file if it has unstaged changes, otherwise unstages it |
+| <kbd>a</kbd> | Stages everything, or unstages everything if it's all staged already |
+| <kbd>enter</kbd> | Opens the file's changes fullscreen, to stage part of it |
+
+Staging a conflicted file marks it resolved. Unstaging works before your first commit too.
+
+To stage only some of a file's changes, a hunk or a line at a time, press <kbd>enter</kbd>. See
+[Staging hunks and lines](/panes/staging/).
+
 ## Committing and amending
+
+{/* screenshot: full 1080p screen with the "Commit message" dialog open over the layout, a message typed. Callouts: the dialog, the hint line "enter confirm · esc cancel", the staged files in the status pane behind it */}
+
+<Steps>
+
+1. Stage what you want in the commit.
+2. Press <kbd>c</kbd>. The **Commit message** dialog opens.
+3. Type the message and press <kbd>enter</kbd>. <kbd>esc</kbd> cancels.
+
+</Steps>
+
+If nothing is staged, tt-git says `nothing staged to commit (space stages a file, a stages all)`
+instead of opening the dialog. An empty message isn't accepted.
+
+Press <kbd>A</kbd> to add what's staged to the last commit, keeping its message. tt-git asks first:
+`Amend the last commit with the staged changes, keeping its message?` Press <kbd>y</kbd> or
+<kbd>enter</kbd> to go ahead, <kbd>n</kbd> or <kbd>esc</kbd> to cancel.
+
+[Your first commit](/getting-started/first-commit/) walks through the whole thing, push included.
 
 ## Discarding changes
 
+Press <kbd>d</kbd> to throw away every change to the selected file. tt-git asks first, since this
+can't be undone: `Discard all changes to src/app.rs? This cannot be undone.`
+
+What discarding does depends on the file:
+
+- an untracked file is deleted,
+- a new file is removed from the index and the working tree,
+- a rename is undone on both paths,
+- anything else goes back to how it is in the last commit, staged and unstaged changes both.
+
+To discard only part of a file, use the [staging view](/panes/staging/#discarding).
+
 ## Stashing
 
+{/* screenshot: zoomed crop of the Stash dialog. Callouts: 1) tabs "Everything · Staged · Keep staged · app.rs" with the current choice underlined, 2) the optional message input, 3) the note under it describing what will be stashed, 4) the hint line "enter stash · tab what to stash · esc cancel" */}
+
+Press <kbd>s</kbd> to stash. The **Stash** dialog asks what to stash; <kbd>tab</kbd> (and
+<kbd>shift+tab</kbd>) moves between the choices:
+
+| Choice | Stashes |
+|---|---|
+| **Everything** | Staged, unstaged and untracked changes |
+| **Staged** | Only what's staged |
+| **Keep staged** | Everything, but leaves the staged changes in place too |
+| *the selected file* | Only that file |
+
+The message is optional: press <kbd>enter</kbd> with it empty to stash with git's default message.
+With nothing changed, tt-git says `nothing to stash`.
+
+Your stashes appear on the branches pane's [Stash tab](/panes/stash/), where you can pop, apply, drop
+and inspect them.
+
 ## Merges, rebases and cherry-picks in progress
+
+{/* screenshot: zoomed crop of the status pane during a rebase with a conflict. Callouts: 1) "REBASING" in the title, 2) the banner row "REBASING: stage fixes · C continue · X abort", 3) a "UU" conflicted file in the error color */}
+
+When a merge, rebase, cherry-pick or revert stops, the title shows which one, and a banner across the
+top of the pane tells you what to do next:
+
+```text
+REBASING: stage fixes · C continue · X abort
+UU src/merge.rs
+```
+
+<Steps>
+
+1. Fix the conflicts in your editor.
+2. Stage each fixed file with <kbd>space</kbd>. Staging a conflicted file marks it resolved.
+3. Press <kbd>C</kbd> to continue. tt-git keeps the message git prepared, so no editor opens.
+
+</Steps>
+
+<kbd>C</kbd> refuses while a file is still conflicted (`resolve and stage the conflicted files
+first`). To give up instead, press <kbd>X</kbd>: tt-git asks, then puts everything back the way it was
+before the operation started.
+
+Continue and abort are also in the [command palette](/git/palette/), so you can run them from any
+pane. [Merge, rebase and cherry-pick](/git/merge-rebase/) covers the whole flow.
+
+## Other panes and details
+
+With the status pane focused, details follows the selected file and shows its diff, staged changes
+first, then unstaged. In the default layout details shares the bottom row with status, so you see
+this when you give details a pane of its own in the [layout](/configuration/layout/). Most of the
+time <kbd>enter</kbd> into the [staging view](/panes/staging/) is the better way to read a file's
+changes.
+
+<Aside>
+  The status pane refreshes by itself when files change on disk or when you stage from another
+  program, ignoring anything git ignores. See [Refreshing](/git/refreshing/).
+</Aside>
+
+## Keys
+
+| Key | Does |
+|---|---|
+| <kbd>j</kbd> <kbd>k</kbd> <kbd>↓</kbd> <kbd>↑</kbd> | Next / previous file |
+| <kbd>space</kbd> | Stage / unstage the file |
+| <kbd>enter</kbd> | Stage by hunk or line |
+| <kbd>a</kbd> | Stage all (or unstage all) |
+| <kbd>d</kbd> | Discard changes to the file (asks first) |
+| <kbd>c</kbd> | Commit what's staged |
+| <kbd>A</kbd> | Amend the last commit, keeping its message |
+| <kbd>s</kbd> | Stash |
+| <kbd>C</kbd> | Continue a merge, rebase or cherry-pick |
+| <kbd>X</kbd> | Abort it (asks first) |

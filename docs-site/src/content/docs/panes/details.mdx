@@ -3,14 +3,127 @@ title: Details
 description: "The details pane: a commit's message and diff, its changed files, and links."
 ---
 
-{/* screenshot: details open in place of the bottom row; fullscreen files + diff */}
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The details pane shows whatever you have selected in full: a commit's message and diff, the list of
+files it changed, a stash, or a working-tree file's diff. It follows the selection, so moving through
+the graph updates it as you go. In the default layout details is hidden until you ask for it, and
+then takes the place of the status and branches panes at the bottom of the screen. Press
+<kbd>4</kbd> to focus it from anywhere.
+
+{/* screenshot: full 1080p screen, graph on top, details open in place of the bottom row showing a commit (header, message, --stat, start of the patch). Highlight the details pane; callouts: 1) title "[4] Commit 59f1c2a", 2) author/committer/parents header, 3) message, 4) diffstat, 5) patch with + / - lines and @@ hunk header */}
 
 ## Opening and closing details
 
+| Key | Where | Does |
+|---|---|---|
+| <kbd>space</kbd> | graph | Shows or hides the selected commit's details |
+| <kbd>4</kbd> | anywhere | Opens details and focuses it |
+| <kbd>enter</kbd> | graph | Opens the commit fullscreen as changed files beside a diff |
+| <kbd>enter</kbd> | Stash tab | Opens the stash fullscreen |
+| <kbd>esc</kbd> | graph | Hides details |
+| <kbd>esc</kbd> <kbd>space</kbd> | details | Closes details |
+
+Details also closes when you focus a pane it covers, for example <kbd>2</kbd> for status.
+Where details opens is part of the [layout](/configuration/layout/): you can give it a permanent pane
+of its own instead, so it's always on screen.
+
+<Aside type="tip">
+  Nothing loads while details is hidden. When it's open, holding <kbd>j</kbd> in the graph doesn't
+  load every commit you pass, only the one you stop on.
+</Aside>
+
 ## The commit view
+
+The title is `Commit` and the short hash, for example `[4] Commit 59f1c2a`. Below it is what
+`git show` prints for the commit:
+
+- the hash, author, committer, dates and parents,
+- the full commit message,
+- a summary of changed files with `+` and `-` counts,
+- and the patch: added lines in green, removed lines in red, hunk headers (`@@ … @@`) in cyan.
+
+A merge commit is shown as what it brought into the branch, compared with its first parent, which is
+what you usually want to review. Renamed files show as renames rather than a delete and an add.
+
+Very long diffs stop after 5,000 lines with a count of what's left, so a huge generated file can't
+stall tt-git.
+
+Scroll with <kbd>j</kbd> <kbd>k</kbd>, a page at a time with <kbd>ctrl+d</kbd> <kbd>ctrl+u</kbd>
+(or <kbd>pagedown</kbd> <kbd>pageup</kbd>), and jump to the top or bottom with <kbd>g</kbd> <kbd>G</kbd>.
 
 ## Changed files
 
+{/* screenshot: zoomed crop of the details pane in the bottom row with the files list below the diff. Callouts: 1) commit header at the top, 2) the selected file's diff, 3) the "Files (6)" rule, 4) the selected file in the list, with a rename shown as "old → new" */}
+
+Press <kbd>{'}'}</kbd> in details to switch to the changed-files view. The commit header stays at
+the top, the selected file's diff fills the middle, and the list of files sits below it under a rule
+titled `Files (6)`. Press <kbd>{'}'}</kbd> again to go back to the whole commit.
+
+In this view:
+
+- <kbd>j</kbd> <kbd>k</kbd> pick a file, and its diff shows above.
+- <kbd>ctrl+d</kbd> <kbd>ctrl+u</kbd> (or <kbd>pagedown</kbd> <kbd>pageup</kbd>) scroll the diff.
+- Renamed files are listed as `old → new`.
+
+Each file's diff loads when you pick it, and stays cached while the view is open. When you move to
+another commit in the graph, details stays in the files view and the old list stays up until the new
+one arrives, so the layout doesn't jump.
+
 ## Fullscreen files and diff
 
+{/* screenshot: full 1080p screen of a commit opened with enter: file list on the left, diff on the right. Callouts: 1) "Files (N)" list with the selected file, 2) commit header, 3) the selected file's diff, 4) title "[4] Commit 59f1c2a files" */}
+
+Press <kbd>enter</kbd> on a commit in the graph to open it fullscreen. The changed files are listed on
+the left and the selected file's diff fills the right, like a pull request's "Files changed" tab.
+
+<Steps>
+
+1. Select a commit in the graph and press <kbd>enter</kbd>.
+2. Pick a file with <kbd>j</kbd> <kbd>k</kbd>. Scroll its diff with <kbd>pagedown</kbd> <kbd>pageup</kbd>.
+3. Press <kbd>esc</kbd> or <kbd>space</kbd> to go back to the graph.
+
+</Steps>
+
+<kbd>+</kbd> also makes the details pane fullscreen from wherever it is, and with the files view on,
+fullscreen moves the file list to the left.
+
+## Other things details shows
+
+- **A stash**: on the [Stash tab](/panes/stash/), details shows what the selected stash holds,
+  untracked files included.
+- **A file's diff**: with the status pane focused, details shows the selected file's staged and
+  unstaged changes, titled `Diff` and the path. In the default layout you see this when details has a
+  pane of its own; to stage part of a file, use the [staging view](/panes/staging/).
+- **Staging**: <kbd>enter</kbd> in the status pane turns details into the
+  [staging view](/panes/staging/).
+- **Plugin logs**: *Plugin logs* in the [command palette](/git/palette/) lists recent plugin runs in
+  details.
+- **A plugin pane**: a plugin pane with the `split` placement takes details' place. See
+  [Plugin panes](/panes/plugin-panes/).
+
 ## Links
+
+{/* screenshot: zoomed crop of details showing a commit message with a GitHub issue URL. Callouts: the link, and the help bar notice after pressing o */}
+
+Commit messages often contain links to a pull request or a ticket. Press <kbd>o</kbd>, or
+<kbd>ctrl</kbd>+click the link, and tt-git hands the first `http://` or `https://` link in view to a
+plugin that knows what to do with it, for example opening it in your browser.
+
+A plugin says which links it handles with a `[[link_handlers]]` pattern in its manifest; see
+[Writing a plugin](/plugins/manifest/#link-handlers). If no plugin handles the link, the help bar
+says `no plugin handles …` rather than guessing which program should open it.
+
+## Keys
+
+| Key | Does |
+|---|---|
+| <kbd>j</kbd> <kbd>k</kbd> | Scroll the diff a line (in the files view: pick a file) |
+| <kbd>ctrl+d</kbd> <kbd>ctrl+u</kbd>, <kbd>pagedown</kbd> <kbd>pageup</kbd> | Scroll a page |
+| <kbd>g</kbd> <kbd>G</kbd> | Top / bottom |
+| <kbd>{'}'}</kbd> | Show / hide the changed files |
+| <kbd>o</kbd> | Open the link in view with a plugin |
+| <kbd>esc</kbd> <kbd>space</kbd> | Close details |
+| <kbd>+</kbd> | Fullscreen and back |
+
+The mouse wheel scrolls details too.

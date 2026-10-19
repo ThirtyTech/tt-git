@@ -3,6 +3,74 @@ title: Memory and speed
 description: "Built to sit open all day: what tt-git costs at idle, measured on a large repository."
 ---
 
+tt-git is meant to sit open all day next to your editor. While you aren't
+using it, it should cost next to nothing: no CPU, no git processes, and a
+few tens of megabytes of memory, even on a repository with tens of thousands
+of commits and hundreds of branches.
+
 ## Idle by design
 
+- **It redraws only when something changed.** A 250 ms tick redraws only
+  when a relative date on screen would change ("2m" becoming "3m"), plugins
+  reloaded, or a [plugin pane](/panes/plugin-panes/) shows a cursor.
+- **Few threads.** tt-git runs on a single-threaded async runtime. git work
+  runs on a blocking thread pool whose threads exit once they've been idle
+  for a few seconds, so an idle tt-git has a handful of threads.
+- **One git process per kind of load.** Each kind of load keeps at most one
+  git process in flight, with only the newest request waiting. Holding
+  <kbd>j</kbd> through the graph doesn't start a `git show` per row, and a
+  graph load that's been replaced is killed rather than finished.
+- **Compact commits.** Hashes are stored as 32-byte arrays rather than
+  strings, author names and emails are shared between commits, and the graph
+  stores only the lanes it draws, at 2 bytes a lane.
+- **Cheap refreshes.** A refs refresh is 6 to 8 git processes however many
+  branches and tags there are. Reflogs and the ref fingerprint are read from
+  files directly, without git.
+- **Quiet watching.** File changes in paths git ignores (`node_modules/`,
+  `dist/`, `target/`) don't trigger a reload, and a fetch that brings
+  nothing new doesn't reload the graph. See [Refreshing](/git/refreshing/).
+
+What each pane runs, and why, is in [How tt-git uses
+git](/reference/how-it-works/).
+
 ## A large React codebase
+
+Measured on a long-lived React and TypeScript web app:
+
+| | |
+|---|---|
+| History | 28,145 commits on all refs (27,281 on `HEAD`), since 2017, 42 authors |
+| Refs | 810: 160 local branches, 303 remote branches, 341 tags |
+| Tracked files | 3,209 (1,111 `.tsx`/`.jsx`, 1,637 `.ts`/`.js`) |
+| Packed objects | 246k objects, 103 MiB |
+| Working tree | With an installed `node_modules/` (ignored) |
+
+tt-git release build, Windows 11, git 2.50, `--no-plugins`, default config
+(so the graph loads the newest 20,000 commits), sampled every second for 45
+seconds after starting, with no keys pressed:
+
+| | |
+|---|---|
+| Peak working set | 30.5 MiB |
+| Working set, idle | 28.2 to 29.2 MiB |
+| Private bytes, idle | 17.9 to 18.9 MiB |
+| Threads | 11 while loading, 5 at idle |
+| CPU time | 0.17 s to load, 0.31 s total over 45 s |
+| git processes at idle | None |
+
+Refs, status and the first 20,000 commits of the graph had loaded by the
+first sample, one second in; the extra threads wound down over the next 20
+seconds. The binary is 6.4 MiB.
+
+## Tuning
+
+Two settings in the [configuration file](/configuration/) trade memory for
+reach:
+
+| Setting | Default | Effect |
+|---|---|---|
+| `graph.max_commits` | `20000` | Commits loaded at a time. Scrolling near the end loads the next batch, so a smaller number uses less memory without hiding history. |
+| `graph.max_lanes` | `16` | Lanes drawn and stored before the rest collapse into `…`. |
+
+`watch = false` turns off file watching entirely; then tt-git only refreshes
+when you press <kbd>ctrl+r</kbd> or after a git command it runs itself.

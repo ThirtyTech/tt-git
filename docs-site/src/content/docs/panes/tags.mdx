@@ -3,10 +3,83 @@ title: Tags
 description: "Every tag, newest first, and how far each recent release is from the base branch."
 ---
 
-{/* screenshot: tags tab with ↓/↑/✓ called out */}
+The **Tags** tab of the [branches pane](/panes/branches/) lists every tag,
+newest first, with its message and age. Tags are treated as releases: the
+five newest also show how far they are from the base branch, so the newest
+tag tells you how many commits are waiting to be released and how long ago
+the last release was. Selecting a tag moves the [graph](/panes/graph/) to its
+commit.
+
+{/* screenshot: full 1080p screen with the Tags tab selected in the branches pane and the graph scrolled to the selected tag's commit (its <v1.2.0> badge visible). Callouts: "selected tag", "graph jumps to the tagged commit". */}
 
 ## What it shows
 
+Press <kbd>]</kbd> on the branches pane to get to **Tags**. Each row has:
+
+```
+  v1.2.0   ↓12   Release 1.2.0: faster graph loads     3d
+  v1.1.1   ↑1↓40 Fix crash on empty repos              2w
+  v1.1.0   ↓52   Release 1.1.0                         1mo
+  v1.0.0         First stable release                  4mo
+```
+
+- **The name**, in the tag color.
+- **The distance from the base branch**, for the five newest tags (below).
+- **The subject**: the tag message's first line for an annotated tag, or
+  the commit's subject for a lightweight one.
+- **The age**: `3d`, `2w`, `4mo`.
+
+Tags are ordered by creation date: the tagger date for an annotated tag, the
+commit date for a lightweight one. Version numbers in names aren't parsed;
+the newest tag is the one made last.
+
 ## Distance from the base branch
 
+The five newest tags show how far they are from the [base
+branch](/panes/merged-unmerged/#the-base-branch), the same one the Merged
+and Unmerged tabs use:
+
+| Shown | Means |
+|---|---|
+| `↓12` | The base has 12 commits since this tag: 12 commits unreleased |
+| `↑3` | The tag has 3 commits the base doesn't, for example a fix tagged on a release branch |
+| `↑3↓12` | Both |
+| `✓` | The tag is the base's tip; nothing unreleased |
+
+So the newest tag's `↓` is "commits since the last release", and its age is
+"how long since the last release".
+
+The counts are against the base branch, not against `HEAD` or the previous
+tag, so they don't change as you switch branches. Press <kbd>b</kbd> to pick
+a different base.
+
+Older tags are left blank. Each comparison walks history, which gets slower
+the older the tag is, so only five are compared.
+
+{/* screenshot: zoomed crop of the Tags tab with the distance column. Callouts: "↓12 = 12 commits unreleased on origin/main", "↑1↓40 = tagged on a release branch", "✓ = tag is the base's tip", "older tags aren't compared", and "(origin/main)" in the title. */}
+
 ## Acting on a tag
+
+- <kbd>n</kbd> makes a branch starting at the tag (**New branch from
+  &lt;tag&gt;**). <kbd>enter</kbd> on a tag reminds you of this, since a tag
+  can't be checked out as a branch.
+- <kbd>M</kbd> merges the tag into the current branch; <kbd>r</kbd> rebases
+  the current branch onto it. Both ask first.
+- <kbd>d</kbd> deletes the tag locally (`git tag -d`), after asking. Tags on
+  remotes are left alone.
+- <kbd>c</kbd> copies the tag name.
+- <kbd>/</kbd> filters the list as you type.
+
+## Keys
+
+| Key | Does |
+|---|---|
+| <kbd>n</kbd> | New branch from the tag |
+| <kbd>M</kbd> | Merge the tag into the current branch |
+| <kbd>r</kbd> | Rebase the current branch onto the tag |
+| <kbd>d</kbd> | Delete the tag locally (asks first) |
+| <kbd>c</kbd> | Copy the tag name |
+| <kbd>/</kbd> | Filter as you type (<kbd>esc</kbd> clears) |
+| <kbd>b</kbd> | Pick the base branch the distances are measured against |
+| <kbd>f</kbd> | `git fetch --all --prune` |
+| <kbd>]</kbd> <kbd>[</kbd> | Next / previous tab |

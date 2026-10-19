@@ -3,16 +3,127 @@ title: Staging hunks and lines
 description: "Open a file's changes and stage, unstage or discard them a hunk or a line at a time."
 ---
 
-{/* screenshot: staging view side by side, hunk selection; line mode with a range */}
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+Sometimes a file holds two changes that belong in different commits. The staging view opens one
+file's changes fullscreen, with what's unstaged on one side and what's staged on the other, and lets
+you move them across a hunk or a single line at a time. You can also throw away just part of a file.
+Open it with <kbd>enter</kbd> on a file in the [status pane](/panes/status/).
+
+{/* screenshot: full 1080p screen of the staging view side by side (terminal ≥140 columns). Callouts: 1) title "[4] Stage src/app.rs · hunks", 2) "▌Unstaged  3 hunks" active side marker, 3) "Staged  1 hunk" inactive side, 4) the selected hunk highlighted, 5) hunk header @@ in cyan, 6) + / - lines */}
 
 ## Opening the staging view
 
+<Steps>
+
+1. Focus the status pane (<kbd>2</kbd>) and select a file.
+2. Press <kbd>enter</kbd>.
+3. When you're done, press <kbd>esc</kbd> to go back to the status pane.
+
+</Steps>
+
+The view has two sides:
+
+- **Unstaged**: changes in your working tree that aren't staged yet.
+- **Staged**: changes that will go into the next commit.
+
+When your terminal is at least 140 columns wide they sit side by side, unstaged on the left. On a
+narrower terminal, unstaged is on top and staged below. A side with no changes shrinks to its title.
+
+Each side's title says how many hunks it has (`3 hunks`, `1 hunk`, `no changes`). The side you're
+working on is marked with `▌`; press <kbd>tab</kbd> to switch sides.
+
+The pane's title shows the file and the mode: `Stage src/app.rs · hunks` or
+`Stage src/app.rs · lines`.
+
 ## Hunk mode
+
+The view starts in hunk mode. A hunk is one block of nearby changes, starting at an `@@` line.
+
+- <kbd>j</kbd> <kbd>k</kbd> move to the next or previous hunk. The whole hunk is highlighted.
+- <kbd>space</kbd> stages the selected hunk.
+
+After each change both sides reload, and the selection lands on whatever came next, so you can press
+<kbd>space</kbd> repeatedly to work down the file. The view closes by itself once the file has no
+changes left.
 
 ## Line mode and ranges
 
+{/* screenshot: zoomed crop of the unstaged side in line mode with a range selected across three changed lines. Callouts: 1) title ending "· lines", 2) the highlighted range, 3) context lines skipped by j/k, 4) an unselected + line that stays unstaged */}
+
+Press <kbd>a</kbd> to switch to line mode, and <kbd>a</kbd> again to go back to hunks.
+
+- <kbd>j</kbd> <kbd>k</kbd> step through changed lines only (`+` and `-`), skipping the unchanged
+  context around them.
+- <kbd>space</kbd> stages the selected line.
+- <kbd>v</kbd> starts a range at the selected line. Move with <kbd>j</kbd> <kbd>k</kbd> to extend it,
+  then <kbd>space</kbd> stages every changed line in it. <kbd>v</kbd> again ends the range without
+  staging. Pressing <kbd>v</kbd> in hunk mode switches to line mode and starts a range.
+
+Lines you don't pick stay as they are. Staging an added line without the removed line next to it
+works the way you'd expect: the removed line stays in the file until you stage it too.
+
+<Aside type="tip">
+  Picking only part of a new file stages a file containing just those lines. Picking part of a
+  deleted file removes only those lines rather than deleting the file.
+</Aside>
+
 ## Unstaging
+
+Press <kbd>tab</kbd> to move to the Staged side. Everything works the same way, but <kbd>space</kbd>
+unstages the selection, moving it back to the Unstaged side.
 
 ## Discarding
 
+{/* screenshot: zoomed crop of the "Discard changes" confirm dialog over the staging view: "Discard the selected hunk of src/app.rs? This cannot be undone." Callout: the hint "y confirm · n/esc cancel" */}
+
+Press <kbd>d</kbd> on the Unstaged side to throw away the selected hunk or lines from your working
+tree. tt-git asks first, since this can't be undone:
+
+```text
+Discard the selected hunk of src/app.rs? This cannot be undone.
+```
+
+Discarding only works on unstaged changes. On the Staged side, unstage first.
+
+## Committing from here
+
+Press <kbd>c</kbd> to commit what's staged without leaving the staging view. It opens the same
+**Commit message** dialog as the status pane; see
+[Committing and amending](/panes/status/#committing-and-amending).
+
 ## Files that can't be split
+
+Some files can only be staged whole. The side says why instead of showing hunks:
+
+| Message | Why |
+|---|---|
+| `conflicted: resolve it, then stage the whole file` | The file has merge conflicts |
+| `binary: stage the whole file` | The file isn't text |
+| `not UTF-8: stage the whole file` | The diff isn't valid UTF-8 text |
+| `too large to split (… bytes)` | An untracked file over 256 KiB |
+| `… is an untracked directory` | A new folder rather than a file |
+
+Press <kbd>esc</kbd> and use <kbd>space</kbd> in the status pane to stage these.
+
+While a change is being applied, keys wait: if you press <kbd>space</kbd> too soon, tt-git says
+`still applying the last change…`, because what's on screen is out of date until the new diffs
+arrive.
+
+For how tt-git turns your selection into a patch git can apply, see
+[How tt-git uses git](/reference/how-it-works/#status-and-staging).
+
+## Keys
+
+| Key | Does |
+|---|---|
+| <kbd>j</kbd> <kbd>k</kbd> | Next / previous hunk (in line mode: changed line) |
+| <kbd>g</kbd> <kbd>G</kbd> | First / last hunk or line |
+| <kbd>ctrl+d</kbd> <kbd>ctrl+u</kbd> | Scroll a page |
+| <kbd>space</kbd> | Stage the selection (on the Staged side: unstage it) |
+| <kbd>tab</kbd> | Switch between Unstaged and Staged |
+| <kbd>a</kbd> | Hunks ↔ lines |
+| <kbd>v</kbd> | Start or end a range of lines |
+| <kbd>d</kbd> | Discard the selection from the working tree (asks first) |
+| <kbd>c</kbd> | Commit what's staged |
+| <kbd>esc</kbd> | Back to the status pane |

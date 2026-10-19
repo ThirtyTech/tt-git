@@ -3,12 +3,80 @@ title: Moving around
 description: "Focusing panes, moving the selection, zooming, the mouse, and the help popup."
 ---
 
+import { Aside } from '@astrojs/starlight/components';
+
 ## Focusing a pane
+
+Keys go to the focused pane, the one with the green border. These keys work
+from any pane:
+
+| Key | Focuses |
+|---|---|
+| <kbd>1</kbd> | Graph |
+| <kbd>2</kbd> | Status |
+| <kbd>3</kbd> | Branches |
+| <kbd>4</kbd> | Details (opening it if it's hidden) |
+| <kbd>tab</kbd> / <kbd>shift+tab</kbd> | The next / previous pane |
+| <kbd>ctrl+h</kbd> <kbd>ctrl+j</kbd> <kbd>ctrl+k</kbd> <kbd>ctrl+l</kbd> | The pane to the left / below / above / right |
+
+Focusing status or branches while details covers them closes details and
+brings them back.
 
 ## Moving the selection
 
+Every list moves the same way:
+
+| Key | Moves |
+|---|---|
+| <kbd>j</kbd> / <kbd>↓</kbd> | Down one row |
+| <kbd>k</kbd> / <kbd>↑</kbd> | Up one row |
+| <kbd>ctrl+d</kbd> / <kbd>ctrl+u</kbd> | Down / up a page |
+| <kbd>g</kbd> / <kbd>G</kbd> | To the top / bottom |
+
+As you move in the graph or the branch list, the details pane (when it's
+open) follows the selection. It only loads the row you stop on, so holding
+<kbd>j</kbd> through a long history stays fast.
+
 ## Zoom
+
+<kbd>+</kbd> makes a pane fill the screen, and <kbd>+</kbd> again puts it
+back. It zooms details if details is focused, and the graph otherwise.
+
+{/* screenshot: the graph zoomed to fullscreen with "space" details open below it at full width; callout on the full-width graph and on the details area. */}
+
+With the graph zoomed, <kbd>space</kbd> opens details below it at full width.
 
 ## The mouse
 
+The mouse is on by default:
+
+- Click a pane to focus it, or a row to select it.
+- Scroll the wheel to scroll the pane under the pointer, focused or not.
+- <kbd>ctrl</kbd>+click a link in the details pane to open it with a plugin
+  (see [Links](/panes/details/#links)).
+
+Set `mouse = false` in your [configuration file](/configuration/) to turn it
+off, for example so your terminal's own text selection works without
+holding <kbd>shift</kbd>.
+
 ## Getting help
+
+{/* screenshot: the Keybindings popup over the screen with the graph focused, then the same popup with "merge" typed, showing the narrowed list; callouts on the search line and on the pane-specific vs global rows. */}
+
+Press <kbd>?</kbd> to see the keys for the focused pane, followed by the ones
+that work everywhere. Start typing to narrow the list: `stash` finds every
+stash key, `ctrl` every control key. <kbd>backspace</kbd> deletes a character,
+<kbd>ctrl+u</kbd> clears what you typed, and <kbd>esc</kbd> closes the popup
+(so does <kbd>?</kbd> while nothing is typed).
+
+The popup lists the keys as they're bound now, so it includes any you've
+changed in your config.
+
+<Aside type="tip">
+	To run a command without remembering its key, press <kbd>:</kbd> or
+	<kbd>ctrl+p</kbd> for the [command palette](/git/palette/).
+</Aside>
+
+To quit, press <kbd>q</kbd> or <kbd>ctrl+c</kbd>.
+
+The full list of keys is in [Keyboard shortcuts](/reference/keys/).

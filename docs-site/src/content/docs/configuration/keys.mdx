@@ -1,14 +1,168 @@
 ---
 title: Key bindings
-description: "Change any key, per pane, and bind keys to plugin actions."
+description: Change any key, per pane, and bind keys to plugin actions.
 ---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Every key in tt-git can be changed in the `[keys]` tables of
+[`config.toml`](/configuration/). For the full list of default keys, see
+[Keyboard shortcuts](/reference/keys/).
 
 ## Contexts
 
+Bindings belong to a context. Each pane has one, plus `global` for keys that
+work everywhere:
+
+| Context | Where it applies |
+|---|---|
+| `global` | Everywhere, unless the focused pane's context binds the same key. |
+| `graph` | The graph pane. |
+| `status` | The status pane. |
+| `branches` | The branches pane, on every tab but Stash. |
+| `stash` | The branches pane on its Stash tab. It doesn't fall back to `branches`. |
+| `details` | The details pane. |
+| `stage` | The staging view, while you stage a file by hunk or line. |
+
+When you press a key, tt-git looks it up in the focused pane's context first,
+then in `global`. That's why <kbd>a</kbd> means "all branches / current branch"
+in the graph but "stage everything" in the status pane.
+
 ## Changing a binding
+
+Name the context's table, then set a command to one key or a list of keys:
+
+```toml title="config.toml"
+[keys.global]
+quit = ["q", "ctrl+c"]
+palette = ":"
+
+[keys.graph]
+toggle_scope = "b"
+
+[keys.branches]
+checkout = ["enter", "o"]
+```
+
+The keys you set **replace** that command's default keys in that context.
+In the example, `palette = ":"` removes the default <kbd>ctrl+p</kbd>. To keep a
+default, list it too.
+
+Changing a command in one context leaves the others alone. `[keys.graph]
+new_branch = "N"` changes the key in the graph only; <kbd>n</kbd> still makes
+a branch in the branches pane.
+
+The help bar, the help popup (<kbd>?</kbd>) and the command palette all show
+your keys, not the defaults.
+
+<Aside type="caution">
+A misspelled command name or a key tt-git can't read stops tt-git from
+starting, with an error that names the table and command, for example
+`keys.graph.toggle_scope: invalid key 'ctrl+'`.
+</Aside>
 
 ## How to write keys
 
+| Write | For |
+|---|---|
+| `q`, `Q`, `?`, `+`, `}` | A character. Uppercase means shift: `Q` and `shift+q` are the same key. |
+| `ctrl+c`, `alt+enter`, `ctrl+alt+x` | Modifiers joined with `+`. `control` and `meta` work too. |
+| `ctrl++` | <kbd>ctrl</kbd> with the <kbd>+</kbd> key. |
+| `space`, `enter`, `esc`, `tab`, `shift+tab`, `backspace` | Named keys. `return`, `escape`, `backtab` also work. |
+| `up`, `down`, `left`, `right` | Arrow keys. |
+| `home`, `end`, `pageup`, `pagedown` | Also `pgup`, `pgdn`. |
+| `delete`, `insert` | Also `del`, `ins`. |
+| `f1` … `f24` | Function keys. |
+
+Names aren't case-sensitive, except single characters.
+
 ## Binding plugin actions
 
+To run a [plugin action](/plugins/manifest/#actions) with a key, add a
+`[[keys.command]]` entry:
+
+```toml title="config.toml"
+[[keys.command]]
+key = "ctrl+o"
+type = "plugin_action"
+command = "acme.github.open-commit"   # the action's qualified id
+description = "open on GitHub"        # optional
+context = "graph"                     # optional; default: everywhere
+```
+
+| Field | |
+|---|---|
+| `key` | The key, written as above. |
+| `type` | Always `plugin_action`. |
+| `command` | The qualified action id: the plugin's id, a dot, and the action's id. `tt-git plugin action list` prints them. |
+| `description` | Optional. |
+| `context` | Optional. One of the contexts above; the default is `global`, so the key works in every pane. |
+
+Plugin bindings are checked before the built-in ones, and a binding for the
+focused pane's context wins over a `global` one. The command palette shows the
+key next to the action.
+
 ## Commands
+
+Every command you can bind, with its default keys:
+
+| Command | Default | Context |
+|---|---|---|
+| `quit` | <kbd>q</kbd> <kbd>ctrl+c</kbd> | global |
+| `help` | <kbd>?</kbd> | global |
+| `palette` | <kbd>:</kbd> <kbd>ctrl+p</kbd> | global |
+| `focus_graph`, `focus_status`, `focus_branches`, `focus_details` | <kbd>1</kbd>, <kbd>2</kbd>, <kbd>3</kbd>, <kbd>4</kbd> | global |
+| `focus_next`, `focus_prev` | <kbd>tab</kbd>, <kbd>shift+tab</kbd> | global |
+| `focus_left`, `focus_down`, `focus_up`, `focus_right` | <kbd>ctrl+h</kbd>, <kbd>ctrl+j</kbd>, <kbd>ctrl+k</kbd>, <kbd>ctrl+l</kbd> | global |
+| `zoom` | <kbd>+</kbd> | global |
+| `move_up`, `move_down` | <kbd>k</kbd> <kbd>up</kbd>, <kbd>j</kbd> <kbd>down</kbd> | global |
+| `page_up`, `page_down` | <kbd>ctrl+u</kbd> <kbd>pageup</kbd>, <kbd>ctrl+d</kbd> <kbd>pagedown</kbd> | global |
+| `top`, `bottom` | <kbd>g</kbd> <kbd>home</kbd>, <kbd>G</kbd> <kbd>end</kbd> | global |
+| `refresh` | <kbd>ctrl+r</kbd> | global |
+| `push`, `pull` | <kbd>P</kbd>, <kbd>p</kbd> | global |
+| `plugin_logs` | none (palette only) | global |
+| `expand_details` | <kbd>enter</kbd> | graph, stash |
+| `toggle_details` | <kbd>space</kbd> | graph |
+| `close_details` | <kbd>esc</kbd> (graph, stage); <kbd>esc</kbd> <kbd>space</kbd> (details) | graph, details, stage |
+| `toggle_scope` | <kbd>a</kbd> | graph |
+| `filter` | <kbd>f</kbd> (graph); <kbd>/</kbd> (branches, stash) | graph, branches, stash |
+| `new_branch` | <kbd>n</kbd> | graph, branches, stash |
+| `merge`, `rebase` | <kbd>M</kbd>, <kbd>r</kbd> | graph, branches |
+| `cherry_pick` | <kbd>C</kbd> | graph |
+| `copy` | <kbd>c</kbd> | graph, branches |
+| `checkout` | <kbd>enter</kbd> <kbd>space</kbd> | branches |
+| `delete_branch`, `rename_branch` | <kbd>d</kbd>, <kbd>R</kbd> | branches |
+| `fetch` | <kbd>f</kbd> | branches |
+| `next_tab`, `prev_tab` | <kbd>]</kbd> <kbd>{'}'}</kbd>, <kbd>[</kbd> <kbd>{'{'}</kbd> | branches, stash |
+| `pick_base` | <kbd>b</kbd> | branches |
+| `stage_toggle` | <kbd>space</kbd> | status, stage |
+| `open_staging` | <kbd>enter</kbd> | status |
+| `stage_all` | <kbd>a</kbd> | status |
+| `discard` | <kbd>d</kbd> | status, stage |
+| `commit` | <kbd>c</kbd> | status, stage |
+| `amend` | <kbd>A</kbd> | status |
+| `stash` | <kbd>s</kbd> | status |
+| `continue`, `abort` | <kbd>C</kbd>, <kbd>X</kbd> | status |
+| `stash_pop`, `stash_apply`, `stash_drop` | <kbd>space</kbd>, <kbd>a</kbd>, <kbd>d</kbd> | stash |
+| `switch_side` | <kbd>tab</kbd> | stage |
+| `toggle_line_mode` | <kbd>a</kbd> | stage |
+| `select_range` | <kbd>v</kbd> | stage |
+| `toggle_files` | <kbd>{'}'}</kbd> | details |
+| `open_link` | <kbd>o</kbd> | details |
+
+A command does nothing in a context it isn't meant for, so binding, say,
+`commit` in `[keys.graph]` has no effect.
+
+## Keys you can't rebind
+
+A few keys belong to dialogs and lists rather than to a pane, and are fixed:
+
+- In dialogs and prompts: <kbd>enter</kbd> confirms, <kbd>esc</kbd> cancels,
+  <kbd>tab</kbd> switches options (worktree, what to stash), <kbd>ctrl+u</kbd>
+  clears the text, and <kbd>y</kbd>/<kbd>n</kbd> answer a yes/no question.
+- In the palette and pickers: <kbd>up</kbd>/<kbd>down</kbd> or
+  <kbd>ctrl+p</kbd>/<kbd>ctrl+n</kbd> move.
+- In the help popup: type to search, <kbd>backspace</kbd> and
+  <kbd>ctrl+u</kbd> edit the search, <kbd>esc</kbd> closes.
+- In plugin panes, the keys in `[plugins] pane_release_keys` (default
+  <kbd>ctrl+\\</kbd> and <kbd>f12</kbd>); every other key goes to the plugin.

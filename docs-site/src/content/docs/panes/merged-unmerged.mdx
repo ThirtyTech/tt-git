@@ -3,12 +3,154 @@ title: Merged and unmerged
 description: "The Unmerged and Merged tabs, the base branch, and a branch's history in the graph."
 ---
 
-{/* screenshot: unmerged tab with the graph showing only the selected branch */}
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The **Unmerged** and **Merged** tabs of the [branches pane](/panes/branches/)
+list the branches that are not yet merged into the project's primary branch,
+and the ones that are, each with its tip's subject, author and date. They
+work like the `git branch -r --no-merged origin/main` and `--merged` aliases
+many people keep around, but you can act on each row, and the
+[graph](/panes/graph/) shows only the selected branch: where it branched off,
+its own commits, and where it was merged back in.
+
+{/* screenshot: full 1080p screen on the Unmerged tab. The graph shows only the selected branch as a loop: the fork commit "(branched off origin/main)" at the bottom, the branch's commits, and the base's tip at the top. Callouts: "graph title shows the branch", "branched off" note, "base tip", and the selected row in the branches pane. */}
 
 ## What the tabs list
 
+Press <kbd>]</kbd> on the branches pane to get from Branches past Tags to
+**Unmerged**, then **Merged**. Each row shows:
+
+```
+  feature/login     Add the login form          Ada Lovelace   3h
+  fix/null-config   Handle a missing config     Grace Hopper   2d
+```
+
+the branch name, its tip commit's subject, the author (through `.mailmap`,
+so one person is one name) and the commit date. Both tabs are sorted by
+commit date, newest first.
+
+- **Merged** means reachable: a branch is merged when its tip is the base
+  branch or one of the base's ancestors.
+- **Unmerged** is everything else. A branch that was squash-merged or
+  rebase-merged has a tip that isn't in the base's history, so it stays on
+  Unmerged.
+
+Some branches are never listed:
+
+- **The base branch itself.**
+- **Long-lived branches**, named exactly one of `safe_branches` (by default
+  `master`, `main`, `production` and `prod`) on any remote. They'd be noise
+  on both tabs, and you never want to delete one by accident.
+- **Archived branches** on Unmerged: names containing anything in
+  `unmerged_exclude` (default `archive`), the way people add `grep -v
+  archive` to the alias.
+
+Both lists are set in the [configuration file](/configuration/#settings).
+
+{/* screenshot: zoomed crop of the branches pane on the Merged tab. Callouts on the name, subject, author and date columns, and on "(origin/main)" in the title. */}
+
+### Like with like
+
+If the base is a remote branch (`origin/main`), only branches on that remote
+are compared. If it's a local branch, only local branches are. That keeps
+one row per branch and compares like with like.
+
 ## The base branch
+
+The tabs compare against the *base branch*, shown in the pane's title:
+`Unmerged 4 (origin/main)`. tt-git detects it as the project's primary
+branch:
+
+1. whatever a remote's `HEAD` points at, `origin` first,
+2. else the first of `main`, `master`, `development`, `develop` or `trunk`
+   found on a remote,
+3. else the same names locally.
+
+To compare against something else, press <kbd>b</kbd>. The **Base branch**
+picker lists **Detect automatically** first (with what detection would pick),
+then every remote branch, then every local one, with the current choice
+marked. Type to narrow the list and press <kbd>enter</kbd>.
+
+tt-git saves your choice as `tt-git.baseBranch` in the repository's own git
+config, so each project remembers its own and nothing goes in your global
+config. Pick **Detect automatically** to go back. If the saved branch is
+later deleted, detection takes over again.
+
+The [Tags](/panes/tags/) tab measures how far each recent tag is from the
+same base branch.
+
+{/* screenshot: the "Base branch" picker open over the screen, "Detect automatically" at the top with its hint (origin/main), a remote branch marked "current". Callouts on both. */}
+
+<Aside>
+In a repository with several [worktrees](/git/worktrees/), the base branch
+is shared: it's stored in the one `.git/config` they all use.
+</Aside>
 
 ## A branch's history in the graph
 
+On Unmerged and Merged, the graph shows only the selected branch, so you can
+see what it contains without the rest of the history in the way. The
+graph's title changes from `Graph [all]` to the branch's name.
+
+From the bottom up, you see:
+
+<Steps>
+
+1. **Where it branched off**: the base commit it started from, marked
+   *(branched off origin/main)*.
+
+2. **The branch's own commits.** Only its first-parent history, so commits
+   it pulled in from other branches (say, a merge of `main` into it) are
+   left out and you see only the work done on it.
+
+3. **Where it was merged back in**: the base commit that merged it, marked
+   *(merged into origin/main)*. For an unmerged branch, the base's current
+   tip takes this place, so you can see how far the base has moved on since
+   the branch started.
+
+</Steps>
+
+The base's commits in between are left out. A branch that was
+fast-forwarded into the base has no commits of its own left, so only its
+tip is shown.
+
+Moving the selection redraws the graph for the next branch. Going back to
+the Branches tab, or pressing <kbd>a</kbd> in the graph, shows the full
+graph again. Any [author or file filter](/panes/graph/#filtering-by-author-or-file)
+on the graph is set aside while these tabs are open and comes back when you
+leave them.
+
+{/* screenshot: zoomed crop of the graph on the Merged tab showing a merged branch: fork commit "(branched off origin/main)", 3 branch commits, merge commit "(merged into origin/main)". Numbered callouts 1-2-3 matching the steps above. */}
+
+How tt-git works this out with git is covered in [How tt-git uses
+git](/reference/how-it-works/#the-branch-history-in-the-graph).
+
 ## Cleaning up merged branches
+
+The Merged tab is a list of branches that are safe to delete: everything on
+them is already in the base.
+
+1. <kbd>f</kbd> to fetch and prune, so the list is current.
+2. <kbd>]</kbd> to the **Merged** tab.
+3. Check a branch's history in the graph if you want to be sure.
+4. <kbd>d</kbd> to delete it. A branch you have locally is deleted locally
+   (`git branch -d`); a branch that's only on the remote is deleted there
+   (`git push <remote> --delete <branch>`), after the dialog shows you the
+   command.
+
+The other branch keys work on these tabs too: check out, new branch, rename,
+merge, rebase and copy. See [Branches](/panes/branches/#keys).
+
+## Keys
+
+| Key | Does |
+|---|---|
+| <kbd>]</kbd> <kbd>[</kbd> | Next / previous tab |
+| <kbd>b</kbd> | Pick the base branch (**Detect automatically** clears your choice) |
+| <kbd>enter</kbd> <kbd>space</kbd> | Check out the branch |
+| <kbd>d</kbd> | Delete it (locally if you have it, else on the remote; asks first) |
+| <kbd>n</kbd> | New branch from it |
+| <kbd>M</kbd> / <kbd>r</kbd> | Merge it into the current branch / rebase the current branch onto it |
+| <kbd>/</kbd> | Filter as you type |
+| <kbd>f</kbd> | `git fetch --all --prune` |
+| <kbd>c</kbd> | Copy the branch name |
