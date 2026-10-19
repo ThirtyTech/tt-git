@@ -19,7 +19,25 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # The tag must name the version the binary reports, so `tt-git --version`
+  # matches the release it came from. Bump `version` in Cargo.toml first.
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Tag matches Cargo version
+        shell: bash
+        run: |
+          crate=$(cargo metadata --no-deps --format-version 1 --locked |
+            jq -r '.packages[] | select(.name == "tt-git") | .version')
+          tag="${GITHUB_REF_NAME#v}"
+          if [ "$crate" != "$tag" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match tt-git version $crate in Cargo.toml"
+            exit 1
+          fi
+
   build:
+    needs: version
     strategy:
       fail-fast: false
       matrix:
