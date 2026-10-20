@@ -12,6 +12,7 @@ pub use graph::{BranchFocus, DateStyle, GraphPane, GraphScope, LabelKind, LoadTo
 pub use stage::{StageSideId, StageView};
 pub use status::StatusPane;
 
+use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders};
 use tt_git_core::time::relative_changes_at;
@@ -82,6 +83,12 @@ impl PaneId {
             PaneId::Details => "details",
         }
     }
+}
+
+/// The column where a pane drawn in `area` starts its title text, after the
+/// corner and the `[n] ` [`pane_block`] puts first.
+pub(crate) fn title_x(pane: PaneId, area: Rect) -> u16 {
+    area.x + 1 + format!("[{}] ", pane.number()).len() as u16
 }
 
 /// The bordered block every pane draws inside, titled `[n] title`.

@@ -1,8 +1,10 @@
 //! Top-level application state, update and draw.
 
+use std::time::{Duration, Instant};
+
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
@@ -27,6 +29,9 @@ mod panes;
 mod plugins;
 pub use panes::PaneRequest;
 pub use plugins::PluginOptions;
+
+/// The longest gap between the clicks of a double click.
+const DOUBLE_CLICK: Duration = Duration::from_millis(500);
 
 /// Commands always listed in the help bar after the focused pane's own.
 const GLOBAL_HELP: &[Command] = &[Command::FocusNext, Command::Help, Command::Quit];
@@ -156,6 +161,9 @@ pub struct App {
     clipboard: Option<String>,
     should_quit: bool,
     pane_areas: Vec<(PaneId, Rect)>,
+    /// The last left click on a pane's body: when, and which pane and row,
+    /// to spot a double click.
+    last_click: Option<(Instant, PaneId, usize)>,
     /// Something on screen may have changed since the last frame.
     dirty: bool,
     /// The last frame showed the terminal cursor (in a focused plugin pane).
@@ -226,6 +234,7 @@ impl App {
             clipboard: None,
             should_quit: false,
             pane_areas: Vec::new(),
+            last_click: None,
             dirty: true,
             cursor_shown: false,
             details_wanted: None,
@@ -373,16 +382,19 @@ impl App {
     }
 
     fn mouse(&mut self, m: MouseEvent) {
+        if self.error.is_none()
+            && let Some(Modal::Filter(panel)) = &mut self.modal
+        {
+            let outcome = panel.handle_mouse(m, self.layout_rects.0);
+            self.modal_outcome(outcome);
+            return;
+        }
         // Popups and floating plugin panes own the screen.
         if self.modal.is_some() || self.error.is_some() || self.show_help || self.panes.iter().any(|p| p.is_modal()) {
             return;
         }
-        let Some((pane, area)) = self
-            .pane_areas
-            .iter()
-            .copied()
-            .find(|(_, r)| r.contains(ratatui::layout::Position::new(m.column, m.row)))
-        else {
+        let pos = Position::new(m.column, m.row);
+        let Some((pane, area)) = self.pane_areas.iter().copied().find(|(_, r)| r.contains(pos)) else {
             return;
         };
         if pane == PaneId::Details && self.has_split_pane() {
@@ -404,25 +416,51 @@ impl App {
                 }
                 let before = self.focus;
                 self.focus = pane;
-                if let Some(row) = body_row {
-                    self.pane_mut(pane).on_click(row, &ctx);
+                let target = self.pane_mut(pane);
+                let handled = target.on_click_at(pos, &ctx);
+                let row = body_row.filter(|_| !handled);
+                if let Some(row) = row {
+                    target.on_click(row, &ctx);
                 }
                 if self.focus != before {
                     self.refresh_details(false);
                 }
+                let double = match row {
+                    Some(row) => self.is_double_click(pane, row),
+                    None => {
+                        self.last_click = None;
+                        false
+                    }
+                };
+                if double && pane == PaneId::Graph && row.is_some_and(|r| self.graph.has_commit_at_row(r)) {
+                    // As enter does: the commit fullscreen, files beside the diff.
+                    self.update(Action::Command(Command::ExpandDetails));
+                }
             }
             MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
-                let cmd = if m.kind == MouseEventKind::ScrollDown {
-                    Command::MoveDown
-                } else {
-                    Command::MoveUp
-                };
+                let down = m.kind == MouseEventKind::ScrollDown;
+                let cmd = if down { Command::MoveDown } else { Command::MoveUp };
                 for _ in 0..3 {
-                    self.pane_mut(pane).on_command(cmd, &ctx);
+                    let target = self.pane_mut(pane);
+                    if !target.on_scroll_at(pos, down, &ctx) {
+                        target.on_command(cmd, &ctx);
+                    }
                 }
             }
             _ => {}
         }
+    }
+
+    /// Notes a click on `pane`'s body `row`, returning whether it's the
+    /// second of a double click: the same row clicked again soon after.
+    /// A third click starts over.
+    fn is_double_click(&mut self, pane: PaneId, row: usize) -> bool {
+        let now = Instant::now();
+        let double = self
+            .last_click
+            .is_some_and(|(at, p, r)| p == pane && r == row && now.duration_since(at) <= DOUBLE_CLICK);
+        self.last_click = (!double).then_some((now, pane, row));
+        double
     }
 
     fn pane_mut(&mut self, pane: PaneId) -> &mut dyn Component {
@@ -451,36 +489,8 @@ impl App {
             return;
         }
         if let Some(modal) = &mut self.modal {
-            match modal.handle_key(combo) {
-                ModalOutcome::Open => {}
-                ModalOutcome::Cancelled => self.modal = None,
-                ModalOutcome::Run(op) => {
-                    self.modal = None;
-                    self.update(Action::Run(op));
-                }
-                ModalOutcome::Command(cmd) => {
-                    self.modal = None;
-                    self.run_command(cmd);
-                }
-                ModalOutcome::Filter(filter) => {
-                    self.modal = None;
-                    self.set_graph_filter(filter);
-                }
-                ModalOutcome::PluginAction(action) => {
-                    self.modal = None;
-                    let _ = self.invoke_plugin_action(&action, "palette");
-                }
-                ModalOutcome::PluginPane(plugin, entry) => {
-                    self.modal = None;
-                    let req = PaneRequest {
-                        focus: true,
-                        ..Default::default()
-                    };
-                    if let Err(e) = self.open_pane(&plugin, &entry, req) {
-                        self.error = Some(e);
-                    }
-                }
-            }
+            let outcome = modal.handle_key(combo);
+            self.modal_outcome(outcome);
             return;
         }
         if self.show_help {
@@ -500,6 +510,40 @@ impl App {
         }
         if let Some(cmd) = self.keymap.lookup(context, combo) {
             self.update(Action::Command(cmd));
+        }
+    }
+
+    /// Acts on what the open modal made of a key or click.
+    fn modal_outcome(&mut self, outcome: ModalOutcome) {
+        match outcome {
+            ModalOutcome::Open => {}
+            ModalOutcome::Cancelled => self.modal = None,
+            ModalOutcome::Run(op) => {
+                self.modal = None;
+                self.update(Action::Run(op));
+            }
+            ModalOutcome::Command(cmd) => {
+                self.modal = None;
+                self.run_command(cmd);
+            }
+            ModalOutcome::Filter(filter) => {
+                self.modal = None;
+                self.set_graph_filter(filter);
+            }
+            ModalOutcome::PluginAction(action) => {
+                self.modal = None;
+                let _ = self.invoke_plugin_action(&action, "palette");
+            }
+            ModalOutcome::PluginPane(plugin, entry) => {
+                self.modal = None;
+                let req = PaneRequest {
+                    focus: true,
+                    ..Default::default()
+                };
+                if let Err(e) = self.open_pane(&plugin, &entry, req) {
+                    self.error = Some(e);
+                }
+            }
         }
     }
 

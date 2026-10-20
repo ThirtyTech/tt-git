@@ -135,9 +135,11 @@ command palette, which lists built-in commands and plugin actions.
 | | `c` | commit what's staged |
 | | `esc` | back to the status pane |
 
-The mouse also works: click a pane or row to focus and select it, use the
-wheel to scroll the pane under the pointer, and `ctrl`+click a link in the
-details pane. Every binding can be changed; see
+The mouse also works: click a pane or row to focus and select it,
+double-click a commit to open its files fullscreen, click a tab in the
+branches pane's title, a file in the changed-files view or an entry
+in the graph's filter popup, use the wheel to scroll the pane under the
+pointer, and `ctrl`+click a link in the details pane. Every binding can be changed; see
 [docs/configuration.md](docs/configuration.md).
 
 ## Documentation

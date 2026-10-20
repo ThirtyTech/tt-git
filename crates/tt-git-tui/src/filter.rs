@@ -3,9 +3,9 @@
 
 use std::collections::HashSet;
 
-use crossterm::event::{KeyCode, KeyModifiers};
+use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph};
@@ -20,6 +20,9 @@ use crate::widgets::{fit, truncate};
 
 /// Rows of choices shown at once.
 const ROWS: usize = 12;
+/// The row inside the border the choices start on, under the tabs, the
+/// input and a blank line.
+const FIRST_CHOICE_ROW: usize = 3;
 
 /// The panel's two lists, switched with `tab`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -154,6 +157,12 @@ impl List {
         self.matches.get(self.selected).map(|&i| &self.items()[i])
     }
 
+    /// The position in `matches` of the first choice shown, scrolled so
+    /// the selection is in view.
+    fn first_shown(&self) -> usize {
+        self.selected.saturating_sub(ROWS - 1)
+    }
+
     fn step(&mut self, up: bool, by: usize) {
         let last = self.matches.len().saturating_sub(1);
         self.selected = if up {
@@ -269,14 +278,65 @@ impl FilterPanel {
         ModalOutcome::Open
     }
 
-    pub fn draw(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        // A fixed height, so the panel doesn't jump about while typing.
-        let width = 70.min(area.width);
-        let height = (ROWS as u16 + 7).min(area.height);
-        let popup = Rect {
-            y: area.y + area.height.saturating_sub(height) / 4,
-            ..crate::app::centered(area, width, height)
+    /// A click on a choice applies it as enter would, a click on a tab
+    /// switches to it, and a click outside the panel closes it. The wheel
+    /// moves the selection. `area` is what [`draw`](Self::draw) was given.
+    pub fn handle_mouse(&mut self, m: MouseEvent, area: Rect) -> ModalOutcome {
+        let popup = popup_area(area);
+        let pos = Position::new(m.column, m.row);
+        match m.kind {
+            MouseEventKind::Down(MouseButton::Left) if !popup.contains(pos) => ModalOutcome::Cancelled,
+            MouseEventKind::Down(MouseButton::Left) => {
+                let inner = Block::bordered().inner(popup);
+                if !inner.contains(pos) {
+                    return ModalOutcome::Open;
+                }
+                let row = (pos.y - inner.y) as usize;
+                if row == 0 {
+                    let mut x = inner.x;
+                    for tab in FilterTab::ALL {
+                        if tab.index() > 0 {
+                            x += 3;
+                        }
+                        let width = self.tab_text(tab).width() as u16;
+                        if (x..x + width).contains(&pos.x) {
+                            self.tab = tab;
+                        }
+                        x += width;
+                    }
+                    return ModalOutcome::Open;
+                }
+                let list = self.list_mut();
+                let Some(shown) = row.checked_sub(FIRST_CHOICE_ROW).filter(|&r| r < ROWS) else {
+                    return ModalOutcome::Open;
+                };
+                let picked = list.first_shown() + shown;
+                if picked >= list.matches.len() {
+                    return ModalOutcome::Open;
+                }
+                list.selected = picked;
+                self.submit().map_or(ModalOutcome::Open, ModalOutcome::Filter)
+            }
+            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
+                self.list_mut().step(m.kind == MouseEventKind::ScrollUp, 3);
+                ModalOutcome::Open
+            }
+            _ => ModalOutcome::Open,
+        }
+    }
+
+    /// A tab's name and what the filter has for it now.
+    fn tab_text(&self, tab: FilterTab) -> String {
+        let now = match (tab, tab.value(&self.current)) {
+            (_, None) => "any",
+            (FilterTab::Author, Some(ident)) => author_name(ident),
+            (FilterTab::File, Some(path)) => path,
         };
+        format!("{}: {now}", tab.label())
+    }
+
+    pub fn draw(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
+        let popup = popup_area(area);
         frame.render_widget(Clear, popup);
         let block = Block::bordered()
             .border_type(BorderType::Rounded)
@@ -290,17 +350,12 @@ impl FilterPanel {
             if !tabs.is_empty() {
                 tabs.push(Span::styled(" · ", theme.muted));
             }
-            let now = match (tab, tab.value(&self.current)) {
-                (_, None) => "any",
-                (FilterTab::Author, Some(ident)) => author_name(ident),
-                (FilterTab::File, Some(path)) => path,
-            };
             let style = if tab == self.tab {
                 theme.help_key.add_modifier(Modifier::UNDERLINED)
             } else {
                 theme.muted
             };
-            tabs.push(Span::styled(format!("{}: {now}", tab.label()), style));
+            tabs.push(Span::styled(self.tab_text(tab), style));
         }
 
         let count = match &list.items {
@@ -334,8 +389,7 @@ impl FilterPanel {
                 lines.push(Line::styled(msg, theme.muted));
             }
             Some(Ok(items)) => {
-                let start = list.selected.saturating_sub(ROWS - 1);
-                for (pos, &i) in list.matches.iter().enumerate().skip(start).take(ROWS) {
+                for (pos, &i) in list.matches.iter().enumerate().skip(list.first_shown()).take(ROWS) {
                     let choice = &items[i];
                     let hint_w = choice.hint.width();
                     let label_w = inner_width.saturating_sub(hint_w + 1);
@@ -368,6 +422,17 @@ impl FilterPanel {
             theme.muted,
         ));
         frame.render_widget(Paragraph::new(lines).block(block), popup);
+    }
+}
+
+/// Where the panel goes in `area`: a fixed height, so it doesn't jump
+/// about while typing.
+fn popup_area(area: Rect) -> Rect {
+    let width = 70.min(area.width);
+    let height = (ROWS as u16 + 7).min(area.height);
+    Rect {
+        y: area.y + area.height.saturating_sub(height) / 4,
+        ..crate::app::centered(area, width, height)
     }
 }
 

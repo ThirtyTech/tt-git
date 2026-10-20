@@ -1,7 +1,7 @@
 //! The pane abstraction.
 
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context, KeyCombo};
@@ -40,6 +40,20 @@ pub trait Component {
 
     /// A click on the `row`-th visible line of the pane's body.
     fn on_click(&mut self, _row: usize, _ctx: &Ctx) {}
+
+    /// A click at screen cell `pos`, tried before [`on_click`](Self::on_click)
+    /// for panes with more than one list, or tabs in their title. Returns
+    /// whether it was handled.
+    fn on_click_at(&mut self, _pos: Position, _ctx: &Ctx) -> bool {
+        false
+    }
+
+    /// The mouse wheel at screen cell `pos`, tried before the pane gets
+    /// [`Command::MoveUp`] or [`Command::MoveDown`]. Returns whether it was
+    /// handled.
+    fn on_scroll_at(&mut self, _pos: Position, _down: bool, _ctx: &Ctx) -> bool {
+        false
+    }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme);
 }

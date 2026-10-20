@@ -1,5 +1,6 @@
 use tt_git_testkit::{Sandbox, TestDriver};
 use tt_git_tui::Config;
+use tt_git_tui::filter::FilterTab;
 use tt_git_tui::modal::Modal;
 use tt_git_tui::panes::PaneId;
 
@@ -97,4 +98,44 @@ fn filtering_to_nothing_says_so() {
     assert!(t.app().graph().is_filtered());
     t.press("esc");
     assert!(!t.app().graph().is_filtered());
+}
+
+#[test]
+fn filter_panel_takes_clicks() {
+    let sb = two_authors();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
+    let tab = |t: &TestDriver| match t.app().modal() {
+        Some(Modal::Filter(panel)) => Some(panel.tab()),
+        _ => None,
+    };
+
+    t.press("f");
+    t.click_text("File: any");
+    assert_eq!(tab(&t), Some(FilterTab::File));
+    t.click_text("Author: any");
+    assert_eq!(tab(&t), Some(FilterTab::Author));
+
+    // Clicking outside the panel closes it.
+    t.click(0, 0, false);
+    assert!(t.app().modal().is_none());
+    assert_eq!(t.app().graph().commits().len(), 4);
+
+    // Clicking a choice applies it.
+    t.press("f");
+    t.click_text("Alice <alice@example.com>");
+    assert!(t.app().modal().is_none());
+    assert_eq!(summaries(&t), ["alice guide", "alice lib"]);
+    assert_eq!(t.app().focus(), PaneId::Graph);
+
+    t.press("f").press("tab");
+    t.click_text("src/lib.rs");
+    assert_eq!(summaries(&t), ["alice lib"]);
+
+    // The wheel moves the selection: down past the end, then back to
+    // "Any file" at the top.
+    t.press("f").press("tab");
+    let (x, y) = t.find_text("Any file").unwrap();
+    t.scroll(x, y, true).scroll(x, y, false).scroll(x, y, false);
+    t.press("enter");
+    assert_eq!(summaries(&t), ["alice guide", "alice lib"]);
 }

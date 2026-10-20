@@ -185,6 +185,40 @@ impl TestDriver {
         self.click(area.x + 2, area.y + 1 + row, false)
     }
 
+    /// Clicks the first cell of the first place `text` is on screen.
+    #[track_caller]
+    pub fn click_text(&mut self, text: &str) -> &mut Self {
+        let (x, y) = self
+            .find_text(text)
+            .unwrap_or_else(|| panic!("{text:?} is not on screen:\n{}", self.screen()));
+        self.click(x, y, false)
+    }
+
+    /// The cell where `text` first starts on screen, top to bottom.
+    pub fn find_text(&self, text: &str) -> Option<(u16, u16)> {
+        let buf = self.buffer();
+        for y in buf.area.top()..buf.area.bottom() {
+            let mut line = String::new();
+            // Byte offset in `line` at which each drawn cell starts.
+            let mut starts = Vec::new();
+            let mut skip = 0;
+            for x in buf.area.left()..buf.area.right() {
+                if skip > 0 {
+                    skip -= 1;
+                    continue;
+                }
+                let sym = buf[(x, y)].symbol();
+                starts.push((line.len(), x));
+                line.push_str(sym);
+                skip = sym.width().saturating_sub(1);
+            }
+            if let Some(at) = line.find(text) {
+                return starts.iter().find(|(b, _)| *b == at).map(|&(_, x)| (x, y));
+            }
+        }
+        None
+    }
+
     /// Mouse wheel over (`x`, `y`).
     pub fn scroll(&mut self, x: u16, y: u16, down: bool) -> &mut Self {
         use crossterm::event::{Event, KeyModifiers, MouseEvent, MouseEventKind};

@@ -1,6 +1,6 @@
 use crossterm::event::KeyCode;
 use ratatui::Frame;
-use ratatui::layout::Rect;
+use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
@@ -9,7 +9,7 @@ use tt_git_core::time::{SharedClock, relative};
 use tt_git_core::{BaseBranches, BranchEntry, BranchState, GitRef, RefKind, Stash};
 use unicode_width::UnicodeWidthStr;
 
-use super::{BranchFocus, DrawnDates, PaneId, pane_block};
+use super::{BranchFocus, DrawnDates, PaneId, pane_block, title_x};
 use crate::action::Action;
 use crate::component::{Component, EventState};
 use crate::jobs::Ctx;
@@ -88,6 +88,9 @@ pub struct BranchesPane {
     /// One per tab, so switching back returns to the same row.
     cursors: [Cursor; BranchTab::ALL.len()],
     dates: DrawnDates,
+    /// Where each tab's name was drawn in the title last frame: its row and
+    /// columns, for clicks.
+    tab_cells: Vec<(BranchTab, u16, std::ops::Range<u16>)>,
 }
 
 impl BranchesPane {
@@ -104,6 +107,7 @@ impl BranchesPane {
             editing_filter: false,
             cursors: [Cursor::default(); BranchTab::ALL.len()],
             dates: DrawnDates::default(),
+            tab_cells: Vec::new(),
         }
     }
 
@@ -261,7 +265,11 @@ impl BranchesPane {
                 break;
             }
         }
-        self.tab = next;
+        self.select_tab(next, ctx);
+    }
+
+    fn select_tab(&mut self, tab: BranchTab, ctx: &Ctx) {
+        self.tab = tab;
         self.refilter();
         self.announce(ctx);
     }
@@ -666,11 +674,15 @@ impl BranchesPane {
 
     /// `Branches 12 · Tags 3 · Unmerged 4 · Merged 9` with the current tab
     /// underlined, then the base everywhere but the full list.
-    fn title(&self, theme: &Theme) -> Line<'static> {
+    /// The title, and the columns each tab's name takes in it.
+    fn title(&self, theme: &Theme) -> (Line<'static>, Vec<(BranchTab, std::ops::Range<u16>)>) {
         let mut spans = Vec::new();
+        let mut cells = Vec::new();
+        let mut x = 0;
         for tab in BranchTab::ALL.into_iter().filter(|t| self.shows_tab(*t)) {
             if !spans.is_empty() {
                 spans.push(Span::styled(" · ", theme.muted));
+                x += 3;
             }
             let count = if tab.compares() && self.base.is_none() {
                 String::new()
@@ -682,7 +694,11 @@ impl BranchesPane {
             } else {
                 theme.muted
             };
-            spans.push(Span::styled(format!("{}{count}", tab.label()), style));
+            let text = format!("{}{count}", tab.label());
+            let width = text.width() as u16;
+            cells.push((tab, x..x + width));
+            x += width;
+            spans.push(Span::styled(text, style));
         }
         if !matches!(self.tab, BranchTab::All | BranchTab::Stash)
             && let Some(base) = &self.base
@@ -693,7 +709,7 @@ impl BranchesPane {
             let cursor = if self.editing_filter { "█" } else { "" };
             spans.push(Span::raw(format!(" /{}{cursor}", self.filter)));
         }
-        Line::from(spans)
+        (Line::from(spans), cells)
     }
 
     fn empty_message(&self) -> String {
@@ -798,6 +814,20 @@ impl Component for BranchesPane {
         }
     }
 
+    fn on_click_at(&mut self, pos: Position, ctx: &Ctx) -> bool {
+        let Some(&(tab, ..)) = self
+            .tab_cells
+            .iter()
+            .find(|(_, y, xs)| *y == pos.y && xs.contains(&pos.x))
+        else {
+            return false;
+        };
+        if tab != self.tab {
+            self.select_tab(tab, ctx);
+        }
+        true
+    }
+
     fn wants_text_input(&self) -> bool {
         self.editing_filter
     }
@@ -834,7 +864,16 @@ impl Component for BranchesPane {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
-        let block = pane_block(PaneId::Branches, self.title(theme), focused, theme);
+        let (title, cells) = self.title(theme);
+        // Past the right corner the title is cut off.
+        let start = title_x(PaneId::Branches, area);
+        let end = area.right().saturating_sub(1);
+        self.tab_cells = cells
+            .into_iter()
+            .map(|(tab, xs)| (tab, area.y, (start + xs.start).min(end)..(start + xs.end).min(end)))
+            .filter(|(_, _, xs)| !xs.is_empty())
+            .collect();
+        let block = pane_block(PaneId::Branches, title, focused, theme);
         let inner = block.inner(area);
         frame.render_widget(block, area);
         self.dates = DrawnDates::new(self.clock.now());

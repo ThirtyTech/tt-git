@@ -233,6 +233,11 @@ impl GraphPane {
         self.cursor.selected
     }
 
+    /// Whether the `row`-th body line drawn last frame is a commit.
+    pub fn has_commit_at_row(&self, row: usize) -> bool {
+        self.cursor.offset + row < self.commits.len()
+    }
+
     /// Starts a new load and returns its token, whose generation incoming
     /// batches must carry. The current rows stay visible until the first
     /// batch arrives.

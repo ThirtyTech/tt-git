@@ -115,6 +115,10 @@ switches between them. You can set one or both, and a commit has to match both.
 
 </Steps>
 
+With the mouse, click an entry to filter by it straight away, or click **Author** or **File** to
+switch tabs. The wheel moves the selection, and a click outside the popup closes it without
+changing the filter.
+
 - **Authors** are listed with the most commits first. Each person appears once, even if they've
   committed under several email addresses, as long as your `.mailmap` says they're the same person.
 - **Files** lists every tracked file, with each folder listed just before the first file in it. Pick
@@ -216,5 +220,7 @@ See [How tt-git uses git](/reference/how-it-works/#graph) for the details, and
 | <kbd>c</kbd> | Copy the commit hash |
 | <kbd>+</kbd> | Zoom the graph fullscreen and back |
 
-The mouse works too: click a row to select it, and use the wheel to scroll. Every key can be changed;
+The mouse works too: click a row to select it, double-click it to open the commit fullscreen as
+<kbd>enter</kbd> does, and use the wheel to scroll. In **Filter graph**, click
+an author or file to filter by it. Every key can be changed;
 see [Key bindings](/configuration/keys/).

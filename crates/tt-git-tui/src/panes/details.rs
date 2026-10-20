@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use tt_git_core::{CommitFile, FileState, StageSide, StatusEntry};
@@ -41,6 +41,9 @@ struct FilesView {
     cursor: Cursor,
     /// Diff lines already loaded, by file index.
     diffs: HashMap<usize, Arc<Vec<String>>>,
+    /// Where the file rows and the diff were drawn last frame, for the mouse.
+    rows_area: Rect,
+    diff_area: Rect,
 }
 
 /// Commit details or file diff for the current selection.
@@ -281,6 +284,7 @@ impl DetailsPane {
                 Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(list_block.inner(list_area));
             frame.render_widget(list_block, list_area);
             frame.render_widget(Paragraph::new(title), title_area);
+            view.rows_area = rows_area;
             draw_file_list(view, frame, rows_area, focused, theme);
             Rect {
                 x: right.x + 1,
@@ -296,7 +300,8 @@ impl DetailsPane {
                 .borders(Borders::TOP)
                 .border_style(theme.border)
                 .title(title);
-            draw_file_list(view, frame, list_block.inner(list_area), focused, theme);
+            view.rows_area = list_block.inner(list_area);
+            draw_file_list(view, frame, view.rows_area, focused, theme);
             frame.render_widget(list_block, list_area);
             top
         };
@@ -325,6 +330,7 @@ impl DetailsPane {
         frame.render_widget(Paragraph::new(header), header_area);
         let rule = "─".repeat(rule_area.width as usize);
         frame.render_widget(Paragraph::new(rule).style(theme.border), rule_area);
+        view.diff_area = diff_area;
         self.draw_text(frame, diff_area, theme);
     }
 
@@ -437,6 +443,33 @@ impl Component for DetailsPane {
             return EventState::Consumed;
         }
         self.scroll(cmd)
+    }
+
+    /// In the files view, a click on a file shows its diff.
+    fn on_click_at(&mut self, pos: Position, ctx: &Ctx) -> bool {
+        if self.stage.is_some() {
+            return false;
+        }
+        let Some(view) = &mut self.files else { return false };
+        if !view.rows_area.contains(pos) {
+            return false;
+        }
+        let before = view.cursor.selected;
+        let row = (pos.y - view.rows_area.y) as usize;
+        if view.cursor.click(row, view.files.len()) && view.cursor.selected != before {
+            self.show_selected_file(ctx);
+        }
+        true
+    }
+
+    /// In the files view, the wheel scrolls the diff when over it (and
+    /// moves through the files elsewhere, like the arrow keys).
+    fn on_scroll_at(&mut self, pos: Position, down: bool, _ctx: &Ctx) -> bool {
+        if self.stage.is_some() || !self.files.as_ref().is_some_and(|v| v.diff_area.contains(pos)) {
+            return false;
+        }
+        self.scroll(if down { Command::MoveDown } else { Command::MoveUp });
+        true
     }
 
     fn commands(&self) -> &[Command] {
