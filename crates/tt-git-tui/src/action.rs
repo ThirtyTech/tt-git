@@ -12,6 +12,7 @@ use crate::filter::{Choice, FilterTab};
 use crate::keymap::Command;
 use crate::modal::{GitOp, Modal};
 use crate::panes::{BranchFocus, DetailsSubject};
+use crate::syntax::{HunkTokens, LineTokens};
 
 /// Refs and HEAD, loaded together so labels and branch lists agree.
 #[derive(Debug, Clone)]
@@ -155,6 +156,8 @@ pub enum Action {
     DetailsLoaded {
         subject: DetailsSubject,
         text: String,
+        /// The code in `text`'s diffs, line by line.
+        syntax: LineTokens,
     },
     /// A commit's header and changed files, for the details files view.
     CommitFilesLoaded {
@@ -172,12 +175,15 @@ pub enum Action {
         oid: String,
         path: String,
         text: String,
+        syntax: LineTokens,
     },
-    /// Both sides of a file's changes, for the staging view.
+    /// Both sides of a file's changes, for the staging view, with the code
+    /// in each side's hunks.
     StageDiffsLoaded {
         entry: StatusEntry,
         unstaged: StageSide,
         staged: StageSide,
+        syntax: (HunkTokens, HunkTokens),
     },
     /// Blame `path` as of `rev` (the working tree when `None`) for blame
     /// load `id`.
@@ -190,6 +196,8 @@ pub enum Action {
     BlameLoaded {
         id: u64,
         result: Result<tt_git_core::Blame, String>,
+        /// The code, line by line.
+        syntax: LineTokens,
     },
     /// Load a commit's full message, for the blame view's commit details.
     LoadCommitMessage(String),

@@ -16,6 +16,8 @@ pub struct Config {
     pub watch: bool,
     /// Click to focus/select, wheel to scroll, ctrl+click links.
     pub mouse: bool,
+    /// Color code by language in blame and diffs.
+    pub syntax: bool,
     pub keys: KeysConfig,
     pub layout: Layout,
     pub graph: GraphConfig,
@@ -63,6 +65,7 @@ impl Default for Config {
         Self {
             watch: true,
             mouse: true,
+            syntax: true,
             keys: KeysConfig::default(),
             layout: Layout::default(),
             graph: GraphConfig::default(),
@@ -149,6 +152,8 @@ mod tests {
         .unwrap();
         assert!(!cfg.mouse);
         assert!(cfg.watch);
+        assert!(cfg.syntax);
+        assert!(!Config::parse("syntax = false").unwrap().syntax);
         let km = cfg.keymap().unwrap();
         assert_eq!(km.lookup(Context::Global, "x".parse().unwrap()), Some(Command::Quit));
     }

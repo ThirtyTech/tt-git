@@ -15,8 +15,9 @@ use crate::editor::EditTarget;
 use crate::jobs::Ctx;
 use crate::keymap::Command;
 use crate::modal::{GitOp, Modal};
+use crate::syntax::{self, HunkTokens};
 use crate::theme::Theme;
-use crate::widgets::truncate;
+use crate::widgets::{code_spans, truncate};
 
 /// Below this width the two sides stack instead of sitting side by side.
 const SIDE_BY_SIDE_WIDTH: u16 = 140;
@@ -57,13 +58,15 @@ enum Row {
 #[derive(Debug, Default)]
 struct SideView {
     diff: Option<StageSide>,
+    /// The code in the diff's hunks.
+    syntax: HunkTokens,
     rows: Vec<Row>,
     offset: usize,
     height: usize,
 }
 
 impl SideView {
-    fn set(&mut self, diff: StageSide) {
+    fn set(&mut self, diff: StageSide, syntax: HunkTokens) {
         self.rows.clear();
         if let Ok(d) = &diff {
             for (h, hunk) in d.hunks.iter().enumerate() {
@@ -73,6 +76,7 @@ impl SideView {
         }
         self.offset = self.offset.min(self.rows.len().saturating_sub(1));
         self.diff = Some(diff);
+        self.syntax = syntax;
     }
 
     fn file_diff(&self) -> Option<&FileDiff> {
@@ -193,11 +197,19 @@ impl StageView {
     /// Takes newly loaded diffs, keeping the selection near where it was
     /// (after staging a hunk, on the hunk that followed it). If the active
     /// side has nothing left, the other side becomes active.
-    pub fn set_diffs(&mut self, entry: StatusEntry, unstaged: StageSide, staged: StageSide) {
+    /// Shows `entry`'s changes, with `syntax` the code in each side's hunks
+    /// (unstaged, staged).
+    pub fn set_diffs(
+        &mut self,
+        entry: StatusEntry,
+        unstaged: StageSide,
+        staged: StageSide,
+        syntax: (HunkTokens, HunkTokens),
+    ) {
         let first = !self.loaded();
         self.entry = entry;
-        self.unstaged.set(unstaged);
-        self.staged.set(staged);
+        self.unstaged.set(unstaged, syntax.0);
+        self.staged.set(staged, syntax.1);
         self.applying = false;
         self.anchor = None;
         if first && !self.active().has_content()
@@ -514,29 +526,38 @@ impl StageView {
         let lines: Vec<Line> = view.rows[start..end]
             .iter()
             .map(|row| {
-                let (text, style, picked) = match *row {
+                let (line, picked) = match *row {
                     Row::Heading(h) => (
-                        diff.hunks[h].heading(),
-                        theme.diff_hunk,
+                        Line::from(Span::styled(truncate(&diff.hunks[h].heading(), width), theme.diff_hunk)),
                         !self.line_mode && h == self.hunk,
                     ),
                     Row::Line(h, l) => {
                         let line = &diff.hunks[h].lines[l];
-                        let (prefix, style) = match line.kind {
-                            LineKind::Context => (' ', Style::new()),
-                            LineKind::Add => ('+', theme.diff_add),
-                            LineKind::Del => ('-', theme.diff_del),
+                        let (prefix, style, back) = match line.kind {
+                            LineKind::Context => (" ", Style::new(), Style::new()),
+                            LineKind::Add => ("+", theme.diff_add, theme.diff_add_line),
+                            LineKind::Del => ("-", theme.diff_del, theme.diff_del_line),
                         };
-                        let body = line.text.strip_suffix('\r').unwrap_or(&line.text).replace('\t', "    ");
+                        let body = syntax::shown(&line.text);
                         let picked = if self.line_mode {
                             line.is_change() && self.picked((h, l))
                         } else {
                             h == self.hunk
                         };
-                        (format!("{prefix}{body}"), style, picked)
+                        let tokens = view.syntax.get(h).and_then(|t| t.get(l)).and_then(Option::as_ref);
+                        let line = match tokens {
+                            Some(tokens) if width > 0 => {
+                                let code =
+                                    code_spans(&body, Some(tokens), Style::new(), theme, width - 1, line.is_change());
+                                let mut spans = vec![Span::styled(prefix, style)];
+                                spans.extend(code.into_iter().map(|s| Span::styled(s.content.into_owned(), s.style)));
+                                Line::from(spans).style(back)
+                            }
+                            _ => Line::from(Span::styled(truncate(&format!("{prefix}{body}"), width), style)),
+                        };
+                        (line, picked)
                     }
                 };
-                let line = Line::from(Span::styled(truncate(&text, width), style));
                 if active && picked {
                     line.patch_style(highlight)
                 } else {

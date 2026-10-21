@@ -871,8 +871,8 @@ impl App {
                     self.show_commit(oid);
                 }
             }
-            Action::DetailsLoaded { subject, text } => {
-                self.details.set_content(&subject, &text);
+            Action::DetailsLoaded { subject, text, syntax } => {
+                self.details.set_content(&subject, &text, syntax);
                 match subject {
                     DetailsSubject::Commit(oid) => {
                         self.details_finished(0, |l| matches!(l, DetailsLoad::Commit(o) if *o == oid))
@@ -889,9 +889,11 @@ impl App {
             Action::CommitFilesLoaded { oid, header, files } => {
                 match files {
                     Ok(files) => self.details.set_commit_files(&oid, &header, files, &self.ctx),
-                    Err(e) => self
-                        .details
-                        .set_content(&DetailsSubject::CommitFiles(oid.clone()), &format!("{header}\n{e}")),
+                    Err(e) => self.details.set_content(
+                        &DetailsSubject::CommitFiles(oid.clone()),
+                        &format!("{header}\n{e}"),
+                        Vec::new(),
+                    ),
                 }
                 self.details_finished(1, |l| matches!(l, DetailsLoad::CommitFiles(o) if *o == oid));
             }
@@ -900,8 +902,13 @@ impl App {
                     self.spawn_file_diff(item);
                 }
             }
-            Action::CommitFileDiffLoaded { oid, path, text } => {
-                self.details.set_file_diff(&oid, &path, &text);
+            Action::CommitFileDiffLoaded {
+                oid,
+                path,
+                text,
+                syntax,
+            } => {
+                self.details.set_file_diff(&oid, &path, &text, syntax);
                 if let Some(next) = self.file_diff_job.finished(|(o, f)| *o == oid && f.path == path) {
                     self.spawn_file_diff(next);
                 }
@@ -910,19 +917,22 @@ impl App {
                 entry,
                 unstaged,
                 staged,
+                syntax,
             } => {
                 let path = entry.path.clone();
-                self.details.set_stage_diffs(entry, unstaged, staged);
+                self.details.set_stage_diffs(entry, unstaged, staged, syntax);
                 self.details_finished(3, |l| matches!(l, DetailsLoad::Stage(e) if e.path == path));
             }
             Action::LoadBlame { id, rev, path } => {
                 let repo = self.repo.clone();
-                self.ctx.spawn(move || loaders::load_blame(repo, id, rev, path));
+                let highlight = self.config.syntax;
+                self.ctx
+                    .spawn(move || loaders::load_blame(repo, id, rev, path, highlight));
             }
-            Action::BlameLoaded { id, result } => {
+            Action::BlameLoaded { id, result, syntax } => {
                 let ctx = self.ctx.clone();
                 if let Some(view) = self.details.blame_mut() {
-                    view.set_blame(id, result, &ctx);
+                    view.set_blame(id, result, syntax, &ctx);
                 }
             }
             Action::LoadCommitMessage(oid) => {
@@ -1539,12 +1549,13 @@ impl App {
         };
         let repo = self.repo.clone();
         let job = load.clone();
+        let highlight = self.config.syntax;
         let done = self.ctx.spawn_watched(move || match job {
-            DetailsLoad::Commit(oid) => loaders::load_commit_details(repo, oid),
+            DetailsLoad::Commit(oid) => loaders::load_commit_details(repo, oid, highlight),
             DetailsLoad::CommitFiles(oid) => loaders::load_commit_files(repo, oid),
-            DetailsLoad::File(entry) => loaders::load_file_diff(repo, entry),
-            DetailsLoad::Stage(entry) => loaders::load_stage_diffs(repo, entry),
-            DetailsLoad::Stash(stash) => loaders::load_stash_details(repo, stash),
+            DetailsLoad::File(entry) => loaders::load_file_diff(repo, entry, highlight),
+            DetailsLoad::Stage(entry) => loaders::load_stage_diffs(repo, entry, highlight),
+            DetailsLoad::Stash(stash) => loaders::load_stash_details(repo, stash, highlight),
         });
         self.details_jobs[kind].started(load, done);
     }
@@ -1566,9 +1577,10 @@ impl App {
             return;
         }
         let repo = self.repo.clone();
+        let highlight = self.config.syntax;
         let done = self
             .ctx
-            .spawn_watched(move || loaders::load_commit_file_diff(repo, oid, file));
+            .spawn_watched(move || loaders::load_commit_file_diff(repo, oid, file, highlight));
         self.file_diff_job.started(item, done);
     }
 

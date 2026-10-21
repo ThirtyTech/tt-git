@@ -581,7 +581,7 @@ impl App {
         };
         let subject = DetailsSubject::Text("plugin-logs".into());
         self.details.request(subject.clone(), "Plugin logs".into());
-        self.details.set_content(&subject, &text);
+        self.details.set_content(&subject, &text, Vec::new());
         self.focus = PaneId::Details;
     }
 

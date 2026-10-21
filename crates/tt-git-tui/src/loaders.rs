@@ -12,6 +12,8 @@ use crate::filter::{FilterTab, author_choices, file_choices};
 use crate::jobs::Ctx;
 use crate::modal::GitOp;
 use crate::panes::{BranchFocus, DetailsSubject, GraphScope, LoadToken};
+use crate::syntax::{self, LineTokens};
+use crate::widgets::{expand_tabs, split_lines};
 
 /// Commits per `GraphBatch`, so the first screenful appears quickly.
 const GRAPH_BATCH: usize = 1000;
@@ -20,6 +22,16 @@ const MAX_DETAIL_LINES: usize = 5000;
 
 fn message(e: GitError) -> String {
     e.to_string()
+}
+
+/// The code in `text`'s diffs, as the details pane splits it into lines,
+/// if `highlight`.
+fn diff_syntax(text: &str, highlight: bool) -> LineTokens {
+    if highlight {
+        syntax::diff_text(&split_lines(text))
+    } else {
+        Vec::new()
+    }
 }
 
 /// `config` says which branches the merged and unmerged lists leave out.
@@ -326,7 +338,7 @@ fn head_upstream(repo: &Repo) -> Option<String> {
 const COMMIT_HEADER_FORMAT: &str =
     "--format=commit %H%nParents: %P%nAuthor: %aN <%aE>%nDate:   %ad%nCommitter: %cN <%cE>%n%n%w(0,4,4)%B";
 
-pub fn load_commit_details(repo: Repo, oid: String) -> Action {
+pub fn load_commit_details(repo: Repo, oid: String, highlight: bool) -> Action {
     let text = match repo.git().run(&[
         "show",
         COMMIT_HEADER_FORMAT,
@@ -343,6 +355,7 @@ pub fn load_commit_details(repo: Repo, oid: String) -> Action {
     };
     Action::DetailsLoaded {
         subject: DetailsSubject::Commit(oid),
+        syntax: diff_syntax(&text, highlight),
         text,
     }
 }
@@ -364,7 +377,7 @@ pub fn load_commit_files(repo: Repo, oid: String) -> Action {
     Action::CommitFilesLoaded { oid, header, files }
 }
 
-pub fn load_commit_file_diff(repo: Repo, oid: String, file: CommitFile) -> Action {
+pub fn load_commit_file_diff(repo: Repo, oid: String, file: CommitFile, highlight: bool) -> Action {
     let text = match repo.commit_file_diff(&oid, &file) {
         Ok(t) if t.trim().is_empty() => format!("{}: no textual changes", file.path),
         Ok(t) => cap_lines(t),
@@ -373,6 +386,7 @@ pub fn load_commit_file_diff(repo: Repo, oid: String, file: CommitFile) -> Actio
     Action::CommitFileDiffLoaded {
         oid,
         path: file.path,
+        syntax: diff_syntax(&text, highlight),
         text,
     }
 }
@@ -492,7 +506,7 @@ pub fn plan_undo(repo: Repo) -> Action {
 /// Largest untracked file shown in full in the details pane.
 const MAX_UNTRACKED_PREVIEW: usize = 256 * 1024;
 
-pub fn load_file_diff(repo: Repo, entry: tt_git_core::StatusEntry) -> Action {
+pub fn load_file_diff(repo: Repo, entry: tt_git_core::StatusEntry, highlight: bool) -> Action {
     let text = match repo.file_diff(&entry, MAX_UNTRACKED_PREVIEW) {
         Ok(t) if t.trim().is_empty() => format!("{}: no textual changes", entry.path),
         Ok(t) => cap_lines(t),
@@ -500,33 +514,41 @@ pub fn load_file_diff(repo: Repo, entry: tt_git_core::StatusEntry) -> Action {
     };
     Action::DetailsLoaded {
         subject: DetailsSubject::File(entry.path),
+        syntax: diff_syntax(&text, highlight),
         text,
     }
 }
 
 /// What a stash holds, for the details pane.
-pub fn load_stash_details(repo: Repo, stash: tt_git_core::Stash) -> Action {
+pub fn load_stash_details(repo: Repo, stash: tt_git_core::Stash, highlight: bool) -> Action {
     let text = match repo.stash_details(&stash) {
         Ok(t) => cap_lines(t),
         Err(e) => format!("could not show {}: {e}", stash.name()),
     };
     Action::DetailsLoaded {
         subject: DetailsSubject::Stash(stash.oid),
+        syntax: diff_syntax(&text, highlight),
         text,
     }
 }
 
 /// Both sides of `entry`'s changes, for the staging view.
-pub fn load_stage_diffs(repo: Repo, entry: tt_git_core::StatusEntry) -> Action {
+pub fn load_stage_diffs(repo: Repo, entry: tt_git_core::StatusEntry, highlight: bool) -> Action {
     let side = |staged| {
         repo.stage_diff(&entry, staged, MAX_UNTRACKED_PREVIEW)
             .unwrap_or_else(|e| Err(format!("could not diff {}: {e}", entry.path)))
     };
     let (unstaged, staged) = (side(false), side(true));
+    let code = |side: &tt_git_core::StageSide| match side {
+        Ok(diff) if highlight => syntax::hunks(&entry.path, diff),
+        _ => Vec::new(),
+    };
+    let syntax = (code(&unstaged), code(&staged));
     Action::StageDiffsLoaded {
         entry,
         unstaged,
         staged,
+        syntax,
     }
 }
 
@@ -587,9 +609,16 @@ pub fn edit_snapshot(repo: Repo, dir: PathBuf, target: EditTarget) -> Action {
 }
 
 /// Blames `path` as of `rev` (the working tree when `None`).
-pub fn load_blame(repo: Repo, id: u64, rev: Option<String>, path: String) -> Action {
+pub fn load_blame(repo: Repo, id: u64, rev: Option<String>, path: String, highlight: bool) -> Action {
     let result = repo.blame(rev.as_deref(), &path).map_err(message);
-    Action::BlameLoaded { id, result }
+    let syntax = match &result {
+        Ok(blame) if highlight => {
+            let lines: Vec<_> = blame.lines.iter().map(|l| expand_tabs(&l.text)).collect();
+            syntax::file(&path, &lines)
+        }
+        _ => Vec::new(),
+    };
+    Action::BlameLoaded { id, result, syntax }
 }
 
 /// `oid`'s message below its subject line.

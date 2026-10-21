@@ -14,6 +14,7 @@ portable-pty = "0.9.0"
 ratatui.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+syntect.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 toml.workspace = true
@@ -21,6 +22,7 @@ tracing.workspace = true
 tt-git-core.workspace = true
 tt-git-graph.workspace = true
 tt-git-plugin.workspace = true
+two-face.workspace = true
 unicode-width = "0.2"
 vt100 = "0.17.0"
 

@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Position, Rect};
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 use tt_git_core::patch::{DiffPosition, diff_text_position, diff_text_row_of_line};
@@ -17,8 +18,9 @@ use crate::component::{Component, EventState};
 use crate::editor::EditTarget;
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context};
+use crate::syntax::{HunkTokens, LineTokens, Tokens};
 use crate::theme::Theme;
-use crate::widgets::{Cursor, truncate};
+use crate::widgets::{Cursor, code_spans, split_lines, truncate};
 
 /// What the details pane is showing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,8 +46,8 @@ struct FilesView {
     header: Vec<String>,
     files: Vec<CommitFile>,
     cursor: Cursor,
-    /// Diff lines already loaded, by file index.
-    diffs: HashMap<usize, Arc<Vec<String>>>,
+    /// Diff lines and their code already loaded, by file index.
+    diffs: HashMap<usize, (Arc<Vec<String>>, Arc<LineTokens>)>,
     /// Where the file rows and the diff were drawn last frame, for the mouse.
     rows_area: Rect,
     diff_area: Rect,
@@ -66,6 +68,8 @@ pub struct DetailsPane {
     /// The text shown, or in the files view the selected file's diff
     /// (shared with its entry in the view's `diffs`).
     lines: Arc<Vec<String>>,
+    /// The code in `lines`, line by line; set along with them.
+    syntax: Arc<LineTokens>,
     cursor: Cursor,
     loading: bool,
     files: Option<FilesView>,
@@ -86,6 +90,7 @@ pub struct SavedDetails {
     subject: Option<DetailsSubject>,
     title: String,
     lines: Arc<Vec<String>>,
+    syntax: Arc<LineTokens>,
     cursor: Cursor,
     loading: bool,
     files: Option<FilesView>,
@@ -164,6 +169,7 @@ impl DetailsPane {
                     ..FilesView::default()
                 });
                 self.lines = Arc::default();
+                self.syntax = Arc::default();
             }
             _ => self.files = None,
         }
@@ -177,9 +183,11 @@ impl DetailsPane {
 
     /// Sets content if it is for the current subject (stale results are
     /// dropped). Text replaces the files view (e.g. its files failed to load).
-    pub fn set_content(&mut self, subject: &DetailsSubject, text: &str) {
+    /// `syntax` is the code in it, if any, line by line.
+    pub fn set_content(&mut self, subject: &DetailsSubject, text: &str, syntax: LineTokens) {
         if self.subject.as_ref() == Some(subject) {
             self.lines = Arc::new(split_lines(text));
+            self.syntax = Arc::new(syntax);
             self.loading = false;
             self.files = None;
         }
@@ -196,6 +204,7 @@ impl DetailsPane {
         } else {
             Vec::new()
         });
+        self.syntax = Arc::default();
         let focus = self.files.take().and_then(|v| v.focus);
         let selected = focus
             .as_ref()
@@ -225,6 +234,7 @@ impl DetailsPane {
         self.files = None;
         self.blame = None;
         self.lines = Arc::default();
+        self.syntax = Arc::default();
         self.title = format!("Stage {}", entry.path);
         self.stage = Some(StageView::new(entry));
         self.subject = Some(subject);
@@ -233,12 +243,18 @@ impl DetailsPane {
     }
 
     /// Fills the staging view, if it's still showing `entry`.
-    pub fn set_stage_diffs(&mut self, entry: StatusEntry, unstaged: StageSide, staged: StageSide) {
+    pub fn set_stage_diffs(
+        &mut self,
+        entry: StatusEntry,
+        unstaged: StageSide,
+        staged: StageSide,
+        syntax: (HunkTokens, HunkTokens),
+    ) {
         if self.subject != Some(DetailsSubject::Stage(entry.path.clone())) {
             return;
         }
         if let Some(view) = &mut self.stage {
-            view.set_diffs(entry, unstaged, staged);
+            view.set_diffs(entry, unstaged, staged, syntax);
             self.loading = false;
         }
     }
@@ -251,8 +267,9 @@ impl DetailsPane {
         self.stage.as_mut()
     }
 
-    /// Stores a file's diff, showing it if that file is still selected.
-    pub fn set_file_diff(&mut self, oid: &str, path: &str, text: &str) {
+    /// Stores a file's diff and its code, showing it if that file is still
+    /// selected.
+    pub fn set_file_diff(&mut self, oid: &str, path: &str, text: &str, syntax: LineTokens) {
         let Some(view) = &mut self.files else { return };
         if view.oid != oid {
             return;
@@ -261,8 +278,10 @@ impl DetailsPane {
             return;
         };
         let lines = Arc::new(split_lines(text));
+        let syntax = Arc::new(syntax);
         if idx == view.cursor.selected {
             self.lines = lines.clone();
+            self.syntax = syntax.clone();
             self.cursor.offset = 0;
             // The line blame came from: mark it, a third of the way down.
             if let Some((_, line)) = view.focus.take_if(|(p, _)| *p == path)
@@ -272,7 +291,7 @@ impl DetailsPane {
                 view.center = true;
             }
         }
-        view.diffs.insert(idx, lines);
+        view.diffs.insert(idx, (lines, syntax));
     }
 
     fn show_selected_file(&mut self, ctx: &Ctx) {
@@ -281,9 +300,13 @@ impl DetailsPane {
         let Some(file) = view.files.get(idx) else { return };
         self.cursor.offset = 0;
         match view.diffs.get(&idx) {
-            Some(lines) => self.lines = lines.clone(),
+            Some((lines, syntax)) => {
+                self.lines = lines.clone();
+                self.syntax = syntax.clone();
+            }
             None => {
                 self.lines = Arc::new(vec!["loading…".into()]);
+                self.syntax = Arc::default();
                 ctx.emit(Action::CommitFileSelected {
                     oid: view.oid.clone(),
                     file: file.clone(),
@@ -345,6 +368,7 @@ impl DetailsPane {
     pub fn clear(&mut self) {
         self.subject = None;
         self.lines = Arc::default();
+        self.syntax = Arc::default();
         self.files = None;
         self.stage = None;
         self.blame = None;
@@ -357,6 +381,7 @@ impl DetailsPane {
         self.files = None;
         self.stage = None;
         self.lines = Arc::default();
+        self.syntax = Arc::default();
         self.cursor = Cursor::default();
         self.loading = false;
         self.subject = Some(DetailsSubject::Blame(view.path().to_string()));
@@ -410,6 +435,7 @@ impl DetailsPane {
             subject: self.subject.take(),
             title: std::mem::take(&mut self.title),
             lines: std::mem::take(&mut self.lines),
+            syntax: std::mem::take(&mut self.syntax),
             cursor: std::mem::take(&mut self.cursor),
             loading: std::mem::take(&mut self.loading),
             files: self.files.take(),
@@ -427,6 +453,7 @@ impl DetailsPane {
             subject,
             title,
             lines,
+            syntax,
             cursor,
             loading,
             files,
@@ -438,6 +465,7 @@ impl DetailsPane {
         self.subject = subject;
         self.title = title;
         self.lines = lines;
+        self.syntax = syntax;
         self.cursor = cursor;
         self.loading = loading;
         self.files = files;
@@ -539,7 +567,7 @@ impl DetailsPane {
         .areas(body);
         let header: Vec<Line> = view.header[..header_rows]
             .iter()
-            .map(|l| style_line(l, theme))
+            .map(|l| style_line(l, None, 0, theme))
             .collect();
         frame.render_widget(Paragraph::new(header), header_area);
         let rule = "─".repeat(rule_area.width as usize);
@@ -568,16 +596,17 @@ impl DetailsPane {
         let lines: Vec<Line> = (start..end)
             .map(|row| {
                 let text = &self.lines[row];
+                let tokens = self.syntax.get(row).and_then(Option::as_ref);
                 match mark {
                     Some((at, line)) if at == row => {
                         let note = format!("◂ line {line} in blame ");
                         let pad = (area.width as usize).saturating_sub(text.width() + note.width());
-                        let mut marked = style_line(text, theme);
+                        let mut marked = style_line(text, tokens, 0, theme);
                         marked.spans.push(Span::raw(" ".repeat(pad)));
                         marked.spans.push(Span::styled(note, theme.help_text));
                         marked.patch_style(theme.selected)
                     }
-                    _ => style_line(text, theme),
+                    _ => style_line(text, tokens, area.width as usize, theme),
                 }
             })
             .collect();
@@ -612,18 +641,6 @@ fn draw_file_list(view: &mut FilesView, frame: &mut Frame, area: Rect, focused: 
     frame.render_widget(Paragraph::new(rows), area);
 }
 
-fn split_lines(text: &str) -> Vec<String> {
-    text.lines()
-        .map(|l| {
-            if l.contains('\t') {
-                l.replace('\t', "    ")
-            } else {
-                l.to_string()
-            }
-        })
-        .collect()
-}
-
 fn file_label(file: &CommitFile) -> String {
     match &file.orig_path {
         Some(orig) => format!("{orig} → {}", file.path),
@@ -631,7 +648,7 @@ fn file_label(file: &CommitFile) -> String {
     }
 }
 
-fn state_style(state: FileState, theme: &Theme) -> ratatui::style::Style {
+fn state_style(state: FileState, theme: &Theme) -> Style {
     match state {
         FileState::Added | FileState::Copied => theme.diff_add,
         FileState::Deleted => theme.diff_del,
@@ -640,7 +657,26 @@ fn state_style(state: FileState, theme: &Theme) -> ratatui::style::Style {
     }
 }
 
-fn style_line<'a>(line: &'a str, theme: &Theme) -> Line<'a> {
+/// A line of diff or `git show` output. A hunk line with `tokens` is in
+/// code colors, an added or deleted one on a tinted background (padded out
+/// to `width` columns) with its `+` or `-` in the usual green or red.
+fn style_line<'a>(line: &'a str, tokens: Option<&Tokens>, width: usize, theme: &Theme) -> Line<'a> {
+    if let Some(tokens) = tokens
+        && let Some(code) = line.get(1..)
+    {
+        let (sign, back) = match line.as_bytes().first() {
+            Some(b'+') => (theme.diff_add, theme.diff_add_line),
+            Some(b'-') => (theme.diff_del, theme.diff_del_line),
+            _ => (Style::new(), Style::new()),
+        };
+        let mut spans = vec![Span::styled(&line[..1], sign)];
+        spans.extend(code_spans(code, Some(tokens), Style::new(), theme, usize::MAX, false));
+        let pad = width.saturating_sub(line.width());
+        if pad > 0 && back != Style::new() {
+            spans.push(Span::raw(" ".repeat(pad)));
+        }
+        return Line::from(spans).style(back);
+    }
     let style = if line.starts_with("+++") || line.starts_with("---") || line.starts_with("diff --git") {
         theme.diff_header
     } else if line.starts_with('+') {
@@ -652,7 +688,7 @@ fn style_line<'a>(line: &'a str, theme: &Theme) -> Line<'a> {
     } else if line.starts_with("commit ") {
         theme.sha
     } else {
-        ratatui::style::Style::new()
+        Style::new()
     };
     Line::from(Span::styled(line, style))
 }
@@ -837,7 +873,7 @@ mod tests {
         let ctx = Ctx::new(tx);
         let mut pane = DetailsPane::default();
         pane.request(DetailsSubject::Commit("a".into()), "Commit a".into());
-        pane.set_content(&DetailsSubject::Commit("a".into()), "commit a\nAuthor: me");
+        pane.set_content(&DetailsSubject::Commit("a".into()), "commit a\nAuthor: me", Vec::new());
 
         // From plain text, an empty list stands in and the text goes.
         pane.request(DetailsSubject::CommitFiles("a".into()), "Commit a files".into());
@@ -854,26 +890,14 @@ mod tests {
 
         // Text for the files view (a failed load) and other subjects drop the list.
         pane.request(DetailsSubject::CommitFiles("c".into()), "Commit c files".into());
-        pane.set_content(&DetailsSubject::CommitFiles("c".into()), "could not load commit");
+        pane.set_content(
+            &DetailsSubject::CommitFiles("c".into()),
+            "could not load commit",
+            Vec::new(),
+        );
         assert_eq!(paths(&pane), None);
         pane.request(DetailsSubject::CommitFiles("a".into()), "Commit a files".into());
         pane.request(DetailsSubject::Commit("a".into()), "Commit a".into());
         assert_eq!(paths(&pane), None);
-    }
-
-    #[test]
-    fn split_lines_expands_tabs_as_before() {
-        let old = |text: &str| -> Vec<String> { text.lines().map(|l| l.replace('\t', "    ")).collect() };
-        for text in [
-            "",
-            "a",
-            "a\n",
-            "a\r\nb\tc\n\t\n",
-            "no tabs\nat all\n\n",
-            "\t\t",
-            "x\ty\r",
-        ] {
-            assert_eq!(split_lines(text), old(text), "{text:?}");
-        }
     }
 }

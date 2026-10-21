@@ -2,6 +2,8 @@
 
 use ratatui::style::{Color, Modifier, Style};
 
+use crate::syntax::Class;
+
 #[derive(Debug, Clone)]
 pub struct Theme {
     pub border: Style,
@@ -28,6 +30,12 @@ pub struct Theme {
     pub diff_del: Style,
     pub diff_hunk: Style,
     pub diff_header: Style,
+    /// Behind an added or deleted line whose code is highlighted (its text
+    /// is in code colors, so the background shows the change).
+    pub diff_add_line: Style,
+    pub diff_del_line: Style,
+    /// Code colors, by [`Theme::code`].
+    pub syntax: SyntaxStyles,
     /// Blame's age stripe, newest to oldest (hot to cold).
     pub blame_heat: [Color; 5],
     /// Blame's author colors; each author always gets the same one.
@@ -78,6 +86,9 @@ impl Default for Theme {
             diff_del: Style::new().fg(Color::Red),
             diff_hunk: Style::new().fg(Color::Cyan),
             diff_header: Style::new().add_modifier(Modifier::BOLD),
+            diff_add_line: Style::new().bg(Color::Rgb(22, 50, 32)),
+            diff_del_line: Style::new().bg(Color::Rgb(62, 28, 32)),
+            syntax: SyntaxStyles::default(),
             blame_heat: [
                 Color::Rgb(242, 93, 46),
                 Color::Rgb(227, 163, 65),
@@ -103,5 +114,71 @@ impl Default for Theme {
 impl Theme {
     pub fn lane(&self, color: u8) -> Style {
         Style::new().fg(self.lanes[color as usize % self.lanes.len()])
+    }
+
+    /// How highlighted code of `class` looks.
+    pub fn code(&self, class: Class) -> Style {
+        let s = &self.syntax;
+        match class {
+            Class::Comment => s.comment,
+            Class::String => s.string,
+            Class::Keyword => s.keyword,
+            Class::Operator => s.operator,
+            Class::Type => s.r#type,
+            Class::Function => s.function,
+            Class::Number => s.number,
+            Class::Constant => s.constant,
+            Class::Macro => s.r#macro,
+            Class::Tag => s.tag,
+            Class::Attribute => s.attribute,
+            Class::Heading => s.heading,
+            Class::Link => s.link,
+            Class::Strong => s.strong,
+            Class::Emphasis => s.emphasis,
+        }
+    }
+}
+
+/// Code colors, one per [`Class`].
+#[derive(Debug, Clone)]
+pub struct SyntaxStyles {
+    pub comment: Style,
+    pub string: Style,
+    pub keyword: Style,
+    pub operator: Style,
+    pub r#type: Style,
+    pub function: Style,
+    pub number: Style,
+    pub constant: Style,
+    pub r#macro: Style,
+    pub tag: Style,
+    pub attribute: Style,
+    pub heading: Style,
+    pub link: Style,
+    pub strong: Style,
+    pub emphasis: Style,
+}
+
+impl Default for SyntaxStyles {
+    /// One Dark-like, for a dark terminal.
+    fn default() -> Self {
+        let fg = |r, g, b| Style::new().fg(Color::Rgb(r, g, b));
+        Self {
+            comment: fg(127, 132, 142).add_modifier(Modifier::ITALIC),
+            string: fg(152, 195, 121),
+            keyword: fg(198, 120, 221),
+            operator: fg(86, 182, 194),
+            r#type: fg(229, 192, 123),
+            function: fg(97, 175, 239),
+            number: fg(209, 154, 102),
+            constant: fg(209, 154, 102),
+            r#macro: fg(86, 182, 194),
+            tag: fg(224, 108, 117),
+            attribute: fg(209, 154, 102),
+            heading: fg(97, 175, 239).add_modifier(Modifier::BOLD),
+            link: fg(97, 175, 239).add_modifier(Modifier::UNDERLINED),
+            strong: Style::new().add_modifier(Modifier::BOLD),
+            emphasis: Style::new().add_modifier(Modifier::ITALIC),
+        }
     }
 }

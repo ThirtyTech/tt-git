@@ -30,11 +30,15 @@ ratatui = "0.30"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 smallvec = "1"
+# fancy-regex rather than onig: pure Rust, no C toolchain needed.
+syntect = { version = "5.3", default-features = false, features = ["default-fancy"] }
 thiserror = "2"
 # The app uses a current-thread runtime; only the test driver needs rt-multi-thread.
 tokio = { version = "1", features = ["rt", "macros", "sync", "time"] }
 toml = "1"
 tracing = "0.1"
+# bat's syntax set for syntect, for languages syntect doesn't bundle (TOML, TypeScript, Dart…).
+two-face = { version = "0.5.2", default-features = false, features = ["syntect-fancy"] }
 tracing-appender = "0.2"
 # No ansi: logs go to a file, written with `with_ansi(false)`.
 tracing-subscriber = { version = "0.3", default-features = false, features = [

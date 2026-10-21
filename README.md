@@ -18,6 +18,9 @@ A terminal git client in Rust ([ratatui](https://ratatui.rs)), inspired by
   commit, amend and stash. Press `enter` on a file to see its changes
   fullscreen and stage, unstage or discard them a hunk or a line at a time.
   It also handles merge/rebase/cherry-pick conflicts.
+- **Code colored by language** in diffs, the staging view and blame, with
+  added and removed lines on a green or red background. Around 200 languages,
+  from bat's syntax definitions.
 - **One branch list for local and remote branches**, sorted by recent
   activity (commits, fetches, checkouts). If you check out a branch that only
   exists on a remote, tt-git creates the local tracking branch for you

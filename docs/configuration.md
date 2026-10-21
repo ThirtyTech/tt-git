@@ -13,6 +13,7 @@ Unknown keys are reported as errors, so typos don't go unnoticed.
 ```toml
 watch = true        # refresh when files or refs change outside tt-git
 mouse = true        # click, wheel, ctrl+click links
+syntax = true       # color code by language in diffs, staging and blame
 
 [graph]
 max_commits = 20000             # loaded at a time; scrolling near the end loads more

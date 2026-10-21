@@ -19,8 +19,9 @@ use crate::component::EventState;
 use crate::editor::EditTarget;
 use crate::jobs::Ctx;
 use crate::keymap::Command;
+use crate::syntax::LineTokens;
 use crate::theme::Theme;
-use crate::widgets::{Cursor, fit, fit_right};
+use crate::widgets::{Cursor, code_spans, expand_tabs, fit, fit_right};
 
 /// Ids for blame loads, unique across views so a late result can't land
 /// in a view opened after it.
@@ -43,6 +44,8 @@ struct Level {
     label: String,
     path: String,
     blame: Option<Result<Blame, String>>,
+    /// The code, line by line.
+    syntax: LineTokens,
     /// Each commit's index into the theme's heat colors, by age.
     heat: Vec<usize>,
     cursor: Cursor,
@@ -60,6 +63,7 @@ impl Level {
             label,
             path,
             blame: None,
+            syntax: Vec::new(),
             heat: Vec::new(),
             cursor: Cursor::default(),
             want_line: line,
@@ -174,7 +178,7 @@ impl BlameView {
 
     /// Takes blame load `id`'s result. Returns whether it was one of this
     /// view's.
-    pub fn set_blame(&mut self, id: u64, result: Result<Blame, String>, ctx: &Ctx) -> bool {
+    pub fn set_blame(&mut self, id: u64, result: Result<Blame, String>, syntax: LineTokens, ctx: &Ctx) -> bool {
         let Some(level) = self.levels.iter_mut().find(|l| l.id == id) else {
             return false;
         };
@@ -185,6 +189,7 @@ impl BlameView {
             level.center = true;
         }
         level.blame = Some(result);
+        level.syntax = syntax;
         self.want_message(ctx);
         true
     }
@@ -435,7 +440,10 @@ impl BlameView {
             spans.push(Span::styled("▌", stripe));
             spans.push(Span::styled(format!("{:>num_width$}", i + 1), theme.muted));
             spans.push(Span::raw(" "));
-            spans.push(Span::raw(fit(&expand_tabs(&line.text), code_width)));
+            let tokens = level.syntax.get(i).and_then(Option::as_ref);
+            let text = expand_tabs(&line.text);
+            let code = code_spans(&text, tokens, Style::new(), theme, code_width, true);
+            spans.extend(code.into_iter().map(|s| Span::styled(s.content.into_owned(), s.style)));
             let row = Line::from(spans);
             rows.push(if i == selected {
                 row.patch_style(if focused {
@@ -551,14 +559,6 @@ fn author_color(author: &str, theme: &Theme) -> Color {
         (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
     });
     theme.blame_authors[(hash % theme.blame_authors.len() as u64) as usize]
-}
-
-fn expand_tabs(text: &str) -> std::borrow::Cow<'_, str> {
-    if text.contains('\t') {
-        text.replace('\t', "    ").into()
-    } else {
-        text.into()
-    }
 }
 
 #[cfg(test)]

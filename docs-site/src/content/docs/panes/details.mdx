@@ -42,7 +42,9 @@ The title is `Commit` and the short hash, for example `[4] Commit 59f1c2a`. Belo
 - the hash, author, committer, dates and parents,
 - the full commit message,
 - a summary of changed files with `+` and `-` counts,
-- and the patch: added lines in green, removed lines in red, hunk headers (`@@ … @@`) in cyan.
+- and the patch, with hunk headers (`@@ … @@`) in cyan. Code in a language tt-git knows is
+  [colored by syntax](#code-colors), with added lines on a green background and removed lines on
+  red. Anything else shows added lines in green and removed lines in red.
 
 A merge commit is shown as what it brought into the branch, compared with its first parent, which is
 what you usually want to review. Renamed files show as renames rather than a delete and an add.
@@ -105,6 +107,27 @@ fullscreen moves the file list to the left.
   details.
 - **A plugin pane**: a plugin pane with the `split` placement takes details' place. See
   [Plugin panes](/panes/plugin-panes/).
+
+## Code colors
+
+Wherever tt-git shows a file's code (diffs here, the [staging view](/panes/staging/) and
+[blame](/panes/blame/)), it colors it by language: comments, strings, keywords, types, functions,
+numbers and so on. In a diff, an added line sits on a green background and a removed line on a red
+one, with its `+` or `-` still in green or red, so you can read the code and the change at once.
+
+The language comes from the file's name or extension, and for a file with neither, like a script,
+from a `#!` line at the top. Around 200 languages are known, among them Rust, TypeScript and TSX,
+JavaScript, Go, C#, Dart, HTML, CSS, Markdown, YAML, JSON and TOML. A file in a language tt-git
+doesn't know shows as before: added lines in green, removed lines in red.
+
+Each side of a diff is colored on its own, the old side from its unchanged and removed lines and the
+new side from its unchanged and added lines, so a comment opened on a removed line doesn't color the
+added lines after it. Each hunk starts afresh, because what's between hunks isn't in the diff. Code
+inside a hunk that starts in the middle of a block comment or a long string can be colored wrongly
+until the hunk passes its end.
+
+Files of more than 20,000 lines, and lines longer than 2,000 bytes (minified code, data), aren't
+colored. To turn colors off everywhere, set [`syntax = false`](/configuration/#top-level).
 
 ## Opening a file in your editor
 
