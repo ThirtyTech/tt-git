@@ -154,6 +154,7 @@ children = [
         ("blame-commit", blame_keys(33, &["enter"])),
         ("blame-step-back", blame_keys(46, &["["])),
         ("blame-clock", blame_keys(33, &["t"])),
+        ("blame-search", blame_keys(1, &["/", "text:res\\.status", "enter", "n"])),
     ] {
         let mut driver = TestDriver::with_size(Config::default(), &blamed, WIDTH, HEIGHT);
         press(&mut driver, &keys);

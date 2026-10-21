@@ -206,7 +206,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `toggle_files`, `open_link` | `}`, `o` | details |
 | `open_in_editor` | `e` | status, details, stage, blame |
 | `blame` | `b` | status, details |
-| `open_commit`, `toggle_details`, `blame_back`, `blame_forward`, `toggle_dates`, `close_details` | `enter`, `space`, `[`, `]`, `t`, `esc` | blame |
+| `open_commit`, `toggle_details`, `blame_back`, `blame_forward`, `search`, `search_next`, `search_prev`, `toggle_dates`, `close_details` | `enter`, `space`, `[`, `]`, `/`, `n`, `N`, `t`, `esc` | blame |
 | `copy` (commit hash / branch name / absolute worktree path) | `c` | graph, branches, worktrees, blame |
 | `plugin_logs` | (palette only) | global |
 

@@ -1,15 +1,20 @@
 //! Blaming one file: when each line last changed, who changed it and in
 //! which commit, reading right to left from the code. `[` steps back to the
 //! file as it was before the selected line's commit; `]` comes forward again.
+//! `/` searches the code for a regex, jumping as you type; `n` and `N` go to
+//! the next and previous matching line.
 
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crossterm::event::KeyCode;
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
+use regex::{Regex, RegexBuilder};
 use tt_git_core::time::{SharedClock, clock_time, relative};
 use tt_git_core::{Blame, BlameCommit};
 
@@ -18,10 +23,10 @@ use crate::action::Action;
 use crate::component::EventState;
 use crate::editor::EditTarget;
 use crate::jobs::Ctx;
-use crate::keymap::Command;
+use crate::keymap::{Command, KeyCombo};
 use crate::syntax::LineTokens;
 use crate::theme::Theme;
-use crate::widgets::{Cursor, code_spans, expand_tabs, fit, fit_right};
+use crate::widgets::{Cursor, expand_tabs, fit, fit_right, marked_code_spans};
 
 /// Ids for blame loads, unique across views so a late result can't land
 /// in a view opened after it.
@@ -88,6 +93,45 @@ impl Level {
     }
 }
 
+/// A search through the code, typed after `/`.
+#[derive(Debug, Default)]
+struct Search {
+    pattern: String,
+    /// `pattern` compiled; `None` while it's empty or doesn't compile.
+    regex: Option<Regex>,
+    /// Why `pattern` doesn't compile.
+    invalid: Option<String>,
+    /// Keys go to the pattern.
+    typing: bool,
+    /// The line (index) the search was started from, to come back to.
+    origin: usize,
+    /// The lines (indices) that match, in the version shown.
+    lines: Vec<usize>,
+}
+
+impl Search {
+    /// Compiles the pattern: ignoring case unless it has a capital letter.
+    fn compile(&mut self) {
+        self.regex = None;
+        self.invalid = None;
+        if self.pattern.is_empty() {
+            return;
+        }
+        let ignore_case = !self.pattern.chars().any(char::is_uppercase);
+        match RegexBuilder::new(&self.pattern).case_insensitive(ignore_case).build() {
+            Ok(regex) => self.regex = Some(regex),
+            Err(e) => self.invalid = Some(e.to_string()),
+        }
+    }
+
+    /// Where it matches `text`, leaving out empty matches.
+    fn ranges(&self, text: &str) -> Vec<Range<usize>> {
+        self.regex.as_ref().map_or_else(Vec::new, |r| {
+            r.find_iter(text).filter(|m| !m.is_empty()).map(|m| m.range()).collect()
+        })
+    }
+}
+
 /// The blame view for one file.
 #[derive(Debug)]
 pub struct BlameView {
@@ -99,6 +143,7 @@ pub struct BlameView {
     show_commit: bool,
     /// Commit messages below the subject line, by commit; `None` while loading.
     messages: HashMap<String, Option<String>>,
+    search: Search,
 }
 
 impl BlameView {
@@ -121,6 +166,7 @@ impl BlameView {
             clock,
             show_commit: false,
             messages: HashMap::new(),
+            search: Search::default(),
         }
     }
 
@@ -190,6 +236,7 @@ impl BlameView {
         }
         level.blame = Some(result);
         level.syntax = syntax;
+        self.find_matches();
         self.want_message(ctx);
         true
     }
@@ -254,6 +301,7 @@ impl BlameView {
             Command::BlameForward => {
                 if self.levels.len() > 1 {
                     self.levels.pop();
+                    self.find_matches();
                     self.want_message(ctx);
                 } else {
                     ctx.emit(Action::Notify("this is the newest version".into()));
@@ -268,6 +316,15 @@ impl BlameView {
                 Ok(target) => Action::OpenInEditor(target),
                 Err(why) => Action::Notify(why),
             }),
+            Command::Search => {
+                self.search = Search {
+                    typing: true,
+                    origin: self.level().cursor.selected,
+                    ..Search::default()
+                };
+            }
+            Command::SearchNext => self.next_match(true, ctx),
+            Command::SearchPrev => self.next_match(false, ctx),
             _ => {
                 let len = self.level().len();
                 if !self.level_mut().cursor.apply(cmd, len) {
@@ -277,6 +334,134 @@ impl BlameView {
             }
         }
         EventState::Consumed
+    }
+
+    /// The search for the title: ` /pattern█` while it's typed, then which
+    /// matching line is selected, of how many.
+    pub fn search_title(&self) -> Option<String> {
+        let search = &self.search;
+        if !search.typing && search.pattern.is_empty() {
+            return None;
+        }
+        let mut title = format!(" /{}", search.pattern);
+        if search.typing {
+            title.push('█');
+        }
+        if search.invalid.is_some() {
+            title.push_str(" invalid regex");
+        } else if search.regex.is_some() && !self.loading() {
+            let count = search.lines.len();
+            match search.lines.binary_search(&self.level().cursor.selected) {
+                _ if count == 0 => title.push_str(" no match"),
+                Ok(i) => title.push_str(&format!(" {}/{count}", i + 1)),
+                Err(_) if count == 1 => title.push_str(" 1 match"),
+                Err(_) => title.push_str(&format!(" {count} matches")),
+            }
+        }
+        Some(title)
+    }
+
+    /// Whether the search is being typed.
+    pub fn searching(&self) -> bool {
+        self.search.typing
+    }
+
+    /// A key while the search is typed: each change jumps to the first
+    /// match from where the search started.
+    pub fn on_search_key(&mut self, key: KeyCombo, ctx: &Ctx) {
+        match key.code {
+            KeyCode::Enter => {
+                self.search.typing = false;
+                if let Some(why) = self.search.invalid.take() {
+                    ctx.emit(Action::Notify(format!("invalid regex: {why}")));
+                    self.search = Search::default();
+                } else if self.search.pattern.is_empty() {
+                    self.search = Search::default();
+                }
+                return;
+            }
+            KeyCode::Esc => {
+                let origin = self.search.origin;
+                self.search = Search::default();
+                self.select(origin, ctx);
+                return;
+            }
+            KeyCode::Backspace => {
+                self.search.pattern.pop();
+            }
+            KeyCode::Char(c) => self.search.pattern.push(c),
+            _ => return,
+        }
+        self.search.compile();
+        self.find_matches();
+        let origin = self.search.origin;
+        let lines = &self.search.lines;
+        let to = lines
+            .get(lines.partition_point(|&l| l < origin))
+            .or(lines.first())
+            .copied()
+            .unwrap_or(origin);
+        self.select(to, ctx);
+    }
+
+    /// Works out which lines of the version shown match the search.
+    fn find_matches(&mut self) {
+        let lines = match (&self.search.regex, self.level().blame()) {
+            (Some(regex), Some(blame)) => blame
+                .lines
+                .iter()
+                .enumerate()
+                .filter(|(_, l)| regex.is_match(&l.text))
+                .map(|(i, _)| i)
+                .collect(),
+            _ => Vec::new(),
+        };
+        self.search.lines = lines;
+    }
+
+    /// Goes to the next matching line after the selected one, or the one
+    /// before it, round past the end.
+    fn next_match(&mut self, forward: bool, ctx: &Ctx) {
+        if self.search.regex.is_none() {
+            ctx.emit(Action::Notify("nothing to search for yet".into()));
+            return;
+        }
+        let lines = &self.search.lines;
+        let (Some(&first), Some(&last)) = (lines.first(), lines.last()) else {
+            ctx.emit(Action::Notify(format!("no match for /{}", self.search.pattern)));
+            return;
+        };
+        let selected = self.level().cursor.selected;
+        let to = if forward {
+            lines.get(lines.partition_point(|&l| l <= selected)).copied()
+        } else {
+            lines[..lines.partition_point(|&l| l < selected)].last().copied()
+        };
+        let to = to.unwrap_or_else(|| {
+            let why = if forward {
+                "search wrapped to the top"
+            } else {
+                "search wrapped to the bottom"
+            };
+            ctx.emit(Action::Notify(why.into()));
+            if forward { first } else { last }
+        });
+        self.select(to, ctx);
+    }
+
+    /// Selects line `index`, bringing it a third of the way down when it's
+    /// off screen.
+    fn select(&mut self, index: usize, ctx: &Ctx) {
+        let level = self.level_mut();
+        if level.len() == 0 {
+            return;
+        }
+        let cursor = &mut level.cursor;
+        cursor.selected = index;
+        if index < cursor.offset || index >= cursor.offset + cursor.height {
+            level.center = true;
+        }
+        self.want_message(ctx);
     }
 
     /// Selects the line on visible row `row` of the code.
@@ -314,6 +499,7 @@ impl BlameView {
         };
         older.load(ctx);
         self.levels.push(older);
+        self.find_matches();
     }
 
     /// Loads the selected commit's message if its details are showing.
@@ -355,6 +541,7 @@ impl BlameView {
         let dates = self.dates;
         let clock = self.clock.clone();
         let height = area.height as usize;
+        let search = &self.search;
         let level = self.levels.last_mut().expect("a blame view has a level");
         level.cursor.height = height;
         match &level.blame {
@@ -442,7 +629,8 @@ impl BlameView {
             spans.push(Span::raw(" "));
             let tokens = level.syntax.get(i).and_then(Option::as_ref);
             let text = expand_tabs(&line.text);
-            let code = code_spans(&text, tokens, Style::new(), theme, code_width, true);
+            let marks = search.ranges(&text);
+            let code = marked_code_spans(&text, tokens, Style::new(), theme, code_width, true, &marks);
             spans.extend(code.into_iter().map(|s| Span::styled(s.content.into_owned(), s.style)));
             let row = Line::from(spans);
             rows.push(if i == selected {

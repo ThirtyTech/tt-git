@@ -333,6 +333,7 @@ export const shots = [
 		],
 	},
 	{ name: 'blame-step-back', capture: 'blame-step-back' },
+	{ name: 'blame-search', capture: 'blame-search' },
 	{
 		name: 'staging-discard',
 		capture: 'staging-discard',

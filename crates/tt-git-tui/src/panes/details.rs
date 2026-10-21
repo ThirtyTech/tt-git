@@ -17,7 +17,7 @@ use crate::action::Action;
 use crate::component::{Component, EventState};
 use crate::editor::EditTarget;
 use crate::jobs::Ctx;
-use crate::keymap::{Command, Context};
+use crate::keymap::{Command, Context, KeyCombo};
 use crate::syntax::{HunkTokens, LineTokens, Tokens};
 use crate::theme::Theme;
 use crate::widgets::{Cursor, code_spans, split_lines, truncate};
@@ -735,6 +735,17 @@ impl Component for DetailsPane {
         self.scroll(cmd)
     }
 
+    /// In blame, while a search is typed.
+    fn wants_text_input(&self) -> bool {
+        self.stage.is_none() && self.blame.as_ref().is_some_and(BlameView::searching)
+    }
+
+    fn on_text_key(&mut self, key: KeyCombo, ctx: &Ctx) {
+        if let Some(view) = &mut self.blame {
+            view.on_search_key(key, ctx);
+        }
+    }
+
     /// In blame, a click selects a line.
     fn on_click(&mut self, row: usize, ctx: &Ctx) {
         if let Some(view) = &mut self.blame {
@@ -791,6 +802,9 @@ impl Component for DetailsPane {
                 Command::ToggleDetails,
                 Command::BlameBack,
                 Command::BlameForward,
+                Command::Search,
+                Command::SearchNext,
+                Command::SearchPrev,
                 Command::ToggleDates,
                 Command::OpenInEditor,
                 Command::Copy,
@@ -825,6 +839,9 @@ impl Component for DetailsPane {
         }
         if let Some(position) = self.blame.as_ref().and_then(BlameView::position) {
             title.push_str(&format!(" {position}"));
+        }
+        if let Some(search) = self.blame.as_ref().and_then(BlameView::search_title) {
+            title.push_str(&search);
         }
         if self.loading || self.blame.as_ref().is_some_and(BlameView::loading) {
             title.push_str(" loading…");

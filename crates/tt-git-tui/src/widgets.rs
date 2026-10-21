@@ -1,6 +1,7 @@
 //! Small helpers shared by the panes.
 
 use std::borrow::Cow;
+use std::ops::Range;
 
 use ratatui::style::Style;
 use ratatui::text::Span;
@@ -127,6 +128,20 @@ pub fn code_spans<'a>(
     width: usize,
     pad: bool,
 ) -> Vec<Span<'a>> {
+    marked_code_spans(text, tokens, base, theme, width, pad, &[])
+}
+
+/// [`code_spans`], with the byte ranges `marks` of `text` (a search's
+/// matches, in order and apart) in the theme's search match style.
+pub fn marked_code_spans<'a>(
+    text: &'a str,
+    tokens: Option<&Tokens>,
+    base: Style,
+    theme: &Theme,
+    width: usize,
+    pad: bool,
+    marks: &[Range<usize>],
+) -> Vec<Span<'a>> {
     let mut pieces: Vec<(&'a str, Style)> = Vec::new();
     let mut at = 0;
     for (range, class) in tokens.into_iter().flatten() {
@@ -140,6 +155,9 @@ pub fn code_spans<'a>(
     }
     pieces.push((&text[at..], base));
     pieces.retain(|(s, _)| !s.is_empty());
+    if !marks.is_empty() {
+        pieces = mark(pieces, marks, theme.search_match);
+    }
     let mut spans = Vec::with_capacity(pieces.len() + 1);
     let mut used = 0;
     if text.width() <= width {
@@ -166,9 +184,73 @@ pub fn code_spans<'a>(
     spans
 }
 
+/// `pieces`, which run through a text end to end, split where the byte
+/// ranges `marks` of that text start and end, the marked parts in `style`.
+fn mark<'a>(pieces: Vec<(&'a str, Style)>, marks: &[Range<usize>], style: Style) -> Vec<(&'a str, Style)> {
+    let mut out = Vec::with_capacity(pieces.len() + 2 * marks.len());
+    let mut at = 0;
+    for (s, base) in pieces {
+        let end = at + s.len();
+        let mut cut = 0;
+        for m in marks.iter().filter(|m| m.start < end && m.end > at) {
+            let (from, to) = (m.start.max(at) - at, m.end.min(end) - at);
+            out.push((&s[cut..from], base));
+            out.push((&s[from..to], base.patch(style)));
+            cut = to;
+        }
+        out.push((&s[cut..], base));
+        at = end;
+    }
+    out.retain(|(s, _)| !s.is_empty());
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::style::Color;
+
+    #[test]
+    fn marks_split_across_pieces() {
+        let red = Style::new().fg(Color::Red);
+        let hit = Style::new().bg(Color::Yellow);
+        // "let x" in red, then " = 1": marks on "t x =" and "1".
+        let pieces = vec![("let x", red), (" = 1", Style::new())];
+        let marked = mark(pieces, &[2..7, 8..9], hit);
+        assert_eq!(
+            marked,
+            vec![
+                ("le", red),
+                ("t x", red.patch(hit)),
+                (" =", hit),
+                (" ", Style::new()),
+                ("1", hit),
+            ]
+        );
+    }
+
+    #[test]
+    fn marked_code_is_cut_like_the_rest() {
+        let theme = Theme::default();
+        let spans = marked_code_spans(
+            "abcdef",
+            None,
+            Style::new(),
+            &theme,
+            4,
+            false,
+            std::slice::from_ref(&(1..5)),
+        );
+        let shown: Vec<_> = spans.iter().map(|s| (s.content.as_ref(), s.style)).collect();
+        assert_eq!(
+            shown,
+            vec![
+                ("a", Style::new()),
+                ("bc", theme.search_match),
+                ("…", theme.search_match)
+            ]
+        );
+    }
 
     #[test]
     fn truncates_by_display_width() {
