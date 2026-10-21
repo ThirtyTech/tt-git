@@ -259,8 +259,10 @@ other refs. Only while the Worktrees tab is showing, a background job runs
 `git status --porcelain=v2 -z --untracked-files=all` in each worktree to
 count its changed files. One more job per worktree adds up the size of the
 files in its folder (without git, and without following links), so small
-worktrees show their size while a big one is still being walked. They run
-when the tab opens and when the list of worktrees changes.
+worktrees show their size while a big one is still being walked. At most
+four run at once, so they don't slow down the git commands behind the rest
+of the app. They run when the tab opens and when the list of worktrees
+changes.
 
 | Action | Runs |
 |---|---|

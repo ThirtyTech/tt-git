@@ -38,6 +38,12 @@ pub use plugins::PluginOptions;
 /// The longest gap between the clicks of a double click.
 const DOUBLE_CLICK: Duration = Duration::from_millis(500);
 
+/// Worktree folders walked at once for their sizes. Walking all 22 of a big
+/// repo's worktrees together made git commands 2-5x slower until they were
+/// done (the graph lagged as you moved through the list); 4 left git
+/// unaffected and still finishes in seconds.
+const SIZE_JOBS: usize = 4;
+
 /// Commands always listed in the help bar after the focused pane's own.
 const GLOBAL_HELP: &[Command] = &[Command::FocusNext, Command::Help, Command::Quit];
 
@@ -156,8 +162,11 @@ pub struct App {
     /// Worktree changes are being counted, and whether to count again
     /// when that's done (something changed meanwhile).
     worktree_count: (bool, bool),
-    /// Worktrees whose sizes are still being measured.
+    /// Worktree sizes being measured right now.
     worktree_sizing: usize,
+    /// Worktrees waiting for a measuring job, last first, each with the
+    /// worktrees nested in it to leave out.
+    worktree_size_queue: Vec<(std::path::PathBuf, Vec<std::path::PathBuf>)>,
     /// The worktrees whose sizes were last measured. Walking a folder can
     /// be slow, so a refresh measures again only when this list changes.
     worktree_sized: Vec<std::path::PathBuf>,
@@ -244,6 +253,7 @@ impl App {
             undo_pending: false,
             worktree_count: (false, false),
             worktree_sizing: 0,
+            worktree_size_queue: Vec::new(),
             worktree_sized: Vec::new(),
             reopen: None,
             watcher: None,
@@ -777,6 +787,7 @@ impl App {
             Action::WorktreeSize(path, size) => {
                 self.branches.set_worktree_size(path, size);
                 self.worktree_sizing = self.worktree_sizing.saturating_sub(1);
+                self.start_size_jobs();
                 if self.worktree_sizing == 0 {
                     self.measure_worktree_sizes(false);
                 }
@@ -1103,20 +1114,34 @@ impl App {
     /// is checked again.
     fn measure_worktree_sizes(&mut self, again: bool) {
         let paths = self.branches.countable_worktrees();
-        if self.worktree_sizing > 0 || (!again && paths == self.worktree_sized) {
+        if self.worktree_sizing > 0 || !self.worktree_size_queue.is_empty() || (!again && paths == self.worktree_sized)
+        {
             return;
         }
-        self.worktree_sizing = paths.len();
-        for path in &paths {
-            let nested: Vec<_> = paths
-                .iter()
-                .filter(|p| *p != path && p.starts_with(path))
-                .cloned()
-                .collect();
-            let path = path.clone();
+        self.worktree_size_queue = paths
+            .iter()
+            .rev()
+            .map(|path| {
+                let nested = paths
+                    .iter()
+                    .filter(|p| *p != path && p.starts_with(path))
+                    .cloned()
+                    .collect();
+                (path.clone(), nested)
+            })
+            .collect();
+        self.worktree_sized = paths;
+        self.start_size_jobs();
+    }
+
+    /// Starts measuring queued worktrees, at most [`SIZE_JOBS`] at a time.
+    fn start_size_jobs(&mut self) {
+        while self.worktree_sizing < SIZE_JOBS
+            && let Some((path, nested)) = self.worktree_size_queue.pop()
+        {
+            self.worktree_sizing += 1;
             self.ctx.spawn(move || loaders::measure_worktree_size(path, nested));
         }
-        self.worktree_sized = paths;
     }
 
     /// Quits so the worktree at `path` can be opened in its place, unless a

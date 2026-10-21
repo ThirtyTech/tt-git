@@ -276,3 +276,16 @@ fn c_copies_the_absolute_path() {
         assert!(!copied.contains('/'), "Windows separators: {copied}");
     }
 }
+
+#[test]
+fn measures_more_worktrees_than_run_at_once() {
+    let sb = repo_with_worktrees();
+    for i in 0..5 {
+        add_worktree(&sb, &format!("extra{i}"), &["--detach"]);
+    }
+    let t = on_worktrees_tab(&sb);
+    let lines = t.pane_lines(PaneId::Branches);
+    assert_eq!(lines.iter().filter(|l| l.contains(".worktrees/")).count(), 7);
+    assert!(!lines.iter().any(|l| l.ends_with('…')), "{}", lines.join("\n"));
+    assert!(!t.screen().contains("total …"), "{}", t.screen());
+}
