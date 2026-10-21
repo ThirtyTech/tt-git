@@ -67,8 +67,10 @@ Each line reads right to left from the code: when it changed, who changed it, an
 - **When**: next to the line number, a stripe (`▌`) colored by age, from hot orange for the newest
   commits in this file to cold blue for the oldest. Then the age, like `23h` or `2w`, or the local
   date and time, like `2026-10-17 01:30 PM`; <kbd>t</kbd> switches between them.
-- **Who**: the author, on every line, next to the date. Each author always gets the same color, so
-  you can see whose lines are whose at a glance.
+- **Who**: the author, on every line, next to the date. Each author in the file gets a color of
+  their own, so you can see whose lines are whose at a glance. There are 16 colors; two authors
+  share one only when more than 16 people wrote the file. An author usually keeps their color from
+  file to file, but can get a different one where it would clash with someone else's.
 - **Why**: the short commit id and the commit's summary. These show only on the first line of each
   run of lines from the same commit, so a block someone wrote in one go reads as one block. They're
   left out when the pane is narrower than 100 columns.

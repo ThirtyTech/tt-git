@@ -38,8 +38,9 @@ pub struct Theme {
     pub syntax: SyntaxStyles,
     /// Blame's age stripe, newest to oldest (hot to cold).
     pub blame_heat: [Color; 5],
-    /// Blame's author colors; each author always gets the same one.
-    pub blame_authors: [Color; 8],
+    /// Blame's author colors. Each author starts from the same one every time;
+    /// see `panes::blame` for how clashes within a file are avoided.
+    pub blame_authors: [Color; 16],
     /// Blame's lines not committed yet: their stripe and author.
     pub blame_uncommitted: Style,
 }
@@ -97,14 +98,22 @@ impl Default for Theme {
                 Color::Rgb(61, 90, 128),
             ],
             blame_authors: [
-                Color::Cyan,
-                Color::Magenta,
-                Color::Green,
-                Color::Yellow,
-                Color::LightRed,
-                Color::LightBlue,
-                Color::LightMagenta,
-                Color::LightCyan,
+                Color::Rgb(240, 113, 120),
+                Color::Rgb(247, 150, 98),
+                Color::Rgb(255, 203, 107),
+                Color::Rgb(221, 231, 120),
+                Color::Rgb(158, 214, 118),
+                Color::Rgb(96, 190, 120),
+                Color::Rgb(110, 220, 190),
+                Color::Rgb(137, 221, 255),
+                Color::Rgb(70, 170, 220),
+                Color::Rgb(120, 160, 255),
+                Color::Rgb(165, 150, 255),
+                Color::Rgb(199, 146, 234),
+                Color::Rgb(230, 120, 220),
+                Color::Rgb(255, 150, 195),
+                Color::Rgb(205, 170, 135),
+                Color::Rgb(175, 188, 200),
             ],
             blame_uncommitted: Style::new().fg(Color::Green).add_modifier(Modifier::BOLD),
         }
