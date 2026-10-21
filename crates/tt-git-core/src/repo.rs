@@ -208,6 +208,21 @@ impl Repo {
         (!name.is_empty()).then_some(name)
     }
 
+    /// git's `core.editor`, if set.
+    pub fn core_editor(&self) -> Option<String> {
+        let out = self.git.run(&["config", "--get", "core.editor"]).ok()?;
+        let cmd = out.stdout_str().trim().to_string();
+        (!cmd.is_empty()).then_some(cmd)
+    }
+
+    /// `path`'s contents as of `rev`, and `rev`'s short commit id.
+    pub fn file_at(&self, rev: &str, path: &str) -> Result<(Vec<u8>, String)> {
+        let commit = format!("{rev}^{{commit}}");
+        let short = self.git.run(&["rev-parse", "--short", &commit])?.stdout_str();
+        let blob = self.git.run(&["cat-file", "blob", &format!("{rev}:{path}")])?;
+        Ok((blob.stdout, short.trim().to_string()))
+    }
+
     /// Full names of the refs under `prefix` (e.g. `refs/remotes/origin/`)
     /// that are merged into `base`.
     pub fn merged_refs(&self, base: &str, prefix: &str) -> Result<HashSet<String>> {

@@ -337,6 +337,32 @@ The patch goes to `git apply --cached` (stage), `--cached -R` (unstage) or
 `-R` (discard) on stdin. Binary files, conflicted files and untracked files
 over 256 KiB can't be split.
 
+### Opening a file in your editor
+
+<kbd>e</kbd> runs your editor on the file's full path, from the repository's
+root. tt-git runs one git command to pick the editor, and only when neither
+`[editor] command`, `$VISUAL` nor `$EDITOR` is set:
+`git config --get core.editor`.
+
+From the status pane, the line comes from the same two `git diff` calls as
+the staging view, made in the background: the first unstaged change, else
+the first staged one, moved by any unstaged lines added or removed above
+it. A conflicted file is read directly for its first `<<<<<<<` line. In
+the staging view and details the line comes from the diff already on
+screen, with no git call.
+
+A file from a commit that isn't in the working tree is read with
+`git rev-parse --short <commit>^{commit}` and
+`git cat-file blob <commit>:<path>` (`<commit>^` for a file the commit
+deleted), then written read-only to
+`<temp>/tt-git/<repo>/<short id>/<path>`, where the editor opens it. A copy
+that's already there is reused.
+
+A terminal editor gets the real terminal: tt-git stops reading keys, leaves
+its alternate screen and raw mode, waits for the editor to exit, then
+restores all three, redraws and refreshes. A GUI editor is started with no
+input or output attached and left running.
+
 ## Details
 
 ### A commit

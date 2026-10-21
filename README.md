@@ -119,6 +119,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `d` | discard changes to the file (asks first) |
 | | `c` / `A` | commit / amend keeping the message |
 | | `s` | stash: everything, only what's staged, everything but leave staged changes in place, or just the selected file (`tab` in the dialog picks; the message is optional) |
+| | `e` | open the file in your editor at its first change (a conflicted file: at its first conflict marker) |
 | | `C` / `X` | continue / abort a merge, rebase or cherry-pick |
 | stash tab | `space` / `a` | pop / apply the selected stash (pop drops it once applied) |
 | | `d` | drop it (asks first) |
@@ -126,6 +127,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `enter` | show what it holds fullscreen, untracked files included (`esc` back) |
 | details | `}` | show / hide the commit's changed files below the diff (`j`/`k` pick a file); fullscreen puts them on the left |
 | | `o` | open the link in view with a plugin link handler |
+| | `e` | open the file in view in your editor, at the line at the top of the diff |
 | | `esc` `space` | close details |
 | staging | `j` / `k` | next / previous hunk (or changed line) |
 | | `space` | stage the selection, or unstage it on the staged side |
@@ -134,6 +136,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `v` | start or end a range of lines |
 | | `d` | discard the selection from the working tree (asks first) |
 | | `c` | commit what's staged |
+| | `e` | open the file in your editor at the selected hunk or line |
 | | `esc` | back to the status pane |
 
 The mouse also works: click a pane or row to focus and select it,

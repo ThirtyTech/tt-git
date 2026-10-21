@@ -5,6 +5,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
+use tt_git_core::patch::{DiffPosition, diff_text_position};
 use tt_git_core::{CommitFile, FileState, StageSide, StatusEntry};
 use unicode_width::UnicodeWidthStr;
 
@@ -12,6 +13,7 @@ use super::stage::StageView;
 use super::{PaneId, pane_block};
 use crate::action::Action;
 use crate::component::{Component, EventState};
+use crate::editor::EditTarget;
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context};
 use crate::theme::Theme;
@@ -237,6 +239,53 @@ impl DetailsPane {
         }
     }
 
+    /// The file shown and the line at the top of the view, to open in an
+    /// editor, or why there isn't one. A file from a commit carries the
+    /// commit, to open as it was there if it isn't in the working tree: a
+    /// deleted file, as it was just before.
+    pub fn edit_target(&self) -> Result<EditTarget, String> {
+        let nothing = || "no file to open here".to_string();
+        let row = self.cursor.offset;
+        let pos = diff_text_position(self.lines.as_slice(), row);
+        let line = pos.as_ref().and_then(|p| p.line);
+        let before = |oid: &str| Some(format!("{oid}^"));
+        match self.subject.as_ref().ok_or_else(nothing)? {
+            DetailsSubject::Text(_) | DetailsSubject::Stage(_) => Err(nothing()),
+            DetailsSubject::File(path) => {
+                // An untracked file is shown whole, one `+` line per line
+                // under a `new file` heading.
+                let untracked = self.lines.first().is_some_and(|l| l.starts_with("new file "));
+                let line = line.or_else(|| untracked.then(|| row.max(1) as u32));
+                Ok(EditTarget {
+                    path: path.clone(),
+                    line,
+                    rev: None,
+                })
+            }
+            DetailsSubject::CommitFiles(oid) if self.files.is_some() => {
+                let file = self.selected_file().ok_or_else(nothing)?;
+                let deleted = file.state == FileState::Deleted;
+                Ok(EditTarget {
+                    path: file.path.clone(),
+                    line: if deleted { None } else { line },
+                    rev: if deleted { before(oid) } else { Some(oid.clone()) },
+                })
+            }
+            DetailsSubject::Commit(oid) | DetailsSubject::CommitFiles(oid) | DetailsSubject::Stash(oid) => match pos {
+                Some(DiffPosition {
+                    path: Some(path),
+                    deleted,
+                    line,
+                }) => Ok(EditTarget {
+                    path,
+                    line: if deleted { None } else { line },
+                    rev: if deleted { before(oid) } else { Some(oid.clone()) },
+                }),
+                _ => Err(nothing()),
+            },
+        }
+    }
+
     pub fn clear(&mut self) {
         self.subject = None;
         self.lines = Arc::default();
@@ -428,6 +477,13 @@ impl Component for DetailsPane {
         if let Some(view) = &mut self.stage {
             return view.on_command(cmd, ctx);
         }
+        if cmd == Command::OpenInEditor {
+            ctx.emit(match self.edit_target() {
+                Ok(target) => Action::OpenInEditor(target),
+                Err(why) => Action::Notify(why),
+            });
+            return EventState::Consumed;
+        }
         // In the files view, line movement picks a file and paging scrolls its diff.
         if let Some(view) = &mut self.files
             && matches!(
@@ -481,10 +537,16 @@ impl Component for DetailsPane {
                 Command::SelectRange,
                 Command::Discard,
                 Command::Commit,
+                Command::OpenInEditor,
                 Command::CloseDetails,
             ];
         }
-        &[Command::OpenLink, Command::ToggleFiles, Command::CloseDetails]
+        &[
+            Command::OpenLink,
+            Command::OpenInEditor,
+            Command::ToggleFiles,
+            Command::CloseDetails,
+        ]
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {

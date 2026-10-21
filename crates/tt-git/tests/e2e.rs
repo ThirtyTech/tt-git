@@ -143,6 +143,56 @@ fn undo_a_commit_in_the_real_binary() {
 }
 
 #[test]
+fn e_hands_the_terminal_to_the_editor_and_takes_it_back() {
+    use tt_git_testkit::read_records;
+
+    let sb = Sandbox::new();
+    sb.commit_file("f.txt", "1\n2\n3\n4\n", "base");
+    sb.write("f.txt", "1\n2\nthree\n4\n");
+    // A stand-in terminal editor: records its arguments, then echoes typed
+    // lines until `q`.
+    let record = sb.root().join("editor.jsonl");
+    let config_dir = sb.root().join("tt-config");
+    std::fs::create_dir_all(&config_dir).unwrap();
+    let command = format!(
+        r#""{}" __test-plugin record "{}" echo {{file}}:{{line}} interactive editing"#,
+        env!("CARGO_BIN_EXE_tt-git"),
+        record.display()
+    );
+    std::fs::write(
+        config_dir.join("config.toml"),
+        format!("[editor]\ncommand = '{command}'\nterminal = true\n"),
+    )
+    .unwrap();
+
+    let mut t = spawn(&sb, &[]);
+    t.wait_until(|s| s.contains(" M f.txt")).expect("status lists file");
+    t.send_str("2").unwrap();
+    t.send_str("e").unwrap();
+    t.wait_until(|s| s.contains("editing") && !s.contains("Status:"))
+        .expect("editor has the terminal");
+    t.send_str("hello").unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("you typed: hello"))
+        .expect("editor reads keys");
+    t.send_str("q").unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("Status:") && !s.contains("you typed"))
+        .expect("tt-git is back");
+
+    let records = read_records(&record);
+    assert_eq!(records.len(), 1, "{records:?}");
+    let args: Vec<String> = serde_json::from_value(records[0]["args"].clone()).unwrap();
+    let opened = &args[3];
+    assert!(opened.ends_with(":3"), "{args:?}");
+    assert!(opened.contains("f.txt"), "{args:?}");
+
+    // Keys reach tt-git again.
+    t.send_str("q").unwrap();
+    assert!(t.wait_exit().unwrap().success());
+}
+
+#[test]
 fn external_cli_talks_to_running_instance_over_the_socket() {
     use tt_git_testkit::{PluginFixture, read_records};
     let sb = Sandbox::new();

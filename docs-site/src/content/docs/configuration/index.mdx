@@ -54,6 +54,10 @@ safe_branches = ["master", "main", "production", "prod"]  # never listed on the 
 
 [plugins]
 pane_release_keys = ["ctrl+\\", "f12"]   # leave or close plugin panes
+
+[editor]
+# command = "nvim"   # unset: $VISUAL, $EDITOR, git's core.editor, then notepad / vi
+# terminal = true    # unset: worked out from the program
 ```
 
 Two more tables, `[layout]` and `[keys]`, have pages of their own:
@@ -92,6 +96,48 @@ See [Merged and unmerged](/panes/merged-unmerged/).
 | `pane_release_keys` | `["ctrl+\\", "f12"]` | Keys that give focus back to tt-git from a split plugin pane, or close an overlay or popup pane. Written the same way as [key bindings](/configuration/keys/#how-to-write-keys). |
 
 See [Plugin panes](/panes/plugin-panes/).
+
+### `[editor]`
+
+The editor <kbd>e</kbd> opens a file in, from the [status pane](/panes/status/#opening-a-file-in-your-editor),
+the [staging view](/panes/staging/#opening-the-file-in-your-editor) and
+[details](/panes/details/#opening-a-file-in-your-editor).
+
+| Setting | Default | What it does |
+|---|---|---|
+| `command` | unset | The editor to run. Unset, tt-git uses the first of `$VISUAL`, `$EDITOR` and git's `core.editor` that is set, else `notepad` on Windows and `vi` elsewhere. Quote a path with spaces: `'"C:\Program Files\Notepad++\notepad++.exe" -multiInst'`. |
+| `terminal` | unset | `true` if the editor runs in the terminal, `false` if it opens a window of its own. Unset, tt-git works it out from the program's name, and treats editors it doesn't know as terminal ones. |
+
+tt-git adds the file, and the line when it knows one, in the form the editor
+understands:
+
+| Editor | Arguments added |
+|---|---|
+| vim, nvim, vi, gvim, nano, micro, emacs, emacsclient, kakoune (`kak`), joe, mg, ne | `+12 <file>` |
+| VS Code (`code`, `code-insiders`), VSCodium, Cursor, Windsurf | `--goto <file>:12` |
+| Helix (`hx`), Zed, Sublime Text (`subl`) | `<file>:12` |
+| Notepad++ | `-n12 <file>` |
+| JetBrains IDEs (`idea`, `pycharm`, `goland`, `rustrover`, `webstorm`, `clion`, `rider`, `phpstorm`) | `--line 12 <file>` |
+| anything else, including Notepad | `<file>` |
+
+The file is a full path, and the editor starts in the repository's root.
+To pass the arguments yourself, put `{file}` and `{line}` in `command`.
+tt-git then adds nothing, and `{line}` is `1` when there's no line to go to:
+
+```toml
+[editor]
+command = "code --reuse-window --goto {file}:{line}"
+```
+
+A terminal editor gets the whole terminal: tt-git steps aside until you quit
+the editor, then comes back and refreshes. A GUI editor (VS Code, Cursor,
+Zed, Sublime Text, Notepad, Notepad++, gedit, Kate, TextMate, JetBrains IDEs)
+opens in its own window and tt-git keeps running.
+
+<Aside type="caution">
+A GUI editor tt-git doesn't recognize is treated as a terminal editor, so
+tt-git waits until it exits. Set `terminal = false` for it.
+</Aside>
 
 ### Per-repository settings
 

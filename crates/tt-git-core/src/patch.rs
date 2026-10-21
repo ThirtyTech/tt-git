@@ -50,6 +50,27 @@ impl Hunk {
             &self.section,
         )
     }
+
+    /// The new-side line number of the hunk's line `idx`. A deleted line
+    /// has none of its own, so it gets the new-side line that follows it.
+    pub fn new_line_of(&self, idx: usize) -> u32 {
+        let before = self.lines[..idx.min(self.lines.len())]
+            .iter()
+            .filter(|l| l.kind != LineKind::Del)
+            .count() as u32;
+        // `git diff` numbers an empty range by the line before it.
+        let start = if self.new_count == 0 {
+            self.new_start + 1
+        } else {
+            self.new_start
+        };
+        (start + before).max(1)
+    }
+
+    /// The index of the hunk's first added or deleted line (0 if none).
+    pub fn first_change(&self) -> usize {
+        self.lines.iter().position(DiffLine::is_change).unwrap_or(0)
+    }
 }
 
 /// A single file's diff: the lines before the first hunk, then its hunks.
@@ -131,6 +152,41 @@ impl FileDiff {
 
     pub fn is_empty(&self) -> bool {
         self.hunks.is_empty()
+    }
+
+    /// The new-side line of the first change, if there are hunks.
+    pub fn first_change_line(&self) -> Option<u32> {
+        let hunk = self.hunks.first()?;
+        Some(hunk.new_line_of(hunk.first_change()))
+    }
+
+    /// Where old-side line `line` ends up on the new side, e.g. a line of
+    /// the index in the working tree given the unstaged diff. A deleted
+    /// line maps to the new-side line that follows it.
+    pub fn old_to_new(&self, line: u32) -> u32 {
+        let mut shift: i64 = 0;
+        for hunk in &self.hunks {
+            let first = if hunk.old_count == 0 {
+                hunk.old_start + 1
+            } else {
+                hunk.old_start
+            };
+            if line < first {
+                break;
+            }
+            let mut old = first;
+            for (i, l) in hunk.lines.iter().enumerate() {
+                if l.kind == LineKind::Add {
+                    continue;
+                }
+                if old == line {
+                    return hunk.new_line_of(i);
+                }
+                old += 1;
+            }
+            shift += i64::from(hunk.new_count) - i64::from(hunk.old_count);
+        }
+        (i64::from(line) + shift).max(1) as u32
     }
 
     /// A patch holding only the changed lines `selected(hunk, line)` picks,
@@ -284,6 +340,157 @@ fn parse_heading(line: &str) -> Option<Hunk> {
         section: section.strip_prefix(' ').unwrap_or(section).to_string(),
         lines: Vec::new(),
     })
+}
+
+/// The file and line a row of diff text (`git show`, `git diff`) is on.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DiffPosition {
+    /// The file's path on the new side, when the text names it.
+    pub path: Option<String>,
+    /// The file is gone on the new side (`+++ /dev/null`); `path` is its
+    /// old path.
+    pub deleted: bool,
+    /// The new-side line, when the file has hunks.
+    pub line: Option<u32>,
+}
+
+/// Where row `row` of diff text is: the file whose `diff --git` section
+/// holds it (or the first one below it, for a row in a commit's header) and
+/// the new-side line. A row that isn't a hunk line (a heading, the file's
+/// header) gets the first change of the hunk that follows. `None` when the
+/// text has no file sections or hunks at all.
+pub fn diff_text_position<S: AsRef<str>>(lines: &[S], row: usize) -> Option<DiffPosition> {
+    let line = |i: usize| lines[i].as_ref();
+    let is_file = |i: usize| line(i).starts_with("diff --git ");
+    let row = row.min(lines.len().checked_sub(1)?);
+    let start = (0..=row)
+        .rev()
+        .find(|&i| is_file(i))
+        .or_else(|| (row..lines.len()).find(|&i| is_file(i)))
+        .unwrap_or(0);
+    let end = (start + 1..lines.len()).find(|&i| is_file(i)).unwrap_or(lines.len());
+
+    // The new path from `+++`, else the old one from `---` for a deletion,
+    // else `diff --git a/x b/x` (a binary file or a mode change).
+    let mut path = None;
+    let mut deleted = false;
+    let mut old_path = None;
+    for i in start..end {
+        let l = line(i);
+        if l.starts_with("@@ ") {
+            break;
+        }
+        if let Some(p) = l.strip_prefix("--- ") {
+            old_path = Some(diff_path(p, "a/"));
+        } else if let Some(p) = l.strip_prefix("+++ ") {
+            if p == "/dev/null" {
+                deleted = true;
+                path = old_path.take();
+            } else {
+                path = Some(diff_path(p, "b/"));
+            }
+        }
+    }
+    if path.is_none() && !deleted && is_file(start) {
+        path = same_paths(&line(start)["diff --git ".len()..]);
+    }
+
+    let in_section = |i: usize| (start..end).contains(&i);
+    let heading = (start..=row)
+        .rev()
+        .find(|&i| in_section(i) && line(i).starts_with("@@ "))
+        .or_else(|| (start..end).find(|&i| line(i).starts_with("@@ ")));
+    let mut found = None;
+    if let Some(at) = heading
+        && let Some(mut hunk) = parse_heading(line(at))
+    {
+        let mut target = None;
+        for i in at + 1..end {
+            let kind = match line(i).as_bytes().first() {
+                Some(b' ') | None => LineKind::Context,
+                Some(b'+') => LineKind::Add,
+                Some(b'-') => LineKind::Del,
+                Some(b'\\') => continue,
+                Some(_) => break,
+            };
+            if row > at && i >= row && target.is_none() {
+                target = Some(hunk.lines.len());
+            }
+            hunk.lines.push(DiffLine {
+                kind,
+                text: String::new(),
+                no_newline: false,
+            });
+        }
+        let idx = target.unwrap_or_else(|| hunk.first_change());
+        found = Some(hunk.new_line_of(idx));
+    }
+    if path.is_none() && found.is_none() {
+        return None;
+    }
+    Some(DiffPosition {
+        path,
+        deleted,
+        line: found,
+    })
+}
+
+/// A path from a `---`/`+++` line, unquoted and without its `a/`/`b/` prefix.
+fn diff_path(raw: &str, prefix: &str) -> String {
+    let p = unquote_c(raw);
+    match p.strip_prefix(prefix) {
+        Some(rest) => rest.to_string(),
+        None => p,
+    }
+}
+
+/// The path from `a/<p> b/<p>`, when both sides are the same path.
+fn same_paths(rest: &str) -> Option<String> {
+    let inner = rest.strip_prefix("a/")?;
+    let len = inner.len().checked_sub(3)? / 2;
+    let (old, new) = (inner.get(..len)?, inner.get(len..)?);
+    (new.strip_prefix(" b/")? == old).then(|| old.to_string())
+}
+
+/// Undoes git's C-style quoting of a path (`"a\tb\"c"`), leaving unquoted
+/// text as it is.
+pub fn unquote_c(s: &str) -> String {
+    let Some(inner) = s.strip_prefix('"').and_then(|r| r.strip_suffix('"')) else {
+        return s.to_string();
+    };
+    let mut bytes = Vec::with_capacity(inner.len());
+    let mut it = inner.bytes().peekable();
+    while let Some(b) = it.next() {
+        if b != b'\\' {
+            bytes.push(b);
+            continue;
+        }
+        match it.next() {
+            Some(b'n') => bytes.push(b'\n'),
+            Some(b't') => bytes.push(b'\t'),
+            Some(b'r') => bytes.push(b'\r'),
+            Some(b'a') => bytes.push(7),
+            Some(b'b') => bytes.push(8),
+            Some(b'f') => bytes.push(12),
+            Some(b'v') => bytes.push(11),
+            Some(d @ b'0'..=b'7') => {
+                let mut n = u32::from(d - b'0');
+                for _ in 0..2 {
+                    match it.peek() {
+                        Some(&d @ b'0'..=b'7') => {
+                            n = n * 8 + u32::from(d - b'0');
+                            it.next();
+                        }
+                        _ => break,
+                    }
+                }
+                bytes.push(n as u8);
+            }
+            Some(other) => bytes.push(other),
+            None => bytes.push(b'\\'),
+        }
+    }
+    String::from_utf8_lossy(&bytes).into_owned()
 }
 
 /// A diff that adds all of `content` as a new file at `path`, in the shape
@@ -449,5 +656,99 @@ index 1111111..2222222 100644
         assert!(untracked_diff("n", b"a\0b").is_none());
         let d = FileDiff::parse(&untracked_diff("n", b"").unwrap()).unwrap();
         assert!(d.is_empty());
+    }
+
+    #[test]
+    fn new_side_lines_of_hunk_lines() {
+        let d = FileDiff::parse(TWO_HUNKS).unwrap();
+        let lines: Vec<u32> = (0..5).map(|i| d.hunks[0].new_line_of(i)).collect();
+        // a, -b (takes B's line), +B, c, d
+        assert_eq!(lines, [1, 2, 2, 3, 4]);
+        assert_eq!(d.first_change_line(), Some(2));
+        let gone = FileDiff::parse("--- a/f\n+++ b/f\n@@ -5,2 +4,0 @@\n-x\n-y\n").unwrap();
+        assert_eq!(gone.first_change_line(), Some(5));
+        let emptied = FileDiff::parse("--- a/f\n+++ /dev/null\n@@ -1 +0,0 @@\n-x\n").unwrap();
+        assert_eq!(emptied.first_change_line(), Some(1));
+    }
+
+    #[test]
+    fn old_lines_map_through_the_hunks() {
+        let d = FileDiff::parse(TWO_HUNKS).unwrap();
+        let mapped: Vec<u32> = [1, 2, 3, 5, 10, 11, 12, 20].iter().map(|&l| d.old_to_new(l)).collect();
+        assert_eq!(mapped, [1, 2, 3, 5, 10, 12, 13, 21]);
+        let inserted = FileDiff::parse("--- a/f\n+++ b/f\n@@ -3,0 +4,2 @@\n+p\n+q\n").unwrap();
+        assert_eq!([3, 4].map(|l| inserted.old_to_new(l)), [3, 6]);
+        let deleted = FileDiff::parse("--- a/f\n+++ b/f\n@@ -5,2 +4,0 @@\n-x\n-y\n").unwrap();
+        assert_eq!([4, 5, 6, 7].map(|l| deleted.old_to_new(l)), [4, 5, 5, 5]);
+    }
+
+    const SHOW: &str = r#"commit abc
+Author: me
+
+    subject
+
+diff --git a/one.txt b/one.txt
+index 1111111..2222222 100644
+--- a/one.txt
++++ b/one.txt
+@@ -1,3 +1,3 @@
+ a
+-b
++B
+ c
+diff --git a/gone.txt b/gone.txt
+deleted file mode 100644
+--- a/gone.txt
++++ /dev/null
+@@ -1 +0,0 @@
+-x
+diff --git "a/sp\"q.txt" "b/sp\"q.txt"
+--- "a/sp\"q.txt"
++++ "b/sp\"q.txt"
+@@ -5,2 +5,3 @@
+ m
++n
+ o
+diff --git a/img.png b/img.png
+index 1111111..2222222 100644
+Binary files a/img.png and b/img.png differ
+"#;
+
+    #[test]
+    fn rows_of_diff_text_map_to_files_and_lines() {
+        let lines: Vec<&str> = SHOW.lines().collect();
+        let at = |row: usize| diff_text_position(&lines, row).unwrap();
+        let pos = |path: &str, line: Option<u32>| DiffPosition {
+            path: Some(path.into()),
+            deleted: false,
+            line,
+        };
+        // The commit header and a file's header go to its first change.
+        assert_eq!(at(0), pos("one.txt", Some(2)));
+        assert_eq!(at(7), pos("one.txt", Some(2)));
+        assert_eq!(at(9), pos("one.txt", Some(2)));
+        assert_eq!(at(10), pos("one.txt", Some(1)));
+        assert_eq!(at(11), pos("one.txt", Some(2)));
+        assert_eq!(at(13), pos("one.txt", Some(3)));
+        assert_eq!(
+            at(19),
+            DiffPosition {
+                path: Some("gone.txt".into()),
+                deleted: true,
+                line: Some(1),
+            }
+        );
+        assert_eq!(at(25), pos("sp\"q.txt", Some(6)));
+        assert_eq!(at(27), pos("img.png", None));
+        assert_eq!(at(1000), pos("img.png", None));
+        assert_eq!(diff_text_position(&["just text", "here"], 1), None);
+        assert_eq!(diff_text_position::<&str>(&[], 0), None);
+    }
+
+    #[test]
+    fn unquotes_c_style_paths() {
+        assert_eq!(unquote_c("plain"), "plain");
+        assert_eq!(unquote_c(r#""a\tb\"c\\d""#), "a\tb\"c\\d");
+        assert_eq!(unquote_c(r#""\303\244.txt""#), "ä.txt");
     }
 }

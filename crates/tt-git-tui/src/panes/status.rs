@@ -212,6 +212,7 @@ impl Component for StatusPane {
             Command::Commit,
             Command::Amend,
             Command::Stash,
+            Command::OpenInEditor,
             Command::Continue,
             Command::Abort,
         ]

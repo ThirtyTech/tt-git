@@ -4,6 +4,7 @@ use std::path::Path;
 
 use serde::Deserialize;
 
+use crate::editor::EditorConfig;
 use crate::keymap::{Keymap, KeymapError, KeysConfig};
 use crate::layout::Layout;
 use crate::panes::DateStyle;
@@ -20,6 +21,7 @@ pub struct Config {
     pub graph: GraphConfig,
     pub branches: BranchesConfig,
     pub plugins: PluginsConfig,
+    pub editor: EditorConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -66,6 +68,7 @@ impl Default for Config {
             graph: GraphConfig::default(),
             branches: BranchesConfig::default(),
             plugins: PluginsConfig::default(),
+            editor: EditorConfig::default(),
         }
     }
 }

@@ -120,6 +120,19 @@ With nothing changed, tt-git says `nothing to stash`.
 Your stashes appear on the branches pane's [Stash tab](/panes/stash/), where you can pop, apply, drop
 and inspect them.
 
+## Opening a file in your editor
+
+Press <kbd>e</kbd> to open the selected file in your editor, at its first change. Where that is
+comes from the file's unstaged changes, or its staged ones when there are none. A conflicted file
+opens at its first conflict marker (`<<<<<<<`), and a new untracked file at the top.
+
+A file you deleted isn't in the working tree, so there's nothing to open: tt-git says
+`notes.txt isn't in the working tree`.
+
+When you quit a terminal editor, tt-git comes back and refreshes, so your edits show up straight
+away. Which editor runs, and whether it gets the terminal or a window of its own, is set in
+[`[editor]`](/configuration/#editor).
+
 ## Merges, rebases and cherry-picks in progress
 
 <Screenshot name="status-conflict" alt="The status pane during a merge with a conflict: MERGING in the title, the banner, a resolved file and a conflicted one" />
@@ -134,7 +147,7 @@ UU src/merge.rs
 
 <Steps>
 
-1. Fix the conflicts in your editor.
+1. Fix the conflicts in your editor. <kbd>e</kbd> opens the selected file at its first conflict.
 2. Stage each fixed file with <kbd>space</kbd>. Staging a conflicted file marks it resolved.
 3. Press <kbd>C</kbd> to continue. tt-git keeps the message git prepared, so no editor opens.
 
@@ -172,5 +185,6 @@ changes.
 | <kbd>c</kbd> | Commit what's staged |
 | <kbd>A</kbd> | Amend the last commit, keeping its message |
 | <kbd>s</kbd> | Stash |
+| <kbd>e</kbd> | Open the file in your editor at its first change |
 | <kbd>C</kbd> | Continue a merge, rebase or cherry-pick |
 | <kbd>X</kbd> | Abort it (asks first) |

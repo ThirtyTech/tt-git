@@ -26,6 +26,10 @@ safe_branches = ["master", "main", "production", "prod"]  # never list these on 
 
 [plugins]
 pane_release_keys = ["ctrl+\\", "f12"]   # leave/close plugin panes
+
+[editor]                        # for `e`; both unset by default
+# command = "nvim"              # default: $VISUAL, $EDITOR, git's core.editor, then notepad / vi
+# terminal = true               # runs in this terminal; default: worked out from the program
 ```
 
 ## Merged and unmerged branches
@@ -74,6 +78,39 @@ points at, else the first of `main`, `master`, `development`, `develop` or
 to pick a different one from a list; tt-git saves it in the repo's own git
 config as `tt-git.baseBranch`, so each project remembers its own.
 "Detect automatically" at the top of the list clears it again.
+
+## Opening files in your editor
+
+`e` in the status pane, the staging view and the details pane opens the
+file in your editor, at the line you're on where tt-git can tell: the
+first change (or first conflict marker) from the status pane, the
+selected hunk or line in the staging view, and the line at the top of the
+diff in details. A file from a commit that isn't in the working tree (on
+another branch, or deleted) opens as a read-only copy of the commit's
+version, written under `<temp>/tt-git/<repo>/<commit>/`; a file the commit
+deleted, as it was just before. A file missing from the working tree in the
+status pane is refused with a notice.
+
+The editor is the first of `[editor] command`, `$VISUAL`, `$EDITOR` and
+git's `core.editor` that is set, else `notepad` on Windows and `vi`
+elsewhere. tt-git adds the file and line in the form the editor
+understands: `+12 file` for vim, nvim, nano, emacs, micro and kakoune;
+`--goto file:12` for VS Code, VSCodium and Cursor; `file:12` for Helix,
+Zed and Sublime Text; `-n12 file` for Notepad++; `--line 12 file` for
+JetBrains IDEs; just the file for anything else. Put `{file}` and
+`{line}` in `command` to say it yourself:
+
+```toml
+[editor]
+command = "code --reuse-window --goto {file}:{line}"
+```
+
+An editor that runs in the terminal (vim, nano, helix…) gets the whole
+terminal until you quit it; then tt-git comes back and refreshes. One
+with a window of its own (VS Code, Zed, Sublime, Notepad++, JetBrains
+IDEs, Notepad) opens beside tt-git, which keeps running. Unknown editors
+are treated as terminal ones; set `terminal = false` for a GUI editor
+tt-git doesn't recognize.
 
 ## Layout
 
@@ -161,6 +198,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `stash_pop`, `stash_apply`, `stash_drop`, `new_branch`, `expand_details`, `next_tab`, `prev_tab`, `filter` | `space`, `a`, `d`, `n`, `enter`, `]` `}`, `[` `{`, `/` | stash |
 | `stage_toggle`, `switch_side`, `toggle_line_mode`, `select_range`, `discard`, `commit`, `close_details` | `space`, `tab`, `a`, `v`, `d`, `c`, `esc` | stage |
 | `toggle_files`, `open_link` | `}`, `o` | details |
+| `open_in_editor` | `e` | status, details, stage |
 | `copy` (commit hash / branch name) | `c` | graph, branches |
 | `plugin_logs` | (palette only) | global |
 

@@ -1,9 +1,13 @@
 //! Background jobs that read from git and report back as actions.
 
+use tt_git_core::patch::FileDiff;
 use tt_git_core::{BaseBranches, BranchEntry, CommitFile, GitError, GitRef, LogFilter, LogScope, RemoteConfig, Repo};
 
 use crate::action::{Action, RefsSnapshot};
 use crate::config::BranchesConfig;
+use std::path::PathBuf;
+
+use crate::editor::{EditTarget, Snapshot, abs_path, write_snapshot};
 use crate::filter::{FilterTab, author_choices, file_choices};
 use crate::jobs::Ctx;
 use crate::modal::GitOp;
@@ -480,6 +484,62 @@ pub fn load_stage_diffs(repo: Repo, entry: tt_git_core::StatusEntry) -> Action {
         unstaged,
         staged,
     }
+}
+
+/// `entry` from the status pane, to open in the editor at its first
+/// conflict marker if it's conflicted, else its first unstaged change, else
+/// its first staged one (carried through the unstaged changes).
+pub fn status_edit_target(repo: Repo, entry: tt_git_core::StatusEntry) -> Action {
+    let line = if entry.is_untracked() {
+        None
+    } else if entry.is_conflicted() {
+        std::fs::read(abs_path(repo.root(), &entry.path))
+            .ok()
+            .and_then(|text| text.split(|b| *b == b'\n').position(|l| l.starts_with(b"<<<<<<<")))
+            .map(|i| i as u32 + 1)
+    } else {
+        let side = |staged| {
+            repo.stage_diff(&entry, staged, MAX_UNTRACKED_PREVIEW)
+                .ok()
+                .and_then(Result::ok)
+        };
+        let unstaged = side(false);
+        unstaged.as_ref().and_then(FileDiff::first_change_line).or_else(|| {
+            let line = side(true)?.first_change_line()?;
+            Some(unstaged.as_ref().map_or(line, |u| u.old_to_new(line)))
+        })
+    };
+    Action::OpenInEditor(EditTarget {
+        path: entry.path,
+        line,
+        rev: None,
+    })
+}
+
+/// A read-only copy under `dir` of `target`'s file as of its commit, for a
+/// file that isn't in the working tree.
+pub fn edit_snapshot(repo: Repo, dir: PathBuf, target: EditTarget) -> Action {
+    let rev = target.rev.as_deref().unwrap_or("HEAD");
+    let path = target.path;
+    let result = repo
+        .file_at(rev, &path)
+        .map_err(|e| {
+            format!(
+                "couldn't read {path} from {rev}: {}",
+                e.stderr().unwrap_or(&e.to_string()).trim()
+            )
+        })
+        .and_then(|(contents, commit)| {
+            let file = write_snapshot(&dir, &commit, &path, &contents)
+                .map_err(|e| format!("couldn't write a copy of {path}: {e}"))?;
+            Ok(Snapshot {
+                path,
+                commit,
+                file,
+                line: target.line,
+            })
+        });
+    Action::EditSnapshot(result)
 }
 
 #[cfg(test)]

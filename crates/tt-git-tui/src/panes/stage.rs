@@ -11,6 +11,7 @@ use tt_git_core::{PatchOp, StageSide, StatusEntry};
 
 use crate::action::Action;
 use crate::component::EventState;
+use crate::editor::EditTarget;
 use crate::jobs::Ctx;
 use crate::keymap::Command;
 use crate::modal::{GitOp, Modal};
@@ -332,9 +333,31 @@ impl StageView {
                     )));
                 }
             }
+            Command::OpenInEditor => ctx.emit(Action::OpenInEditor(EditTarget {
+                path: self.entry.path.clone(),
+                line: self.selected_line(),
+                rev: None,
+            })),
             _ => return EventState::NotConsumed,
         }
         EventState::Consumed
+    }
+
+    /// The working-tree line the selection is on: the selected line, or the
+    /// selected hunk's first change. The staged side's lines are the
+    /// index's, so they're carried through the unstaged changes.
+    pub fn selected_line(&self) -> Option<u32> {
+        let diff = self.active().file_diff()?;
+        let (h, l) = if self.line_mode {
+            self.cursor
+        } else {
+            (self.hunk, diff.hunks.get(self.hunk)?.first_change())
+        };
+        let line = diff.hunks.get(h)?.new_line_of(l);
+        Some(match self.side {
+            StageSideId::Unstaged => line,
+            StageSideId::Staged => self.unstaged.file_diff().map_or(line, |u| u.old_to_new(line)),
+        })
     }
 
     /// Moves the selection to the next or previous hunk, or changed line.

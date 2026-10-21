@@ -95,6 +95,17 @@ Press <kbd>c</kbd> to commit what's staged without leaving the staging view. It 
 **Commit message** dialog as the status pane; see
 [Committing and amending](/panes/status/#committing-and-amending).
 
+## Opening the file in your editor
+
+Press <kbd>e</kbd> to open the file in your editor at the selection: the first changed line of the
+selected hunk, or in line mode the line the cursor is on. A removed line opens where it was.
+
+On the Staged side, the line numbers in the diff are the index's. tt-git carries them through your
+unstaged changes, so if you've since added lines above the change, the editor still lands on it in
+the file as it is now.
+
+Which editor runs is set in [`[editor]`](/configuration/#editor).
+
 ## Files that can't be split
 
 Some files can only be staged whole. The side says why instead of showing hunks:
@@ -129,4 +140,5 @@ For how tt-git turns your selection into a patch git can apply, see
 | <kbd>v</kbd> | Start or end a range of lines |
 | <kbd>d</kbd> | Discard the selection from the working tree (asks first) |
 | <kbd>c</kbd> | Commit what's staged |
+| <kbd>e</kbd> | Open the file in your editor at the selection |
 | <kbd>esc</kbd> | Back to the status pane |

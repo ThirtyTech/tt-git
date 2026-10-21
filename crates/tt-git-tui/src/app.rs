@@ -17,6 +17,7 @@ use tt_git_core::{
 use crate::action::{Action, RefsSnapshot};
 use crate::component::{Component, EventState};
 use crate::config::Config;
+use crate::editor::{self, EditTarget, EditorLaunch};
 use crate::filter::FilterPanel;
 use crate::jobs::{Ctx, JobTracker, LatestJob, Reload};
 use crate::keymap::{Command, Context, KeyCombo, Keymap, KeymapError};
@@ -164,6 +165,8 @@ pub struct App {
     notice: Option<String>,
     /// Text waiting for the runner to put on the clipboard.
     clipboard: Option<String>,
+    /// An editor waiting for the runner to start.
+    editor: Option<EditorLaunch>,
     should_quit: bool,
     pane_areas: Vec<(PaneId, Rect)>,
     /// The last left click on a pane's body: when, and which pane and row,
@@ -238,6 +241,7 @@ impl App {
             error: None,
             notice: None,
             clipboard: None,
+            editor: None,
             should_quit: false,
             pane_areas: Vec::new(),
             last_click: None,
@@ -343,6 +347,17 @@ impl App {
     /// Takes the text a command copied, for the runner to send to the terminal.
     pub fn take_clipboard(&mut self) -> Option<String> {
         self.clipboard.take()
+    }
+
+    /// Takes the editor a command asked for, for the runner to start. It
+    /// reports back with [`Action::EditorFinished`].
+    pub fn take_editor(&mut self) -> Option<EditorLaunch> {
+        self.editor.take()
+    }
+
+    /// The terminal's title: `<repo> - tt-git`, like lazygit's.
+    pub fn terminal_title(&self) -> String {
+        format!("{} - tt-git", self.repo.name())
     }
 
     /// Where each pane was drawn in the last frame.
@@ -650,6 +665,24 @@ impl App {
                 self.load_refs();
                 self.load_status();
                 self.load_graph();
+            }
+            Action::OpenInEditor(target) => self.open_in_editor(target),
+            Action::EditSnapshot(Ok(snap)) => {
+                self.notice = Some(format!(
+                    "{} isn't in the working tree: opened a read-only copy from {}",
+                    snap.path, snap.commit
+                ));
+                self.start_editor(&snap.file, snap.line);
+            }
+            Action::EditSnapshot(Err(e)) => self.error = Some(e),
+            Action::EditorFinished(result) => {
+                match result {
+                    Ok(Some(code)) if code != 0 => self.notice = Some(format!("editor exited with status {code}")),
+                    Ok(_) => {}
+                    Err(e) => self.error = Some(e),
+                }
+                // Pick up the edits even when the watcher is off.
+                self.apply(Action::Refresh);
             }
             Action::GraphBatch {
                 generation,
@@ -1184,6 +1217,44 @@ impl App {
         self.focus = PaneId::Details;
     }
 
+    /// The status pane's selected file in the editor, at its first change
+    /// once that's loaded.
+    fn edit_status_file(&mut self) {
+        let Some(entry) = self.status.selected().cloned() else {
+            self.notice = Some("no file to open here".into());
+            return;
+        };
+        let repo = self.repo.clone();
+        self.ctx.spawn(move || loaders::status_edit_target(repo, entry));
+    }
+
+    /// Opens `target` in the editor: the working-tree file, or if it isn't
+    /// there, a read-only copy from the target's commit.
+    fn open_in_editor(&mut self, target: EditTarget) {
+        let file = editor::abs_path(self.repo.root(), &target.path);
+        if file.exists() {
+            self.start_editor(&file, target.line);
+        } else if target.rev.is_some() {
+            let repo = self.repo.clone();
+            let dir = std::env::temp_dir().join("tt-git").join(self.repo.name());
+            self.ctx.spawn(move || loaders::edit_snapshot(repo, dir, target));
+        } else {
+            self.notice = Some(format!("{} isn't in the working tree", target.path));
+        }
+    }
+
+    /// Works out the editor command for `file` and leaves it for the
+    /// runner to start.
+    fn start_editor(&mut self, file: &std::path::Path, line: Option<u32>) {
+        let repo = &self.repo;
+        let cfg = &self.config.editor;
+        let (command, from) = editor::choose(cfg, |k| std::env::var(k).ok(), || repo.core_editor());
+        match editor::launch(cfg, &command, from, repo.root(), file, line) {
+            Ok(launch) => self.editor = Some(launch),
+            Err(e) => self.error = Some(e),
+        }
+    }
+
     /// Leaves the staging view for the status pane.
     fn close_staging(&mut self) {
         self.details.clear();
@@ -1424,6 +1495,7 @@ impl App {
                 self.set_graph_filter(LogFilter::default())
             }
             Command::OpenStaging if self.focus == PaneId::Status => self.open_staging(),
+            Command::OpenInEditor if self.focus == PaneId::Status => self.edit_status_file(),
             Command::CloseDetails if self.focus == PaneId::Details && self.details.stage().is_some() => {
                 self.close_staging()
             }

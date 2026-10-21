@@ -7,6 +7,7 @@ use tt_git_core::{
 use tt_git_plugin::runtime::CommandLog;
 use tt_git_plugin::socket::Call;
 
+use crate::editor::{EditTarget, Snapshot};
 use crate::filter::{Choice, FilterTab};
 use crate::keymap::Command;
 use crate::modal::{GitOp, Modal};
@@ -115,6 +116,15 @@ pub enum Action {
         result: Result<String, String>,
         head: Option<String>,
     },
+    /// Open this file in the user's editor.
+    OpenInEditor(EditTarget),
+    /// A copy of a file that isn't in the working tree, written to open in
+    /// the editor, or why it couldn't be.
+    EditSnapshot(Result<Snapshot, String>),
+    /// The editor from `OpenInEditor` exited (`Ok` with its exit code, when
+    /// it has one) or, for one with a window of its own, started. `Err` says
+    /// why it couldn't start.
+    EditorFinished(Result<Option<i32>, String>),
     /// A request arrived on the API socket.
     Socket(Call),
     /// A plugin command finished.
