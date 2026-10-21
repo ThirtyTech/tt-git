@@ -586,6 +586,21 @@ pub fn edit_snapshot(repo: Repo, dir: PathBuf, target: EditTarget) -> Action {
     Action::EditSnapshot(result)
 }
 
+/// Blames `path` as of `rev` (the working tree when `None`).
+pub fn load_blame(repo: Repo, id: u64, rev: Option<String>, path: String) -> Action {
+    let result = repo.blame(rev.as_deref(), &path).map_err(message);
+    Action::BlameLoaded { id, result }
+}
+
+/// `oid`'s message below its subject line.
+pub fn load_commit_message(repo: Repo, oid: String) -> Action {
+    let body = match repo.git().run(&["show", "-s", "--format=%b", &oid, "--"]) {
+        Ok(out) => out.into_stdout_string().trim_end().to_string(),
+        Err(e) => format!("could not load the message: {}", message(e)),
+    };
+    Action::CommitMessageLoaded { oid, body }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

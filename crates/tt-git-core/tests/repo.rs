@@ -643,3 +643,41 @@ fn disk_usage_sums_files_and_skips_nested_worktrees() {
     assert_eq!(disk_usage(dir.path(), &[nested]).unwrap(), 123);
     assert!(disk_usage(&dir.path().join("missing"), &[]).is_err());
 }
+
+#[test]
+fn blame_names_the_commit_behind_each_line() {
+    let sb = Sandbox::new();
+    let first = sb.commit_file("f.txt", "one\ntwo\nthree\n", "add f");
+    let second = sb.commit_file("f.txt", "one\nTWO\nthree\n", "shout two");
+    sb.write("f.txt", "one\nTWO\nthree\nfour\n");
+    let repo = open(&sb);
+
+    // The working tree: the new line isn't committed yet.
+    let blame = repo.blame(None, "f.txt").unwrap();
+    let who: Vec<_> = blame
+        .lines
+        .iter()
+        .map(|l| (l.text.as_str(), blame.commits[l.commit].oid.clone()))
+        .collect();
+    assert_eq!(who[0], ("one", first.clone()));
+    assert_eq!(who[1], ("TWO", second.clone()));
+    assert_eq!(who[2], ("three", first.clone()));
+    assert!(blame.commit_of(3).unwrap().is_uncommitted());
+
+    let shout = blame.commit_of(1).unwrap();
+    assert_eq!(shout.summary, "shout two");
+    assert_eq!(shout.previous, Some((first.clone(), "f.txt".to_string())));
+    assert_eq!(blame.lines[1].orig_line, 2);
+
+    // As of a commit, and before it: where stepping back goes.
+    let before = repo.blame(Some(&first), "f.txt").unwrap();
+    assert_eq!(before.lines[1].text, "two");
+    assert_eq!(before.commit_of(1).unwrap().previous, None);
+
+    // .git-blame-ignore-revs passes over a commit, to the one before.
+    sb.write(".git-blame-ignore-revs", &format!("{second}\n"));
+    let ignored = repo.blame(Some("HEAD"), "f.txt").unwrap();
+    assert_eq!(ignored.commit_of(1).unwrap().oid, first);
+
+    assert!(repo.blame(None, "missing.txt").is_err());
+}

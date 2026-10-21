@@ -189,6 +189,8 @@ pub enum Context {
     Stash,
     /// The branches pane on its Worktrees tab.
     Worktrees,
+    /// The details pane while it blames a file.
+    Blame,
 }
 
 /// Everything a key can be bound to.
@@ -260,6 +262,10 @@ pub enum Command {
     Undo,
     OpenWorktree,
     RemoveWorktree,
+    Blame,
+    OpenCommit,
+    BlameBack,
+    BlameForward,
 }
 
 impl Command {
@@ -331,6 +337,10 @@ impl Command {
             Command::StashDrop => "drop",
             Command::OpenWorktree => "open",
             Command::RemoveWorktree => "remove",
+            Command::Blame => "blame",
+            Command::OpenCommit => "open commit",
+            Command::BlameBack => "step back past commit",
+            Command::BlameForward => "forward again",
         }
     }
 }
@@ -473,6 +483,7 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Status, Command::Amend, &["A"]),
     (Context::Status, Command::Stash, &["s"]),
     (Context::Status, Command::OpenInEditor, &["e"]),
+    (Context::Status, Command::Blame, &["b"]),
     (Context::Graph, Command::ToggleScope, &["a"]),
     (Context::Graph, Command::ToggleDates, &["t"]),
     (Context::Graph, Command::Checkout, &["o"]),
@@ -495,6 +506,15 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Details, Command::CloseDetails, &["esc", "space"]),
     (Context::Details, Command::ToggleFiles, &["}"]),
     (Context::Details, Command::OpenInEditor, &["e"]),
+    (Context::Details, Command::Blame, &["b"]),
+    (Context::Blame, Command::OpenCommit, &["enter"]),
+    (Context::Blame, Command::ToggleDetails, &["space"]),
+    (Context::Blame, Command::BlameBack, &["["]),
+    (Context::Blame, Command::BlameForward, &["]"]),
+    (Context::Blame, Command::ToggleDates, &["t"]),
+    (Context::Blame, Command::OpenInEditor, &["e"]),
+    (Context::Blame, Command::Copy, &["c"]),
+    (Context::Blame, Command::CloseDetails, &["esc"]),
     (Context::Stage, Command::StageToggle, &["space"]),
     (Context::Stage, Command::Discard, &["d"]),
     (Context::Stage, Command::SwitchSide, &["tab"]),
@@ -854,6 +874,7 @@ mod tests {
             Context::Stage,
             Context::Stash,
             Context::Worktrees,
+            Context::Blame,
         ];
         let commands: std::collections::HashSet<Command> = DEFAULTS.iter().map(|(_, cmd, _)| *cmd).collect();
         for km in [Keymap::default(), Keymap::with_overrides(&overrides).unwrap()] {

@@ -28,6 +28,12 @@ pub struct Theme {
     pub diff_del: Style,
     pub diff_hunk: Style,
     pub diff_header: Style,
+    /// Blame's age stripe, newest to oldest (hot to cold).
+    pub blame_heat: [Color; 5],
+    /// Blame's author colors; each author always gets the same one.
+    pub blame_authors: [Color; 8],
+    /// Blame's lines not committed yet: their stripe and author.
+    pub blame_uncommitted: Style,
 }
 
 impl Default for Theme {
@@ -72,6 +78,24 @@ impl Default for Theme {
             diff_del: Style::new().fg(Color::Red),
             diff_hunk: Style::new().fg(Color::Cyan),
             diff_header: Style::new().add_modifier(Modifier::BOLD),
+            blame_heat: [
+                Color::Rgb(242, 93, 46),
+                Color::Rgb(227, 163, 65),
+                Color::Rgb(156, 143, 125),
+                Color::Rgb(91, 127, 166),
+                Color::Rgb(61, 90, 128),
+            ],
+            blame_authors: [
+                Color::Cyan,
+                Color::Magenta,
+                Color::Green,
+                Color::Yellow,
+                Color::LightRed,
+                Color::LightBlue,
+                Color::LightMagenta,
+                Color::LightCyan,
+            ],
+            blame_uncommitted: Style::new().fg(Color::Green).add_modifier(Modifier::BOLD),
         }
     }
 }

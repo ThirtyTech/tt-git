@@ -126,6 +126,50 @@ fn stage_and_commit_in_the_real_binary() {
 }
 
 #[test]
+fn blame_a_line_open_its_commit_and_come_back() {
+    let sb = Sandbox::new();
+    sb.commit_file(
+        "notes.txt",
+        "alpha
+beta
+",
+        "Write notes",
+    );
+    sb.commit_file(
+        "notes.txt",
+        "alpha
+BETA
+",
+        "Shout beta",
+    );
+    sb.write(
+        "notes.txt",
+        "alpha
+BETA
+gamma
+",
+    );
+    let mut t = spawn(&sb, &[]);
+    t.wait_until(|s| s.contains(" M notes.txt")).expect("status lists file");
+    t.send_str("2").unwrap();
+    t.send_str("b").unwrap();
+    t.wait_until(|s| s.contains("Blame notes.txt at working tree") && s.contains("Not committed yet"))
+        .expect("blame drawn");
+    t.send_str("j").unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("Shout beta") && s.contains("◂ line 2 in blame"))
+        .expect("the line's commit, with the line marked");
+    t.send(Key::Esc).unwrap();
+    t.wait_until(|s| s.contains("Blame notes.txt at working tree") && s.contains("2/3"))
+        .expect("back on line 2");
+    t.send(Key::Esc).unwrap();
+    t.wait_until(|s| !s.contains("Blame notes.txt") && s.contains("Status: repo"))
+        .expect("back to status");
+    t.send_str("q").unwrap();
+    assert!(t.wait_exit().unwrap().success());
+}
+
+#[test]
 fn undo_a_commit_in_the_real_binary() {
     let sb = Sandbox::new();
     let base = sb.commit("base");

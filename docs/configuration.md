@@ -18,7 +18,7 @@ mouse = true        # click, wheel, ctrl+click links
 max_commits = 20000             # loaded at a time; scrolling near the end loads more
 max_lanes = 16                  # lanes drawn before collapsing into …
 current_includes_upstream = true  # current-branch mode also shows HEAD's upstream
-dates = "relative"              # date column: "relative" (3h, 2d) or "clock" (2026-10-17 01:30 PM, local time)
+dates = "relative"              # graph and blame dates: "relative" (3h, 2d) or "clock" (2026-10-17 01:30 PM, local time)
 
 [branches]
 unmerged_exclude = ["archive"]  # hide unmerged branches whose name contains any of these
@@ -160,6 +160,7 @@ graph opens details below it at full width and closes it again.
 
 Bindings belong to a context: `global`, `status`, `branches`, `graph`,
 `details`, `stage` (the details pane while it stages a file by hunk),
+`blame` (the details pane while it blames a file),
 `stash` (the branches pane on its Stash tab, which doesn't fall back to
 `branches`) or `worktrees` (the branches pane on its Worktrees tab, which
 doesn't either).
@@ -202,8 +203,10 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `open_worktree`, `remove_worktree`, `new_branch`, `copy`, `next_tab`, `prev_tab`, `filter` | `enter`/`space`, `d`, `n`, `c`, `]` `}`, `[` `{`, `/` | worktrees |
 | `stage_toggle`, `switch_side`, `toggle_line_mode`, `select_range`, `discard`, `commit`, `close_details` | `space`, `tab`, `a`, `v`, `d`, `c`, `esc` | stage |
 | `toggle_files`, `open_link` | `}`, `o` | details |
-| `open_in_editor` | `e` | status, details, stage |
-| `copy` (commit hash / branch name / absolute worktree path) | `c` | graph, branches, worktrees |
+| `open_in_editor` | `e` | status, details, stage, blame |
+| `blame` | `b` | status, details |
+| `open_commit`, `toggle_details`, `blame_back`, `blame_forward`, `toggle_dates`, `close_details` | `enter`, `space`, `[`, `]`, `t`, `esc` | blame |
+| `copy` (commit hash / branch name / absolute worktree path) | `c` | graph, branches, worktrees, blame |
 | `plugin_logs` | (palette only) | global |
 
 ### Plugin action bindings

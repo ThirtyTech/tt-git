@@ -134,6 +134,16 @@ such as plugin logs, tt-git says `no file to open here`.
 
 Which editor runs is set in [`[editor]`](/configuration/#editor).
 
+## Blaming a file
+
+Press <kbd>b</kbd> to [blame](/panes/blame/) the file you're looking at: see who last changed each
+line, when and in which commit. Which file is the same as for <kbd>e</kbd> above, and blame opens on
+the line at the top of the diff.
+
+For a commit, blame shows the file as of that commit, not as it is now. A file the commit
+deleted is blamed as it was just before the commit. For a file's diff from the status pane, it shows
+your working tree. Blame opens fullscreen, and <kbd>esc</kbd> comes back to exactly this view.
+
 ## Links
 
 <Screenshot name="details-link" alt="A commit message with an issue link in the details pane" />
@@ -156,6 +166,7 @@ says `no plugin handles …` rather than guessing which program should open it.
 | <kbd>{'}'}</kbd> | Show / hide the changed files |
 | <kbd>o</kbd> | Open the link in view with a plugin |
 | <kbd>e</kbd> | Open the file in view in your editor |
+| <kbd>b</kbd> | [Blame](/panes/blame/) the file in view, as of the commit |
 | <kbd>esc</kbd> <kbd>space</kbd> | Close details |
 | <kbd>+</kbd> | Fullscreen and back |
 

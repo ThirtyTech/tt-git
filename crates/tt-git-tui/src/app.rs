@@ -11,7 +11,7 @@ use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tt_git_core::branches::matches_filter;
 use tt_git_core::time::SharedClock;
 use tt_git_core::{
-    CheckoutPlan, CommitFile, Head, LogFilter, NoStep, Repo, Stash, StatusEntry, UNDO_CHANGES_KEPT, UndoStep,
+    CheckoutPlan, CommitFile, FileState, Head, LogFilter, NoStep, Repo, Stash, StatusEntry, UNDO_CHANGES_KEPT, UndoStep,
 };
 
 use crate::action::{Action, RefsSnapshot};
@@ -25,7 +25,8 @@ use crate::layout::View;
 use crate::loaders;
 use crate::modal::{GitOp, Modal, ModalOutcome};
 use crate::panes::{
-    BranchFocus, BranchTab, BranchesPane, DetailsPane, DetailsSubject, GraphPane, LoadToken, PaneId, StatusPane,
+    BlameView, BranchFocus, BranchTab, BranchesPane, DetailsPane, DetailsSubject, GraphPane, LoadToken, PaneId,
+    SavedDetails, StatusPane,
 };
 use crate::theme::Theme;
 use crate::watcher::RepoWatcher;
@@ -121,6 +122,19 @@ impl PartialEq for HistoryLoad {
     }
 }
 
+/// Where `esc` goes back to from a view opened on top of another (blame,
+/// or the commit opened from a blamed line): the details shown before, and
+/// the focus and layout they were shown with.
+#[derive(Debug)]
+struct Back {
+    details: SavedDetails,
+    /// How the view on top names it, after its title.
+    label: String,
+    focus: PaneId,
+    zoom: Zoom,
+    details_open: bool,
+}
+
 /// How much of the screen the graph and details panes take. `+` toggles
 /// between [`Zoom::Off`] and [`Zoom::Full`]; `space` in a fullscreen graph
 /// opens details below it in [`Zoom::Wide`].
@@ -208,6 +222,9 @@ pub struct App {
     file_diff_job: LatestJob<(String, CommitFile)>,
     /// Branch histories for the graph's focused branch.
     history_job: LatestJob<HistoryLoad>,
+    /// Views to go back to with `esc`, the latest last. Only while details
+    /// has the focus.
+    back: Vec<Back>,
     refs_reload: Reload,
     status_reload: Reload,
 }
@@ -277,6 +294,7 @@ impl App {
             details_jobs: Default::default(),
             file_diff_job: LatestJob::default(),
             history_job: LatestJob::default(),
+            back: Vec::new(),
             refs_reload: Reload::default(),
             status_reload: Reload::default(),
         };
@@ -897,6 +915,25 @@ impl App {
                 self.details.set_stage_diffs(entry, unstaged, staged);
                 self.details_finished(3, |l| matches!(l, DetailsLoad::Stage(e) if e.path == path));
             }
+            Action::LoadBlame { id, rev, path } => {
+                let repo = self.repo.clone();
+                self.ctx.spawn(move || loaders::load_blame(repo, id, rev, path));
+            }
+            Action::BlameLoaded { id, result } => {
+                let ctx = self.ctx.clone();
+                if let Some(view) = self.details.blame_mut() {
+                    view.set_blame(id, result, &ctx);
+                }
+            }
+            Action::LoadCommitMessage(oid) => {
+                let repo = self.repo.clone();
+                self.ctx.spawn(move || loaders::load_commit_message(repo, oid));
+            }
+            Action::CommitMessageLoaded { oid, body } => {
+                if let Some(view) = self.details.blame_mut() {
+                    view.set_message(&oid, body);
+                }
+            }
             Action::FilterChoicesLoaded { tab, choices } => {
                 if let Some(Modal::Filter(panel)) = &mut self.modal {
                     panel.set_choices(tab, choices);
@@ -1305,6 +1342,10 @@ impl App {
 
     /// Points the details pane at whatever the focused pane has selected.
     fn refresh_details(&mut self, force: bool) {
+        // Leaving details leaves what it would go back to.
+        if self.focus != PaneId::Details {
+            self.back.clear();
+        }
         match self.focus {
             PaneId::Status => {
                 if let Some(entry) = self.status.selected().cloned() {
@@ -1531,6 +1572,121 @@ impl App {
         self.file_diff_job.started(item, done);
     }
 
+    /// Puts what details shows aside for `esc` to come back to.
+    fn push_back(&mut self) {
+        let label = if self.focus == PaneId::Details {
+            self.details.back_label()
+        } else {
+            // The pane's name: `Status`.
+            format!("{:?}", self.focus)
+        };
+        let details = self.details.save();
+        self.back.push(Back {
+            details,
+            label,
+            focus: self.focus,
+            zoom: self.zoom,
+            details_open: self.details_open,
+        });
+    }
+
+    /// Goes back to the view the one shown was opened from, as it was.
+    fn go_back(&mut self) {
+        let Some(back) = self.back.pop() else { return };
+        let ctx = self.ctx.clone();
+        self.details.restore(back.details, &ctx);
+        if let Some(view) = self.details.blame_mut() {
+            view.set_dates(self.graph.dates);
+        }
+        self.focus = back.focus;
+        self.zoom = back.zoom;
+        self.details_open = back.details_open;
+        // A load that finished while put aside was dropped: ask again.
+        if self.details.loading() {
+            match self.details.subject().cloned() {
+                Some(DetailsSubject::Commit(oid)) => self.want_details(DetailsLoad::Commit(oid), true),
+                Some(DetailsSubject::CommitFiles(oid)) => self.want_details(DetailsLoad::CommitFiles(oid), true),
+                _ if self.focus != PaneId::Details => self.refresh_details(true),
+                _ => {}
+            }
+        }
+    }
+
+    /// Opens a blame of `path` as of `rev` (the working tree when `None`)
+    /// fullscreen, on `line`. `esc` comes back to what was showing.
+    fn open_blame(&mut self, path: String, rev: Option<String>, label: String, line: u32) {
+        self.push_back();
+        let view = BlameView::open(path, rev, label, line, self.graph.dates, self.clock.clone(), &self.ctx);
+        self.details.open_blame(view);
+        self.details.set_trail(self.back.last().map(|b| b.label.clone()));
+        self.details_open = true;
+        self.zoom = Zoom::Full(PaneId::Details);
+        self.focus = PaneId::Details;
+    }
+
+    /// Blames the status pane's selected file in the working tree.
+    fn blame_status_file(&mut self) {
+        let Some(entry) = self.status.selected().cloned() else {
+            self.notice = Some("no file to blame here".into());
+            return;
+        };
+        if entry.is_untracked() || entry.index == FileState::Added {
+            self.notice = Some(format!("{} isn't committed yet: nothing to blame", entry.path));
+            return;
+        }
+        // A file deleted from the working tree is blamed as it was in HEAD.
+        let (rev, label) = if entry.worktree == FileState::Deleted || entry.index == FileState::Deleted {
+            (Some("HEAD".to_string()), "HEAD")
+        } else {
+            (None, "working tree")
+        };
+        self.open_blame(entry.path, rev, label.to_string(), 1);
+    }
+
+    /// Blames the file details shows, as of the commit it's from (the
+    /// working tree for a working-tree diff), on the line at the top.
+    fn blame_details_file(&mut self) {
+        if self.details.stage().is_some() || self.details.blame().is_some() {
+            return;
+        }
+        match self.details.edit_target() {
+            Ok(target) => {
+                let label = target
+                    .rev
+                    .as_deref()
+                    .map_or_else(|| "working tree".to_string(), short_rev);
+                self.open_blame(target.path, target.rev, label, target.line.unwrap_or(1));
+            }
+            Err(why) => self.notice = Some(why),
+        }
+    }
+
+    /// Opens the commit behind blame's selected line, with that file
+    /// selected and the line marked in its diff. `esc` comes back.
+    fn open_blame_commit(&mut self) {
+        let Some((commit, path, line)) = self.details.blame().and_then(BlameView::selected) else {
+            return;
+        };
+        if commit.is_uncommitted() {
+            self.notice = Some("this line isn't committed yet: there's no commit to open".into());
+            return;
+        }
+        let (oid, path) = (commit.oid.clone(), path.to_string());
+        self.push_back();
+        self.show_commit_files(oid);
+        self.details.focus_file(path, line);
+        self.details.set_trail(self.back.last().map(|b| b.label.clone()));
+    }
+
+    /// `t` in blame: the same date style as the graph's, switched for both.
+    fn toggle_blame_dates(&mut self) {
+        self.graph.dates = self.graph.dates.toggled();
+        let dates = self.graph.dates;
+        if let Some(view) = self.details.blame_mut() {
+            view.set_dates(dates);
+        }
+    }
+
     /// Opens the selected commit fullscreen as changed files beside a diff.
     fn expand_details(&mut self) {
         let Some(oid) = self.graph.selected().map(|c| c.oid.to_string()) else {
@@ -1646,6 +1802,14 @@ impl App {
                 self.set_graph_filter(LogFilter::default())
             }
             Command::OpenStaging if self.focus == PaneId::Status => self.open_staging(),
+            // esc in a view opened on top of another goes back to it.
+            Command::CloseDetails if self.focus == PaneId::Details && !self.back.is_empty() => self.go_back(),
+            Command::Blame if self.focus == PaneId::Status => self.blame_status_file(),
+            Command::Blame if self.focus == PaneId::Details => self.blame_details_file(),
+            Command::OpenCommit if self.focus == PaneId::Details => self.open_blame_commit(),
+            Command::ToggleDates if self.focus == PaneId::Details && self.details.blame().is_some() => {
+                self.toggle_blame_dates()
+            }
             Command::OpenInEditor if self.focus == PaneId::Status => self.edit_status_file(),
             Command::CloseDetails if self.focus == PaneId::Details && self.details.stage().is_some() => {
                 self.close_staging()
@@ -1898,6 +2062,17 @@ fn draw_error_popup(frame: &mut Frame, area: Rect, msg: &str, theme: &Theme) {
         .border_style(theme.error)
         .title(Span::styled(" Error ", theme.error));
     frame.render_widget(Paragraph::new(msg).wrap(Wrap { trim: false }).block(block), popup);
+}
+
+/// A revision as a title shows it: a commit id shortened, keeping a `^`.
+fn short_rev(rev: &str) -> String {
+    let (base, suffix) = rev.split_at(rev.find(['^', '~']).unwrap_or(rev.len()));
+    let short = if base.len() >= 40 && base.bytes().all(|b| b.is_ascii_hexdigit()) {
+        &base[..7]
+    } else {
+        base
+    };
+    format!("{short}{suffix}")
 }
 
 pub(crate) fn centered(area: Rect, width: u16, height: u16) -> Rect {

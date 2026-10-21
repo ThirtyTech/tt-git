@@ -67,7 +67,7 @@ impl DateStyle {
         }
     }
 
-    fn width(self) -> usize {
+    pub(crate) fn width(self) -> usize {
         match self {
             DateStyle::Relative => 4,
             DateStyle::Clock => 19,

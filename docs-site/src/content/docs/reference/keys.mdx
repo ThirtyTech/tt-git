@@ -42,6 +42,7 @@ else.
 | <kbd>space</kbd> | Show / hide the commit's details. |
 | <kbd>esc</kbd> | Hide details. With details already hidden: clear the filter. |
 | <kbd>a</kbd> | All branches ↔ the current branch (and its upstream). |
+| <kbd>t</kbd> | Dates as age ↔ local date and time. |
 | <kbd>f</kbd> | Filter by author or by file or folder. |
 | <kbd>o</kbd> | Check out the selected commit: the local branch on it, else the commit with HEAD detached. Asks to stash uncommitted changes first. |
 | <kbd>n</kbd> | New branch at the selected commit. |
@@ -73,6 +74,7 @@ See [Graph](/panes/graph/).
 | <kbd>{'}'}</kbd> | Show / hide the commit's changed files below the diff. Fullscreen puts them on the left. |
 | <kbd>o</kbd> | Open the link in view with a plugin link handler. |
 | <kbd>e</kbd> | Open the file in view in your editor, at the line at the top of the diff. |
+| <kbd>b</kbd> | [Blame](/panes/blame/) the file in view as of that commit, at the line at the top of the diff. |
 | <kbd>esc</kbd> <kbd>space</kbd> | Close details. |
 
 See [Details](/panes/details/).
@@ -89,6 +91,7 @@ See [Details](/panes/details/).
 | <kbd>A</kbd> | Amend the last commit with what's staged, keeping its message. |
 | <kbd>s</kbd> | Stash. |
 | <kbd>e</kbd> | Open the file in your editor at its first change, or a conflicted file at its first conflict marker. |
+| <kbd>b</kbd> | [Blame](/panes/blame/) the file in the working tree. |
 | <kbd>C</kbd> | Continue a merge, rebase or cherry-pick. |
 | <kbd>X</kbd> | Abort a merge, rebase or cherry-pick (asks first). |
 
@@ -111,6 +114,25 @@ The staging view, opened with <kbd>enter</kbd> on a file in the status pane.
 | <kbd>esc</kbd> | Back to the status pane. |
 
 See [Staging hunks and lines](/panes/staging/).
+
+## Blame `blame`
+
+Blame, opened with <kbd>b</kbd> on a file in the status pane or details.
+<kbd>j</kbd> <kbd>k</kbd>, <kbd>ctrl+d</kbd> <kbd>ctrl+u</kbd> and
+<kbd>g</kbd> <kbd>G</kbd> move as everywhere else.
+
+| Key | Does |
+|---|---|
+| <kbd>enter</kbd> | Open the line's commit fullscreen, scrolled to the line. <kbd>esc</kbd> comes back. |
+| <kbd>space</kbd> | Show / hide the line's commit details below the code. |
+| <kbd>[</kbd> | Step back: blame the file as it was just before the line's commit. |
+| <kbd>]</kbd> | Forward again, to the newer version you stepped back from. |
+| <kbd>t</kbd> | Ages ↔ local dates and times. Shared with the graph. |
+| <kbd>e</kbd> | Open the file in your editor at the selected line. |
+| <kbd>c</kbd> | Copy the line's commit hash. |
+| <kbd>esc</kbd> | Back to where you opened blame. |
+
+See [Blame](/panes/blame/).
 
 ## Branches `branches`
 
@@ -212,6 +234,7 @@ With `mouse = true` (the default):
 | Double-click a commit in the graph | Open it fullscreen with its changed files, as <kbd>enter</kbd> does. |
 | Click a tab in the branches pane's title | Switch to that tab. |
 | Click a file in the details files view | Show its diff. |
+| Click a line in blame | Select it. |
 | Click an entry in Filter graph | Filter the graph by it. A click outside the popup closes it. |
 | Scroll the wheel | Scroll the pane under the pointer (in the details files view, the diff when over it). |
 | <kbd>ctrl</kbd>+click a link in details | Open it with a plugin link handler. |

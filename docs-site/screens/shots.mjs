@@ -308,6 +308,31 @@ export const shots = [
 			{ target: { find: '▌Staged  1 hunk' }, text: '**Staged** on the right: space there unstages', markerSide: 'right', tone: 'green' },
 		],
 	},
+	// ---- blame ----------------------------------------------------------------
+	{
+		name: 'blame-gutter',
+		capture: 'blame',
+		view: { region: { cells: [0, 0, 120, 14] } },
+		callouts: [
+			{ target: { find: '▌', nth: 0, h: 13 }, text: '**When**: hot is recent, cold is old', markerSide: 'below', tone: 'amber' },
+			{ target: { find: ' 1w ▌', nth: 0, dx: 2, w: 2 }, text: '**When**: its age, or with t the date', markerSide: 'above', tone: 'amber' },
+			{ target: { find: 'Mia Chen', nth: 0 }, text: '**Who**: on every line, a color each', markerSide: 'above', tone: 'green' },
+			{ target: { find: '31a324f  Refresh', w: 39 }, text: '**Why**: the commit, where its lines start', markerSide: 'above' },
+		],
+	},
+	{ name: 'blame-overview', capture: 'blame' },
+	{ name: 'blame-details', capture: 'blame-details' },
+	{
+		name: 'blame-commit',
+		capture: 'blame-commit',
+		legend: { x: 1200, y: 700, width: 680 },
+		callouts: [
+			{ target: { find: '‹ Blame src/api/client.ts' , w: 52 }, text: '**esc** goes back here, to line 33', markerSide: 'below' },
+			{ target: { find: 'Files (2)', w: 26, h: 3 }, text: '**Everything** the commit changed', markerSide: 'right' },
+			{ target: { find: '+      signal: opts.signal,', w: 159 }, text: '**The blamed line**, picked out', markerSide: 'left', tone: 'green' },
+		],
+	},
+	{ name: 'blame-step-back', capture: 'blame-step-back' },
 	{
 		name: 'staging-discard',
 		capture: 'staging-discard',

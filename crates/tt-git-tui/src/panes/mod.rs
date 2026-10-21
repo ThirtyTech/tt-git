@@ -1,13 +1,15 @@
 //! The four main panes.
 
+mod blame;
 mod branches;
 mod details;
 mod graph;
 mod stage;
 mod status;
 
+pub use blame::BlameView;
 pub use branches::{BranchTab, BranchesPane};
-pub use details::{DetailsPane, DetailsSubject};
+pub use details::{DetailsPane, DetailsSubject, SavedDetails};
 pub use graph::{BranchFocus, DateStyle, GraphPane, GraphScope, LabelKind, LoadToken, RefLabel, build_labels};
 pub use stage::{StageSideId, StageView};
 pub use status::StatusPane;

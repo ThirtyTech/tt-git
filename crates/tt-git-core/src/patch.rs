@@ -435,6 +435,32 @@ pub fn diff_text_position<S: AsRef<str>>(lines: &[S], row: usize) -> Option<Diff
     })
 }
 
+/// The row of diff text that shows new-side line `line`: an added or
+/// context line of the hunk that holds it. `None` when no hunk reaches it.
+pub fn diff_text_row_of_line<S: AsRef<str>>(lines: &[S], line: u32) -> Option<usize> {
+    let mut new_line = None;
+    for (row, text) in lines.iter().enumerate() {
+        let text = text.as_ref();
+        if text.starts_with("diff --git ") {
+            new_line = None;
+        } else if text.starts_with("@@ ") {
+            new_line = parse_heading(text).map(|h| h.new_start);
+        } else if let Some(n) = new_line.as_mut() {
+            match text.as_bytes().first() {
+                Some(b' ' | b'+') | None => {
+                    if *n == line {
+                        return Some(row);
+                    }
+                    *n += 1;
+                }
+                Some(b'-' | b'\\') => {}
+                Some(_) => new_line = None,
+            }
+        }
+    }
+    None
+}
+
 /// A path from a `---`/`+++` line, unquoted and without its `a/`/`b/` prefix.
 fn diff_path(raw: &str, prefix: &str) -> String {
     let p = unquote_c(raw);
@@ -544,6 +570,21 @@ index 1111111..2222222 100644
  z
  w
 ";
+
+    #[test]
+    fn finds_the_row_of_a_new_line() {
+        let lines: Vec<&str> = TWO_HUNKS.lines().collect();
+        let row = |line| diff_text_row_of_line(&lines, line);
+        assert_eq!(row(1), Some(5));
+        // A deleted line has no new number: the added line after it is 2.
+        assert_eq!(row(2), Some(7));
+        assert_eq!(row(4), Some(9));
+        assert_eq!(row(11), Some(12));
+        assert_eq!(row(13), Some(14));
+        // Between the hunks and past the end, no hunk shows it.
+        assert_eq!(row(6), None);
+        assert_eq!(row(14), None);
+    }
 
     #[test]
     fn parses_header_and_hunks() {

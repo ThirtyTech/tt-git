@@ -90,6 +90,7 @@ export default defineConfig({
 						{ label: 'Details', slug: 'panes/details' },
 						{ label: 'Status', slug: 'panes/status' },
 						{ label: 'Staging hunks and lines', slug: 'panes/staging' },
+						{ label: 'Blame', slug: 'panes/blame' },
 						{ label: 'Branches', slug: 'panes/branches' },
 						{ label: 'Merged and unmerged', slug: 'panes/merged-unmerged' },
 						{ label: 'Tags', slug: 'panes/tags' },

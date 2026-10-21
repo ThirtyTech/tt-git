@@ -124,6 +124,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `c` / `A` | commit / amend keeping the message |
 | | `s` | stash: everything, only what's staged, only what isn't staged, everything but leave staged changes in place, or just the selected file (`tab` in the dialog picks; the message is optional) |
 | | `e` | open the file in your editor at its first change (a conflicted file: at its first conflict marker) |
+| | `b` | blame the file in the working tree: who last changed each line, when and in which commit |
 | | `C` / `X` | continue / abort a merge, rebase or cherry-pick |
 | stash tab | `space` / `a` | pop / apply the selected stash (pop drops it once applied) |
 | | `d` | drop it (asks first) |
@@ -135,6 +136,7 @@ command palette, which lists built-in commands and plugin actions.
 | details | `}` | show / hide the commit's changed files below the diff (`j`/`k` pick a file); fullscreen puts them on the left |
 | | `o` | open the link in view with a plugin link handler |
 | | `e` | open the file in view in your editor, at the line at the top of the diff |
+| | `b` | blame the file in view as of that commit, at the line at the top of the diff |
 | | `esc` `space` | close details |
 | staging | `j` / `k` | next / previous hunk (or changed line) |
 | | `space` | stage the selection, or unstage it on the staged side |
@@ -145,6 +147,12 @@ command palette, which lists built-in commands and plugin actions.
 | | `c` | commit what's staged |
 | | `e` | open the file in your editor at the selected hunk or line |
 | | `esc` | back to the status pane |
+| blame | `enter` | open the line's commit fullscreen, scrolled to the line (`b` there blames another of its files; `esc` back) |
+| | `space` | show / hide the line's commit: author, date, how many lines it gave this file, full message |
+| | `[` / `]` | step back to the file as it was before the line's commit / forward again |
+| | `t` | ages ↔ local dates and times (shared with the graph) |
+| | `e` / `c` | open the file in your editor at the line / copy the line's commit hash |
+| | `esc` | back to where blame was opened from |
 
 The mouse also works: click a pane or row to focus and select it,
 double-click a commit to open its files fullscreen, click a tab in the

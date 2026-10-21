@@ -419,6 +419,35 @@ Nothing loads while details is hidden, and at most one load of each kind is
 in flight. Hold <kbd>j</kbd> in the graph and tt-git loads only the commit
 you stop on, not every commit you passed.
 
+## Blame
+
+[Blame](/panes/blame/) is one `git blame` per version of the file:
+
+```sh
+git blame --porcelain -M -C [--ignore-revs-file <repo>/.git-blame-ignore-revs] [<rev>] -- <path>
+```
+
+There's no `<rev>` for the working tree, so lines you haven't committed show
+as `Not committed yet`. `-M` and `-C` follow lines that were moved or copied,
+within the file and from other files in the same commit, so a line keeps the
+commit that wrote it rather than the one that moved it. When the repository
+has a `.git-blame-ignore-revs` file at its root and `blame.ignoreRevsFile`
+isn't set, tt-git passes `--ignore-revs-file` so the commits listed there are
+skipped. When `blame.ignoreRevsFile` is set, git uses it by itself.
+
+The porcelain output gives each commit's author, date and summary, and the
+`previous` commit and path that <kbd>[</kbd> steps back to: the file as it
+was in that commit's parent, under its old name if it was renamed. A commit
+with no `previous` added the file, so there's nothing to step back to.
+
+The commit message that <kbd>space</kbd> shows is
+`git show -s --format=%b <commit> --`, loaded for the selected line's commit
+and kept while blame is open. <kbd>enter</kbd> opens the commit with the
+same commands as the [commit view](#changed-files).
+
+Blame runs in the background. The working-tree blame is a snapshot taken
+when it opens, and doesn't reload as files change.
+
 ## Refreshing
 
 What reloads when, and how file watching skips ignored paths, is covered in

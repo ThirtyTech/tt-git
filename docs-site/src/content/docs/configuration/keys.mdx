@@ -24,6 +24,7 @@ work everywhere:
 | `worktrees` | The branches pane on its Worktrees tab. It doesn't fall back to `branches`. |
 | `details` | The details pane. |
 | `stage` | The staging view, while you stage a file by hunk or line. |
+| `blame` | [Blame](/panes/blame/), while the details pane blames a file. |
 
 When you press a key, tt-git looks it up in the focused pane's context first,
 then in `global`. That's why <kbd>a</kbd> means "all branches / current branch"
@@ -124,14 +125,15 @@ Every command you can bind, with its default keys:
 | `undo` | <kbd>z</kbd> | global |
 | `plugin_logs` | none (palette only) | global |
 | `expand_details` | <kbd>enter</kbd> | graph, stash |
-| `toggle_details` | <kbd>space</kbd> | graph |
-| `close_details` | <kbd>esc</kbd> (graph, stage); <kbd>esc</kbd> <kbd>space</kbd> (details) | graph, details, stage |
+| `toggle_details` | <kbd>space</kbd> | graph, blame |
+| `close_details` | <kbd>esc</kbd> (graph, stage, blame); <kbd>esc</kbd> <kbd>space</kbd> (details) | graph, details, stage, blame |
 | `toggle_scope` | <kbd>a</kbd> | graph |
+| `toggle_dates` | <kbd>t</kbd> | graph, blame |
 | `filter` | <kbd>f</kbd> (graph); <kbd>/</kbd> (branches, stash, worktrees) | graph, branches, stash, worktrees |
 | `new_branch` | <kbd>n</kbd> | graph, branches, stash, worktrees |
 | `merge`, `rebase` | <kbd>M</kbd>, <kbd>r</kbd> | graph, branches |
 | `cherry_pick` | <kbd>C</kbd> | graph |
-| `copy` | <kbd>c</kbd> | graph, branches, worktrees |
+| `copy` | <kbd>c</kbd> | graph, branches, worktrees, blame |
 | `checkout` | <kbd>o</kbd> (graph); <kbd>enter</kbd> <kbd>space</kbd> (branches) | graph, branches |
 | `delete_branch`, `rename_branch` | <kbd>d</kbd>, <kbd>R</kbd> | branches |
 | `new_tag` | <kbd>T</kbd> | graph, branches |
@@ -154,7 +156,10 @@ Every command you can bind, with its default keys:
 | `select_range` | <kbd>v</kbd> | stage |
 | `toggle_files` | <kbd>{'}'}</kbd> | details |
 | `open_link` | <kbd>o</kbd> | details |
-| `open_in_editor` | <kbd>e</kbd> | status, details, stage |
+| `open_in_editor` | <kbd>e</kbd> | status, details, stage, blame |
+| `blame` | <kbd>b</kbd> | status, details |
+| `open_commit` | <kbd>enter</kbd> | blame |
+| `blame_back`, `blame_forward` | <kbd>[</kbd>, <kbd>]</kbd> | blame |
 
 A command does nothing in a context it isn't meant for, so binding, say,
 `commit` in `[keys.graph]` has no effect.

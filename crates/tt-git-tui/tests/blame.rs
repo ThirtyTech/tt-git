@@ -1,0 +1,236 @@
+//! Blaming a file: opening it from the status pane and from a commit, the
+//! commit behind a line and back, stepping back past a commit, dates.
+
+use tt_git_testkit::{Sandbox, TestDriver};
+use tt_git_tui::Config;
+use tt_git_tui::app::Zoom;
+use tt_git_tui::panes::{DateStyle, DetailsSubject, PaneId};
+
+/// The commits behind f.ts, oldest first.
+struct Repo {
+    sb: Sandbox,
+    add: String,
+    shout_b: String,
+    shout_d: String,
+}
+
+fn commit_as(sb: &Sandbox, author: &str, msg: &[&str]) -> String {
+    sb.git(&["add", "."]);
+    sb.tick();
+    let mut args = vec!["commit", "-q", "--author", author];
+    for part in msg {
+        args.extend(["-m", part]);
+    }
+    sb.git(&args);
+    sb.rev_parse("HEAD")
+}
+
+/// f.ts from three authors, with line 5 changed in the working tree.
+fn blamed() -> Repo {
+    let sb = Sandbox::new();
+    sb.write("f.ts", "a\nb\nc\nd\ne\n");
+    let add = commit_as(&sb, "Ada Park <ada@lumen.dev>", &["Add f"]);
+    sb.write("f.ts", "a\nB\nc\nd\ne\n");
+    let shout_b = commit_as(&sb, "Sam Rivera <sam@lumen.dev>", &["Shout b"]);
+    sb.write("f.ts", "a\nB\nc\nD\ne\n").write("other.txt", "more\n");
+    let shout_d = commit_as(
+        &sb,
+        "Mia Chen <mia@lumen.dev>",
+        &["Shout d and add other", "Other comes along for the ride."],
+    );
+    sb.write("f.ts", "a\nB\nc\nD\nE\n");
+    Repo {
+        sb,
+        add,
+        shout_b,
+        shout_d,
+    }
+}
+
+fn short(oid: &str) -> &str {
+    &oid[..7]
+}
+
+/// Blames f.ts from the status pane and waits for it.
+fn blame_from_status(t: &mut TestDriver) {
+    t.press("2").press("g").press("b").wait_idle();
+}
+
+#[test]
+fn b_in_status_blames_the_working_tree_and_esc_goes_back() {
+    let r = blamed();
+    let mut t = TestDriver::with_size(Config::default(), &r.sb, 120, 20);
+    blame_from_status(&mut t);
+    assert_eq!(t.app().details().subject(), Some(&DetailsSubject::Blame("f.ts".into())));
+    assert_eq!(t.app().focus(), PaneId::Details);
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    let title = t.pane_title(PaneId::Details);
+    assert!(title.contains("Blame f.ts at working tree  ‹ Status 1/5"), "{title}");
+    insta::assert_snapshot!(t.pane_lines(PaneId::Details).join("\n"));
+    assert!(t.screen().contains("step back past commit"), "{}", t.screen());
+
+    t.press("esc");
+    assert_eq!(t.app().focus(), PaneId::Status);
+    assert_eq!(t.app().zoom(), Zoom::Off);
+    assert!(t.app().details().blame().is_none());
+}
+
+#[test]
+fn nothing_to_blame_in_an_untracked_file() {
+    let r = blamed();
+    r.sb.write("new.txt", "fresh\n");
+    let mut t = TestDriver::new(&r.sb);
+    t.press("2").press("G").press("b");
+    assert!(t.app().details().blame().is_none());
+    assert_eq!(t.app().notice(), Some("new.txt isn't committed yet: nothing to blame"));
+}
+
+#[test]
+fn enter_opens_the_lines_commit_and_esc_comes_back_to_the_line() {
+    let r = blamed();
+    let mut t = TestDriver::with_size(Config::default(), &r.sb, 120, 30);
+    blame_from_status(&mut t);
+    t.press_all(&["j", "j", "j"]);
+    t.press("enter").wait_idle();
+    assert_eq!(
+        t.app().details().subject(),
+        Some(&DetailsSubject::CommitFiles(r.shout_d.clone()))
+    );
+    // Every file the commit touched, with the blamed one selected and its
+    // line picked out.
+    let files: Vec<_> = t
+        .app()
+        .details()
+        .commit_files()
+        .unwrap()
+        .iter()
+        .map(|f| f.path.clone())
+        .collect();
+    assert_eq!(files, ["f.ts", "other.txt"]);
+    assert_eq!(t.app().details().selected_file().unwrap().path, "f.ts");
+    let title = t.pane_title(PaneId::Details);
+    assert!(
+        title.contains(&format!(
+            "Commit {} files  ‹ Blame f.ts at working tree, line 4",
+            short(&r.shout_d)
+        )),
+        "{title}"
+    );
+    t.assert_pane_contains(PaneId::Details, "◂ line 4 in blame");
+    // Looking at another file the commit changed.
+    t.press("j").wait_idle();
+    t.assert_pane_contains(PaneId::Details, "+more");
+
+    t.press("esc");
+    let blame = t.app().details().blame().expect("back in blame");
+    assert_eq!(blame.selected_line(), 4);
+    assert_eq!(blame.label(), "working tree");
+    t.press("esc");
+    assert_eq!(t.app().focus(), PaneId::Status);
+}
+
+#[test]
+fn an_uncommitted_line_has_no_commit_to_open() {
+    let r = blamed();
+    let mut t = TestDriver::new(&r.sb);
+    blame_from_status(&mut t);
+    t.press("G").press("enter");
+    assert!(t.app().details().blame().is_some());
+    assert_eq!(
+        t.app().notice(),
+        Some("this line isn't committed yet: there's no commit to open")
+    );
+}
+
+#[test]
+fn brackets_step_back_past_a_commit_and_forward_again() {
+    let r = blamed();
+    let mut t = TestDriver::with_size(Config::default(), &r.sb, 120, 20);
+    blame_from_status(&mut t);
+    // Line 2 is "B", from Sam's commit: before it, line 2 was "b", from Ada's.
+    t.press("j").press("[").wait_idle();
+    let blame = t.app().details().blame().unwrap();
+    assert_eq!(blame.depth(), 2);
+    assert_eq!(blame.label(), format!("{}^", short(&r.shout_b)));
+    assert_eq!(blame.selected_line(), 2);
+    let (commit, path, _) = blame.selected().unwrap();
+    assert_eq!((commit.oid.as_str(), path), (r.add.as_str(), "f.ts"));
+    let title = t.pane_title(PaneId::Details);
+    assert!(
+        title.contains(&format!("Blame f.ts at {}^  ‹ working tree 2/5", short(&r.shout_b))),
+        "{title}"
+    );
+    t.assert_pane_contains(PaneId::Details, "▌  2 b");
+
+    // Ada's commit added the file: there's nothing before it.
+    t.press("[");
+    assert_eq!(t.app().details().blame().unwrap().depth(), 2);
+    assert!(
+        t.app()
+            .notice()
+            .unwrap()
+            .ends_with("added f.ts: there's nothing before it")
+    );
+
+    t.press("]");
+    let blame = t.app().details().blame().unwrap();
+    assert_eq!((blame.depth(), blame.label()), (1, "working tree"));
+    assert_eq!(blame.selected_line(), 2);
+    t.press("]");
+    assert_eq!(t.app().notice(), Some("this is the newest version"));
+}
+
+#[test]
+fn t_switches_blame_and_the_graph_to_clock_times() {
+    let r = blamed();
+    let mut t = TestDriver::with_size(Config::default(), &r.sb, 120, 20);
+    blame_from_status(&mut t);
+    t.assert_pane_contains(PaneId::Details, "Ada Park  23h");
+    t.press("t");
+    assert_eq!(t.app().graph().dates, DateStyle::Clock);
+    t.assert_pane_contains(PaneId::Details, "Ada Park 2024-01-01 12:01 AM");
+    t.press("esc");
+    // The graph shows them the same way.
+    assert_eq!(t.app().graph().dates, DateStyle::Clock);
+}
+
+#[test]
+fn space_shows_the_lines_commit_with_its_message() {
+    let r = blamed();
+    let mut t = TestDriver::with_size(Config::default(), &r.sb, 120, 30);
+    blame_from_status(&mut t);
+    t.press_all(&["j", "j", "j"]).press("space").wait_idle();
+    t.assert_pane_contains(PaneId::Details, &format!("Commit {}", short(&r.shout_d)));
+    t.assert_pane_contains(PaneId::Details, "Shout d and add other");
+    t.assert_pane_contains(PaneId::Details, "Mia Chen <mia@lumen.dev>");
+    t.assert_pane_contains(PaneId::Details, "1 line in this file come from it");
+    t.assert_pane_contains(PaneId::Details, "Other comes along for the ride.");
+
+    t.press("c");
+    assert_eq!(t.app().notice(), Some(format!("copied {}", r.shout_d).as_str()));
+}
+
+#[test]
+fn b_in_a_commit_blames_its_file_as_of_that_commit() {
+    let r = blamed();
+    let mut t = TestDriver::with_size(Config::default(), &r.sb, 120, 30);
+    // The graph's newest commit, fullscreen: f.ts is its first file.
+    t.press("1").press("g").press("enter").wait_idle();
+    assert_eq!(t.app().details().selected_file().unwrap().path, "f.ts");
+    t.press("b").wait_idle();
+    let blame = t.app().details().blame().expect("blame open");
+    assert_eq!(blame.label(), short(&r.shout_d));
+    // As of that commit, line 5 is still Ada's "e".
+    assert_eq!(blame.blame().unwrap().lines[4].text, "e");
+    let title = t.pane_title(PaneId::Details);
+    assert!(title.contains(&format!("‹ Commit {}", short(&r.shout_d))), "{title}");
+
+    t.press("esc");
+    assert_eq!(
+        t.app().details().subject(),
+        Some(&DetailsSubject::CommitFiles(r.shout_d.clone()))
+    );
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    t.press("esc");
+    assert_eq!(t.app().focus(), PaneId::Graph);
+}

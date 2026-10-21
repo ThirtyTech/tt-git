@@ -838,6 +838,25 @@ impl Repo {
         Ok(self.git.run(&args)?.into_stdout_string())
     }
 
+    /// Which commit last changed each line of `path`: as of `rev`, or in the
+    /// working tree when `rev` is `None`. Follows lines moved or copied
+    /// within a commit (`-M -C`), and skips the commits listed in
+    /// `.git-blame-ignore-revs` when the repo has one and
+    /// `blame.ignoreRevsFile` isn't set (git uses that itself when it is).
+    pub fn blame(&self, rev: Option<&str>, path: &str) -> Result<crate::blame::Blame> {
+        let mut args: Vec<String> = ["blame", "--porcelain", "-M", "-C"].map(String::from).to_vec();
+        let ignore = self.root.join(".git-blame-ignore-revs");
+        if ignore.is_file() && self.git.run(&["config", "--get", "blame.ignoreRevsFile"]).is_err() {
+            args.push("--ignore-revs-file".into());
+            args.push(ignore.to_string_lossy().into_owned());
+        }
+        args.extend(rev.map(String::from));
+        args.push("--".into());
+        args.push(path.into());
+        let out = self.git.run(&args)?;
+        Ok(crate::blame::Blame::parse_porcelain(&out.stdout))
+    }
+
     /// Loads up to `limit` commits into a Vec.
     pub fn commits(&self, scope: &LogScope, limit: usize) -> Result<Vec<Commit>> {
         let mut commits = Vec::new();

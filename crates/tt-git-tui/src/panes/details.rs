@@ -5,10 +5,11 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
-use tt_git_core::patch::{DiffPosition, diff_text_position};
+use tt_git_core::patch::{DiffPosition, diff_text_position, diff_text_row_of_line};
 use tt_git_core::{CommitFile, FileState, StageSide, StatusEntry};
 use unicode_width::UnicodeWidthStr;
 
+use super::blame::BlameView;
 use super::stage::StageView;
 use super::{PaneId, pane_block};
 use crate::action::Action;
@@ -32,6 +33,8 @@ pub enum DetailsSubject {
     Stash(String),
     /// Free text produced by the app (e.g. plugin logs).
     Text(String),
+    /// A file's blame, by its path.
+    Blame(String),
 }
 
 /// The changed-files view of a commit.
@@ -46,6 +49,13 @@ struct FilesView {
     /// Where the file rows and the diff were drawn last frame, for the mouse.
     rows_area: Rect,
     diff_area: Rect,
+    /// A file and new-side line to select and scroll to once they load
+    /// (the line blame came from).
+    focus: Option<(String, u32)>,
+    /// The focused line once found: file index, diff row and line number.
+    marked: Option<(usize, usize, u32)>,
+    /// Scroll the marked line a third of the way down at the next draw.
+    center: bool,
 }
 
 /// Commit details or file diff for the current selection.
@@ -65,6 +75,30 @@ pub struct DetailsPane {
     /// rather than below it.
     files_beside: bool,
     stage: Option<StageView>,
+    blame: Option<BlameView>,
+    /// What `esc` goes back to, shown after the title.
+    trail: Option<String>,
+}
+
+/// Everything the details pane shows, put aside to come back to.
+#[derive(Debug, Default)]
+pub struct SavedDetails {
+    subject: Option<DetailsSubject>,
+    title: String,
+    lines: Arc<Vec<String>>,
+    cursor: Cursor,
+    loading: bool,
+    files: Option<FilesView>,
+    header_rows: usize,
+    stage: Option<StageView>,
+    blame: Option<BlameView>,
+    trail: Option<String>,
+}
+
+impl SavedDetails {
+    pub fn subject(&self) -> Option<&DetailsSubject> {
+        self.subject.as_ref()
+    }
 }
 
 impl DetailsPane {
@@ -134,6 +168,7 @@ impl DetailsPane {
             _ => self.files = None,
         }
         self.stage = None;
+        self.blame = None;
         self.subject = Some(subject);
         self.title = title;
         self.loading = true;
@@ -161,10 +196,20 @@ impl DetailsPane {
         } else {
             Vec::new()
         });
+        let focus = self.files.take().and_then(|v| v.focus);
+        let selected = focus
+            .as_ref()
+            .and_then(|(path, _)| files.iter().position(|f| f.path == *path))
+            .unwrap_or(0);
         self.files = Some(FilesView {
             oid: oid.to_string(),
             header: split_lines(header.trim_end()),
             files,
+            cursor: Cursor {
+                selected,
+                ..Cursor::default()
+            },
+            focus,
             ..FilesView::default()
         });
         self.show_selected_file(ctx);
@@ -178,6 +223,7 @@ impl DetailsPane {
             return;
         }
         self.files = None;
+        self.blame = None;
         self.lines = Arc::default();
         self.title = format!("Stage {}", entry.path);
         self.stage = Some(StageView::new(entry));
@@ -218,6 +264,13 @@ impl DetailsPane {
         if idx == view.cursor.selected {
             self.lines = lines.clone();
             self.cursor.offset = 0;
+            // The line blame came from: mark it, a third of the way down.
+            if let Some((_, line)) = view.focus.take_if(|(p, _)| *p == path)
+                && let Some(row) = diff_text_row_of_line(&lines, line)
+            {
+                view.marked = Some((idx, row, line));
+                view.center = true;
+            }
         }
         view.diffs.insert(idx, lines);
     }
@@ -249,8 +302,11 @@ impl DetailsPane {
         let pos = diff_text_position(self.lines.as_slice(), row);
         let line = pos.as_ref().and_then(|p| p.line);
         let before = |oid: &str| Some(format!("{oid}^"));
+        if let Some(view) = &self.blame {
+            return view.edit_target();
+        }
         match self.subject.as_ref().ok_or_else(nothing)? {
-            DetailsSubject::Text(_) | DetailsSubject::Stage(_) => Err(nothing()),
+            DetailsSubject::Text(_) | DetailsSubject::Stage(_) | DetailsSubject::Blame(_) => Err(nothing()),
             DetailsSubject::File(path) => {
                 // An untracked file is shown whole, one `+` line per line
                 // under a `new file` heading.
@@ -291,7 +347,116 @@ impl DetailsPane {
         self.lines = Arc::default();
         self.files = None;
         self.stage = None;
+        self.blame = None;
+        self.trail = None;
         self.loading = false;
+    }
+
+    /// Shows `view` in place of whatever was showing.
+    pub fn open_blame(&mut self, view: BlameView) {
+        self.files = None;
+        self.stage = None;
+        self.lines = Arc::default();
+        self.cursor = Cursor::default();
+        self.loading = false;
+        self.subject = Some(DetailsSubject::Blame(view.path().to_string()));
+        self.title = view.title();
+        self.blame = Some(view);
+    }
+
+    pub fn blame(&self) -> Option<&BlameView> {
+        self.blame.as_ref()
+    }
+
+    pub fn blame_mut(&mut self) -> Option<&mut BlameView> {
+        self.blame.as_mut()
+    }
+
+    /// Whether the subject's content is still on its way.
+    pub fn loading(&self) -> bool {
+        self.loading
+    }
+
+    /// Notes what `esc` goes back to, for the title.
+    pub fn set_trail(&mut self, trail: Option<String>) {
+        self.trail = trail;
+    }
+
+    /// In the files view loading now, selects `path` and marks new-side
+    /// line `line` in its diff once that's loaded.
+    pub fn focus_file(&mut self, path: String, line: u32) {
+        if let Some(view) = &mut self.files {
+            view.focus = Some((path, line));
+            view.marked = None;
+        }
+    }
+
+    /// How a view opened from here names this, to come back to.
+    pub fn back_label(&self) -> String {
+        let short = |oid: &str| oid.chars().take(7).collect::<String>();
+        if let Some(view) = &self.blame {
+            return view.back_label();
+        }
+        match &self.subject {
+            Some(DetailsSubject::Commit(oid) | DetailsSubject::CommitFiles(oid)) => format!("Commit {}", short(oid)),
+            Some(DetailsSubject::File(path)) => format!("Diff {path}"),
+            _ => self.title.clone(),
+        }
+    }
+
+    /// Puts everything shown aside, leaving the pane empty.
+    pub fn save(&mut self) -> SavedDetails {
+        SavedDetails {
+            subject: self.subject.take(),
+            title: std::mem::take(&mut self.title),
+            lines: std::mem::take(&mut self.lines),
+            cursor: std::mem::take(&mut self.cursor),
+            loading: std::mem::take(&mut self.loading),
+            files: self.files.take(),
+            header_rows: std::mem::take(&mut self.header_rows),
+            stage: self.stage.take(),
+            blame: self.blame.take(),
+            trail: self.trail.take(),
+        }
+    }
+
+    /// Shows what [`save`](Self::save) put aside, as it was, asking again
+    /// for anything whose load finished while it was away.
+    pub fn restore(&mut self, saved: SavedDetails, ctx: &Ctx) {
+        let SavedDetails {
+            subject,
+            title,
+            lines,
+            cursor,
+            loading,
+            files,
+            header_rows,
+            stage,
+            blame,
+            trail,
+        } = saved;
+        self.subject = subject;
+        self.title = title;
+        self.lines = lines;
+        self.cursor = cursor;
+        self.loading = loading;
+        self.files = files;
+        self.header_rows = header_rows;
+        self.stage = stage;
+        self.blame = blame;
+        self.trail = trail;
+        if let Some(view) = &mut self.blame {
+            view.reload_missing(ctx);
+        }
+        let diff_missing = self
+            .files
+            .as_ref()
+            .is_some_and(|v| !v.files.is_empty() && !v.diffs.contains_key(&v.cursor.selected));
+        if diff_missing && !self.loading {
+            let offset = self.cursor.offset;
+            self.show_selected_file(ctx);
+            self.cursor.offset = offset;
+        }
     }
 
     fn scroll(&mut self, cmd: Command) -> EventState {
@@ -380,14 +545,42 @@ impl DetailsPane {
         let rule = "─".repeat(rule_area.width as usize);
         frame.render_widget(Paragraph::new(rule).style(theme.border), rule_area);
         view.diff_area = diff_area;
-        self.draw_text(frame, diff_area, theme);
+        let mark = view
+            .marked
+            .filter(|(idx, _, _)| *idx == view.cursor.selected)
+            .map(|(_, row, line)| (row, line));
+        if let Some((row, _)) = mark
+            && std::mem::take(&mut view.center)
+        {
+            let height = diff_area.height as usize;
+            let last_page = self.lines.len().saturating_sub(height);
+            self.cursor.offset = row.saturating_sub(height / 3).min(last_page);
+        }
+        self.draw_text(frame, diff_area, mark, theme);
     }
 
-    fn draw_text(&mut self, frame: &mut Frame, area: Rect, theme: &Theme) {
+    /// The text, with `mark`'s row (and new-side line number) picked out:
+    /// the line blame came from.
+    fn draw_text(&mut self, frame: &mut Frame, area: Rect, mark: Option<(usize, u32)>, theme: &Theme) {
         self.cursor.height = area.height as usize;
         let start = self.cursor.offset.min(self.lines.len());
         let end = (start + area.height as usize).min(self.lines.len());
-        let lines: Vec<Line> = self.lines[start..end].iter().map(|l| style_line(l, theme)).collect();
+        let lines: Vec<Line> = (start..end)
+            .map(|row| {
+                let text = &self.lines[row];
+                match mark {
+                    Some((at, line)) if at == row => {
+                        let note = format!("◂ line {line} in blame ");
+                        let pad = (area.width as usize).saturating_sub(text.width() + note.width());
+                        let mut marked = style_line(text, theme);
+                        marked.spans.push(Span::raw(" ".repeat(pad)));
+                        marked.spans.push(Span::styled(note, theme.help_text));
+                        marked.patch_style(theme.selected)
+                    }
+                    _ => style_line(text, theme),
+                }
+            })
+            .collect();
         frame.render_widget(Paragraph::new(lines), area);
     }
 }
@@ -468,6 +661,8 @@ impl Component for DetailsPane {
     fn context(&self) -> Context {
         if self.stage.is_some() {
             Context::Stage
+        } else if self.blame.is_some() {
+            Context::Blame
         } else {
             Context::Details
         }
@@ -475,6 +670,9 @@ impl Component for DetailsPane {
 
     fn on_command(&mut self, cmd: Command, ctx: &Ctx) -> EventState {
         if let Some(view) = &mut self.stage {
+            return view.on_command(cmd, ctx);
+        }
+        if let Some(view) = &mut self.blame {
             return view.on_command(cmd, ctx);
         }
         if cmd == Command::OpenInEditor {
@@ -501,9 +699,16 @@ impl Component for DetailsPane {
         self.scroll(cmd)
     }
 
+    /// In blame, a click selects a line.
+    fn on_click(&mut self, row: usize, ctx: &Ctx) {
+        if let Some(view) = &mut self.blame {
+            view.click(row, ctx);
+        }
+    }
+
     /// In the files view, a click on a file shows its diff.
     fn on_click_at(&mut self, pos: Position, ctx: &Ctx) -> bool {
-        if self.stage.is_some() {
+        if self.stage.is_some() || self.blame.is_some() {
             return false;
         }
         let Some(view) = &mut self.files else { return false };
@@ -521,7 +726,10 @@ impl Component for DetailsPane {
     /// In the files view, the wheel scrolls the diff when over it (and
     /// moves through the files elsewhere, like the arrow keys).
     fn on_scroll_at(&mut self, pos: Position, down: bool, _ctx: &Ctx) -> bool {
-        if self.stage.is_some() || !self.files.as_ref().is_some_and(|v| v.diff_area.contains(pos)) {
+        if self.stage.is_some()
+            || self.blame.is_some()
+            || !self.files.as_ref().is_some_and(|v| v.diff_area.contains(pos))
+        {
             return false;
         }
         self.scroll(if down { Command::MoveDown } else { Command::MoveUp });
@@ -541,28 +749,50 @@ impl Component for DetailsPane {
                 Command::CloseDetails,
             ];
         }
+        if self.blame.is_some() {
+            return &[
+                Command::OpenCommit,
+                Command::ToggleDetails,
+                Command::BlameBack,
+                Command::BlameForward,
+                Command::ToggleDates,
+                Command::OpenInEditor,
+                Command::Copy,
+                Command::CloseDetails,
+            ];
+        }
         &[
             Command::OpenLink,
             Command::OpenInEditor,
+            Command::Blame,
             Command::ToggleFiles,
             Command::CloseDetails,
         ]
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
-        let stage_title = self.stage.as_ref().map(StageView::title);
-        let title = if let Some(t) = &stage_title {
+        let view_title =
+            (self.stage.as_ref().map(StageView::title)).or_else(|| self.blame.as_ref().map(BlameView::title));
+        let title = if let Some(t) = &view_title {
             t.as_str()
         } else if self.subject.is_some() {
             self.title.as_str()
         } else {
             "Details"
         };
-        let title = if self.loading {
-            format!("{title} loading…")
-        } else {
-            title.to_string()
-        };
+        let mut title = title.to_string();
+        // Blame's own steps back name the version before; otherwise, what esc goes back to.
+        if let Some(trail) = &self.trail
+            && self.blame.as_ref().is_none_or(|v| v.depth() == 1)
+        {
+            title.push_str(&format!("  ‹ {trail}"));
+        }
+        if let Some(position) = self.blame.as_ref().and_then(BlameView::position) {
+            title.push_str(&format!(" {position}"));
+        }
+        if self.loading || self.blame.as_ref().is_some_and(BlameView::loading) {
+            title.push_str(" loading…");
+        }
         let block = pane_block(PaneId::Details, title, focused, theme);
         let inner = block.inner(area);
         frame.render_widget(block, area);
@@ -574,10 +804,12 @@ impl Component for DetailsPane {
         }
         if let Some(view) = &mut self.stage {
             view.draw(frame, inner, focused, theme);
+        } else if let Some(view) = &mut self.blame {
+            view.draw(frame, inner, focused, theme);
         } else if self.files.is_some() {
             self.draw_files(frame, inner, focused, theme);
         } else {
-            self.draw_text(frame, inner, theme);
+            self.draw_text(frame, inner, None, theme);
         }
     }
 }

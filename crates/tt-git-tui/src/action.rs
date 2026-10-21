@@ -179,6 +179,25 @@ pub enum Action {
         unstaged: StageSide,
         staged: StageSide,
     },
+    /// Blame `path` as of `rev` (the working tree when `None`) for blame
+    /// load `id`.
+    LoadBlame {
+        id: u64,
+        rev: Option<String>,
+        path: String,
+    },
+    /// Blame load `id` finished.
+    BlameLoaded {
+        id: u64,
+        result: Result<tt_git_core::Blame, String>,
+    },
+    /// Load a commit's full message, for the blame view's commit details.
+    LoadCommitMessage(String),
+    /// A commit's message below its subject line (empty when there's none).
+    CommitMessageLoaded {
+        oid: String,
+        body: String,
+    },
     /// The authors or files for a list in the graph's filter panel.
     FilterChoicesLoaded {
         tab: FilterTab,

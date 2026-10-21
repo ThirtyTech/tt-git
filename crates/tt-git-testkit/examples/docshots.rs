@@ -134,6 +134,32 @@ children = [
         save(&out, name, &driver);
     }
 
+    // Blame of src/api/client.ts, written by five people over two months,
+    // with two lines changed in the working tree. In its own repo, as its
+    // commits would change the other shots' graphs.
+    let blamed = Sandbox::named(REPO);
+    let mock = Mock::new(&blamed);
+    mock.build();
+    mock.blame_history();
+    // From the status pane, on line `line`, then `after`.
+    let blame_keys = |line: usize, after: &[&'static str]| {
+        let mut keys = vec!["2", "b"];
+        keys.extend(std::iter::repeat_n("j", line - 1));
+        keys.extend_from_slice(after);
+        keys
+    };
+    for (name, keys) in [
+        ("blame", blame_keys(33, &[])),
+        ("blame-details", blame_keys(33, &["space"])),
+        ("blame-commit", blame_keys(33, &["enter"])),
+        ("blame-step-back", blame_keys(46, &["["])),
+        ("blame-clock", blame_keys(33, &["t"])),
+    ] {
+        let mut driver = TestDriver::with_size(Config::default(), &blamed, WIDTH, HEIGHT);
+        press(&mut driver, &keys);
+        save(&out, name, &driver);
+    }
+
     println!("wrote captures to {}", out.display());
 }
 
@@ -566,6 +592,61 @@ impl<'a> Mock<'a> {
         std::fs::write(fix.join("src/components/bell.test.tsx"), "// TODO\n").unwrap();
     }
 
+    /// src/api/client.ts built up line by line (see [`CLIENT`]), one commit
+    /// per author, then changed in the working tree. The last commit also
+    /// touches the notifications client, so it has more than one file.
+    fn blame_history(&self) {
+        let d = DAY;
+        let commits: [(char, i64, Person, &str); 6] = [
+            ('A', 60 * d, SAM, "Add API client"),
+            ('G', 30 * d, SAM, "Typed API errors"),
+            ('D', 21 * d, GRACE, "Retry API requests on 5xx responses"),
+            ('C', 14 * d, LINUS, "Search filters"),
+            ('F', 7 * d, MIA, "Refresh expired tokens once before failing"),
+            (
+                'E',
+                4 * HOUR,
+                ADA,
+                "Let callers cancel polling\n\nAdd an AbortSignal option to the client so polling stops when the\nbell unmounts, and return { data } so callers match the old axios shape.",
+            ),
+        ];
+        let order = |tag: char| commits.iter().position(|c| c.0 == tag).expect("known commit");
+        for (i, (_, ago, who, msg)) in commits.iter().enumerate() {
+            // Each line as of commit `i`: written by then, or what it said
+            // before the commit that rewrote it.
+            let mut text = String::new();
+            for (tag, line, before) in CLIENT {
+                let shown = if order(*tag) <= i {
+                    Some(*line)
+                } else {
+                    before.filter(|(t, _)| order(*t) <= i).map(|(_, l)| l)
+                };
+                if let Some(l) = shown {
+                    text.push_str(l);
+                    text.push('\n');
+                }
+            }
+            let mut files = vec![("src/api/client.ts", text)];
+            if i == commits.len() - 1 {
+                let api = format!("{NOTIFICATIONS_API}{MARK_ALL_READ}").replace(
+                    "client.get('/notifications', { params })",
+                    "client.get('/notifications', { params, signal })",
+                );
+                files.push(("src/api/notifications.ts", api));
+            }
+            let files: Vec<(&str, &str)> = files.iter().map(|(p, c)| (*p, c.as_str())).collect();
+            self.commit(*ago, *who, &files, msg);
+        }
+        let mut now: Vec<&str> = CLIENT.iter().map(|(_, l, _)| *l).collect();
+        let retry = now.iter().position(|l| l.contains("logger.warn")).expect("retry line");
+        now[retry] = "      logger.warn(`retrying ${method} ${path}`, { status: res.status, attempt });";
+        now.insert(
+            retry + 1,
+            "      await new Promise((r) => setTimeout(r, 250 * 2 ** attempt));",
+        );
+        self.sb.write("src/api/client.ts", &(now.join("\n") + "\n"));
+    }
+
     /// A merge of a branch that changed the bell's markup the same way,
     /// stopped on the conflict, with one other file already resolved.
     fn conflict(&self) {
@@ -620,6 +701,112 @@ const PACKAGE_JSON: &str = r#"{
   }
 }
 "#;
+
+/// src/api/client.ts for the blame shots: each line with the commit (see
+/// `Mock::blame_history`) that wrote it, and what it said before if a later
+/// commit rewrote it.
+type ClientLine = (char, &'static str, Option<(char, &'static str)>);
+const CLIENT: &[ClientLine] = &[
+    (
+        'F',
+        "import { getToken, refreshToken } from '../auth/session';",
+        Some(('A', "import { getToken } from '../auth/session';")),
+    ),
+    ('D', "import { logger } from '../lib/logger';", None),
+    ('A', "", None),
+    ('A', "export type RequestOptions = {", None),
+    ('C', "  params?: Record<string, string | number>;", None),
+    ('E', "  signal?: AbortSignal;", None),
+    ('D', "  retries?: number;", None),
+    ('A', "};", None),
+    ('A', "", None),
+    ('A', "const BASE_URL = import.meta.env.VITE_API_URL ?? '/api';", None),
+    ('D', "const DEFAULT_RETRIES = 2;", None),
+    ('D', "", None),
+    ('G', "export class ApiError extends Error {", None),
+    ('G', "  constructor(public status: number, message: string) {", None),
+    ('G', "    super(message);", None),
+    ('G', "    this.name = 'ApiError';", None),
+    ('G', "  }", None),
+    ('G', "}", None),
+    ('G', "", None),
+    (
+        'C',
+        "function buildUrl(path: string, params?: RequestOptions['params']) {",
+        None,
+    ),
+    ('C', "  const url = new URL(path, BASE_URL);", None),
+    (
+        'C',
+        "  for (const [key, value] of Object.entries(params ?? {})) {",
+        None,
+    ),
+    ('C', "    url.searchParams.set(key, String(value));", None),
+    ('C', "  }", None),
+    ('C', "  return url.toString();", None),
+    ('C', "}", None),
+    ('C', "", None),
+    (
+        'E',
+        "async function request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {",
+        Some((
+            'A',
+            "async function request<T>(method: string, path: string, opts: RequestOptions = {}) {",
+        )),
+    ),
+    ('D', "  const retries = opts.retries ?? DEFAULT_RETRIES;", None),
+    ('D', "  for (let attempt = 0; ; attempt++) {", None),
+    (
+        'C',
+        "    const res = await fetch(buildUrl(path, opts.params), {",
+        Some(('A', "    const res = await fetch(BASE_URL + path, {")),
+    ),
+    ('A', "      method,", None),
+    ('E', "      signal: opts.signal,", None),
+    (
+        'F',
+        "      headers: { Authorization: `Bearer ${await getToken()}` },",
+        Some(('A', "      headers: { Authorization: `Bearer ${getToken()}` },")),
+    ),
+    ('A', "    });", None),
+    ('F', "    if (res.status === 401 && attempt === 0) {", None),
+    ('F', "      await refreshToken();", None),
+    ('F', "      continue;", None),
+    ('F', "    }", None),
+    ('D', "    if (res.status >= 500 && attempt < retries) {", None),
+    (
+        'D',
+        "      logger.warn(`retrying ${method} ${path} (${res.status})`);",
+        None,
+    ),
+    ('D', "      continue;", None),
+    ('D', "    }", None),
+    (
+        'G',
+        "    if (!res.ok) throw new ApiError(res.status, await res.text());",
+        Some(('A', "    if (!res.ok) throw new Error(await res.text());")),
+    ),
+    (
+        'E',
+        "    return { data: await res.json() } as T;",
+        Some(('A', "    return (await res.json()) as T;")),
+    ),
+    ('D', "  }", None),
+    ('A', "}", None),
+    ('A', "", None),
+    ('A', "export const client = {", None),
+    (
+        'A',
+        "  get: <T>(path: string, opts?: RequestOptions) => request<T>('GET', path, opts),",
+        None,
+    ),
+    (
+        'A',
+        "  post: <T>(path: string, opts?: RequestOptions) => request<T>('POST', path, opts),",
+        None,
+    ),
+    ('A', "};", None),
+];
 
 const BELL: &str = r#"import { useState } from 'react';
 import { BellIcon } from './icons';

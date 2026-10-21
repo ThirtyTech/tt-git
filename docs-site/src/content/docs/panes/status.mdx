@@ -138,6 +138,15 @@ When you quit a terminal editor, tt-git comes back and refreshes, so your edits 
 away. Which editor runs, and whether it gets the terminal or a window of its own, is set in
 [`[editor]`](/configuration/#editor).
 
+## Blaming a file
+
+Press <kbd>b</kbd> to [blame](/panes/blame/) the selected file: see who last changed each line, when
+and in which commit. It opens fullscreen, and <kbd>esc</kbd> comes back to the status pane.
+
+Blame shows the file as it is in your working tree, with lines you haven't committed marked `You`.
+A file you deleted is blamed as it was in `HEAD`. An untracked file, or one you've added but never
+committed, has no history yet, so tt-git says `notes.txt isn't committed yet: nothing to blame`.
+
 ## Merges, rebases and cherry-picks in progress
 
 <Screenshot name="status-conflict" alt="The status pane during a merge with a conflict: MERGING in the title, the banner, a resolved file and a conflicted one" />
@@ -191,5 +200,6 @@ changes.
 | <kbd>A</kbd> | Amend the last commit, keeping its message |
 | <kbd>s</kbd> | Stash |
 | <kbd>e</kbd> | Open the file in your editor at its first change |
+| <kbd>b</kbd> | [Blame](/panes/blame/) the file |
 | <kbd>C</kbd> | Continue a merge, rebase or cherry-pick |
 | <kbd>X</kbd> | Abort it (asks first) |
