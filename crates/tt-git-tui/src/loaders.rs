@@ -399,7 +399,19 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         } => repo.create_worktree(name, start),
         GitOp::DeleteBranch { name, force } => repo.delete_branch(name, *force),
         GitOp::DeleteRemoteBranch { remote, branch } => repo.delete_remote_branch(remote, branch),
-        GitOp::DeleteTag { name } => repo.delete_tag(name),
+        GitOp::DeleteTag { name, remote: None } => repo.delete_tag(name),
+        GitOp::DeleteTag {
+            name,
+            remote: Some(remote),
+        } => repo.delete_remote_tag(remote, name).and_then(|there| {
+            Ok(format!(
+                "{there}
+{}",
+                repo.delete_tag(name)?
+            ))
+        }),
+        GitOp::CreateTag { name, target, message } => repo.create_tag(name, target, message.as_deref()),
+        GitOp::PushTag { name } => repo.push_tag(name),
         GitOp::RenameBranch { old, new } => repo.rename_branch(old, new),
         GitOp::FetchAll => repo.fetch_all(),
         GitOp::SetBaseBranch(base) => repo.set_base_branch(base.as_deref()),

@@ -45,6 +45,7 @@ else.
 | <kbd>f</kbd> | Filter by author or by file or folder. |
 | <kbd>o</kbd> | Check out the selected commit: the local branch on it, else the commit with HEAD detached. Asks to stash uncommitted changes first. |
 | <kbd>n</kbd> | New branch at the selected commit. |
+| <kbd>T</kbd> | New tag at the selected commit. <kbd>tab</kbd> in the dialog makes it annotated. |
 | <kbd>M</kbd> | Merge the commit into the current branch. |
 | <kbd>r</kbd> | Rebase the current branch onto the commit. |
 | <kbd>C</kbd> | Cherry-pick the commit. |
@@ -119,8 +120,10 @@ On the Branches, Tags, Unmerged and Merged tabs.
 |---|---|
 | <kbd>enter</kbd> <kbd>space</kbd> | Check out. A remote-only branch gets a local tracking branch. |
 | <kbd>n</kbd> | New branch from the selection. |
-| <kbd>d</kbd> | Delete. Asks before force-deleting an unmerged branch, or deleting a remote branch or a tag. |
+| <kbd>d</kbd> | Delete. Asks before force-deleting an unmerged branch, or deleting a remote branch or a tag. For a tag, <kbd>r</kbd> in the dialog deletes it on the remote too. |
 | <kbd>R</kbd> | Rename a local branch. |
+| <kbd>T</kbd> | New tag at the selection's commit. <kbd>tab</kbd> in the dialog makes it annotated. |
+| <kbd>P</kbd> | On the Tags tab: push the selected tag. Elsewhere: push the current branch. |
 | <kbd>f</kbd> | `git fetch --all --prune`. |
 | <kbd>/</kbd> | Filter the tab as you type. |
 | <kbd>]</kbd> <kbd>{'}'}</kbd> / <kbd>[</kbd> <kbd>{'{'}</kbd> | Next / previous tab. |

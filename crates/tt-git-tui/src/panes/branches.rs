@@ -383,6 +383,52 @@ impl BranchesPane {
         ))
     }
 
+    /// The remote tags are pushed to and deleted from: `origin` if there is
+    /// one, otherwise the first remote with branches.
+    fn tag_remote(&self) -> Option<String> {
+        let mut remotes = self
+            .entries
+            .iter()
+            .flat_map(|e| e.remotes.iter())
+            .filter_map(|r| match &r.kind {
+                RefKind::RemoteBranch { remote } => Some(remote.as_str()),
+                _ => None,
+            });
+        let first = remotes.next()?;
+        let preferred = std::iter::once(first)
+            .chain(remotes)
+            .find(|r| *r == tt_git_core::branches::PREFERRED_REMOTE);
+        Some(preferred.unwrap_or(first).to_string())
+    }
+
+    /// Asks before deleting tag `name`: `y` here only, or with a remote,
+    /// `r` there too.
+    fn delete_tag_modal(&self, name: String) -> Modal {
+        let local = GitOp::DeleteTag {
+            name: name.clone(),
+            remote: None,
+        };
+        let Some(remote) = self.tag_remote() else {
+            return Modal::confirm("Delete tag", format!("Delete local tag {name}?"), local);
+        };
+        Modal::confirm(
+            "Delete tag",
+            format!(
+                "Delete local tag {name}?
+r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
+            ),
+            local,
+        )
+        .confirm_or(
+            'r',
+            format!("here and on {remote}"),
+            GitOp::DeleteTag {
+                name,
+                remote: Some(remote),
+            },
+        )
+    }
+
     /// Commands that act on the selected tag.
     fn on_tag_command(&self, cmd: Command, ctx: &Ctx) -> EventState {
         let Some(tag) = self.selected_tag() else {
@@ -409,12 +455,10 @@ impl BranchesPane {
                 format!("Rebase the current branch onto {name}?"),
                 GitOp::Rebase { onto: name },
             ))),
-            Command::DeleteBranch => ctx.emit(Action::OpenModal(Modal::confirm(
-                "Delete tag",
-                format!("Delete local tag {name}?"),
-                GitOp::DeleteTag { name },
-            ))),
+            Command::DeleteBranch => ctx.emit(Action::OpenModal(self.delete_tag_modal(name))),
             Command::RenameBranch => ctx.emit(Action::Notify("only local branches can be renamed".into())),
+            Command::NewTag => ctx.emit(Action::OpenModal(Modal::new_tag(&name, tag.target.clone()))),
+            Command::PushTag => ctx.emit(Action::Run(GitOp::PushTag { name })),
             Command::Copy => ctx.emit(Action::Copy(name)),
             _ => return EventState::NotConsumed,
         }
@@ -520,6 +564,12 @@ impl BranchesPane {
                 ))),
                 None => ctx.emit(Action::Notify("only local branches can be renamed".into())),
             },
+            Command::NewTag => {
+                let start = Self::start_ref(entry);
+                ctx.emit(Action::OpenModal(Modal::new_tag(&start, start.clone())))
+            }
+            // `P` pushes the selected tag on the Tags tab, the current branch here.
+            Command::PushTag => ctx.emit(Action::Run(GitOp::Push)),
             Command::Copy => ctx.emit(Action::Copy(entry.name.clone())),
             _ => return EventState::NotConsumed,
         }
@@ -791,12 +841,28 @@ impl Component for BranchesPane {
                 Command::Filter,
             ];
         }
+        if self.tab == BranchTab::Tags {
+            return &[
+                Command::NextTab,
+                Command::PrevTab,
+                Command::NewBranch,
+                Command::NewTag,
+                Command::PushTag,
+                Command::DeleteBranch,
+                Command::Fetch,
+                Command::Filter,
+                Command::Merge,
+                Command::Rebase,
+                Command::Copy,
+            ];
+        }
         &[
             Command::Checkout,
             Command::NextTab,
             Command::PrevTab,
             Command::PickBase,
             Command::NewBranch,
+            Command::NewTag,
             Command::DeleteBranch,
             Command::RenameBranch,
             Command::Fetch,

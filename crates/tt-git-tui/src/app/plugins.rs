@@ -308,6 +308,12 @@ impl App {
                 ("branch.deleted", json!({ "branch": branch, "remote": remote }))
             }
             GitOp::RenameBranch { old, new } => ("branch.renamed", json!({ "from": old, "to": new })),
+            GitOp::CreateTag { name, target, message } => (
+                "tag.created",
+                json!({ "tag": name, "target": target, "annotated": message.is_some() }),
+            ),
+            GitOp::PushTag { name } => ("tag.pushed", json!({ "tag": name })),
+            GitOp::DeleteTag { name, remote } => ("tag.deleted", json!({ "tag": name, "remote": remote })),
             GitOp::FetchAll => ("fetch.completed", json!({})),
             GitOp::Pull => ("pull.completed", json!({ "branch": branch, "head": head })),
             GitOp::Push => ("push.completed", json!({ "branch": branch })),
@@ -347,7 +353,7 @@ impl App {
                 json!({ "branch": name, "start": format!("stash@{{{index}}}"), "worktree": null }),
             ),
             // HEAD moving is reported as `head.changed`.
-            GitOp::Abort(_) | GitOp::SetBaseBranch(_) | GitOp::DeleteTag { .. } | GitOp::Undo { .. } => return,
+            GitOp::Abort(_) | GitOp::SetBaseBranch(_) | GitOp::Undo { .. } => return,
             GitOp::Commit { message, amend } => (
                 "commit.created",
                 json!({

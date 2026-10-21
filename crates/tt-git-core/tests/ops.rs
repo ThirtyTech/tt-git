@@ -135,6 +135,49 @@ fn push_sets_upstream_then_pull_gets_remote_work() {
 }
 
 #[test]
+fn create_lightweight_and_annotated_tags_then_push_one() {
+    let sb = Sandbox::new();
+    let first = sb.commit("first");
+    let second = sb.commit("second");
+    sb.add_remote("upstream");
+    let remote = sb.add_remote("origin");
+    let repo = open(&sb);
+
+    repo.create_tag("v1", &first, None).unwrap();
+    assert_eq!(sb.git(&["cat-file", "-t", "v1"]), "commit", "lightweight");
+    assert_eq!(sb.rev_parse("v1"), first);
+
+    repo.create_tag("v2", &second, Some("Release 2\n\nNotes")).unwrap();
+    assert_eq!(sb.git(&["cat-file", "-t", "v2"]), "tag", "annotated");
+    assert_eq!(sb.rev_parse("v2^{commit}"), second);
+    assert_eq!(
+        sb.git(&["tag", "-l", "--format=%(contents)", "v2"]),
+        "Release 2\n\nNotes"
+    );
+
+    let err = repo.create_tag("v1", &second, None).unwrap_err();
+    assert!(err.to_string().contains("already exists"), "{err}");
+
+    repo.push_tag("v2").expect("push goes to origin");
+    let pushed = sb.git_in(&remote, &["tag", "-l"]);
+    assert_eq!(pushed, "v2", "only the one tag is pushed");
+
+    repo.delete_remote_tag("origin", "v2").unwrap();
+    assert_eq!(sb.git_in(&remote, &["tag", "-l"]), "");
+    assert_eq!(sb.git(&["tag", "-l", "v2"]), "v2", "the local tag stays");
+}
+
+#[test]
+fn push_tag_without_remote_errors() {
+    let sb = Sandbox::new();
+    let head = sb.commit("base");
+    let repo = open(&sb);
+    repo.create_tag("v1", &head, None).unwrap();
+    let err = repo.push_tag("v1").unwrap_err();
+    assert!(err.to_string().contains("no remote"), "{err}");
+}
+
+#[test]
 fn push_without_remote_errors() {
     let sb = Sandbox::new();
     sb.commit("base");

@@ -60,6 +60,49 @@ the older the tag is, so only five are compared.
 
 <Screenshot name="tags-distance" alt="The Tags tab with the distance from the base branch called out" />
 
+## Making a tag
+
+<kbd>T</kbd> opens **New tag at &lt;name&gt;**. Press it on a commit in the
+[graph](/panes/graph/), or on a branch or tag in the branches pane to tag the
+commit it points at. Type the name and press <kbd>enter</kbd>.
+
+<kbd>tab</kbd> in the dialog switches between the two kinds of tag:
+
+- **Lightweight** (the default) is just a name for the commit
+  (`git tag <name> <commit>`).
+- **Annotated** also stores a message, your name and the date. <kbd>enter</kbd>
+  then asks for the message (**Message for tag &lt;name&gt;**), and the tag
+  is made with `git tag -a <name> -m <message> <commit>`. The message's first
+  line is what this tab shows as the subject.
+
+If the name is taken or isn't a valid tag name, git's error is shown and
+nothing changes.
+
+<Screenshot name="tags-new" alt="The New tag dialog with Annotated picked and a tag name typed" />
+
+## Pushing a tag
+
+Tags stay local until you push them. <kbd>P</kbd> on the Tags tab pushes the
+selected tag, and only that tag, with `git push <remote> refs/tags/<name>`.
+The remote is `origin`, or your only remote if it's called something else.
+It doesn't ask first.
+
+Outside the Tags tab, <kbd>P</kbd> pushes the current branch as usual.
+
+## Deleting a tag
+
+<kbd>d</kbd> asks **Delete local tag &lt;name&gt;?** and answers:
+
+- <kbd>y</kbd> deletes it here only (`git tag -d`). A copy you've pushed stays
+  on the remote, and comes back the next time you fetch tags from there.
+- <kbd>r</kbd> deletes it on the remote too: first `git push <remote> --delete
+  refs/tags/<name>`, then `git tag -d`. If the remote refuses, the local tag
+  is kept and git's error is shown. The dialog names the remote, and only
+  offers <kbd>r</kbd> when there is one.
+- <kbd>n</kbd> or <kbd>esc</kbd> keeps it.
+
+<Screenshot name="tags-delete" alt="The Delete tag dialog offering to delete the tag here only or here and on origin" />
+
 ## Acting on a tag
 
 - <kbd>n</kbd> makes a branch starting at the tag (**New branch from
@@ -67,8 +110,8 @@ the older the tag is, so only five are compared.
   can't be checked out as a branch.
 - <kbd>M</kbd> merges the tag into the current branch; <kbd>r</kbd> rebases
   the current branch onto it. Both ask first.
-- <kbd>d</kbd> deletes the tag locally (`git tag -d`), after asking. Tags on
-  remotes are left alone.
+- <kbd>T</kbd>, <kbd>P</kbd> and <kbd>d</kbd> make, push and delete tags,
+  as above.
 - <kbd>c</kbd> copies the tag name.
 - <kbd>/</kbd> filters the list as you type.
 
@@ -77,9 +120,11 @@ the older the tag is, so only five are compared.
 | Key | Does |
 |---|---|
 | <kbd>n</kbd> | New branch from the tag |
+| <kbd>T</kbd> | New tag at the same commit (<kbd>tab</kbd> in the dialog: annotated) |
+| <kbd>P</kbd> | Push the tag to the remote |
 | <kbd>M</kbd> | Merge the tag into the current branch |
 | <kbd>r</kbd> | Rebase the current branch onto the tag |
-| <kbd>d</kbd> | Delete the tag locally (asks first) |
+| <kbd>d</kbd> | Delete the tag (asks: <kbd>y</kbd> here only, <kbd>r</kbd> here and on the remote) |
 | <kbd>c</kbd> | Copy the tag name |
 | <kbd>/</kbd> | Filter as you type (<kbd>esc</kbd> clears) |
 | <kbd>b</kbd> | Pick the base branch the distances are measured against |

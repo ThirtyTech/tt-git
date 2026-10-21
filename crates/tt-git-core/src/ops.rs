@@ -119,6 +119,45 @@ impl Repo {
         self.git().run(&["tag", "-d", name]).map(text)
     }
 
+    /// Deletes tag `name` on `remote` (`git push <remote> --delete
+    /// refs/tags/<name>`), leaving the local one.
+    pub fn delete_remote_tag(&self, remote: &str, name: &str) -> Result<String> {
+        let refspec = format!("refs/tags/{name}");
+        self.git()
+            .run(&["push", remote, "--delete", refspec.as_str()])
+            .map(text)
+    }
+
+    /// Tags `target` as `name`: a lightweight tag, or with `message` an
+    /// annotated one (`git tag -a -m`).
+    pub fn create_tag(&self, name: &str, target: &str, message: Option<&str>) -> Result<String> {
+        match message {
+            Some(message) => self.git().run(&["tag", "-a", name, "-m", message, target]).map(text),
+            None => self.git().run(&["tag", name, target]).map(text),
+        }
+    }
+
+    /// Pushes the tag `name` to the remote [`push`](Self::push) would pick
+    /// for a new branch (`git push <remote> refs/tags/<name>`).
+    pub fn push_tag(&self, name: &str) -> Result<String> {
+        let remote = self.push_remote()?;
+        let refspec = format!("refs/tags/{name}");
+        self.git().run(&["push", remote.as_str(), refspec.as_str()]).map(text)
+    }
+
+    /// `origin` if there is one, otherwise the first remote.
+    fn push_remote(&self) -> Result<String> {
+        let mut remotes = self.remotes()?;
+        if remotes.is_empty() {
+            return Err(GitError::Parse("no remote configured to push to".into()));
+        }
+        let at = remotes
+            .iter()
+            .position(|r| r == crate::branches::PREFERRED_REMOTE)
+            .unwrap_or(0);
+        Ok(remotes.swap_remove(at))
+    }
+
     pub fn rename_branch(&self, old: &str, new: &str) -> Result<String> {
         self.git().run(&["branch", "-m", old, new]).map(text)
     }
@@ -261,12 +300,7 @@ impl Repo {
         if has_upstream {
             return self.git().run(&["push"]).map(text);
         }
-        let remotes = self.remotes()?;
-        let remote = remotes
-            .iter()
-            .find(|r| *r == crate::branches::PREFERRED_REMOTE)
-            .or(remotes.first())
-            .ok_or_else(|| crate::git::GitError::Parse("no remote configured to push to".into()))?;
+        let remote = self.push_remote()?;
         self.git().run(&["push", "-u", remote.as_str(), "HEAD"]).map(text)
     }
 

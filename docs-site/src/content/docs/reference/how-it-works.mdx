@@ -218,7 +218,15 @@ and tt-git remembers the old version so it doesn't try the new form again.
 Only five are compared because each one walks history, which gets slower
 the older the tag is.
 
-Deleting a tag runs `git tag -d <tag>`, which only removes it locally.
+| Action | Runs |
+|---|---|
+| New lightweight tag | `git tag <name> <commit>` |
+| New annotated tag | `git tag -a <name> -m <message> <commit>` |
+| Push a tag | `git push <remote> refs/tags/<name>` |
+| Delete a tag here | `git tag -d <name>` |
+| Delete a tag here and on the remote | `git push <remote> --delete refs/tags/<name>`, then `git tag -d <name>` |
+
+`<remote>` is `origin` if there is one, otherwise the first remote.
 
 ### Stashes
 

@@ -141,6 +141,7 @@ Event hooks are low-volume events, each run as a fresh process:
 | `head.changed` | `{from, from_branch, to, branch}` (also on switching between branches at the same commit, and on undo, which has no event of its own) |
 | `branch.checked_out` | `{branch, created, tracking?}`; `created` is true for auto-created tracking branches |
 | `branch.created` / `branch.deleted` / `branch.renamed` | `{branch, start, worktree}` (`worktree` is the new worktree's path, or null) / `{branch, remote}` / `{from, to}` |
+| `tag.created` / `tag.pushed` / `tag.deleted` | `{tag, target, annotated}` / `{tag}` / `{tag, remote}` (`remote` is null for a local-only delete) |
 | `commit.created` | `{oid, amend, summary}` |
 | `fetch.completed` / `pull.completed` / `push.completed` | `{}` / `{branch, head}` / `{branch}` |
 | `files.staged` / `files.unstaged` / `files.discarded` | `{paths}` (`"all"` for stage-all) / `{paths}` / `{path}`, plus `partial: true` when only some hunks or lines changed |

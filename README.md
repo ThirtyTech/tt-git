@@ -103,10 +103,14 @@ command palette, which lists built-in commands and plugin actions.
 | | `f` | filter: only one author's commits, or the commits that changed a file or folder (`tab` in the panel switches between the two; both can be set) |
 | | `o` | check out the selected commit: the local branch on it if there is one, else the commit with HEAD detached (with uncommitted changes, asks to stash them first) |
 | | `n` | new branch at the selected commit (`tab` in the dialog: create it in a worktree) |
+| | `T` | new tag at the selected commit (`tab` in the dialog: annotated, with a message) |
 | | `M` / `r` / `C` | merge into current / rebase current onto / cherry-pick |
 | | `c` | copy the commit hash |
 | branches | `enter` `space` | check out (remote-only branches get a tracking branch) |
 | | `n` `d` `R` | new (`tab` in the dialog: create it in a worktree under `.worktrees/`) / delete (asks before force-deleting unmerged) / rename |
+| | `T` | new tag at the selected branch or tag (`tab` in the dialog: annotated) |
+| | `P` | on the tags tab: push the selected tag (elsewhere: push the current branch) |
+| | `d` (tags tab) | delete the tag: `y` here only, `r` here and on the remote |
 | | `f` | `fetch --all --prune` |
 | | `/` | filter as you type (`esc` clears) |
 | | `]` `[` | next / previous tab: all branches, tags, unmerged into the base branch, merged into it, and stashes (once there are any) |

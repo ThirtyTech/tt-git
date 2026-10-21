@@ -37,7 +37,18 @@ pub enum GitOp {
         remote: String,
         branch: String,
     },
+    /// With `remote`, the tag is deleted there first, then here.
     DeleteTag {
+        name: String,
+        remote: Option<String>,
+    },
+    /// A lightweight tag, or with `message` an annotated one.
+    CreateTag {
+        name: String,
+        target: String,
+        message: Option<String>,
+    },
+    PushTag {
         name: String,
     },
     RenameBranch {
@@ -134,7 +145,13 @@ impl GitOp {
             }
             GitOp::DeleteBranch { name, .. } => format!("delete branch {name}"),
             GitOp::DeleteRemoteBranch { remote, branch } => format!("delete {remote}/{branch}"),
-            GitOp::DeleteTag { name } => format!("delete tag {name}"),
+            GitOp::DeleteTag { name, remote: None } => format!("delete tag {name}"),
+            GitOp::DeleteTag {
+                name,
+                remote: Some(remote),
+            } => format!("delete tag {name} here and on {remote}"),
+            GitOp::CreateTag { name, .. } => format!("create tag {name}"),
+            GitOp::PushTag { name } => format!("push tag {name}"),
             GitOp::RenameBranch { old, new } => format!("rename {old} → {new}"),
             GitOp::FetchAll => "fetch --all".into(),
             GitOp::SetBaseBranch(Some(base)) => format!("base branch {base}"),
@@ -195,6 +212,17 @@ pub enum PromptAction {
     RenameBranch {
         old: String,
     },
+    /// The tag's name. `tab` switches `annotated` on and off; an annotated
+    /// tag asks for its message next.
+    CreateTag {
+        target: String,
+        annotated: bool,
+    },
+    /// The message of annotated tag `name`.
+    TagMessage {
+        name: String,
+        target: String,
+    },
     Commit,
     /// A stash message, which may be left empty. `tab` cycles through what
     /// to stash; `file` (the selected file's paths) adds it as a choice.
@@ -237,6 +265,16 @@ impl PromptAction {
             PromptAction::RenameBranch { old } => GitOp::RenameBranch {
                 old: old.clone(),
                 new: input.to_string(),
+            },
+            PromptAction::CreateTag { target, .. } => GitOp::CreateTag {
+                name: input.to_string(),
+                target: target.clone(),
+                message: None,
+            },
+            PromptAction::TagMessage { name, target } => GitOp::CreateTag {
+                name: name.clone(),
+                target: target.clone(),
+                message: Some(input.to_string()),
             },
             PromptAction::Commit => GitOp::Commit {
                 message: Some(input.to_string()),
@@ -285,6 +323,8 @@ pub enum Modal {
         title: String,
         message: String,
         op: GitOp,
+        /// A second answer besides `y`: its key, its hint text and what it runs.
+        alt: Option<Box<(char, String, GitOp)>>,
     },
     /// Pick an author or file to narrow the graph to.
     Filter(Box<FilterPanel>),
@@ -313,11 +353,38 @@ impl Modal {
         }
     }
 
+    /// The new tag prompt for commit or ref `target`, shown as `at`.
+    pub fn new_tag(at: &str, target: String) -> Self {
+        Self::prompt(
+            format!("New tag at {at}"),
+            "",
+            PromptAction::CreateTag {
+                target,
+                annotated: false,
+            },
+        )
+    }
+
     pub fn confirm(title: impl Into<String>, message: impl Into<String>, op: GitOp) -> Self {
         Modal::Confirm {
             title: title.into(),
             message: message.into(),
             op,
+            alt: None,
+        }
+    }
+
+    /// [`confirm`](Self::confirm) with a second answer: key `key`, shown
+    /// as `hint`, runs `alt_op`.
+    pub fn confirm_or(self, key: char, hint: impl Into<String>, alt_op: GitOp) -> Self {
+        match self {
+            Modal::Confirm { title, message, op, .. } => Modal::Confirm {
+                title,
+                message,
+                op,
+                alt: Some(Box::new((key, hint.into(), alt_op))),
+            },
+            other => other,
         }
     }
 
@@ -385,6 +452,20 @@ impl Modal {
                     let value = input.trim();
                     if value.is_empty() && !matches!(action, PromptAction::Stash { .. }) {
                         ModalOutcome::Open
+                    } else if let PromptAction::CreateTag {
+                        target,
+                        annotated: true,
+                    } = action
+                    {
+                        *self = Modal::prompt(
+                            format!("Message for tag {value}"),
+                            "",
+                            PromptAction::TagMessage {
+                                name: value.to_string(),
+                                target: target.clone(),
+                            },
+                        );
+                        ModalOutcome::Open
                     } else {
                         ModalOutcome::Run(action.op(value))
                     }
@@ -400,6 +481,7 @@ impl Modal {
                 KeyCode::Tab | KeyCode::BackTab => {
                     match action {
                         PromptAction::CreateBranch { worktree, .. } => *worktree = !*worktree,
+                        PromptAction::CreateTag { annotated, .. } => *annotated = !*annotated,
                         PromptAction::Stash { scope, file } => {
                             *scope = PromptAction::next_scope(scope, file.as_ref(), key.code == KeyCode::BackTab);
                         }
@@ -413,7 +495,10 @@ impl Modal {
                 }
                 _ => ModalOutcome::Open,
             },
-            Modal::Confirm { op, .. } => match key.code {
+            Modal::Confirm { op, alt, .. } => match key.code {
+                KeyCode::Char(c) if alt.as_ref().is_some_and(|alt| alt.0 == c) => {
+                    ModalOutcome::Run(alt.as_ref().expect("matched").2.clone())
+                }
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter => ModalOutcome::Run(op.clone()),
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => ModalOutcome::Cancelled,
                 _ => ModalOutcome::Open,
@@ -435,7 +520,7 @@ impl Modal {
         if let Modal::Filter(panel) = self {
             return panel.draw(frame, area, theme);
         }
-        let (title, body, hint): (&str, Vec<Line>, &str) = match self {
+        let (title, body, hint): (&str, Vec<Line>, String) = match self {
             Modal::Palette { .. } | Modal::Filter(_) => unreachable!("handled above"),
             Modal::Prompt { title, input, action } => {
                 let input_line = Line::from(vec![Span::raw(input.as_str()), Span::styled("█", theme.help_key)]);
@@ -471,7 +556,7 @@ impl Modal {
                             input_line,
                             Line::styled(format!("{note} · message optional"), theme.muted),
                         ];
-                        (title, body, "enter stash · tab what to stash · esc cancel")
+                        (title, body, "enter stash · tab what to stash · esc cancel".into())
                     }
                     PromptAction::CreateBranch { worktree, .. } => {
                         let note = if *worktree {
@@ -490,15 +575,42 @@ impl Modal {
                             input_line,
                             Line::styled(note, theme.muted),
                         ];
-                        (title, body, "enter confirm · tab branch/worktree · esc cancel")
+                        (title, body, "enter confirm · tab branch/worktree · esc cancel".into())
                     }
-                    _ => (title, vec![input_line], "enter confirm · esc cancel"),
+                    PromptAction::CreateTag { annotated, .. } => {
+                        let note = if *annotated {
+                            "asks for a message next"
+                        } else {
+                            "just a name for the commit"
+                        };
+                        let body = vec![
+                            Line::from(vec![
+                                tab("Lightweight".into(), !annotated),
+                                Span::styled(" · ", theme.muted),
+                                tab("Annotated".into(), *annotated),
+                            ]),
+                            input_line,
+                            Line::styled(note, theme.muted),
+                        ];
+                        let hint = if *annotated {
+                            "enter next · tab lightweight/annotated · esc cancel"
+                        } else {
+                            "enter create · tab lightweight/annotated · esc cancel"
+                        };
+                        (title, body, hint.into())
+                    }
+                    _ => (title, vec![input_line], "enter confirm · esc cancel".into()),
                 }
             }
-            Modal::Confirm { title, message, .. } => (
+            Modal::Confirm {
+                title, message, alt, ..
+            } => (
                 title,
                 message.lines().map(Line::from).collect(),
-                "y confirm · n/esc cancel",
+                match alt.as_deref() {
+                    Some((key, hint, _)) => format!("y confirm · {key} {hint} · n/esc cancel"),
+                    None => "y confirm · n/esc cancel".into(),
+                },
             ),
         };
         let width = 60.min(area.width);

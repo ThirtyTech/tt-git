@@ -438,6 +438,26 @@ export const shots = [
 		],
 	},
 
+	{
+		name: 'tags-new',
+		capture: 'tags-new',
+		view: { region: { box: 'New tag at' } },
+		callouts: [
+			{ target: { find: 'Lightweight · Annotated' }, text: '**tab** picked Annotated (underlined)', markerSide: 'left' },
+			{ target: { find: 'v1.6.0█' }, text: 'The tag **name**', markerSide: 'left' },
+			{ target: { find: 'asks for a message next' }, text: '**enter** asks for the message', markerSide: 'left' },
+		],
+	},
+	{
+		name: 'tags-delete',
+		capture: 'tags-delete',
+		view: { region: { box: 'Delete tag' } },
+		callouts: [
+			{ target: { find: 'y confirm' }, text: '**y** deletes it here only', markerSide: 'left' },
+			{ target: { find: 'r here and on origin' }, text: '**r** deletes it on the remote too', markerSide: 'right' },
+		],
+	},
+
 	// ---- stash -----------------------------------------------------------------------
 	{
 		name: 'stash-tab',

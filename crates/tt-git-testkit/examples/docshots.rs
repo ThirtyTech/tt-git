@@ -74,6 +74,8 @@ fn main() {
         ("branches-new", &["3", "j", "j", "n", "tab", "text:fix/footer-links"]),
         ("branches-delete", &["3", "j", "j", "j", "j", "j", "j", "d"]),
         ("tags", &["3", "]", "j"]),
+        ("tags-new", &["3", "]", "T", "tab", "text:v1.6.0"]),
+        ("tags-delete", &["3", "]", "j", "d"]),
         ("unmerged", &["3", "]", "]", "j", "j"]),
         ("merged", &["3", "]", "]", "]", "j"]),
         ("stash-tab", &["3", "]", "]", "]", "]"]),

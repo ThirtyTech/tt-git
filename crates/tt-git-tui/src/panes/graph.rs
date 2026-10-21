@@ -761,6 +761,12 @@ impl Component for GraphPane {
                 }
                 EventState::Consumed
             }
+            Command::NewTag => {
+                if let Some(c) = self.selected() {
+                    ctx.emit(Action::OpenModal(Modal::new_tag(&c.short_oid(), c.oid.to_string())));
+                }
+                EventState::Consumed
+            }
             Command::Copy => {
                 if let Some(c) = self.selected() {
                     ctx.emit(Action::Copy(c.oid.to_string()));
@@ -785,6 +791,7 @@ impl Component for GraphPane {
             Command::ToggleDates,
             Command::Checkout,
             Command::NewBranch,
+            Command::NewTag,
             Command::Merge,
             Command::Rebase,
             Command::CherryPick,

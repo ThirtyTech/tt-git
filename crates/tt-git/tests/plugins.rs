@@ -109,13 +109,17 @@ fn palette_lists_and_runs_plugin_actions_for_the_focused_context() {
         .action("for-branch", "Branch thing", &["branch"], &["echo", "x"])
         .install(&sb);
     let mut t = TestDriver::with_plugins(Config::default(), &sb, bin());
-    t.press(":");
+    // The graph's own commands fill the first screen; filter down to the actions.
+    t.press(":").type_text("thing");
     let screen = t.screen();
     assert!(screen.contains("Commit thing"), "{screen}");
     assert!(
         !screen.contains("Branch thing"),
         "branch actions hidden in graph:\n{screen}"
     );
+    for _ in "thing".chars() {
+        t.press("backspace");
+    }
     t.type_text("fetch");
     assert!(t.screen().contains("Fetch"), "built-ins listed too");
     for _ in "fetch".chars() {

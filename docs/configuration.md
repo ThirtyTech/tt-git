@@ -46,7 +46,8 @@ The branches pane has four tabs, five once you have stashes; `]` and `[`
   blank, since each comparison walks history and gets slower the older the
   tag. Selecting one moves the graph to its
   commit; `n` makes a branch from it, `M`/`r` merge or rebase onto it, `c`
-  copies its name and `d` deletes it locally.
+  copies its name, `T` makes another tag at its commit, `P` pushes it and
+  `d` deletes it (`y` locally, `r` locally and on the remote).
 - **Unmerged**: branches on the base branch's remote that aren't merged into
   it, newest commit first, with each tip's subject and author (like
   `git branch -r --no-merged origin/main`). Names matching
@@ -191,8 +192,9 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `move_up`, `move_down`, `page_up`, `page_down`, `top`, `bottom` | `k`/`↑`, `j`/`↓`, `ctrl+u`, `ctrl+d`, `g`, `G` | global |
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |
 | `undo` | `z` | global |
-| `toggle_scope`, `toggle_dates`, `checkout`, `filter`, `new_branch`, `merge`, `rebase`, `cherry_pick` | `a`, `t`, `o`, `f`, `n`, `M`, `r`, `C` | graph |
-| `checkout`, `new_branch`, `delete_branch`, `rename_branch`, `fetch`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `d`, `R`, `f`, `/`, `M`, `r` | branches |
+| `toggle_scope`, `toggle_dates`, `checkout`, `filter`, `new_branch`, `new_tag`, `merge`, `rebase`, `cherry_pick` | `a`, `t`, `o`, `f`, `n`, `T`, `M`, `r`, `C` | graph |
+| `checkout`, `new_branch`, `new_tag`, `delete_branch`, `rename_branch`, `fetch`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `T`, `d`, `R`, `f`, `/`, `M`, `r` | branches |
+| `push_tag` | `P` (on the Tags tab; pushes the branch on the others) | branches |
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |
 | `stage_toggle`, `open_staging`, `stage_all`, `discard`, `commit`, `amend`, `stash`, `continue`, `abort` | `space`, `enter`, `a`, `d`, `c`, `A`, `s`, `C`, `X` | status |
 | `stash_pop`, `stash_apply`, `stash_drop`, `new_branch`, `expand_details`, `next_tab`, `prev_tab`, `filter` | `space`, `a`, `d`, `n`, `enter`, `]` `}`, `[` `{`, `/` | stash |
