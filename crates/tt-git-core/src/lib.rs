@@ -16,10 +16,12 @@ pub mod patch;
 pub mod paths;
 pub mod repo;
 pub mod time;
+pub mod undo;
 
 pub use branches::{AheadBehind, BaseBranches, BranchEntry, BranchState, CheckoutPlan};
 pub use git::{GitCli, GitError};
 pub use ignored::IgnoreRules;
 pub use model::*;
-pub use ops::{DiscardKind, PatchOp, StageSide, StashScope};
+pub use ops::{DiscardKind, PatchOp, StageSide, StashScope, UNDO_CHANGES_KEPT};
 pub use repo::{LogFilter, LogScope, RemoteConfig, Repo};
+pub use undo::{NoStep, UndoStep, UndoTarget};

@@ -35,7 +35,10 @@ opening the dialog.
 
 Checking out a commit from the [graph](/panes/graph/#checking-out-a-commit)
 with uncommitted changes offers to stash them too, as **Everything** with
-git's default message.
+git's default message. So does [undo](/git/undo/#uncommitted-changes):
+after undoing a checkout the stash stays here, and after undoing a merge,
+reset or rebase it's popped straight back unless the changes conflict.
+Undoing a commit never stashes.
 
 <Screenshot name="status-stash" alt="The Stash dialog with Keep staged chosen and a message typed" />
 

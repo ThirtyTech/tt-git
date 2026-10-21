@@ -7,7 +7,7 @@ use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
-use tt_git_core::{CheckoutPlan, DiscardKind, InProgress, LogFilter, PatchOp, StashScope};
+use tt_git_core::{CheckoutPlan, DiscardKind, InProgress, LogFilter, PatchOp, StashScope, UndoStep};
 
 use crate::filter::FilterPanel;
 use crate::keymap::{Command, KeyCombo};
@@ -100,6 +100,12 @@ pub enum GitOp {
         name: String,
         index: usize,
     },
+    /// An undo. With `stash`, every change is stashed first: popped
+    /// back after a reset, left on the Stash tab after a switch.
+    Undo {
+        step: UndoStep,
+        stash: bool,
+    },
 }
 
 impl GitOp {
@@ -166,6 +172,8 @@ impl GitOp {
             GitOp::StashApply { index, pop: false } => format!("stash apply stash@{{{index}}}"),
             GitOp::StashDrop { index } => format!("drop stash@{{{index}}}"),
             GitOp::StashBranch { name, index } => format!("branch {name} from stash@{{{index}}}"),
+            GitOp::Undo { step, stash: false } => step.label(),
+            GitOp::Undo { step, stash: true } => format!("stash and {}", step.label()),
         }
     }
 }

@@ -1,8 +1,8 @@
 //! Messages that drive [`App::update`](crate::App::update).
 
 use tt_git_core::{
-    BaseBranches, BranchEntry, BranchHistory, Checkout, CheckoutPlan, Commit, CommitFile, GitRef, Head, StageSide,
-    Stash, Status, StatusEntry,
+    BaseBranches, BranchEntry, BranchHistory, Checkout, CheckoutPlan, Commit, CommitFile, GitRef, Head, NoStep,
+    StageSide, Stash, Status, StatusEntry, UndoStep,
 };
 use tt_git_plugin::runtime::CommandLog;
 use tt_git_plugin::socket::Call;
@@ -105,6 +105,9 @@ pub enum Action {
     /// Check out `plan`, offering to stash first if there are uncommitted
     /// changes.
     Checkout(CheckoutPlan),
+    /// The next undo step was worked out (or why there's none,
+    /// or the error reading the reflog).
+    UndoPlanned(Result<Result<UndoStep, NoStep>, String>),
     /// A write operation finished; `result` is git's output or error text.
     /// `head` is HEAD's commit afterwards.
     OpDone {

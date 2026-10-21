@@ -37,6 +37,9 @@ pub enum GitError {
     Failed { args: String, code: String, stderr: String },
     #[error("unexpected git output: {0}")]
     Parse(String),
+    /// tt-git declined to run a command; the text says why.
+    #[error("{0}")]
+    Refused(String),
 }
 
 impl GitError {

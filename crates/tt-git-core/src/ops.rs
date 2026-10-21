@@ -1,10 +1,14 @@
 //! Write operations. Each returns git's combined output on success so the
 //! UI can show it, or a [`GitError`] carrying stderr.
 
+use std::collections::HashSet;
+
 use crate::branches::CheckoutPlan;
 use crate::git::{GitError, GitOutput, Result};
+use crate::parse;
 use crate::patch::{FileDiff, PatchDirection, untracked_diff};
 use crate::repo::{BASE_BRANCH_KEY, Repo, WORKTREE_DIR};
+use crate::undo::{self, NoStep, RepoRefs, UNDO_MARK, UndoStep, UndoTarget};
 
 fn text(out: GitOutput) -> String {
     let mut s = String::from_utf8_lossy(&out.stdout).trim().to_string();
@@ -447,6 +451,207 @@ impl Repo {
     pub fn abort_operation(&self, op: crate::model::InProgress) -> Result<String> {
         self.git().run(&[op.command(), "--abort"]).map(text)
     }
+}
+
+/// Starts the error [`Repo::apply_undo`] returns when the step was taken but
+/// the changes stashed for it didn't go back cleanly.
+pub const UNDO_CHANGES_KEPT: &str = "Putting your changes back didn't go cleanly";
+
+impl Repo {
+    /// The next undo step, worked out from HEAD's reflog, or why there
+    /// isn't one.
+    pub fn undo_step(&self) -> Result<std::result::Result<UndoStep, NoStep>> {
+        if let Some(op) = self.in_progress() {
+            return Ok(Err(NoStep::InProgress(op)));
+        }
+        let head = self.head()?;
+        let Some(oid) = head.oid() else {
+            return Ok(Err(NoStep::Unborn));
+        };
+        let max = format!("--max-count={}", undo::REFLOG_LIMIT);
+        let entries = match self
+            .git()
+            .run(&["log", "-g", parse::UNDO_LOG_FORMAT, &max, "HEAD", "--"])
+        {
+            Ok(out) => parse::parse_reflog(&out.stdout),
+            // No reflog.
+            Err(GitError::Failed { .. }) => Vec::new(),
+            Err(e) => return Err(e),
+        };
+        let out = self
+            .git()
+            .run(&["for-each-ref", "--format=%(refname)", "refs/heads/"])?;
+        let refs = LiveRefs {
+            repo: self,
+            branches: out
+                .stdout_str()
+                .lines()
+                .filter_map(|r| r.strip_prefix("refs/heads/"))
+                .map(str::to_string)
+                .collect(),
+        };
+        let current = head.branch().unwrap_or(oid);
+        Ok(undo::plan(&entries, &refs, oid, current))
+    }
+
+    /// Takes `step`, unless HEAD has moved since it was worked out. Each git
+    /// command is marked in the reflog through `GIT_REFLOG_ACTION`, so later
+    /// steps know what's already undone.
+    ///
+    /// With `stash`, every change is stashed first. After a switch the
+    /// stash is left for the user, as [`stash_and_checkout`](Self::stash_and_checkout)
+    /// does; after a reset it's popped back, and if that doesn't go cleanly
+    /// the error starts with [`UNDO_CHANGES_KEPT`]. If the step itself
+    /// fails, the stash is popped back. A step that doesn't
+    /// [touch the working tree](UndoTarget::touches_worktree) never stashes.
+    pub fn apply_undo(&self, step: &UndoStep, stash: bool) -> Result<String> {
+        let stash = stash && step.target.touches_worktree();
+        if self.commit_of("HEAD").as_deref() != Some(step.head.as_str()) {
+            return Err(GitError::Refused(
+                "HEAD moved after the undo was worked out. Try again.".into(),
+            ));
+        }
+        // A rebased branch moves too: it must still be where the step expects.
+        if let UndoTarget::LeaveRebase { branch, rebased, .. } = &step.target
+            && self.commit_of(&format!("refs/heads/{branch}")).as_ref() != Some(rebased)
+        {
+            return Err(GitError::Refused(format!(
+                "{branch} moved after the undo was worked out. Try again."
+            )));
+        }
+        let mut out = String::new();
+        let before = self.stash_tip();
+        if stash {
+            out = self.stash_push(None, &StashScope::All)?;
+        }
+        let stashed = stash && self.stash_tip() != before;
+        let done = match self.move_for_undo(step, &step.target) {
+            Ok(done) => done,
+            Err(e) => {
+                if stashed && let Err(pop) = self.stash_apply(0, true) {
+                    tracing::warn!("restoring the stash after a failed undo failed: {pop}");
+                }
+                return Err(e);
+            }
+        };
+        push_line(&mut out, &done);
+        if stashed && !step.target.is_switch() {
+            match self.stash_apply(0, true) {
+                Ok(popped) => push_line(&mut out, &popped),
+                Err(e) => {
+                    return Err(GitError::Refused(format!(
+                        "{UNDO_CHANGES_KEPT}, so they're still in stash@{{0}}.\n\
+                         Sort out the files git mentions below, then drop the stash.\n\n{e}"
+                    )));
+                }
+            }
+        }
+        Ok(out)
+    }
+}
+
+impl Repo {
+    /// The commit `rev` names, if it names one.
+    fn commit_of(&self, rev: &str) -> Option<String> {
+        let rev = format!("{rev}^{{commit}}");
+        let out = self.git().run(&["rev-parse", "-q", "--verify", rev.as_str()]).ok()?;
+        Some(out.stdout_str().trim().to_string())
+    }
+
+    /// Runs the git commands that take `step` to `target`. Only the command
+    /// that moves HEAD is marked, so each step leaves one marked entry in
+    /// HEAD's reflog.
+    fn move_for_undo(&self, step: &UndoStep, target: &UndoTarget) -> Result<String> {
+        let marked = |action: String| self.git().clone().with_env([("GIT_REFLOG_ACTION", action)]);
+        match target {
+            UndoTarget::Reset(oid) => marked(UNDO_MARK.to_string())
+                .run(&["reset", "--keep", oid.as_str()])
+                .map(text),
+            UndoTarget::SoftReset(oid) => marked(UNDO_MARK.to_string())
+                .run(&["reset", "--soft", oid.as_str()])
+                .map(text),
+            UndoTarget::Branch(name) => marked(switch_message(step, name))
+                .run(&["switch", name.as_str()])
+                .map(text),
+            UndoTarget::Detach(oid) => marked(switch_message(step, oid))
+                .run(&["switch", "--detach", oid.as_str()])
+                .map(text),
+            UndoTarget::LeaveRebase {
+                branch,
+                before,
+                rebased,
+                back,
+            } => {
+                // Off the branch first: git won't move the checked-out one.
+                let out = self.move_for_undo(step, back)?;
+                if let Some(before) = before {
+                    let full = format!("refs/heads/{branch}");
+                    let message = format!("{UNDO_MARK}: back to before the rebase");
+                    self.git()
+                        .run(&[
+                            "update-ref",
+                            "-m",
+                            message.as_str(),
+                            full.as_str(),
+                            before.as_str(),
+                            rebased.as_str(),
+                        ])
+                        .map_err(|e| {
+                            GitError::Refused(format!(
+                                "Switched to {}, but moving {branch} back to before the rebase failed:\n{e}",
+                                back.display()
+                            ))
+                        })?;
+                }
+                Ok(out)
+            }
+        }
+    }
+}
+
+/// [`RepoRefs`] for [`undo::plan`], read from the repository.
+struct LiveRefs<'a> {
+    repo: &'a Repo,
+    branches: HashSet<String>,
+}
+
+impl RepoRefs for LiveRefs<'_> {
+    fn is_branch(&self, name: &str) -> bool {
+        self.branches.contains(name)
+    }
+
+    /// The entry before the rebase's `(finish)` in the branch's reflog.
+    fn before_rebase(&self, branch: &str, rebased: &str) -> Option<String> {
+        let max = format!("--max-count={}", undo::REFLOG_LIMIT);
+        let full = format!("refs/heads/{branch}");
+        let out = self
+            .repo
+            .git()
+            .run(&["log", "-g", parse::UNDO_LOG_FORMAT, max.as_str(), full.as_str(), "--"])
+            .ok()?;
+        let entries = parse::parse_reflog(&out.stdout);
+        let at = entries
+            .iter()
+            .position(|e| e.oid == rebased && e.subject.contains("(finish)"))?;
+        Some(entries.get(at + 1)?.oid.clone())
+    }
+}
+
+/// The reflog message for a switch made by `step`: git uses
+/// `GIT_REFLOG_ACTION` as the whole message, so it's written the way git
+/// writes a checkout, behind the marker.
+fn switch_message(step: &UndoStep, to: &str) -> String {
+    format!("{UNDO_MARK} checkout: moving from {} to {to}", step.current)
+}
+
+fn push_line(out: &mut String, line: &str) {
+    if line.is_empty() {
+        return;
+    }
+    if !out.is_empty() {
+        out.push('\n');
+    }
+    out.push_str(line);
 }
 
 /// Which changes `git stash push` saves.

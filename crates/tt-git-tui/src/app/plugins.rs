@@ -52,6 +52,7 @@ pub(super) struct PluginState {
 const PALETTE_BUILTINS: &[Command] = &[
     Command::Continue,
     Command::Abort,
+    Command::Undo,
     Command::Fetch,
     Command::Pull,
     Command::Push,
@@ -273,6 +274,11 @@ impl App {
         if let GitOp::Checkout { stash: true, .. } = op {
             self.emit_event("stash.created", json!({ "message": null }));
         }
+        if let GitOp::Undo { step, stash: true } = op
+            && step.target.is_switch()
+        {
+            self.emit_event("stash.created", json!({ "message": null }));
+        }
         let (event, data) = match op {
             GitOp::Checkout {
                 plan: CheckoutPlan::Local(name),
@@ -340,7 +346,8 @@ impl App {
                 "branch.created",
                 json!({ "branch": name, "start": format!("stash@{{{index}}}"), "worktree": null }),
             ),
-            GitOp::Abort(_) | GitOp::SetBaseBranch(_) | GitOp::DeleteTag { .. } => return,
+            // HEAD moving is reported as `head.changed`.
+            GitOp::Abort(_) | GitOp::SetBaseBranch(_) | GitOp::DeleteTag { .. } | GitOp::Undo { .. } => return,
             GitOp::Commit { message, amend } => (
                 "commit.created",
                 json!({

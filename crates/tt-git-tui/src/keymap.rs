@@ -252,6 +252,7 @@ pub enum Command {
     StashDrop,
     Continue,
     Abort,
+    Undo,
 }
 
 impl Command {
@@ -313,6 +314,7 @@ impl Command {
             Command::CherryPick => "cherry-pick",
             Command::Continue => "continue merge/rebase",
             Command::Abort => "abort merge/rebase",
+            Command::Undo => "undo",
             Command::Stash => "stash",
             Command::StashPop => "pop",
             Command::StashApply => "apply",
@@ -450,6 +452,7 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Global, Command::Palette, &[":", "ctrl+p"]),
     (Context::Global, Command::Push, &["P"]),
     (Context::Global, Command::Pull, &["p"]),
+    (Context::Global, Command::Undo, &["z"]),
     (Context::Status, Command::StageToggle, &["space"]),
     (Context::Status, Command::OpenStaging, &["enter"]),
     (Context::Status, Command::StageAll, &["a"]),

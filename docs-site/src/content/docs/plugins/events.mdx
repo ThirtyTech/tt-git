@@ -83,7 +83,7 @@ Leave out `events` to get every event.
 |---|---|---|
 | `app.started` | tt-git started, after the startup commands. | `{version}` |
 | `repo.opened` | The repository was opened, right after `app.started`. | `{path, name}` |
-| `head.changed` | `HEAD` moved, from tt-git or outside it. This includes switching between two branches at the same commit. | `{from, from_branch, to, branch}` |
+| `head.changed` | `HEAD` moved, from tt-git or outside it. This includes switching between two branches at the same commit, and [undo](/git/undo/), which sends no event of its own. | `{from, from_branch, to, branch}` |
 | `branch.checked_out` | You checked out a branch, or created one (without a worktree). Checking out a commit from the graph with HEAD detached sends only `head.changed`; stashing first also sends `stash.created`. | `{branch, created, tracking?}`. `created` is `true` for a new branch, including tracking branches made for a remote-only branch; `tracking` is the remote branch then. |
 | `branch.created` | A branch was created, from a commit, a tag, a branch or a stash. | `{branch, start, worktree}`. `worktree` is the new worktree's path, or `null`. |
 | `branch.deleted` | A branch was deleted, locally or on a remote. | `{branch, remote}`. `remote` is `null` for a local branch. |

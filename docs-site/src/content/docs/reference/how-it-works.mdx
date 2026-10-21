@@ -236,6 +236,43 @@ without stashes pays nothing for it.
 | Branch | `git stash branch <name> stash@{n}` |
 | Show | `git show --stat --patch` of the stash commit, then of its untracked-files commit if it has one |
 
+### Undo
+
+[Undo](/git/undo/) reads the reflog only when you press <kbd>z</kbd>, never
+on a refresh: `git log -g --format=%H%x1f%gs --max-count=500 HEAD`, plus
+`git for-each-ref refs/heads/` to know which branches still exist. Walking it
+newest first, each entry marked `[tt-git undo]` counts one of your own
+actions as already undone; the first action not cancelled out is the one to
+undo. A rebase's `(start)` to `(finish)` entries make one action.
+
+Before acting, tt-git checks with `git rev-parse` that `HEAD`, and for a
+rebase of another branch that branch, hasn't moved since. Each command that
+moves `HEAD` runs with `GIT_REFLOG_ACTION` set to the marker:
+
+| Step | Runs |
+|---|---|
+| Back over your own commit or amend (`commit:` or `commit (amend):` in the reflog) | `git reset --soft <commit>`: the index and files stay as they are |
+| Back over anything else on the current branch | `git reset --keep <commit>` |
+| Back to a branch | `git switch <branch>` |
+| Back to a detached commit | `git switch --detach <commit>` |
+| Back over a rebase of another branch | `git switch <branch you were on>`, then `git update-ref refs/heads/<rebased> <before> <rebased commit>` |
+
+A rebase of another branch (`git rebase <upstream> <branch>`) is spotted
+from the rebased branch's own reflog, `git log -g refs/heads/<branch>`: the
+entry before its `rebase (finish)` is where the branch was before. If that's
+where `HEAD` was when the rebase started, it was an ordinary rebase of the
+current branch. If it isn't, or the branch's reflog doesn't say, tt-git goes
+by the newest checkout, finished rebase or rename of the current branch in
+`HEAD`'s reflog before the rebase started.
+Only the switch is marked, so each step leaves one marked entry in `HEAD`'s
+reflog.
+
+A soft reset never touches your files, so it runs straight away. For the
+other steps, with uncommitted changes and your go-ahead, it runs `git stash
+push --include-untracked` first. After a reset, `git stash pop` puts the changes
+back; after a switch they stay stashed. If the reset or switch fails, the
+stash is popped back, as for a checkout.
+
 ## Status and staging
 
 ### The file list

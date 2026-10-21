@@ -10,7 +10,9 @@ use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tt_git_core::branches::matches_filter;
 use tt_git_core::time::SharedClock;
-use tt_git_core::{CheckoutPlan, CommitFile, Head, LogFilter, Repo, Stash, StatusEntry};
+use tt_git_core::{
+    CheckoutPlan, CommitFile, Head, LogFilter, NoStep, Repo, Stash, StatusEntry, UNDO_CHANGES_KEPT, UndoStep,
+};
 
 use crate::action::{Action, RefsSnapshot};
 use crate::component::{Component, EventState};
@@ -58,6 +60,7 @@ const ALL_GLOBAL: &[Command] = &[
     Command::Refresh,
     Command::Pull,
     Command::Push,
+    Command::Undo,
     Command::Help,
     Command::Quit,
 ];
@@ -145,6 +148,8 @@ pub struct App {
     busy: Vec<String>,
     /// Select HEAD in the graph once refs reload (after commit/checkout).
     select_head: bool,
+    /// An undo is being worked out or run; another press waits.
+    undo_pending: bool,
     watcher: Option<RepoWatcher>,
     plugins: Option<plugins::PluginState>,
     panes: Vec<crate::pty_pane::PtyPane>,
@@ -221,6 +226,7 @@ impl App {
             modal: None,
             busy: Vec::new(),
             select_head: false,
+            undo_pending: false,
             watcher: None,
             plugins: None,
             panes: Vec::new(),
@@ -708,6 +714,7 @@ impl App {
             Action::OpenModal(modal) => self.modal = Some(modal),
             Action::Run(op) => self.run_op(op),
             Action::Checkout(plan) => self.checkout(plan),
+            Action::UndoPlanned(planned) => self.undo_planned(planned),
             Action::OpDone { op, result, head } => self.op_done(op, result, head),
             Action::StatusLoaded(Ok(status)) => {
                 self.status.set_status(status);
@@ -956,6 +963,9 @@ impl App {
         {
             view.mark_applying();
         }
+        if matches!(op, GitOp::Undo { .. }) {
+            self.undo_pending = true;
+        }
         let label = op.label();
         self.notice = Some(format!("{label}…"));
         self.busy.push(label);
@@ -989,12 +999,82 @@ impl App {
         ));
     }
 
+    /// Works out the next undo step in the background.
+    fn plan_undo(&mut self) {
+        if self.undo_pending {
+            return;
+        }
+        self.undo_pending = true;
+        let repo = self.repo.clone();
+        self.ctx.spawn(move || loaders::plan_undo(repo));
+    }
+
+    /// Takes a planned undo step, asking first if there are
+    /// uncommitted changes it would otherwise put at risk.
+    fn undo_planned(&mut self, planned: Result<Result<UndoStep, NoStep>, String>) {
+        self.undo_pending = false;
+        let step = match planned {
+            Ok(Ok(step)) => step,
+            Ok(Err(none)) if none.is_notice() => {
+                self.notice = Some(none.message());
+                return;
+            }
+            Ok(Err(none)) => {
+                self.notice = None;
+                self.error = Some(none.message());
+                return;
+            }
+            Err(err) => {
+                self.notice = None;
+                self.error = Some(format!("reading the reflog failed:\n{err}"));
+                return;
+            }
+        };
+        let changed = self.status.entries().len();
+        // Undoing a commit only moves the branch, so there's
+        // nothing to ask about.
+        if changed == 0 || !step.target.touches_worktree() {
+            self.run_op(GitOp::Undo { step, stash: false });
+            return;
+        }
+        let files = if changed == 1 {
+            "1 file has".to_string()
+        } else {
+            format!("{changed} files have")
+        };
+        let target = step.target.display();
+        let message = if step.target.is_switch() {
+            format!(
+                "{files} uncommitted changes.\nStash them and {}, switching to {target}?\n\n\
+                 They stay on the branches pane's Stash tab to pop back later.",
+                step.label()
+            )
+        } else {
+            format!(
+                "{files} uncommitted changes.\nStash them, {} (reset to {target}), and put them back?\n\n\
+                 If they don't go back cleanly, they stay on the branches pane's Stash tab.",
+                step.label()
+            )
+        };
+        self.modal = Some(Modal::confirm(
+            "Uncommitted changes",
+            message,
+            GitOp::Undo { step, stash: true },
+        ));
+    }
+
     fn op_done(&mut self, op: GitOp, result: Result<String, String>, head: Option<String>) {
         let label = op.label();
         if let Some(pos) = self.busy.iter().position(|b| *b == label) {
             self.busy.remove(pos);
         }
-        if result.is_ok()
+        if matches!(op, GitOp::Undo { .. }) {
+            self.undo_pending = false;
+        }
+        // The step was taken, but the stashed changes didn't go back.
+        let kept =
+            matches!(&result, Err(err) if matches!(op, GitOp::Undo { .. }) && err.starts_with(UNDO_CHANGES_KEPT));
+        if (result.is_ok() || kept)
             && matches!(
                 op,
                 GitOp::Commit { .. }
@@ -1007,6 +1087,7 @@ impl App {
                     | GitOp::Continue(_)
                     | GitOp::Abort(_)
                     | GitOp::StashBranch { .. }
+                    | GitOp::Undo { .. }
             )
         {
             self.select_head = true;
@@ -1024,6 +1105,10 @@ impl App {
                         format!("{name} is not fully merged. Delete it anyway (git branch -D)?"),
                         GitOp::DeleteBranch { name, force: true },
                     ));
+                }
+                GitOp::Undo { .. } if kept => {
+                    self.notice = None;
+                    self.error = Some(err);
                 }
                 _ => {
                     self.notice = None;
@@ -1360,6 +1445,7 @@ impl App {
             }
             Command::Push => self.update(Action::Run(GitOp::Push)),
             Command::Pull => self.update(Action::Run(GitOp::Pull)),
+            Command::Undo => self.plan_undo(),
             _ => {
                 let ctx = self.ctx.clone();
                 if self.focused_mut().on_command(cmd, &ctx) == EventState::NotConsumed {

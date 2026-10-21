@@ -423,6 +423,7 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::StashApply { index, pop } => repo.stash_apply(*index, *pop),
         GitOp::StashDrop { index } => repo.stash_drop(*index),
         GitOp::StashBranch { name, index } => repo.stash_branch(name, *index),
+        GitOp::Undo { step, stash } => repo.apply_undo(step, *stash),
     };
     let head = match result {
         Ok(_) => repo.head().ok().and_then(|h| h.oid().map(str::to_string)),
@@ -433,6 +434,11 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         result: result.map_err(|e| e.stderr().map(str::to_string).unwrap_or_else(|| e.to_string())),
         head,
     }
+}
+
+/// Works out the next undo step.
+pub fn plan_undo(repo: Repo) -> Action {
+    Action::UndoPlanned(repo.undo_step().map_err(|e| e.to_string()))
 }
 
 /// Largest untracked file shown in full in the details pane.

@@ -1,0 +1,101 @@
+---
+title: Undo
+description: "Step back through checkouts, commits, resets and rebases."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Press <kbd>z</kbd> in any pane to undo the last thing you did to `HEAD`.
+Press it again to keep stepping back. It's also in the [command
+palette](/git/palette/) as *Undo*.
+
+tt-git works out each step from `HEAD`'s reflog, the log git keeps of every
+move `HEAD` makes. That covers what you did in tt-git and what you did on the
+command line.
+
+## What can be undone
+
+| You did | Undo |
+|---|---|
+| A checkout (switching branch, or detaching at a commit) | Switches back to the branch you were on. If that branch has been deleted since, or you were on a detached commit, `HEAD` goes back to that commit, detached. |
+| A commit or amend | Moves the branch back to the commit before it and gives you the commit's changes back, staged, as they were just before you committed. They show in the [status pane](/panes/status/). |
+| A merge, pull, cherry-pick, revert or reset | Moves the branch back to the commit before it, and the files with it. |
+| A rebase, including `git pull --rebase` | Moves the branch back to where it was before the rebase, in one step. |
+| A rebase of another branch, like `git rebase main feature` run on `main` | Switches back to the branch you ran it from, and moves the rebased branch back to where it was. |
+
+For a rebase of another branch, tt-git finds where that branch was in the
+branch's own reflog. If it can't find it there, undo only switches you back
+and leaves the branch rebased, rather than guess.
+
+When it's done, the help bar shows what happened, for example
+`✓ undo commit: fix typo`, and the graph selects the new head.
+
+There's no redo. To reword or split your last commit, press <kbd>z</kbd>,
+change what's staged, and commit again. Anything else you undo is still in
+`git reflog` if you want it back.
+
+Some reflog entries aren't steps, and tt-git skips them: a stash (it leaves
+`HEAD` where it was), a rebase you aborted, and moves that end on the same
+commit they started from.
+
+## Uncommitted changes
+
+Undoing a commit or amend never asks: it only moves the branch, and your
+files stay exactly as they are. Neither does anything else when the working
+tree is clean. If you have uncommitted changes, untracked files included,
+every other step asks first:
+
+- **Undoing a merge, pull, cherry-pick, revert, reset or rebase** asks
+  *"Stash them, undo …, and put them back?"*. Press <kbd>y</kbd> and tt-git
+  stashes everything, moves the branch, then pops the stash. If the changes
+  don't go back cleanly (they touch the same lines the step changed), git
+  keeps the stash on the branches pane's [Stash](/panes/stash/) tab. tt-git
+  says so, and git's conflict markers are left in the files.
+- **Undoing a checkout** asks the same as a normal
+  [checkout](/panes/branches/): stash them and switch. The changes stay on the
+  Stash tab to pop back later.
+
+Press <kbd>n</kbd> or <kbd>esc</kbd> to leave everything as it is.
+
+## When it refuses
+
+- **A merge, rebase, cherry-pick or revert is in progress.** Continue or
+  abort it first with <kbd>C</kbd> / <kbd>X</kbd> in the status pane; see
+  [resolving conflicts](/git/merge-rebase/#resolving-conflicts).
+- **The step would undo the repository's first commit.** There's nothing
+  before it to go back to.
+- **`HEAD` moved after tt-git worked out the step**, for example because a
+  command ran in another terminal at the same moment, or the branch a
+  rebase step moves did. Press the key again.
+- **The move would overwrite changes it didn't stash.** tt-git moves the
+  branch with `git reset --keep`, which refuses rather than overwrite a file.
+
+*Nothing to undo* shows in the help bar.
+
+<Aside type="caution">
+	Undo only moves your local branch. If you undo a commit you've already
+	pushed, the remote still has it, and your next push will be rejected
+	until you push with `--force`. tt-git never force-pushes.
+</Aside>
+
+<Aside>
+	Undo follows `HEAD` only. Branches that move without `HEAD`, such as
+	remote branches updated by a fetch or a branch you delete, aren't steps.
+</Aside>
+
+## How tt-git keeps count
+
+Each undo is itself a move of `HEAD`, so it lands in the reflog too. tt-git
+marks those entries with `[tt-git undo]`, which is how it knows which of
+your own actions are already undone, so the next <kbd>z</kbd> steps further
+back instead of undoing the undo. You'll see the marker in `git reflog`:
+
+```
+4f1c2ab HEAD@{0}: [tt-git undo]: updating HEAD
+9e8d7c6 HEAD@{1}: commit: fix typo
+```
+
+A checkout made by undo is written like a normal checkout behind the marker,
+`[tt-git undo] checkout: moving from feature to main`, so the branch list
+still sorts that branch as recently used. The git commands are listed in
+[How it works](/reference/how-it-works/#undo).

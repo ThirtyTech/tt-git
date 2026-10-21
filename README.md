@@ -91,6 +91,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `+` | zoom: the graph, or details if focused, fullscreen and back |
 | | `j` `k` `↑` `↓`, `ctrl+d` `ctrl+u`, `g` `G` | move, page, top/bottom |
 | | `P` / `p` | push (sets upstream on first push) / pull |
+| | `z` | undo the last checkout, commit, reset or rebase |
 | | `ctrl+r` | refresh |
 | | `:` `ctrl+p` | command palette |
 | | `q` | quit |
@@ -156,6 +157,8 @@ The full documentation is at <https://thirtytech.github.io/tt-git/>. For how eac
 - [Tags](https://thirtytech.github.io/tt-git/panes/tags/) and [Stash](https://thirtytech.github.io/tt-git/panes/stash/)
 - [Status](https://thirtytech.github.io/tt-git/panes/status/) and [staging hunks and lines](https://thirtytech.github.io/tt-git/panes/staging/)
 - [Plugin panes](https://thirtytech.github.io/tt-git/panes/plugin-panes/)
+- [Undo](https://thirtytech.github.io/tt-git/git/undo/): stepping back through checkouts, commits,
+  resets and rebases
 - [Refreshing](https://thirtytech.github.io/tt-git/git/refreshing/): what tt-git watches and when it reloads
 - [How it works](https://thirtytech.github.io/tt-git/reference/how-it-works/): the git commands behind each
   pane

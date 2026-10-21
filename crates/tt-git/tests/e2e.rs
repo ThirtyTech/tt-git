@@ -126,6 +126,23 @@ fn stage_and_commit_in_the_real_binary() {
 }
 
 #[test]
+fn undo_a_commit_in_the_real_binary() {
+    let sb = Sandbox::new();
+    let base = sb.commit("base");
+    sb.commit("second");
+    let mut t = spawn(&sb, &[]);
+    t.wait_until(|s| s.contains("second")).expect("graph rendered");
+    t.send_str("z").unwrap();
+    t.wait_until(|s| s.contains("✓ undo commit: second")).expect("undone");
+    t.wait_until(|_| sb.rev_parse("HEAD") == base)
+        .expect("HEAD back on base");
+    // The commit's file is back in the status pane, staged.
+    t.wait_until(|s| s.contains("A  second.txt")).expect("changes kept");
+    t.send_str("q").unwrap();
+    assert!(t.wait_exit().unwrap().success());
+}
+
+#[test]
 fn external_cli_talks_to_running_instance_over_the_socket() {
     use tt_git_testkit::{PluginFixture, read_records};
     let sb = Sandbox::new();

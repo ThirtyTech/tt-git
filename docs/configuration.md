@@ -153,6 +153,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `close_details` | `esc` (graph); `esc` `space` (details) | graph, details |
 | `move_up`, `move_down`, `page_up`, `page_down`, `top`, `bottom` | `k`/`↑`, `j`/`↓`, `ctrl+u`, `ctrl+d`, `g`, `G` | global |
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |
+| `undo` | `z` | global |
 | `toggle_scope`, `toggle_dates`, `checkout`, `filter`, `new_branch`, `merge`, `rebase`, `cherry_pick` | `a`, `t`, `o`, `f`, `n`, `M`, `r`, `C` | graph |
 | `checkout`, `new_branch`, `delete_branch`, `rename_branch`, `fetch`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `d`, `R`, `f`, `/`, `M`, `r` | branches |
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |

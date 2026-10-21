@@ -8,6 +8,7 @@ use crate::git::GitError;
 use crate::model::{
     BranchStatus, Checkout, Commit, CommitFile, FileState, GitRef, Oid, RefKind, Stash, Status, StatusEntry,
 };
+use crate::undo::ReflogEntry;
 
 /// Field separator inside a record (ASCII unit separator).
 pub const FS: char = '\u{1f}';
@@ -324,11 +325,16 @@ pub const REFLOG_FORMAT: &str = "--format=%gd%x1f%gs";
 
 /// Extracts `checkout: moving from A to B` entries (newest first, as git
 /// prints them) from HEAD's reflog in [`REFLOG_FORMAT`], one per line.
+/// Checkouts made by undo count too.
 pub fn parse_checkouts(out: &[u8]) -> Vec<Checkout> {
     String::from_utf8_lossy(out)
         .lines()
         .filter_map(|line| {
             let (selector, subject) = line.split_once(FS)?;
+            let subject = subject
+                .strip_prefix(crate::undo::UNDO_MARK)
+                .and_then(|s| s.strip_prefix(' '))
+                .unwrap_or(subject);
             let rest = subject.strip_prefix("checkout: moving from ")?;
             let (from, to) = rest.split_once(" to ")?;
             let time = selector.rsplit_once("@{")?.1.strip_suffix('}')?;
@@ -336,6 +342,23 @@ pub fn parse_checkouts(out: &[u8]) -> Vec<Checkout> {
                 from: from.to_string(),
                 to: to.to_string(),
                 time: time.trim().parse().ok()?,
+            })
+        })
+        .collect()
+}
+
+/// `git log -g` format for [`parse_reflog`]: the commit and the subject.
+pub const UNDO_LOG_FORMAT: &str = "--format=%H%x1f%gs";
+
+/// Parses HEAD's reflog in [`UNDO_LOG_FORMAT`], newest first.
+pub fn parse_reflog(out: &[u8]) -> Vec<ReflogEntry> {
+    String::from_utf8_lossy(out)
+        .lines()
+        .filter_map(|line| {
+            let (oid, subject) = line.split_once(FS)?;
+            Some(ReflogEntry {
+                oid: oid.to_string(),
+                subject: subject.to_string(),
             })
         })
         .collect()
@@ -721,15 +744,30 @@ mod tests {
         let out = format!(
             "HEAD@{{500}}{FS}checkout: moving from main to feature/to-x\n\
              HEAD@{{400}}{FS}commit: something\n\
-             HEAD@{{300}}{FS}checkout: moving from {A} to main\n"
+             HEAD@{{300}}{FS}checkout: moving from {A} to main\n\
+             HEAD@{{200}}{FS}[tt-git undo] checkout: moving from main to old\n\
+             HEAD@{{100}}{FS}[tt-git undo]: updating HEAD\n"
         );
         let cs = parse_checkouts(out.as_bytes());
-        assert_eq!(cs.len(), 2);
+        assert_eq!(cs.len(), 3);
+        assert_eq!((cs[2].to.as_str(), cs[2].time), ("old", 200));
         assert_eq!(
             (cs[0].from.as_str(), cs[0].to.as_str(), cs[0].time),
             ("main", "feature/to-x", 500)
         );
         assert_eq!((cs[1].to.as_str(), cs[1].time), ("main", 300));
+    }
+
+    #[test]
+    fn parses_reflog() {
+        let out = format!("{A}{FS}commit: two\n{B}{FS}checkout: moving from a to b\n");
+        let entries = parse_reflog(out.as_bytes());
+        assert_eq!(entries.len(), 2);
+        assert_eq!(
+            (entries[0].oid.as_str(), entries[0].subject.as_str()),
+            (A, "commit: two")
+        );
+        assert_eq!(entries[1].subject, "checkout: moving from a to b");
     }
 
     #[test]
