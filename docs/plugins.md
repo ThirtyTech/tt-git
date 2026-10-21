@@ -136,7 +136,7 @@ Event hooks are low-volume events, each run as a fresh process:
 
 | Event | `data` |
 |---|---|
-| `app.started` | `{version}` |
+| `app.started` | `{version}` (also after opening another worktree, which starts tt-git over there) |
 | `repo.opened` | `{path, name}` |
 | `head.changed` | `{from, from_branch, to, branch}` (also on switching between branches at the same commit, and on undo, which has no event of its own) |
 | `branch.checked_out` | `{branch, created, tracking?}`; `created` is true for auto-created tracking branches |
@@ -146,6 +146,7 @@ Event hooks are low-volume events, each run as a fresh process:
 | `files.staged` / `files.unstaged` / `files.discarded` | `{paths}` (`"all"` for stage-all) / `{paths}` / `{path}`, plus `partial: true` when only some hunks or lines changed |
 | `merge.completed` / `rebase.completed` / `cherry_pick.completed` | `{target/onto/picked, head}` |
 | `stash.created` / `stash.applied` / `stash.dropped` | `{message}` / `{stash, pop}` / `{stash}` |
+| `worktree.removed` | `{path, branch, force}` (`branch` null if it was detached; `force` true if removed with its changes) |
 
 A long-running process can call `events.subscribe` instead (see below) to
 get a stream of events.

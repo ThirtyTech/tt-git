@@ -109,7 +109,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `n` `d` `R` | new (`tab` in the dialog: create it in a worktree under `.worktrees/`) / delete (asks before force-deleting unmerged) / rename |
 | | `f` | `fetch --all --prune` |
 | | `/` | filter as you type (`esc` clears) |
-| | `]` `[` | next / previous tab: all branches, tags, unmerged into the base branch, merged into it, and stashes (once there are any) |
+| | `]` `[` | next / previous tab: all branches, tags, unmerged into the base branch, merged into it, stashes and worktrees (once there are any) |
 | | `b` | pick the base branch (default: the project's primary branch) |
 | | `M` / `r` | merge / rebase onto the selected branch |
 | | `c` | copy the branch name |
@@ -125,6 +125,9 @@ command palette, which lists built-in commands and plugin actions.
 | | `d` | drop it (asks first) |
 | | `n` | new branch from it at the commit it was made on (`git stash branch`) |
 | | `enter` | show what it holds fullscreen, untracked files included (`esc` back) |
+| worktrees tab | `enter` `space` | open the selected worktree in place of this one (tt-git starts over there) |
+| | `d` | remove it (asks first; asks again before `--force` if it has changes; never the main worktree or the one tt-git is in) |
+| | `n` / `c` | new branch in a new worktree from it / copy its path |
 | details | `}` | show / hide the commit's changed files below the diff (`j`/`k` pick a file); fullscreen puts them on the left |
 | | `o` | open the link in view with a plugin link handler |
 | | `e` | open the file in view in your editor, at the line at the top of the diff |

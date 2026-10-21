@@ -1,0 +1,7 @@
+---
+source: crates/tt-git-tui/tests/worktrees.rs
+expression: "t.pane_lines(PaneId::Branches)[..3].join(\"\\n\")"
+---
+* repo              main                                     main · clean
+  .worktrees/review (detached b290cb5)                     locked · clean
+  .worktrees/side   side                                        1 changed

@@ -117,6 +117,21 @@ children = [
     press(&mut driver, &["2"]);
     save(&out, "conflict", &driver);
 
+    // Two linked worktrees, in their own repo so the other shots' branches
+    // pane doesn't grow a Worktrees tab.
+    let trees = Sandbox::named(REPO);
+    let mock = Mock::new(&trees);
+    mock.build();
+    mock.worktrees();
+    for (name, keys) in [
+        ("worktrees-tab", &["3", "["][..]),
+        ("worktree-remove", &["3", "[", "j", "d"][..]),
+    ] {
+        let mut driver = TestDriver::with_size(Config::default(), &trees, WIDTH, HEIGHT);
+        press(&mut driver, keys);
+        save(&out, name, &driver);
+    }
+
     println!("wrote captures to {}", out.display());
 }
 
@@ -532,6 +547,21 @@ impl<'a> Mock<'a> {
         );
         // Untracked.
         self.sb.write("src/hooks/useNotifications.ts", USE_NOTIFICATIONS);
+    }
+
+    /// A worktree for a new fix branch with work in progress, and a
+    /// detached one for reviewing a feature, both under `.worktrees/`.
+    fn worktrees(&self) {
+        let fix = self.sb.path().join(".worktrees/fix/bell-a11y");
+        let review = self.sb.path().join(".worktrees/review-search");
+        let (fix_s, review_s) = (fix.to_str().unwrap(), review.to_str().unwrap());
+        self.sb
+            .git(&["worktree", "add", "-q", "-b", "fix/bell-a11y", fix_s, "main"]);
+        self.sb.git(&["worktree", "add", "-q", "--detach", review_s, "main~2"]);
+        std::fs::write(self.sb.path().join(".git/info/exclude"), "/.worktrees/\n").unwrap();
+        let bell = BELL.replace("<button", "<button aria-label=\"Notifications\"");
+        std::fs::write(fix.join("src/components/NotificationBell.tsx"), bell).unwrap();
+        std::fs::write(fix.join("src/components/bell.test.tsx"), "// TODO\n").unwrap();
     }
 
     /// A merge of a branch that changed the bell's markup the same way,

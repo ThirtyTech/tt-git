@@ -224,3 +224,34 @@ fn external_cli_talks_to_running_instance_over_the_socket() {
     t.send_str("q").unwrap();
     assert!(t.wait_exit().unwrap().success());
 }
+
+#[test]
+fn opens_another_worktree_in_place() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let side = sb.path().join(".worktrees").join("side");
+    sb.git(&["worktree", "add", "-q", "-b", "side", side.to_str().unwrap(), "main"]);
+    sb.git_in(&side, &["commit", "-q", "--allow-empty", "-m", "side work"]);
+    std::fs::write(
+        sb.path().join(".git/info/exclude"),
+        "/.worktrees/
+",
+    )
+    .unwrap();
+    let mut t = spawn(&sb, &[]);
+    // The tab shows once the refs (and worktrees) are loaded.
+    t.wait_until(|s| s.contains("Status: repo · main") && s.contains("Worktrees"))
+        .expect("main opened");
+    t.send_str("3").unwrap();
+    t.send_str("[").unwrap();
+    t.wait_until(|s| s.contains(".worktrees/side")).expect("worktrees tab");
+    t.send_str("j").unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("Status: side · side"))
+        .expect("side opened");
+    // A fresh start there: the graph is back in front.
+    t.wait_until(|s| s.contains("Graph [all]") && s.contains("side work"))
+        .unwrap();
+    t.send_str("q").unwrap();
+    assert!(t.wait_exit().unwrap().success());
+}

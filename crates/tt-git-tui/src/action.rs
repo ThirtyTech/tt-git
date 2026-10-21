@@ -2,7 +2,7 @@
 
 use tt_git_core::{
     BaseBranches, BranchEntry, BranchHistory, Checkout, CheckoutPlan, Commit, CommitFile, GitRef, Head, NoStep,
-    StageSide, Stash, Status, StatusEntry, UndoStep,
+    StageSide, Stash, Status, StatusEntry, UndoStep, Worktree,
 };
 use tt_git_plugin::runtime::CommandLog;
 use tt_git_plugin::socket::Call;
@@ -26,6 +26,8 @@ pub struct RefsSnapshot {
     pub base: Option<BaseBranches>,
     /// The stash list, newest first.
     pub stashes: Vec<Stash>,
+    /// Every working tree, the main one first.
+    pub worktrees: Vec<Worktree>,
 }
 
 /// Everything that can change app state. Input, timers, finished background
@@ -98,6 +100,13 @@ pub enum Action {
     StashSelected(Stash),
     /// The branch list selection moved to a branch whose tip is this commit.
     BranchSelected(String),
+    /// The worktrees tab is showing: count each worktree's changes.
+    CountWorktreeChanges,
+    /// How many files have changes in each worktree (by path), or why it
+    /// couldn't be told.
+    WorktreeChanges(Vec<(std::path::PathBuf, Result<usize, String>)>),
+    /// Close this repository and open the worktree at this path instead.
+    OpenWorktree(std::path::PathBuf),
     /// The branch the graph should show on its own, or `None` for the
     /// whole graph.
     BranchFocused(Option<BranchFocus>),

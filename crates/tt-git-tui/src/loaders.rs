@@ -33,6 +33,10 @@ pub fn load_refs(repo: Repo, config: BranchesConfig) -> Action {
             tracing::warn!("listing stashes failed: {e}");
             Vec::new()
         });
+        let worktrees = repo.worktrees().unwrap_or_else(|e| {
+            tracing::warn!("listing worktrees failed: {e}");
+            Vec::new()
+        });
         let branches = tt_git_core::branches::unify(&refs, &head, &checkouts, |r| repo.ref_activity(r));
         let base = match load_base(&repo, &refs, &authors, &branches, base_branch, &config) {
             Ok(base) => base,
@@ -48,6 +52,7 @@ pub fn load_refs(repo: Repo, config: BranchesConfig) -> Action {
             branches,
             base,
             stashes,
+            worktrees,
         })
     })();
     Action::RefsLoaded(result.map(Box::new).map_err(message))
@@ -110,6 +115,22 @@ fn load_base(
         authors: repo.ref_authors_of(authors, &scope)?,
         tags,
     }))
+}
+
+/// How many files have changes in each of the worktrees at `paths`.
+pub fn count_worktree_changes(repo: Repo, paths: Vec<PathBuf>) -> Action {
+    let counts = paths
+        .into_iter()
+        .map(|path| {
+            let count = repo.worktree_changes(&path).map_err(|e| {
+                let msg = e.stderr().map(str::to_string).unwrap_or_else(|| e.to_string());
+                tracing::warn!("counting changes in {} failed: {msg}", path.display());
+                msg
+            });
+            (path, count)
+        })
+        .collect();
+    Action::WorktreeChanges(counts)
 }
 
 /// Everyone with commits, for the filter panel's author list.
@@ -428,6 +449,7 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::StashDrop { index } => repo.stash_drop(*index),
         GitOp::StashBranch { name, index } => repo.stash_branch(name, *index),
         GitOp::Undo { step, stash } => repo.apply_undo(step, *stash),
+        GitOp::RemoveWorktree { path, force, .. } => repo.remove_worktree(path, *force),
     };
     let head = match result {
         Ok(_) => repo.head().ok().and_then(|h| h.oid().map(str::to_string)),

@@ -46,6 +46,7 @@ pub const HOOK_EVENTS: &[&str] = &[
     "merge.completed",
     "rebase.completed",
     "cherry_pick.completed",
+    "worktree.removed",
 ];
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

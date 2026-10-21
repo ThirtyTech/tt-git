@@ -73,13 +73,31 @@ impl TestDriver {
         Self::build_with(config, sb, DEFAULT_WIDTH, DEFAULT_HEIGHT, Some(opts))
     }
 
+    /// Like [`with_size`](Self::with_size), opened at `path` (a linked
+    /// worktree of the sandbox repo, say) instead of the sandbox repo.
+    pub fn at(mut config: Config, sb: &Sandbox, path: &std::path::Path, width: u16, height: u16) -> Self {
+        config.watch = false;
+        Self::build_at(config, sb, path, width, height, None)
+    }
+
     fn build(config: Config, sb: &Sandbox, width: u16, height: u16) -> Self {
         Self::build_with(config, sb, width, height, None)
     }
 
     fn build_with(config: Config, sb: &Sandbox, width: u16, height: u16, plugins: Option<PluginOptions>) -> Self {
-        let git = GitCli::new(sb.path()).with_env(sb.env());
-        let repo = Repo::discover(sb.path(), &git).expect("sandbox repo");
+        Self::build_at(config, sb, sb.path(), width, height, plugins)
+    }
+
+    fn build_at(
+        config: Config,
+        sb: &Sandbox,
+        path: &std::path::Path,
+        width: u16,
+        height: u16,
+        plugins: Option<PluginOptions>,
+    ) -> Self {
+        let git = GitCli::new(path).with_env(sb.env());
+        let repo = Repo::discover(path, &git).expect("sandbox repo");
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .worker_threads(2)
             .enable_all()

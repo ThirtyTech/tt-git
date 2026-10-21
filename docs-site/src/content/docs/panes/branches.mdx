@@ -12,7 +12,8 @@ recent activity rather than by name, and a short status column tells you
 whether each branch is pushed, behind, or gone from the remote. From here
 you check out, create, rename, delete, fetch, merge and rebase. The same
 pane has tabs for [tags](/panes/tags/), [merged and unmerged
-branches](/panes/merged-unmerged/) and the [stash](/panes/stash/).
+branches](/panes/merged-unmerged/), the [stash](/panes/stash/) and your
+[worktrees](/git/worktrees/#the-worktrees-tab).
 
 <Screenshot name="branches-overview" alt="The branches pane highlighted, with one row per branch and the status and activity columns" />
 
@@ -28,6 +29,7 @@ move between the tabs, or click a tab's name in the title:
 | **Unmerged** | Branches not yet merged into the base branch. See [Merged and unmerged](/panes/merged-unmerged/). |
 | **Merged** | Branches that are. |
 | **Stash** | Your stashes, once you have any. See [Stash](/panes/stash/). |
+| **Worktrees** | Every worktree of the repository, once there's more than the main one. Open or remove them from here. See [Worktrees](/git/worktrees/#the-worktrees-tab). |
 
 The title shows every tab with its count, the current one underlined, and
 the base branch on the tabs that compare against it:
@@ -35,6 +37,9 @@ the base branch on the tabs that compare against it:
 ```
 Branches 12 · Tags 3 · Unmerged 4 (origin/main) · Merged 9
 ```
+
+When the pane is too narrow for all of that, only the current tab keeps its
+count, so every tab's name still fits.
 
 Each tab keeps its own cursor, so switching away and back returns you to
 the same row.

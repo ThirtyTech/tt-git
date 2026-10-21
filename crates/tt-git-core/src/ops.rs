@@ -103,6 +103,29 @@ impl Repo {
         std::fs::write(&path, updated)
     }
 
+    /// `git worktree remove` the linked worktree at `path`: deletes its
+    /// folder (ignored files too) and git's record of it; its branch stays.
+    /// Without `force` git refuses one with uncommitted or untracked
+    /// changes; it refuses a locked one either way. tt-git refuses the
+    /// main worktree and the one it's running in.
+    pub fn remove_worktree(&self, path: &std::path::Path, force: bool) -> Result<String> {
+        if crate::repo::same_path(path, self.root()) {
+            return Err(GitError::Refused(
+                "tt-git is running in that worktree; open another one first".into(),
+            ));
+        }
+        if crate::repo::same_path(path, self.main_root()) {
+            return Err(GitError::Refused("the main worktree can't be removed".into()));
+        }
+        let path = path.to_string_lossy();
+        let mut args = vec!["worktree", "remove"];
+        if force {
+            args.push("--force");
+        }
+        args.push(&path);
+        self.git().run(&args).map(text)
+    }
+
     /// Deletes a local branch; without `force` git refuses unmerged ones.
     pub fn delete_branch(&self, name: &str, force: bool) -> Result<String> {
         let flag = if force { "-D" } else { "-d" };

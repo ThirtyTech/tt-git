@@ -262,6 +262,123 @@ fn create_branch_in_a_worktree() {
     assert!(err.stderr().unwrap_or_default().contains("already exists"), "{err}");
 }
 
+#[test]
+fn lists_worktrees_and_their_changes() {
+    let sb = Sandbox::new();
+    let base = sb.commit("base");
+    let repo = open(&sb);
+    repo.create_worktree("side", "main").unwrap();
+    let detached = sb.path().join(".worktrees/review");
+    sb.git(&["worktree", "add", "-q", "--detach", detached.to_str().unwrap(), "main"]);
+    sb.git(&["worktree", "lock", "--reason", "on usb", detached.to_str().unwrap()]);
+
+    let wts = repo.worktrees().unwrap();
+    assert_eq!(wts.len(), 3, "{wts:#?}");
+    assert!(wts[0].main && wts[0].current, "{:?}", wts[0]);
+    assert_eq!(wts[0].branch.as_deref(), Some("main"));
+    let side = wts.iter().find(|w| w.branch.as_deref() == Some("side")).unwrap();
+    assert!(!side.main && !side.current && side.locked.is_none());
+    assert_eq!(side.head.as_deref(), Some(base.as_str()));
+    let review = wts.iter().find(|w| w.branch.is_none()).unwrap();
+    assert_eq!(review.locked.as_deref(), Some("on usb"));
+
+    // Seen from inside a linked worktree, that one is current.
+    let inner = Repo::discover(&side.path, &GitCli::new(".").with_env(sb.env())).unwrap();
+    let from_inner = inner.worktrees().unwrap();
+    assert!(
+        from_inner
+            .iter()
+            .any(|w| w.current && w.branch.as_deref() == Some("side"))
+    );
+    assert!(!from_inner[0].current);
+
+    assert_eq!(repo.worktree_changes(&side.path).unwrap(), 0);
+    std::fs::write(
+        side.path.join("base.txt"),
+        "changed
+",
+    )
+    .unwrap();
+    std::fs::write(
+        side.path.join("new.txt"),
+        "new
+",
+    )
+    .unwrap();
+    assert_eq!(repo.worktree_changes(&side.path).unwrap(), 2);
+    assert!(repo.status().unwrap().entries.is_empty(), "this worktree is untouched");
+}
+
+#[test]
+fn remove_worktree_refuses_changes_until_forced() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let repo = open(&sb);
+    repo.create_worktree("clean", "main").unwrap();
+    repo.create_worktree("dirty", "main").unwrap();
+    let clean = sb.path().join(".worktrees/clean");
+    let dirty = sb.path().join(".worktrees/dirty");
+    std::fs::write(
+        dirty.join("scratch.txt"),
+        "wip
+",
+    )
+    .unwrap();
+
+    repo.remove_worktree(&clean, false).unwrap();
+    assert!(!clean.exists());
+    assert_eq!(sb.rev_parse("clean"), sb.rev_parse("main"), "the branch stays");
+
+    let err = repo.remove_worktree(&dirty, false).unwrap_err();
+    assert!(
+        err.stderr().unwrap_or_default().contains("modified or untracked"),
+        "{err}"
+    );
+    assert!(dirty.join("scratch.txt").is_file(), "nothing was deleted");
+    repo.remove_worktree(&dirty, true).unwrap();
+    assert!(!dirty.exists());
+    assert_eq!(repo.worktrees().unwrap().len(), 1);
+}
+
+#[test]
+fn remove_worktree_refuses_main_current_and_locked() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let repo = open(&sb);
+    repo.create_worktree("side", "main").unwrap();
+    repo.create_worktree("locked", "main").unwrap();
+    let side = sb.path().join(".worktrees/side");
+    let locked = sb.path().join(".worktrees/locked");
+    sb.git(&["worktree", "lock", locked.to_str().unwrap()]);
+
+    let err = repo.remove_worktree(sb.path(), true).unwrap_err();
+    assert!(err.to_string().contains("running in that worktree"), "{err}");
+    let inner = Repo::discover(&side, &GitCli::new(".").with_env(sb.env())).unwrap();
+    let err = inner.remove_worktree(sb.path(), true).unwrap_err();
+    assert!(err.to_string().contains("main worktree"), "{err}");
+    let err = inner.remove_worktree(&side, false).unwrap_err();
+    assert!(err.to_string().contains("running in that worktree"), "{err}");
+
+    let err = repo.remove_worktree(&locked, true).unwrap_err();
+    assert!(err.stderr().unwrap_or_default().contains("locked"), "{err}");
+    assert!(locked.exists());
+}
+
+#[test]
+fn remove_worktree_whose_folder_is_gone() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let repo = open(&sb);
+    repo.create_worktree("gone", "main").unwrap();
+    let gone = sb.path().join(".worktrees/gone");
+    std::fs::remove_dir_all(&gone).unwrap();
+    let wts = repo.worktrees().unwrap();
+    assert!(wts[1].prunable.is_some(), "{wts:#?}");
+
+    repo.remove_worktree(&wts[1].path, false).unwrap();
+    assert_eq!(repo.worktrees().unwrap().len(), 1);
+}
+
 mod hunks {
     use tt_git_core::PatchOp;
     use tt_git_core::patch::{FileDiff, LineKind};

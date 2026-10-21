@@ -81,7 +81,7 @@ Leave out `events` to get every event.
 
 | Event | When | `data` |
 |---|---|---|
-| `app.started` | tt-git started, after the startup commands. | `{version}` |
+| `app.started` | tt-git started, after the startup commands. Also when you [open another worktree](/git/worktrees/#opening-a-worktree), which starts tt-git over there. | `{version}` |
 | `repo.opened` | The repository was opened, right after `app.started`. | `{path, name}` |
 | `head.changed` | `HEAD` moved, from tt-git or outside it. This includes switching between two branches at the same commit, and [undo](/git/undo/), which sends no event of its own. | `{from, from_branch, to, branch}` |
 | `branch.checked_out` | You checked out a branch, or created one (without a worktree). Checking out a commit from the graph with HEAD detached sends only `head.changed`; stashing first also sends `stash.created`. | `{branch, created, tracking?}`. `created` is `true` for a new branch, including tracking branches made for a remote-only branch; `tracking` is the remote branch then. |
@@ -101,6 +101,7 @@ Leave out `events` to get every event.
 | `stash.created` | A stash was made. | `{message}` (`null` when you left it empty) |
 | `stash.applied` | A stash was applied or popped. | `{stash, pop}`, where `stash` is like `stash@{0}` |
 | `stash.dropped` | A stash was dropped. | `{stash}` |
+| `worktree.removed` | A worktree was removed from the [Worktrees tab](/git/worktrees/#removing-a-worktree). | `{path, branch, force}`. `branch` is what it had checked out (`null` if detached); `force` is `true` when it was removed with its changes. |
 
 When you finish a merge, rebase or cherry-pick that stopped on conflicts
 (<kbd>C</kbd> in the status pane), the matching `*.completed` event fires with

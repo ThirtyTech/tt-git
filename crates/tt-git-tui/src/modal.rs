@@ -106,6 +106,14 @@ pub enum GitOp {
         step: UndoStep,
         stash: bool,
     },
+    /// `git worktree remove` (with `--force`, even with changes). `name`
+    /// is how the worktrees tab shows it; `branch` is what it had checked out.
+    RemoveWorktree {
+        path: std::path::PathBuf,
+        name: String,
+        branch: Option<String>,
+        force: bool,
+    },
 }
 
 impl GitOp {
@@ -174,6 +182,8 @@ impl GitOp {
             GitOp::StashBranch { name, index } => format!("branch {name} from stash@{{{index}}}"),
             GitOp::Undo { step, stash: false } => step.label(),
             GitOp::Undo { step, stash: true } => format!("stash and {}", step.label()),
+            GitOp::RemoveWorktree { name, force: false, .. } => format!("remove worktree {name}"),
+            GitOp::RemoveWorktree { name, force: true, .. } => format!("force-remove worktree {name}"),
         }
     }
 }

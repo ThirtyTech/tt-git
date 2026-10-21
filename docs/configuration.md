@@ -158,9 +158,10 @@ graph opens details below it at full width and closes it again.
 ## Key bindings
 
 Bindings belong to a context: `global`, `status`, `branches`, `graph`,
-`details`, `stage` (the details pane while it stages a file by hunk) or
+`details`, `stage` (the details pane while it stages a file by hunk),
 `stash` (the branches pane on its Stash tab, which doesn't fall back to
-`branches`).
+`branches`) or `worktrees` (the branches pane on its Worktrees tab, which
+doesn't either).
 tt-git looks up a key in the focused pane's context first, then in `global`. When you set a command's keys, they replace that command's
 default keys in that context.
 
@@ -196,10 +197,11 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |
 | `stage_toggle`, `open_staging`, `stage_all`, `discard`, `commit`, `amend`, `stash`, `continue`, `abort` | `space`, `enter`, `a`, `d`, `c`, `A`, `s`, `C`, `X` | status |
 | `stash_pop`, `stash_apply`, `stash_drop`, `new_branch`, `expand_details`, `next_tab`, `prev_tab`, `filter` | `space`, `a`, `d`, `n`, `enter`, `]` `}`, `[` `{`, `/` | stash |
+| `open_worktree`, `remove_worktree`, `new_branch`, `copy`, `next_tab`, `prev_tab`, `filter` | `enter`/`space`, `d`, `n`, `c`, `]` `}`, `[` `{`, `/` | worktrees |
 | `stage_toggle`, `switch_side`, `toggle_line_mode`, `select_range`, `discard`, `commit`, `close_details` | `space`, `tab`, `a`, `v`, `d`, `c`, `esc` | stage |
 | `toggle_files`, `open_link` | `}`, `o` | details |
 | `open_in_editor` | `e` | status, details, stage |
-| `copy` (commit hash / branch name) | `c` | graph, branches |
+| `copy` (commit hash / branch name / worktree path) | `c` | graph, branches, worktrees |
 | `plugin_logs` | (palette only) | global |
 
 ### Plugin action bindings

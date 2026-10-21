@@ -187,6 +187,8 @@ pub enum Context {
     Stage,
     /// The branches pane on its Stash tab.
     Stash,
+    /// The branches pane on its Worktrees tab.
+    Worktrees,
 }
 
 /// Everything a key can be bound to.
@@ -254,6 +256,8 @@ pub enum Command {
     Continue,
     Abort,
     Undo,
+    OpenWorktree,
+    RemoveWorktree,
 }
 
 impl Command {
@@ -321,6 +325,8 @@ impl Command {
             Command::StashPop => "pop",
             Command::StashApply => "apply",
             Command::StashDrop => "drop",
+            Command::OpenWorktree => "open",
+            Command::RemoveWorktree => "remove",
         }
     }
 }
@@ -509,6 +515,13 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Stash, Command::NextTab, &["]", "}"]),
     (Context::Stash, Command::PrevTab, &["[", "{"]),
     (Context::Stash, Command::Filter, &["/"]),
+    (Context::Worktrees, Command::OpenWorktree, &["enter", "space"]),
+    (Context::Worktrees, Command::RemoveWorktree, &["d"]),
+    (Context::Worktrees, Command::NewBranch, &["n"]),
+    (Context::Worktrees, Command::Copy, &["c"]),
+    (Context::Worktrees, Command::NextTab, &["]", "}"]),
+    (Context::Worktrees, Command::PrevTab, &["[", "{"]),
+    (Context::Worktrees, Command::Filter, &["/"]),
 ];
 
 impl Default for Keymap {
@@ -833,6 +846,7 @@ mod tests {
             Context::Details,
             Context::Stage,
             Context::Stash,
+            Context::Worktrees,
         ];
         let commands: std::collections::HashSet<Command> = DEFAULTS.iter().map(|(_, cmd, _)| *cmd).collect();
         for km in [Keymap::default(), Keymap::with_overrides(&overrides).unwrap()] {

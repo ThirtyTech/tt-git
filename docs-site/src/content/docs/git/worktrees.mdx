@@ -1,6 +1,6 @@
 ---
 title: Worktrees
-description: "Create a branch in its own worktree under .worktrees/."
+description: "Create, list, open and remove worktrees under .worktrees/."
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -11,7 +11,9 @@ folder for the same repository, with its own branch checked out. You can
 work on a fix in one while a long build or a half-finished change sits in the
 other, without stashing or switching branches.
 
-tt-git can create a new branch straight into a worktree.
+tt-git can create a new branch straight into a worktree, list your
+worktrees, open one in place of the repository you're in, and remove the
+ones you're done with.
 
 ## Creating a branch in a worktree
 
@@ -58,9 +60,58 @@ When tt-git makes the first one, it adds `/.worktrees/` to the repository's
 local to your clone and isn't committed. Creating a worktree from inside
 another worktree still puts it in the main checkout's `.worktrees/`.
 
-## Using a worktree
+## The Worktrees tab
 
-Open the worktree in your editor and in a second tt-git:
+The branches pane gets a **Worktrees** tab as soon as the repository has a
+worktree besides the main one. It's the last tab: press <kbd>3</kbd>, then
+<kbd>[</kbd> from the Branches tab (or <kbd>]</kbd> until you reach it), or
+click its name in the title.
+
+```
+* my-project           main                  main · clean
+  .worktrees/fix-login fix-login                3 changed
+  .worktrees/review    (detached 1a2b3c4)  locked · clean
+```
+
+<Screenshot name="worktrees-tab" alt="The Worktrees tab listing the main worktree and two linked ones, with their branches and how many files have changes" />
+
+Each row shows:
+
+- `*` on the worktree tt-git is running in.
+- Its folder: the main worktree by its name, the others by their path from
+  it (`.worktrees/fix-login`), or in full if they live somewhere else.
+- What it has checked out: a branch, or `(detached <commit>)`.
+- Its state: `main` for the main worktree, `locked` if it was locked with
+  `git worktree lock`, `missing` if its folder is gone, and how many files
+  have uncommitted or untracked changes (`clean` for none). The counts are
+  worked out in the background each time you open the tab and when the
+  branches reload, so `…` shows until they're in.
+
+Moving the selection also selects the worktree's commit in the graph.
+<kbd>/</kbd> filters by path, and <kbd>c</kbd> copies the selected
+worktree's full path.
+
+## Opening a worktree
+
+Select a worktree and press <kbd>enter</kbd> (or <kbd>space</kbd>). tt-git
+closes the repository it's in and opens that worktree in the same terminal,
+as if you'd started `tt-git` there: the panes start over, the file watcher
+follows the new folder, and plugins restart (their startup commands run
+again and they get `repo.opened` for the new path). tt-git also changes its
+working directory to the worktree, so it doesn't hold the old folder open.
+The plugin API socket gets a new address, so a plugin process still running
+from before can't reach the new one. To go back, open the main worktree the
+same way.
+
+It won't open:
+
+- the worktree you're already in;
+- one whose folder is gone (remove it instead);
+- anything while a git command it started is still running (it asks you to
+  wait).
+
+You can still open a worktree in a second tt-git, side by side with the
+first:
 
 ```sh
 tt-git .worktrees/fix-login
@@ -78,10 +129,54 @@ staged changes and any merge or rebase in progress are separate.
 	has it.
 </Aside>
 
-When you're done, remove it from a terminal. `git worktree remove` refuses if
-the worktree has uncommitted changes:
+## Removing a worktree
 
-```sh
-git worktree remove .worktrees/fix-login
-git branch -d fix-login        # once it's merged
-```
+On the Worktrees tab, select the worktree and press <kbd>d</kbd>. tt-git
+asks first (**Remove worktree**), then runs
+`git worktree remove <path>`: the folder is deleted, ignored files like build
+output included, and git forgets the worktree. Its branch stays; delete it
+from the Branches tab once it's merged.
+
+<Screenshot name="worktree-remove" alt="The Remove worktree dialog, saying the branch stays and that it will ask again if there are changes" />
+
+If the worktree has uncommitted or untracked changes, git refuses, and
+tt-git asks again (**Uncommitted changes**) before running
+`git worktree remove --force`, which deletes them for good. Answer
+<kbd>n</kbd> to keep everything as it was.
+
+tt-git won't remove:
+
+- the main worktree;
+- the worktree it's running in. Open another one first;
+- a locked worktree. Unlock it with `git worktree unlock <path>` first.
+
+A worktree whose folder you already deleted by hand shows as `missing`;
+<kbd>d</kbd> on it drops it from git's list.
+
+<Aside>
+	On Windows, a folder that a program has open (an editor, a terminal whose
+	current directory is inside it, a running build) can't be deleted, and the
+	removal fails with git's error. Close it and press <kbd>d</kbd> again.
+</Aside>
+
+## A new worktree from the tab
+
+<kbd>n</kbd> on the Worktrees tab opens **New branch** already on its
+*Worktree* tab, starting from the selected worktree's branch (or its commit,
+if it's detached).
+
+## Keys
+
+On the Worktrees tab:
+
+| Key | Does |
+|---|---|
+| <kbd>enter</kbd> <kbd>space</kbd> | Open the worktree here, in place of this one |
+| <kbd>n</kbd> | New branch in a new worktree, from the selected one |
+| <kbd>d</kbd> | Remove the worktree (asks; asks again before `--force`) |
+| <kbd>c</kbd> | Copy its path |
+| <kbd>/</kbd> | Filter as you type |
+| <kbd>]</kbd> <kbd>[</kbd> | Next / previous tab |
+
+The tab has its own key context, `worktrees`, which doesn't fall back to the
+branches keys. See [Key bindings](/configuration/keys/#contexts).

@@ -51,15 +51,22 @@ fn main() -> Result<()> {
         }
         Err(e) => return Err(e).wrap_err("opening repository"),
     };
-    let (mut app, mut rx) = App::new(config, repo, tt_git_core::time::system_clock())?;
-    if !args.no_plugins {
-        app.enable_plugins(PluginOptions {
-            dirs: PluginDirs::from_env(),
-            bin_path: std::env::current_exe().ok(),
-            socket: true,
-            extra_env: Vec::new(),
-        });
-    }
+    let no_plugins = args.no_plugins;
+    let new_app = |repo: Repo| -> Result<_> {
+        let (mut app, rx) = App::new(config.clone(), repo, tt_git_core::time::system_clock())?;
+        if !no_plugins {
+            app.enable_plugins(PluginOptions {
+                dirs: PluginDirs::from_env(),
+                bin_path: std::env::current_exe().ok(),
+                socket: true,
+                extra_env: Vec::new(),
+            });
+        }
+        Ok((app, rx))
+    };
+    // Made before the terminal is taken over, so a bad config is reported
+    // on a normal screen.
+    let mut next = Some(new_app(repo)?);
 
     // The UI loop is the only task; git work runs on the blocking pool
     // (`spawn_blocking`), so worker threads would only sit idle. Only the
@@ -72,14 +79,37 @@ fn main() -> Result<()> {
     // Installed after color-eyre so ratatui's panic hook restores the
     // terminal before the report is printed.
     let mut terminal = ratatui::init();
-    // Like lazygit's "<repo> - Lazygit": lets terminal multiplexers and their
-    // plugins tell tt-git is running when the OS only reports the shell.
-    let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::SetTitle(app.terminal_title()));
-    let mouse = app.wants_mouse();
+    let mouse = config.mouse;
     if mouse {
         let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture);
     }
-    let result = runtime.block_on(tt_git_tui::runner::run(&mut terminal, &mut app, &mut rx));
+    let mut result = Ok(());
+    // Opening another worktree quits the app and starts a new one there,
+    // as if tt-git had been started in it.
+    while let Some((mut app, mut rx)) = next.take() {
+        // Like lazygit's "<repo> - Lazygit": lets terminal multiplexers and
+        // their plugins tell tt-git is running when the OS only reports the shell.
+        let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::SetTitle(app.terminal_title()));
+        result = runtime.block_on(tt_git_tui::runner::run(&mut terminal, &mut app, &mut rx));
+        let Some(repo) = app.take_reopen().filter(|_| result.is_ok()) else {
+            break;
+        };
+        // Plugins, panes and the watcher stop with it.
+        drop(app);
+        // So the folder left isn't held open (Windows can't delete a
+        // process's current directory) and plugins start where tt-git is.
+        if let Err(e) = std::env::set_current_dir(repo.root()) {
+            tracing::warn!("couldn't change to {}: {e}", repo.root().display());
+        }
+        match new_app(repo) {
+            Ok(app) => next = Some(app),
+            Err(e) => {
+                result = Err(std::io::Error::other(e.to_string()));
+                break;
+            }
+        }
+        let _ = terminal.clear();
+    }
     if mouse {
         let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture);
     }

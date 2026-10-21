@@ -342,6 +342,12 @@ impl App {
                 json!({ "stash": format!("stash@{{{index}}}"), "pop": pop }),
             ),
             GitOp::StashDrop { index } => ("stash.dropped", json!({ "stash": format!("stash@{{{index}}}") })),
+            GitOp::RemoveWorktree {
+                path, branch, force, ..
+            } => (
+                "worktree.removed",
+                json!({ "path": path, "branch": branch, "force": force }),
+            ),
             GitOp::StashBranch { name, index } => (
                 "branch.created",
                 json!({ "branch": name, "start": format!("stash@{{{index}}}"), "worktree": null }),

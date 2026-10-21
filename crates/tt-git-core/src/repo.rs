@@ -7,7 +7,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::branches::AheadBehind;
 use crate::git::{GitCli, GitError, Result};
-use crate::model::{BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, Oid, Stash, Status};
+use crate::model::{BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, Oid, Stash, Status, Worktree};
 use crate::parse;
 
 /// Repo-local git config key holding the picked base branch.
@@ -133,6 +133,30 @@ impl Repo {
     /// `.worktrees/<name>` in the main working tree.
     pub fn worktree_path(&self, name: &str) -> PathBuf {
         self.main_root().join(WORKTREE_DIR).join(name)
+    }
+
+    /// Every working tree of the repository, the main one first, with the
+    /// one this repo was opened in marked [`current`](Worktree::current).
+    pub fn worktrees(&self) -> Result<Vec<Worktree>> {
+        let out = self.git.run(&["worktree", "list", "--porcelain"])?;
+        let mut worktrees = parse::parse_worktrees(&out.stdout);
+        for wt in &mut worktrees {
+            wt.current = same_path(&wt.path, &self.root);
+        }
+        Ok(worktrees)
+    }
+
+    /// How many files have uncommitted changes (untracked ones included) in
+    /// the working tree at `path`, another worktree of this repository.
+    pub fn worktree_changes(&self, path: &Path) -> Result<usize> {
+        let out = self.git.in_dir(path).run(&[
+            "status",
+            "--porcelain=v2",
+            "-z",
+            "--untracked-files=all",
+            "--ignore-submodules=none",
+        ])?;
+        Ok(parse::parse_status(&out.stdout)?.entries.len())
     }
 
     pub fn head(&self) -> Result<Head> {
@@ -822,6 +846,23 @@ impl Repo {
             true
         })?;
         Ok(commits)
+    }
+}
+
+/// Whether `a` and `b` name the same directory, going by where they
+/// really are when both exist (git prints `C:/x` where Rust has `C:\x`,
+/// and a temp dir may be reached through a short or linked name).
+pub fn same_path(a: &Path, b: &Path) -> bool {
+    match (std::fs::canonicalize(a), std::fs::canonicalize(b)) {
+        (Ok(a), Ok(b)) => a == b,
+        _ => {
+            let norm = |p: &Path| {
+                let s = p.to_string_lossy().replace('\\', "/");
+                let s = s.trim_end_matches('/').to_string();
+                if cfg!(windows) { s.to_lowercase() } else { s }
+            };
+            norm(a) == norm(b)
+        }
     }
 }
 
