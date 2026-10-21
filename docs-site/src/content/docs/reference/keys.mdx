@@ -123,6 +123,8 @@ Blame, opened with <kbd>b</kbd> on a file in the status pane or details.
 
 | Key | Does |
 |---|---|
+| <kbd>ctrl+g</kbd> | Go to a line: type its number and press <kbd>enter</kbd>. |
+| digits, then <kbd>G</kbd> / <kbd>g</kbd> | Vim style: `42G` goes to line 42, `5j` / `5k` move five lines. <kbd>esc</kbd> drops the count. While blame is focused, digits count instead of switching panes. |
 | <kbd>enter</kbd> | Open the line's commit fullscreen, scrolled to the line. <kbd>esc</kbd> comes back. |
 | <kbd>space</kbd> | Show / hide the line's commit details below the code. |
 | <kbd>[</kbd> | Step back: blame the file as it was just before the line's commit. |

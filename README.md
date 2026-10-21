@@ -150,7 +150,8 @@ command palette, which lists built-in commands and plugin actions.
 | | `c` | commit what's staged |
 | | `e` | open the file in your editor at the selected hunk or line |
 | | `esc` | back to the status pane |
-| blame | `enter` | open the line's commit fullscreen, scrolled to the line (`b` there blames another of its files; `esc` back) |
+| blame | `ctrl+g` | go to a line by number (vim style works too: `42G`, `5j`, `:42` `enter`) |
+| | `enter` | open the line's commit fullscreen, scrolled to the line (`b` there blames another of its files; `esc` back) |
 | | `space` | show / hide the line's commit: author, date, how many lines it gave this file, full message |
 | | `[` / `]` | step back to the file as it was before the line's commit / forward again |
 | | `t` | ages ↔ local dates and times (shared with the graph) |

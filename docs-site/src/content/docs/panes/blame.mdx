@@ -85,6 +85,24 @@ Move with <kbd>j</kbd> <kbd>k</kbd>, a page at a time with <kbd>ctrl+d</kbd> <kb
 to the top or bottom with <kbd>g</kbd> <kbd>G</kbd>. Click a line to select it; the mouse wheel moves
 too.
 
+## Going to a line
+
+Press <kbd>ctrl+g</kbd>, as in VS Code. A `Go to line (1-348)` box opens over blame. Type the line
+number and press <kbd>enter</kbd>; <kbd>esc</kbd> closes the box without moving. A number past the
+end goes to the last line. If the line is off screen, blame scrolls it a third of the way down.
+
+If you're used to vim, these work too:
+
+- **A count before <kbd>G</kbd> or <kbd>g</kbd>**: type `42` then <kbd>G</kbd> to go to line 42.
+  While you type, the title shows `go to 42…` after where you are. <kbd>esc</kbd> drops the count
+  without leaving blame, and any other key uses it up.
+- **A count before <kbd>j</kbd> or <kbd>k</kbd>** moves that many lines: `5j` goes down five.
+- **`:42` and <kbd>enter</kbd>**: <kbd>:</kbd> opens the [command palette](/git/palette/) as
+  usual, and in blame typing a number there turns the list into a single `Go to line 42` entry.
+
+While blame is focused, the digits count lines, so <kbd>1</kbd> to <kbd>4</kbd> don't switch panes.
+Use <kbd>esc</kbd> or <kbd>tab</kbd> to leave.
+
 ## The commit behind a line
 
 <Screenshot name="blame-commit" alt="The commit behind a blamed line, opened fullscreen with the line marked in its diff" />
@@ -176,6 +194,8 @@ The details follow the selection as you move.
 | <kbd>j</kbd> <kbd>k</kbd> | Next / previous line |
 | <kbd>ctrl+d</kbd> <kbd>ctrl+u</kbd> | Page down / up |
 | <kbd>g</kbd> <kbd>G</kbd> | Top / bottom |
+| <kbd>ctrl+g</kbd> | Go to a line by number |
+| `42` <kbd>G</kbd> | Go to line 42 (vim style; `5j` moves down five) |
 | <kbd>enter</kbd> | Open the line's commit fullscreen |
 | <kbd>space</kbd> | Show / hide the line's commit details |
 | <kbd>[</kbd> | Step back past the line's commit |

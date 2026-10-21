@@ -329,6 +329,8 @@ pub enum Modal {
         input: String,
         items: Vec<PaletteItem>,
         selected: usize,
+        /// How many lines a typed number can go to (blame's); 0 for none.
+        lines: usize,
     },
     Prompt {
         title: String,
@@ -358,6 +360,8 @@ pub enum ModalOutcome {
     PluginPane(String, String),
     /// Show only the graph's commits that match.
     Filter(LogFilter),
+    /// Go to this line (from 1), typed as a number in the palette.
+    GoToLine(usize),
 }
 
 impl Modal {
@@ -415,7 +419,39 @@ impl Modal {
             input: String::new(),
             selected: selected.min(items.len().saturating_sub(1)),
             items,
+            lines: 0,
         }
+    }
+
+    /// Asks for a line to go to, from 1 to `count`.
+    pub fn go_to_line(count: usize) -> Self {
+        let mut modal = Self::picker("Go to line", Vec::new(), 0).with_lines(count);
+        if let Modal::Palette { title, .. } = &mut modal {
+            *title = format!("Go to line (1-{count})");
+        }
+        modal
+    }
+
+    /// Lets a number typed in the palette go to one of `count` lines.
+    pub fn with_lines(mut self, count: usize) -> Self {
+        if let Modal::Palette { title, lines, .. } = &mut self
+            && count > 0
+        {
+            *lines = count;
+            title.push_str(" or a line number");
+        }
+        self
+    }
+
+    /// The line a number typed in the palette goes to, as vim's `:42` does
+    /// (the leading `:` is optional): from 1, past the end the last.
+    pub fn palette_line(input: &str, lines: usize) -> Option<usize> {
+        let input = input.trim();
+        let digits = input.strip_prefix(':').unwrap_or(input);
+        if lines == 0 || digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        Some(digits.parse::<usize>().unwrap_or(usize::MAX).clamp(1, lines))
     }
 
     /// Palette entries matching the typed filter, in order.
@@ -429,12 +465,19 @@ impl Modal {
     pub fn handle_key(&mut self, key: KeyCombo) -> ModalOutcome {
         match self {
             Modal::Palette {
-                input, items, selected, ..
+                input,
+                items,
+                selected,
+                lines,
+                ..
             } => {
                 let ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
                 let count = Self::palette_matches(items, input).len();
                 match key.code {
                     KeyCode::Esc => return ModalOutcome::Cancelled,
+                    KeyCode::Enter if Self::palette_line(input, *lines).is_some() => {
+                        return ModalOutcome::GoToLine(Self::palette_line(input, *lines).expect("checked"));
+                    }
                     KeyCode::Enter => {
                         return match Self::palette_matches(items, input).get(*selected) {
                             Some(item) => match &item.target {
@@ -529,9 +572,10 @@ impl Modal {
             input,
             items,
             selected,
+            lines,
         } = self
         {
-            return draw_palette(frame, area, theme, title, input, items, *selected);
+            return draw_palette(frame, area, theme, title, input, items, *selected, *lines);
         }
         if let Modal::Filter(panel) = self {
             return panel.draw(frame, area, theme);
@@ -657,6 +701,7 @@ impl Modal {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw_palette(
     frame: &mut Frame,
     area: Rect,
@@ -665,8 +710,20 @@ fn draw_palette(
     input: &str,
     items: &[PaletteItem],
     selected: usize,
+    line_count: usize,
 ) {
-    let matches = Modal::palette_matches(items, input);
+    // (label, hint) per row. A line number is the one thing to do, in
+    // place of the commands.
+    let (matches, selected) = match Modal::palette_line(input, line_count) {
+        Some(line) => (vec![(format!("Go to line {line}"), format!("of {line_count}"))], 0),
+        None => (
+            Modal::palette_matches(items, input)
+                .into_iter()
+                .map(|i| (i.label.clone(), i.hint.clone()))
+                .collect(),
+            selected,
+        ),
+    };
     let rows = matches.len().clamp(1, PALETTE_ROWS);
     let width = 70.min(area.width);
     let height = (rows as u16 + 4).min(area.height);
@@ -690,15 +747,20 @@ fn draw_palette(
     ];
     let start = selected.saturating_sub(PALETTE_ROWS - 1);
     if matches.is_empty() {
-        lines.push(Line::styled("no matches", theme.muted));
+        let empty = if items.is_empty() && line_count > 0 {
+            "type a line number"
+        } else {
+            "no matches"
+        };
+        lines.push(Line::styled(empty, theme.muted));
     }
-    for (i, item) in matches.iter().enumerate().skip(start).take(PALETTE_ROWS) {
-        let hint_w = item.hint.chars().count();
+    for (i, (label, hint)) in matches.into_iter().enumerate().skip(start).take(PALETTE_ROWS) {
+        let hint_w = hint.chars().count();
         let label_w = inner_width.saturating_sub(hint_w + 1);
         let line = Line::from(vec![
-            Span::raw(crate::widgets::fit(&item.label, label_w)),
+            Span::raw(crate::widgets::fit(&label, label_w)),
             Span::raw(" "),
-            Span::styled(item.hint.clone(), theme.muted),
+            Span::styled(hint, theme.muted),
         ]);
         lines.push(if i == selected {
             line.patch_style(theme.selected)
@@ -715,6 +777,22 @@ mod tests {
 
     fn k(s: &str) -> KeyCombo {
         s.parse().unwrap()
+    }
+
+    #[test]
+    fn a_number_in_the_palette_is_a_line_when_there_are_lines() {
+        assert_eq!(Modal::palette_line("42", 100), Some(42));
+        assert_eq!(Modal::palette_line(" :42 ", 100), Some(42));
+        assert_eq!(Modal::palette_line("420", 100), Some(100));
+        assert_eq!(Modal::palette_line("0", 100), Some(1));
+        assert_eq!(Modal::palette_line("99999999999999999999999", 100), Some(100));
+        assert_eq!(Modal::palette_line("42", 0), None);
+        for not_a_line in ["", ":", "4a", "push", "-3"] {
+            assert_eq!(Modal::palette_line(not_a_line, 100), None, "{not_a_line}");
+        }
+        let mut m = Modal::go_to_line(10);
+        m.handle_key(KeyCombo::char('7'));
+        assert_eq!(m.handle_key(k("enter")), ModalOutcome::GoToLine(7));
     }
 
     #[test]

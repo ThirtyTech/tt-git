@@ -578,6 +578,10 @@ impl App {
             self.focused_mut().on_text_key(combo, &ctx);
             return;
         }
+        let ctx = self.ctx.clone();
+        if self.focused_mut().on_key(combo, &ctx) {
+            return;
+        }
         let context = self.focused().context();
         if let Some(custom) = self.keymap.lookup_custom(context, combo) {
             let action = custom.action.clone();
@@ -605,6 +609,13 @@ impl App {
             ModalOutcome::Filter(filter) => {
                 self.modal = None;
                 self.set_graph_filter(filter);
+            }
+            ModalOutcome::GoToLine(line) => {
+                self.modal = None;
+                let ctx = self.ctx.clone();
+                if let Some(view) = self.details.blame_mut() {
+                    view.go_to_line(line, &ctx);
+                }
             }
             ModalOutcome::PluginAction(action) => {
                 self.modal = None;
@@ -1690,6 +1701,15 @@ impl App {
         self.details.set_trail(self.back.last().map(|b| b.label.clone()));
     }
 
+    /// How many lines the focused blame has; 0 when blame isn't focused
+    /// or hasn't loaded.
+    fn blame_line_count(&self) -> usize {
+        match self.details.blame() {
+            Some(view) if self.focus == PaneId::Details && self.details.stage().is_none() => view.line_count(),
+            _ => 0,
+        }
+    }
+
     /// `t` in blame: the same date style as the graph's, switched for both.
     fn toggle_blame_dates(&mut self) {
         self.graph.dates = self.graph.dates.toggled();
@@ -1834,7 +1854,15 @@ impl App {
             Command::CloseDetails if matches!(self.focus, PaneId::Graph | PaneId::Details) => self.close_details(),
             Command::Filter if self.focus == PaneId::Graph => self.open_graph_filter(),
             Command::Refresh => self.update(Action::Refresh),
-            Command::Palette => self.modal = Some(Modal::palette(self.palette_items())),
+            Command::Palette => {
+                // In blame, a number typed there goes to that line, as `:42` in vim.
+                let lines = self.blame_line_count();
+                self.modal = Some(Modal::palette(self.palette_items()).with_lines(lines));
+            }
+            Command::GoToLine => match self.blame_line_count() {
+                0 => {}
+                lines => self.modal = Some(Modal::go_to_line(lines)),
+            },
             Command::PluginLogs => self.show_plugin_logs(),
             Command::OpenLink if self.focus == PaneId::Details => self.open_link(),
             Command::ToggleFiles if self.focus == PaneId::Details => self.toggle_files(),
