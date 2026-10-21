@@ -4,9 +4,12 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use tt_git_core::branches::{matches_filter, tags_newest_first};
 use tt_git_core::time::{SharedClock, relative};
-use tt_git_core::{BaseBranches, BranchEntry, BranchState, GitRef, RefKind, Stash};
+
+use tt_git_core::{BaseBranches, BranchEntry, BranchState, GitRef, RefKind, Stash, Worktree};
 use unicode_width::UnicodeWidthStr;
 
 use super::{BranchFocus, DrawnDates, PaneId, pane_block, title_x};
@@ -38,15 +41,18 @@ pub enum BranchTab {
     Merged,
     /// Stashes, newest first.
     Stash,
+    /// Every working tree of the repository, the main one first.
+    Worktrees,
 }
 
 impl BranchTab {
-    pub const ALL: [BranchTab; 5] = [
+    pub const ALL: [BranchTab; 6] = [
         BranchTab::All,
         BranchTab::Tags,
         BranchTab::Unmerged,
         BranchTab::Merged,
         BranchTab::Stash,
+        BranchTab::Worktrees,
     ];
 
     pub fn label(self) -> &'static str {
@@ -56,6 +62,7 @@ impl BranchTab {
             BranchTab::Stash => "Stash",
             BranchTab::Unmerged => "Unmerged",
             BranchTab::Merged => "Merged",
+            BranchTab::Worktrees => "Worktrees",
         }
     }
 
@@ -80,6 +87,13 @@ pub struct BranchesPane {
     tags: Vec<GitRef>,
     /// Newest first.
     stashes: Vec<Stash>,
+    /// The main worktree first.
+    worktrees: Vec<Worktree>,
+    /// How each worktree is shown and filtered: its path.
+    worktree_names: Vec<String>,
+    /// Files with changes in each worktree, by path, once counted (`Err`
+    /// when git couldn't tell).
+    worktree_changes: HashMap<PathBuf, Result<usize, String>>,
     tab: BranchTab,
     /// Indices into the current tab's list that pass the filter.
     visible: Vec<usize>,
@@ -101,6 +115,9 @@ impl BranchesPane {
             base: None,
             tags: Vec::new(),
             stashes: Vec::new(),
+            worktrees: Vec::new(),
+            worktree_names: Vec::new(),
+            worktree_changes: HashMap::new(),
             tab: BranchTab::default(),
             visible: Vec::new(),
             filter: String::new(),
@@ -124,12 +141,16 @@ impl BranchesPane {
         base: Option<BaseBranches>,
         refs: &[GitRef],
         stashes: Vec<Stash>,
+        worktrees: Vec<Worktree>,
     ) {
         let keep = self.selected_name().map(str::to_string);
         self.entries = entries;
         self.base = base;
         self.tags = tags_newest_first(refs);
         self.stashes = stashes;
+        let main = worktrees.first().map(|w| w.path.clone()).unwrap_or_default();
+        self.worktree_names = worktrees.iter().map(|w| worktree_name(w, &main)).collect();
+        self.worktrees = worktrees;
         self.refilter();
         let pos = keep.and_then(|name| (0..self.visible.len()).position(|pos| self.name_at(pos) == name));
         if let Some(pos) = pos {
@@ -187,6 +208,37 @@ impl BranchesPane {
             .and_then(|&i| self.stash_list().get(i))
     }
 
+    /// Every worktree, the main one first.
+    pub fn worktrees(&self) -> &[Worktree] {
+        &self.worktrees
+    }
+
+    /// The worktrees passing the filter, in display order, on the worktrees tab.
+    pub fn visible_worktrees(&self) -> impl Iterator<Item = &Worktree> {
+        let worktrees = self.worktree_list();
+        self.visible.iter().filter_map(move |&i| worktrees.get(i))
+    }
+
+    pub fn selected_worktree(&self) -> Option<&Worktree> {
+        self.visible
+            .get(self.cursor().selected)
+            .and_then(|&i| self.worktree_list().get(i))
+    }
+
+    /// The worktrees whose changes can be counted: those with a folder.
+    pub fn countable_worktrees(&self) -> Vec<PathBuf> {
+        self.worktrees
+            .iter()
+            .filter(|w| !w.bare && w.prunable.is_none())
+            .map(|w| w.path.clone())
+            .collect()
+    }
+
+    /// Takes counts of each worktree's changed files.
+    pub fn set_worktree_changes(&mut self, counts: Vec<(PathBuf, Result<usize, String>)>) {
+        self.worktree_changes = counts.into_iter().collect();
+    }
+
     pub fn filter(&self) -> &str {
         &self.filter
     }
@@ -196,7 +248,15 @@ impl BranchesPane {
             (BranchTab::All, _) => &self.entries,
             (BranchTab::Unmerged, Some(base)) => &base.unmerged,
             (BranchTab::Merged, Some(base)) => &base.merged,
-            (BranchTab::Tags | BranchTab::Stash, _) | (_, None) => &[],
+            (BranchTab::Tags | BranchTab::Stash | BranchTab::Worktrees, _) | (_, None) => &[],
+        }
+    }
+
+    fn worktree_list(&self) -> &[Worktree] {
+        if self.tab == BranchTab::Worktrees {
+            &self.worktrees
+        } else {
+            &[]
         }
     }
 
@@ -217,6 +277,7 @@ impl BranchesPane {
         match tab {
             BranchTab::Tags => self.tags.len(),
             BranchTab::Stash => self.stashes.len(),
+            BranchTab::Worktrees => self.worktrees.len(),
             _ => self.list(tab).len(),
         }
     }
@@ -226,6 +287,7 @@ impl BranchesPane {
         match self.tab {
             BranchTab::Tags => &self.tags[i].short_name,
             BranchTab::Stash => &self.stashes[i].message,
+            BranchTab::Worktrees => &self.worktree_names[i],
             _ => &self.list(self.tab)[i].name,
         }
     }
@@ -272,11 +334,20 @@ impl BranchesPane {
         self.tab = tab;
         self.refilter();
         self.announce(ctx);
+        if tab == BranchTab::Worktrees {
+            ctx.emit(Action::CountWorktreeChanges);
+        }
     }
 
-    /// The Stash tab only shows while there are stashes (or it's current).
+    /// The Stash tab only shows while there are stashes, and the Worktrees
+    /// tab while there's more than the main one (or while it's current).
     fn shows_tab(&self, tab: BranchTab) -> bool {
-        tab != BranchTab::Stash || !self.stashes.is_empty() || self.tab == BranchTab::Stash
+        match tab {
+            _ if tab == self.tab => true,
+            BranchTab::Stash => !self.stashes.is_empty(),
+            BranchTab::Worktrees => self.worktrees.len() > 1,
+            _ => true,
+        }
     }
 
     /// On the merged and unmerged tabs, the selected branch for the graph
@@ -303,6 +374,7 @@ impl BranchesPane {
         let oid = match self.tab {
             BranchTab::All => self.selected().and_then(BranchEntry::target),
             BranchTab::Tags => self.selected_tag().map(|t| t.target.as_str()),
+            BranchTab::Worktrees => self.selected_worktree().and_then(|w| w.head.as_deref()),
             _ => None,
         };
         if let Some(oid) = oid {
@@ -505,6 +577,117 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
                 fit_right(&relative(self.clock.now(), stash.date), DATE_WIDTH),
                 theme.date,
             ),
+        ])
+    }
+
+    /// Commands that act on the selected worktree.
+    fn on_worktree_command(&self, cmd: Command, ctx: &Ctx) -> EventState {
+        let Some(wt) = self.selected_worktree() else {
+            return EventState::NotConsumed;
+        };
+        let name = self.name_at(self.cursor().selected).to_string();
+        let notify = |msg: String| ctx.emit(Action::Notify(msg));
+        match cmd {
+            Command::OpenWorktree => {
+                if wt.current {
+                    notify("tt-git is already in this worktree".into());
+                } else if wt.bare {
+                    notify("that's the bare repository; it has no working tree to open".into());
+                } else if wt.prunable.is_some() {
+                    notify(format!("{name}'s folder is gone (d drops it from the list)"));
+                } else {
+                    ctx.emit(Action::OpenWorktree(wt.path.clone()));
+                }
+            }
+            Command::RemoveWorktree => match remove_modal(wt, &name) {
+                Ok(modal) => ctx.emit(Action::OpenModal(modal)),
+                Err(why) => notify(why),
+            },
+            Command::NewBranch => match wt.branch.clone().or_else(|| wt.head.clone()) {
+                Some(start) => {
+                    let shown = wt
+                        .branch
+                        .clone()
+                        .unwrap_or_else(|| start[..start.len().min(7)].to_string());
+                    ctx.emit(Action::OpenModal(Modal::prompt(
+                        format!("New branch from {shown}"),
+                        "",
+                        PromptAction::CreateBranch { start, worktree: true },
+                    )))
+                }
+                None => notify(format!("{name} has no commit to start from")),
+            },
+            Command::Copy => ctx.emit(Action::Copy(wt.path.display().to_string())),
+            _ => return EventState::NotConsumed,
+        }
+        EventState::Consumed
+    }
+
+    /// What a worktree row says about its state: main, locked, missing,
+    /// and how many files have changes once that's counted.
+    fn worktree_state(&self, wt: &Worktree) -> String {
+        let mut parts = Vec::new();
+        if wt.main {
+            parts.push("main".to_string());
+        }
+        if wt.locked.is_some() {
+            parts.push("locked".into());
+        }
+        if wt.prunable.is_some() {
+            parts.push("missing".into());
+        } else if !wt.bare {
+            parts.push(match self.worktree_changes.get(&wt.path) {
+                Some(Ok(0)) => "clean".into(),
+                Some(Ok(n)) => format!("{n} changed"),
+                Some(Err(_)) => "?".into(),
+                None => "…".into(),
+            });
+        }
+        parts.join(" · ")
+    }
+
+    /// A worktree row: its path, what it has checked out and its state.
+    fn render_worktree<'a>(
+        &self,
+        i: usize,
+        name_width: usize,
+        state_width: usize,
+        width: usize,
+        theme: &Theme,
+    ) -> Line<'a> {
+        let wt = &self.worktrees[i];
+        let (marker, name_style) = if wt.current {
+            (Span::styled("* ", theme.label_local), theme.label_local)
+        } else {
+            (Span::raw("  "), Style::new())
+        };
+        let checked_out = match (&wt.branch, &wt.head) {
+            _ if wt.bare => "(bare)".to_string(),
+            (Some(branch), _) => branch.clone(),
+            (None, Some(oid)) => format!("(detached {})", &oid[..oid.len().min(7)]),
+            (None, None) => "(no commit)".to_string(),
+        };
+        let branch_style = if wt.branch.is_some() {
+            theme.label_local
+        } else {
+            theme.sha
+        };
+        let state = self.worktree_state(wt);
+        let state_style = if wt.prunable.is_some() {
+            theme.error
+        } else if wt.locked.is_some() || state.ends_with("changed") {
+            theme.label_tag
+        } else {
+            theme.muted
+        };
+        let branch_width = width.saturating_sub(2 + name_width + 1 + 1 + state_width);
+        Line::from(vec![
+            marker,
+            Span::styled(fit(&self.worktree_names[i], name_width), name_style),
+            Span::raw(" "),
+            Span::styled(fit(&checked_out, branch_width), branch_style),
+            Span::raw(" "),
+            Span::styled(fit_right(&state, state_width), state_style),
         ])
     }
 
@@ -725,7 +908,9 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
     /// `Branches 12 · Tags 3 · Unmerged 4 · Merged 9` with the current tab
     /// underlined, then the base everywhere but the full list.
     /// The title, and the columns each tab's name takes in it.
-    fn title(&self, theme: &Theme) -> (Line<'static>, Vec<(BranchTab, std::ops::Range<u16>)>) {
+    /// Without room for every tab's count (`counts` false), only the
+    /// current tab's is shown.
+    fn title(&self, theme: &Theme, counts: bool) -> (Line<'static>, Vec<(BranchTab, std::ops::Range<u16>)>) {
         let mut spans = Vec::new();
         let mut cells = Vec::new();
         let mut x = 0;
@@ -734,7 +919,7 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
                 spans.push(Span::styled(" · ", theme.muted));
                 x += 3;
             }
-            let count = if tab.compares() && self.base.is_none() {
+            let count = if (tab.compares() && self.base.is_none()) || (!counts && tab != self.tab) {
                 String::new()
             } else {
                 format!(" {}", self.len(tab))
@@ -750,7 +935,7 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
             x += width;
             spans.push(Span::styled(text, style));
         }
-        if !matches!(self.tab, BranchTab::All | BranchTab::Stash)
+        if !matches!(self.tab, BranchTab::All | BranchTab::Stash | BranchTab::Worktrees)
             && let Some(base) = &self.base
         {
             spans.push(Span::styled(format!(" ({})", base.base), theme.muted));
@@ -769,11 +954,74 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
             (BranchTab::All, _) => "no branches".into(),
             (BranchTab::Tags, _) => "no tags".into(),
             (BranchTab::Stash, _) => "no stashes (s in the status pane stashes changes)".into(),
+            (BranchTab::Worktrees, _) => "no worktrees".into(),
             (_, None) => "no base branch found; pick one".into(),
             (BranchTab::Unmerged, Some(base)) => format!("everything is merged into {base}"),
             (BranchTab::Merged, Some(base)) => format!("nothing is merged into {base} yet"),
         }
     }
+}
+
+/// How the worktrees tab names `wt`: the main worktree by its folder's
+/// name, others by their path from it (`.worktrees/x`) when inside it,
+/// else in full.
+fn worktree_name(wt: &Worktree, main: &Path) -> String {
+    if wt.main {
+        return wt
+            .path
+            .file_name()
+            .map_or_else(|| wt.path.display().to_string(), |n| n.to_string_lossy().into_owned());
+    }
+    match wt.path.strip_prefix(main) {
+        Ok(rel) if !rel.as_os_str().is_empty() => rel
+            .components()
+            .map(|c| c.as_os_str().to_string_lossy())
+            .collect::<Vec<_>>()
+            .join("/"),
+        _ => wt.path.display().to_string(),
+    }
+}
+
+/// The confirmation for removing `wt` (shown as `name`), or why it can't be.
+fn remove_modal(wt: &Worktree, name: &str) -> Result<Modal, String> {
+    if wt.main {
+        return Err("the main worktree can't be removed".into());
+    }
+    if wt.current {
+        return Err("tt-git is running in this worktree; open another one first".into());
+    }
+    if let Some(reason) = &wt.locked {
+        let why = if reason.is_empty() {
+            String::new()
+        } else {
+            format!(" ({reason})")
+        };
+        return Err(format!(
+            "{name} is locked{why}; unlock it with git worktree unlock first"
+        ));
+    }
+    let message = if wt.prunable.is_some() {
+        format!("{name}'s folder is already gone.\nDrop it from git's list of worktrees?")
+    } else {
+        let branch = match &wt.branch {
+            Some(b) => format!("Branch {b} stays."),
+            None => "Its detached HEAD is only kept in the reflog.".to_string(),
+        };
+        format!(
+            "Remove worktree {name}?\nIts folder is deleted. {branch}\n\
+             (If it has uncommitted or untracked changes you will be asked again before they're deleted.)"
+        )
+    };
+    Ok(Modal::confirm(
+        "Remove worktree",
+        message,
+        GitOp::RemoveWorktree {
+            path: wt.path.clone(),
+            name: name.to_string(),
+            branch: wt.branch.clone(),
+            force: false,
+        },
+    ))
 }
 
 /// Short state badge and its style.
@@ -802,10 +1050,10 @@ fn state_text(state: &BranchState, theme: &Theme) -> (String, Style) {
 
 impl Component for BranchesPane {
     fn context(&self) -> Context {
-        if self.tab == BranchTab::Stash {
-            Context::Stash
-        } else {
-            Context::Branches
+        match self.tab {
+            BranchTab::Stash => Context::Stash,
+            BranchTab::Worktrees => Context::Worktrees,
+            _ => Context::Branches,
         }
     }
 
@@ -823,6 +1071,7 @@ impl Component for BranchesPane {
             Command::PickBase => ctx.emit(Action::OpenModal(self.base_picker())),
             _ if self.tab == BranchTab::Tags => return self.on_tag_command(cmd, ctx),
             _ if self.tab == BranchTab::Stash => return self.on_stash_command(cmd, ctx),
+            _ if self.tab == BranchTab::Worktrees => return self.on_worktree_command(cmd, ctx),
             _ => return self.on_entry_command(cmd, ctx),
         }
         EventState::Consumed
@@ -854,6 +1103,17 @@ impl Component for BranchesPane {
                 Command::Merge,
                 Command::Rebase,
                 Command::Copy,
+            ];
+        }
+        if self.tab == BranchTab::Worktrees {
+            return &[
+                Command::OpenWorktree,
+                Command::NewBranch,
+                Command::RemoveWorktree,
+                Command::Copy,
+                Command::NextTab,
+                Command::PrevTab,
+                Command::Filter,
             ];
         }
         &[
@@ -930,10 +1190,13 @@ impl Component for BranchesPane {
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
-        let (title, cells) = self.title(theme);
         // Past the right corner the title is cut off.
         let start = title_x(PaneId::Branches, area);
         let end = area.right().saturating_sub(1);
+        let (mut title, mut cells) = self.title(theme, true);
+        if start as usize + title.width() > end as usize {
+            (title, cells) = self.title(theme, false);
+        }
         self.tab_cells = cells
             .into_iter()
             .map(|(tab, xs)| (tab, area.y, (start + xs.start).min(end)..(start + xs.end).min(end)))
@@ -961,6 +1224,15 @@ impl Component for BranchesPane {
         } else {
             0
         };
+        let state_width = if self.tab == BranchTab::Worktrees {
+            self.worktrees
+                .iter()
+                .map(|w| self.worktree_state(w).width())
+                .max()
+                .unwrap_or(0)
+        } else {
+            0
+        };
         let lines: Vec<Line> = (start..end)
             .map(|pos| {
                 let i = self.visible[pos];
@@ -968,6 +1240,7 @@ impl Component for BranchesPane {
                     BranchTab::All => self.render_entry(&list[i], width, theme),
                     BranchTab::Tags => self.render_tag(&self.tags[i], name_width, distance_width, width, theme),
                     BranchTab::Stash => self.render_stash(&self.stashes[i], width, theme),
+                    BranchTab::Worktrees => self.render_worktree(i, name_width, state_width, width, theme),
                     _ => self.render_compared(&list[i], name_width, width, theme),
                 };
                 if pos == cursor.selected {
@@ -987,6 +1260,7 @@ impl Component for BranchesPane {
             dates.add(match self.tab {
                 BranchTab::Tags => self.tags[i].date,
                 BranchTab::Stash => self.stashes[i].date,
+                BranchTab::Worktrees => continue,
                 _ => list[i].activity,
             });
         }

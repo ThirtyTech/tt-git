@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use crate::git::GitError;
 use crate::model::{
-    BranchStatus, Checkout, Commit, CommitFile, FileState, GitRef, Oid, RefKind, Stash, Status, StatusEntry,
+    BranchStatus, Checkout, Commit, CommitFile, FileState, GitRef, Oid, RefKind, Stash, Status, StatusEntry, Worktree,
 };
 use crate::undo::ReflogEntry;
 
@@ -384,6 +384,49 @@ pub fn parse_stashes(out: &[u8]) -> Vec<Stash> {
             })
         })
         .collect()
+}
+
+/// Parses `git worktree list --porcelain`: one block of `key value` lines
+/// per working tree, blank-line separated, the main one first. `current`
+/// is left `false`.
+pub fn parse_worktrees(out: &[u8]) -> Vec<Worktree> {
+    let text = String::from_utf8_lossy(out);
+    let mut worktrees: Vec<Worktree> = Vec::new();
+    let mut open = false;
+    for line in text.lines() {
+        if line.is_empty() {
+            open = false;
+            continue;
+        }
+        let (key, value) = line.split_once(' ').unwrap_or((line, ""));
+        if key == "worktree" {
+            worktrees.push(Worktree {
+                path: value.into(),
+                head: None,
+                branch: None,
+                main: worktrees.is_empty(),
+                bare: false,
+                locked: None,
+                prunable: None,
+                current: false,
+            });
+            open = true;
+            continue;
+        }
+        let Some(wt) = worktrees.last_mut().filter(|_| open) else {
+            continue;
+        };
+        match key {
+            // All zeros on an unborn branch.
+            "HEAD" if !value.bytes().all(|b| b == b'0') => wt.head = Some(value.to_string()),
+            "branch" => wt.branch = Some(value.strip_prefix("refs/heads/").unwrap_or(value).to_string()),
+            "bare" => wt.bare = true,
+            "locked" => wt.locked = Some(value.to_string()),
+            "prunable" => wt.prunable = Some(value.to_string()),
+            _ => {}
+        }
+    }
+    worktrees
 }
 
 /// Parses `git show --name-status -z`: a status token (`M`, `A`, `R100`, …)
@@ -828,5 +871,52 @@ mod tests {
                 assert_eq!(got, want, "window {window} of {:?}", String::from_utf8_lossy(&contents));
             }
         }
+    }
+
+    #[test]
+    fn parses_worktree_list() {
+        let out = b"worktree C:/r
+HEAD 1111111111111111111111111111111111111111
+branch refs/heads/main
+
+worktree C:/r/.worktrees/a b
+HEAD 2222222222222222222222222222222222222222
+detached
+locked
+
+worktree C:/r/.worktrees/gone
+HEAD 3333333333333333333333333333333333333333
+branch refs/heads/feat/x
+locked on usb
+prunable gitdir file points to non-existent location
+
+worktree C:/r/.worktrees/new
+HEAD 0000000000000000000000000000000000000000
+branch refs/heads/new
+
+";
+        let wts = parse_worktrees(out);
+        assert_eq!(wts.len(), 4);
+        assert!(wts[0].main && !wts[1].main);
+        assert_eq!(wts[0].branch.as_deref(), Some("main"));
+        assert_eq!(wts[1].path, std::path::PathBuf::from("C:/r/.worktrees/a b"));
+        assert_eq!((wts[1].branch.as_deref(), wts[1].locked.as_deref()), (None, Some("")));
+        assert_eq!(wts[1].head.as_deref(), Some("2222222222222222222222222222222222222222"));
+        assert_eq!(wts[2].branch.as_deref(), Some("feat/x"));
+        assert_eq!(wts[2].locked.as_deref(), Some("on usb"));
+        assert!(wts[2].prunable.is_some());
+        assert_eq!(wts[3].head, None, "unborn");
+
+        let bare = parse_worktrees(
+            b"worktree /srv/r.git
+bare
+
+worktree /srv/w
+HEAD 1111111111111111111111111111111111111111
+branch refs/heads/main
+",
+        );
+        assert!(bare[0].bare && bare[0].main && !bare[1].bare);
+        assert!(parse_worktrees(b"").is_empty());
     }
 }

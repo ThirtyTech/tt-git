@@ -470,6 +470,26 @@ export const shots = [
 		],
 	},
 	{
+		name: 'worktrees-tab',
+		capture: 'worktrees-tab',
+		view: { region: { cells: [95, 35, 95, 4] } },
+		callouts: [
+			{ target: { find: 'Worktrees 3', in: 'branches' }, text: 'The **Worktrees** tab, once there is a linked worktree', markerSide: 'above' },
+			{ target: { find: '* lumen-web', in: 'branches' }, text: 'The worktree tt-git is **running in**', markerSide: 'left' },
+			{ target: { find: '(detached f33b691)', in: 'branches' }, text: 'Its **branch**, or the commit it has detached', markerSide: 'below' },
+			{ target: { find: '2 changed', in: 'branches' }, text: 'Files with **uncommitted changes** in it', markerSide: 'right' },
+		],
+	},
+	{
+		name: 'worktree-remove',
+		capture: 'worktree-remove',
+		view: { region: { box: 'Remove worktree' } },
+		callouts: [
+			{ target: { find: 'Branch fix/bell-a11y stays.' }, text: 'Only the folder goes; the **branch stays**', markerSide: 'above' },
+			{ target: { find: '(If it has uncommitted' }, text: 'With changes, it **asks again** before --force', markerSide: 'left' },
+		],
+	},
+	{
 		name: 'stash-show',
 		capture: 'stash-show',
 		legend: { x: 1200, y: 560, width: 680 },

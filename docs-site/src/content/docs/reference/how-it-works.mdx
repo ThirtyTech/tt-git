@@ -252,6 +252,19 @@ files alone but keeps the stash; tt-git runs `git stash drop stash@{0}` to
 remove that duplicate. git older than 2.35 doesn't know `--staged`, and tt-git
 says it needs 2.35 instead of showing git's usage text.
 
+### Worktrees
+
+The worktree list comes from `git worktree list --porcelain`, read with the
+other refs. Only while the Worktrees tab is showing, a background job runs
+`git status --porcelain=v2 -z --untracked-files=all` in each worktree to
+count its changed files.
+
+| Action | Runs |
+|---|---|
+| Open | Nothing in git: tt-git shuts down its panes, watcher and plugins, changes its working directory to the worktree, and starts over there |
+| Remove | `git worktree remove <path>`, then `git worktree remove --force <path>` if you confirm removing it with its changes |
+| New worktree | `git worktree add -b <name> .worktrees/<name> <start>`, as in [Other branch commands](#other-branch-commands) |
+
 ### Undo
 
 [Undo](/git/undo/) reads the reflog only when you press <kbd>z</kbd>, never

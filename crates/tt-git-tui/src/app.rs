@@ -24,7 +24,9 @@ use crate::keymap::{Command, Context, KeyCombo, Keymap, KeymapError};
 use crate::layout::View;
 use crate::loaders;
 use crate::modal::{GitOp, Modal, ModalOutcome};
-use crate::panes::{BranchFocus, BranchesPane, DetailsPane, DetailsSubject, GraphPane, LoadToken, PaneId, StatusPane};
+use crate::panes::{
+    BranchFocus, BranchTab, BranchesPane, DetailsPane, DetailsSubject, GraphPane, LoadToken, PaneId, StatusPane,
+};
 use crate::theme::Theme;
 use crate::watcher::RepoWatcher;
 
@@ -151,6 +153,11 @@ pub struct App {
     select_head: bool,
     /// An undo is being worked out or run; another press waits.
     undo_pending: bool,
+    /// Worktree changes are being counted, and whether to count again
+    /// when that's done (something changed meanwhile).
+    worktree_count: (bool, bool),
+    /// The worktree to open in place of this repository once the app quits.
+    reopen: Option<Repo>,
     watcher: Option<RepoWatcher>,
     plugins: Option<plugins::PluginState>,
     panes: Vec<crate::pty_pane::PtyPane>,
@@ -230,6 +237,8 @@ impl App {
             busy: Vec::new(),
             select_head: false,
             undo_pending: false,
+            worktree_count: (false, false),
+            reopen: None,
             watcher: None,
             plugins: None,
             panes: Vec::new(),
@@ -271,6 +280,17 @@ impl App {
 
     pub fn should_quit(&self) -> bool {
         self.should_quit
+    }
+
+    /// The worktree asked for with [`Action::OpenWorktree`]: once the app
+    /// has quit, the caller opens it in a new app.
+    pub fn reopen(&self) -> Option<&Repo> {
+        self.reopen.as_ref()
+    }
+
+    /// Takes [`reopen`](Self::reopen).
+    pub fn take_reopen(&mut self) -> Option<Repo> {
+        self.reopen.take()
     }
 
     pub fn focus(&self) -> PaneId {
@@ -727,9 +747,13 @@ impl App {
                     branches,
                     base,
                     stashes,
+                    worktrees,
                     ..
                 } = *snapshot;
-                self.branches.set_entries(branches, base, &refs, stashes);
+                self.branches.set_entries(branches, base, &refs, stashes, worktrees);
+                if self.branches.tab() == BranchTab::Worktrees {
+                    self.count_worktree_changes();
+                }
                 self.head = Some(head);
                 self.track_head();
                 // Follow the focused branch if the list changed under it.
@@ -738,6 +762,15 @@ impl App {
                 }
             }
             Action::BranchSelected(oid) => self.graph.select_when_loaded(oid, &self.ctx),
+            Action::CountWorktreeChanges => self.count_worktree_changes(),
+            Action::WorktreeChanges(counts) => {
+                self.branches.set_worktree_changes(counts);
+                let (_, again) = std::mem::take(&mut self.worktree_count);
+                if again {
+                    self.count_worktree_changes();
+                }
+            }
+            Action::OpenWorktree(path) => self.open_worktree(path),
             Action::StashSelected(stash) => {
                 if self.focus == PaneId::Branches {
                     self.show_stash(stash);
@@ -1032,6 +1065,37 @@ impl App {
         ));
     }
 
+    /// Counts each worktree's changed files in the background, after the
+    /// count running now if there is one.
+    fn count_worktree_changes(&mut self) {
+        if self.worktree_count.0 {
+            self.worktree_count.1 = true;
+            return;
+        }
+        self.worktree_count = (true, false);
+        let repo = self.repo.clone();
+        let paths = self.branches.countable_worktrees();
+        self.ctx.spawn(move || loaders::count_worktree_changes(repo, paths));
+    }
+
+    /// Quits so the worktree at `path` can be opened in its place, unless a
+    /// git write is still running here or it isn't a repository.
+    fn open_worktree(&mut self, path: std::path::PathBuf) {
+        if let Some(op) = self.busy.first() {
+            self.notice = Some(format!("wait for {op} to finish first"));
+            return;
+        }
+        match Repo::discover(&path, self.repo.git()) {
+            Ok(repo) => {
+                tracing::info!("opening worktree {}", repo.root().display());
+                self.notice = Some(format!("opening {}…", repo.name()));
+                self.reopen = Some(repo);
+                self.should_quit = true;
+            }
+            Err(e) => self.error = Some(format!("can't open {}:\n{e}", path.display())),
+        }
+    }
+
     /// Works out the next undo step in the background.
     fn plan_undo(&mut self) {
         if self.undo_pending {
@@ -1137,6 +1201,27 @@ impl App {
                         "Force delete?",
                         format!("{name} is not fully merged. Delete it anyway (git branch -D)?"),
                         GitOp::DeleteBranch { name, force: true },
+                    ));
+                }
+                GitOp::RemoveWorktree {
+                    path,
+                    name,
+                    branch,
+                    force: false,
+                } if err.contains("modified or untracked") => {
+                    self.notice = None;
+                    self.modal = Some(Modal::confirm(
+                        "Uncommitted changes",
+                        format!(
+                            "{name} has uncommitted or untracked changes.\n\
+                             Remove it anyway and lose them for good (git worktree remove --force)?"
+                        ),
+                        GitOp::RemoveWorktree {
+                            path,
+                            name,
+                            branch,
+                            force: true,
+                        },
                     ));
                 }
                 GitOp::Undo { .. } if kept => {

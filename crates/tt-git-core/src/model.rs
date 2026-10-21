@@ -339,6 +339,28 @@ pub struct Checkout {
     pub time: i64,
 }
 
+/// One working tree of the repository, as `git worktree list --porcelain`
+/// lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct Worktree {
+    /// As git prints it (forward slashes on Windows too).
+    pub path: std::path::PathBuf,
+    /// The commit checked out; `None` for a bare repository or an unborn branch.
+    pub head: Option<String>,
+    /// The branch checked out, short name; `None` when detached (or bare).
+    pub branch: Option<String>,
+    /// The main working tree (git lists it first). It can't be removed.
+    pub main: bool,
+    /// The bare repository itself, which has no working tree to open.
+    pub bare: bool,
+    /// `git worktree lock`ed, with the reason given (empty if none).
+    pub locked: Option<String>,
+    /// Its folder is gone; `git worktree prune` would drop it. Why, as git says.
+    pub prunable: Option<String>,
+    /// The working tree this [`Repo`](crate::Repo) was opened in.
+    pub current: bool,
+}
+
 /// One entry of `git stash list`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Stash {
