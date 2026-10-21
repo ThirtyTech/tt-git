@@ -68,28 +68,39 @@ worktree besides the main one. It's the last tab: press <kbd>3</kbd>, then
 click its name in the title.
 
 ```
-* my-project           main                  main · clean
-  .worktrees/fix-login fix-login                3 changed
-  .worktrees/review    (detached 1a2b3c4)  locked · clean
+* .                    main                  main · clean  1.2 GB
+  .worktrees/fix-login fix-login                3 changed 48.3 MB
+  .worktrees/review    (detached 1a2b3c4)  locked · clean 47.9 MB
 ```
 
-<Screenshot name="worktrees-tab" alt="The Worktrees tab listing the main worktree and two linked ones, with their branches and how many files have changes" />
+<Screenshot name="worktrees-tab" alt="The Worktrees tab listing the main worktree and two linked ones, with their branches, how many files have changes and how much disk space each takes" />
 
 Each row shows:
 
 - `*` on the worktree tt-git is running in.
-- Its folder: the main worktree by its name, the others by their path from
-  it (`.worktrees/fix-login`), or in full if they live somewhere else.
+- Its folder, as a path from the current directory: `.` for the worktree
+  you're in, `.worktrees/fix-login` below it, `../..` from a linked worktree
+  back to the main one. If you started tt-git outside the worktree it runs
+  in, paths are from that worktree's root. A worktree on another drive shows
+  in full.
 - What it has checked out: a branch, or `(detached <commit>)`.
 - Its state: `main` for the main worktree, `locked` if it was locked with
   `git worktree lock`, `missing` if its folder is gone, and how many files
   have uncommitted or untracked changes (`clean` for none). The counts are
   worked out in the background each time you open the tab and when the
   branches reload, so `…` shows until they're in.
+- How much disk space its folder takes, ignored files like build output
+  included. The main worktree's size leaves out the worktrees inside it, so
+  nothing is counted twice. Sizes are measured in the background when you
+  open the tab and when a worktree is added or removed; `…` shows until
+  they're in.
+
+The pane's bottom border shows the total for every worktree, like
+`total 1.3 GB`.
 
 Moving the selection also selects the worktree's commit in the graph.
 <kbd>/</kbd> filters by path, and <kbd>c</kbd> copies the selected
-worktree's full path.
+worktree's absolute path, with `\` separators on Windows.
 
 ## Opening a worktree
 
@@ -174,7 +185,7 @@ On the Worktrees tab:
 | <kbd>enter</kbd> <kbd>space</kbd> | Open the worktree here, in place of this one |
 | <kbd>n</kbd> | New branch in a new worktree, from the selected one |
 | <kbd>d</kbd> | Remove the worktree (asks; asks again before `--force`) |
-| <kbd>c</kbd> | Copy its path |
+| <kbd>c</kbd> | Copy its absolute path |
 | <kbd>/</kbd> | Filter as you type |
 | <kbd>]</kbd> <kbd>[</kbd> | Next / previous tab |
 

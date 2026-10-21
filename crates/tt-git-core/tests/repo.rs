@@ -610,3 +610,36 @@ fn ref_fingerprint_changes_with_anything_a_log_starts_from() {
     std::fs::write(git_dir.join("shallow"), format!("{base}\n")).unwrap();
     assert_ne!(fp(), deep);
 }
+
+#[test]
+fn relative_path_climbs_and_descends() {
+    use tt_git_core::repo::relative_path;
+    let sb = Sandbox::new();
+    let side = sb.path().join(".worktrees/side");
+    std::fs::create_dir_all(&side).unwrap();
+    assert_eq!(relative_path(sb.path(), sb.path()), ".");
+    assert_eq!(relative_path(&side, sb.path()), ".worktrees/side");
+    assert_eq!(relative_path(sb.path(), &side), "../..");
+    // git prints forward slashes, and a folder that's gone can't be resolved.
+    let git_style = sb.path().to_string_lossy().replace('\\', "/");
+    let gone = std::path::Path::new(&git_style).join(".worktrees/gone");
+    assert_eq!(
+        relative_path(&gone, std::path::Path::new(&git_style)),
+        ".worktrees/gone"
+    );
+}
+
+#[test]
+fn disk_usage_sums_files_and_skips_nested_worktrees() {
+    use tt_git_core::repo::disk_usage;
+    let dir = tempfile::tempdir().unwrap();
+    std::fs::write(dir.path().join("a"), [0u8; 100]).unwrap();
+    std::fs::create_dir_all(dir.path().join("sub/deeper")).unwrap();
+    std::fs::write(dir.path().join("sub/deeper/b"), [0u8; 23]).unwrap();
+    std::fs::create_dir_all(dir.path().join(".worktrees/x")).unwrap();
+    std::fs::write(dir.path().join(".worktrees/x/c"), [0u8; 1000]).unwrap();
+    assert_eq!(disk_usage(dir.path(), &[]).unwrap(), 1123);
+    let nested = dir.path().join(".worktrees/x");
+    assert_eq!(disk_usage(dir.path(), &[nested]).unwrap(), 123);
+    assert!(disk_usage(&dir.path().join("missing"), &[]).is_err());
+}

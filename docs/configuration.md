@@ -203,7 +203,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `stage_toggle`, `switch_side`, `toggle_line_mode`, `select_range`, `discard`, `commit`, `close_details` | `space`, `tab`, `a`, `v`, `d`, `c`, `esc` | stage |
 | `toggle_files`, `open_link` | `}`, `o` | details |
 | `open_in_editor` | `e` | status, details, stage |
-| `copy` (commit hash / branch name / worktree path) | `c` | graph, branches, worktrees |
+| `copy` (commit hash / branch name / absolute worktree path) | `c` | graph, branches, worktrees |
 | `plugin_logs` | (palette only) | global |
 
 ### Plugin action bindings

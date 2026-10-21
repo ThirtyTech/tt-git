@@ -3,9 +3,9 @@
 use std::path::{Path, PathBuf};
 
 use tt_git_testkit::{Sandbox, TestDriver};
-use tt_git_tui::Config;
 use tt_git_tui::modal::Modal;
 use tt_git_tui::panes::{BranchTab, PaneId};
+use tt_git_tui::{Action, Config};
 
 /// main, plus `.worktrees/side` (branch side, one untracked file) and
 /// `.worktrees/review` (detached, locked).
@@ -59,14 +59,36 @@ fn same(a: &Path, b: &Path) -> bool {
 #[test]
 fn lists_every_worktree_with_its_state() {
     let sb = repo_with_worktrees();
-    let t = on_worktrees_tab(&sb);
+    let mut t = on_worktrees_tab(&sb);
     assert!(
         t.pane_title(PaneId::Branches).contains("Worktrees 3"),
         "{}",
         t.pane_title(PaneId::Branches)
     );
+    // Sizes depend on git's own files, so the real ones are swapped for fixed ones.
+    let sizes = [1024 * 1024 + 512 * 1024, 2048, 512];
+    let paths: Vec<PathBuf> = t.app().branches().worktrees().iter().map(|w| w.path.clone()).collect();
+    for (path, size) in paths.into_iter().zip(sizes) {
+        t.app_mut().update(Action::WorktreeSize(path, Ok(size)));
+    }
+    t.render();
     insta::assert_snapshot!(t.pane_lines(PaneId::Branches)[..3].join("\n"));
+    assert!(t.screen().contains("total 1.5 MB"), "{}", t.screen());
     assert!(t.screen().contains("enter open"), "the help bar shows the tab's keys");
+}
+
+#[test]
+fn measures_each_worktree_and_the_total() {
+    let sb = repo_with_worktrees();
+    std::fs::write(sb.path().join(".worktrees/side/big.bin"), vec![0u8; 3 * 1024 * 1024]).unwrap();
+    let t = on_worktrees_tab(&sb);
+    let lines = t.pane_lines(PaneId::Branches);
+    let side = lines.iter().find(|l| l.contains(".worktrees/side")).unwrap();
+    assert!(side.trim_end().ends_with("3.0 MB"), "{}", lines.join("\n"));
+    // The main worktree's size leaves out the worktrees inside it, so the
+    // total counts big.bin once.
+    assert!(!lines[0].contains(" MB"), "{}", lines.join("\n"));
+    assert!(t.screen().contains("total 3.0 MB"), "{}", t.screen());
 }
 
 #[test]
@@ -181,12 +203,13 @@ fn refuses_to_remove_the_worktree_tt_git_runs_in() {
     let mut t = TestDriver::at(Config::default(), &sb, &side, 120, 30);
     t.press("3").press("[");
     t.wait_idle();
+    // Paths are given from the worktree tt-git runs in.
     let lines = t.pane_lines(PaneId::Branches);
-    assert!(lines[0].starts_with("  repo"), "{}", lines.join("\n"));
-    let row = lines.iter().find(|l| l.contains(".worktrees/side")).unwrap();
-    assert!(row.starts_with("* "), "{row}");
+    assert!(lines[0].starts_with("  ../.. "), "{}", lines.join("\n"));
+    assert!(lines[1].starts_with("  ../review "), "{}", lines.join("\n"));
+    assert!(lines[2].starts_with("* . "), "{}", lines.join("\n"));
 
-    select(&mut t, ".worktrees/side");
+    select(&mut t, "* . ");
     t.press("d");
     assert!(t.app().modal().is_none());
     let notice = t.app().notice().unwrap_or_default().to_string();
@@ -238,4 +261,18 @@ fn a_narrow_title_drops_the_other_tabs_counts() {
         title.contains("Branches · Tags · Unmerged · Merged · Worktrees 3"),
         "{title}"
     );
+}
+
+#[test]
+fn c_copies_the_absolute_path() {
+    let sb = repo_with_worktrees();
+    let mut t = on_worktrees_tab(&sb);
+    select(&mut t, ".worktrees/side");
+    t.press("c");
+    let copied = t.app_mut().take_clipboard().expect("copied");
+    assert!(Path::new(&copied).is_absolute(), "{copied}");
+    assert!(same(Path::new(&copied), &sb.path().join(".worktrees/side")), "{copied}");
+    if cfg!(windows) {
+        assert!(!copied.contains('/'), "Windows separators: {copied}");
+    }
 }

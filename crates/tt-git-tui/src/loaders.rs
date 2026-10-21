@@ -133,6 +133,16 @@ pub fn count_worktree_changes(repo: Repo, paths: Vec<PathBuf>) -> Action {
     Action::WorktreeChanges(counts)
 }
 
+/// How much disk space the worktree at `path` takes, leaving out the
+/// worktrees in `nested` (`.worktrees/x` in the main one) so they count once.
+pub fn measure_worktree_size(path: PathBuf, nested: Vec<PathBuf>) -> Action {
+    let size = tt_git_core::repo::disk_usage(&path, &nested).map_err(|e| {
+        tracing::warn!("measuring {} failed: {e}", path.display());
+        e.to_string()
+    });
+    Action::WorktreeSize(path, size)
+}
+
 /// Everyone with commits, for the filter panel's author list.
 pub fn load_filter_authors(repo: Repo) -> Action {
     Action::FilterChoicesLoaded {

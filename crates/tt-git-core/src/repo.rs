@@ -866,6 +866,66 @@ pub fn same_path(a: &Path, b: &Path) -> bool {
     }
 }
 
+/// `path` as reached from `base`: `.` for `base` itself, `.worktrees/x`
+/// below it, `../..` above it. In full when they share no root (another
+/// drive). Both are resolved first when they exist, as for [`same_path`].
+pub fn relative_path(path: &Path, base: &Path) -> String {
+    let (real_path, real_base) = match (std::fs::canonicalize(path), std::fs::canonicalize(base)) {
+        (Ok(p), Ok(b)) => (p, b),
+        _ => (path.to_path_buf(), base.to_path_buf()),
+    };
+    let to: Vec<_> = real_path.components().collect();
+    let from: Vec<_> = real_base.components().collect();
+    let same = |a: &std::path::Component, b: &std::path::Component| {
+        if cfg!(windows) {
+            a.as_os_str().eq_ignore_ascii_case(b.as_os_str())
+        } else {
+            a == b
+        }
+    };
+    let common = to.iter().zip(&from).take_while(|(a, b)| same(a, b)).count();
+    if common == 0 {
+        return path.display().to_string();
+    }
+    let parts: Vec<String> = std::iter::repeat_n("..".to_string(), from.len() - common)
+        .chain(
+            to[common..]
+                .iter()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned()),
+        )
+        .collect();
+    if parts.is_empty() { ".".into() } else { parts.join("/") }
+}
+
+/// Bytes taken by the files under `dir`, without following links and
+/// leaving out the folders in `skip` (worktrees nested in it). Folders that
+/// can't be read are left out too; only an unreadable `dir` is an error.
+pub fn disk_usage(dir: &Path, skip: &[PathBuf]) -> std::io::Result<u64> {
+    let mut total = 0;
+    let mut pending = vec![dir.to_path_buf()];
+    let mut first = true;
+    while let Some(dir) = pending.pop() {
+        let entries = match std::fs::read_dir(&dir) {
+            Ok(entries) => entries,
+            Err(e) if first => return Err(e),
+            Err(_) => continue,
+        };
+        first = false;
+        for entry in entries.flatten() {
+            let Ok(meta) = entry.metadata() else { continue };
+            let path = entry.path();
+            if meta.is_dir() {
+                if !skip.contains(&path) {
+                    pending.push(path);
+                }
+            } else {
+                total += meta.len();
+            }
+        }
+    }
+    Ok(total)
+}
+
 /// What [`Repo::remote_config`] reads.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RemoteConfig {

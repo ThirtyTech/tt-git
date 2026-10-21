@@ -89,11 +89,15 @@ pub struct BranchesPane {
     stashes: Vec<Stash>,
     /// The main worktree first.
     worktrees: Vec<Worktree>,
-    /// How each worktree is shown and filtered: its path.
+    /// How each worktree is shown and filtered: its path from the current
+    /// directory.
     worktree_names: Vec<String>,
     /// Files with changes in each worktree, by path, once counted (`Err`
     /// when git couldn't tell).
     worktree_changes: HashMap<PathBuf, Result<usize, String>>,
+    /// Bytes each worktree's folder takes, by path, once measured (`Err`
+    /// when it couldn't be read).
+    worktree_sizes: HashMap<PathBuf, Result<u64, String>>,
     tab: BranchTab,
     /// Indices into the current tab's list that pass the filter.
     visible: Vec<usize>,
@@ -118,6 +122,7 @@ impl BranchesPane {
             worktrees: Vec::new(),
             worktree_names: Vec::new(),
             worktree_changes: HashMap::new(),
+            worktree_sizes: HashMap::new(),
             tab: BranchTab::default(),
             visible: Vec::new(),
             filter: String::new(),
@@ -148,8 +153,11 @@ impl BranchesPane {
         self.base = base;
         self.tags = tags_newest_first(refs);
         self.stashes = stashes;
-        let main = worktrees.first().map(|w| w.path.clone()).unwrap_or_default();
-        self.worktree_names = worktrees.iter().map(|w| worktree_name(w, &main)).collect();
+        let base = names_base(&worktrees);
+        self.worktree_names = worktrees
+            .iter()
+            .map(|w| tt_git_core::repo::relative_path(&w.path, &base))
+            .collect();
         self.worktrees = worktrees;
         self.refilter();
         let pos = keep.and_then(|name| (0..self.visible.len()).position(|pos| self.name_at(pos) == name));
@@ -237,6 +245,39 @@ impl BranchesPane {
     /// Takes counts of each worktree's changed files.
     pub fn set_worktree_changes(&mut self, counts: Vec<(PathBuf, Result<usize, String>)>) {
         self.worktree_changes = counts.into_iter().collect();
+    }
+
+    /// Takes the disk space the folder of the worktree at `path` takes.
+    pub fn set_worktree_size(&mut self, path: PathBuf, size: Result<u64, String>) {
+        self.worktree_sizes.insert(path, size);
+    }
+
+    /// What a worktree row says about its size: `…` until measured, nothing
+    /// for one without a folder.
+    fn worktree_size(&self, wt: &Worktree) -> String {
+        if wt.bare || wt.prunable.is_some() {
+            return String::new();
+        }
+        match self.worktree_sizes.get(&wt.path) {
+            Some(Ok(bytes)) => human_size(*bytes),
+            Some(Err(_)) => "?".into(),
+            None => "…".into(),
+        }
+    }
+
+    /// The disk space the worktrees take together, `…` until each one with
+    /// a folder is measured. Nested ones aren't counted twice: the main
+    /// worktree's size leaves them out.
+    fn worktrees_total(&self) -> String {
+        let mut total = 0;
+        for path in self.countable_worktrees() {
+            match self.worktree_sizes.get(&path) {
+                Some(Ok(bytes)) => total += bytes,
+                Some(Err(_)) => {}
+                None => return "…".into(),
+            }
+        }
+        human_size(total)
     }
 
     pub fn filter(&self) -> &str {
@@ -617,7 +658,13 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
                 }
                 None => notify(format!("{name} has no commit to start from")),
             },
-            Command::Copy => ctx.emit(Action::Copy(wt.path.display().to_string())),
+            // The absolute path, with Windows' own separators where git
+            // printed forward slashes.
+            Command::Copy => ctx.emit(Action::Copy(if cfg!(windows) {
+                wt.path.display().to_string().replace('/', "\\")
+            } else {
+                wt.path.display().to_string()
+            })),
             _ => return EventState::NotConsumed,
         }
         EventState::Consumed
@@ -652,6 +699,7 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
         i: usize,
         name_width: usize,
         state_width: usize,
+        size_width: usize,
         width: usize,
         theme: &Theme,
     ) -> Line<'a> {
@@ -680,7 +728,7 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
         } else {
             theme.muted
         };
-        let branch_width = width.saturating_sub(2 + name_width + 1 + 1 + state_width);
+        let branch_width = width.saturating_sub(2 + name_width + 1 + 1 + state_width + 1 + size_width);
         Line::from(vec![
             marker,
             Span::styled(fit(&self.worktree_names[i], name_width), name_style),
@@ -688,6 +736,8 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
             Span::styled(fit(&checked_out, branch_width), branch_style),
             Span::raw(" "),
             Span::styled(fit_right(&state, state_width), state_style),
+            Span::raw(" "),
+            Span::styled(fit_right(&self.worktree_size(wt), size_width), theme.muted),
         ])
     }
 
@@ -962,24 +1012,35 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
     }
 }
 
-/// How the worktrees tab names `wt`: the main worktree by its folder's
-/// name, others by their path from it (`.worktrees/x`) when inside it,
-/// else in full.
-fn worktree_name(wt: &Worktree, main: &Path) -> String {
-    if wt.main {
-        return wt
-            .path
-            .file_name()
-            .map_or_else(|| wt.path.display().to_string(), |n| n.to_string_lossy().into_owned());
+/// Where the worktrees tab's paths are given from: the current directory
+/// when it's inside the worktree tt-git runs in, else that worktree's root.
+fn names_base(worktrees: &[Worktree]) -> PathBuf {
+    let Some(current) = worktrees.iter().find(|w| w.current).or(worktrees.first()) else {
+        return PathBuf::new();
+    };
+    let inside = |cwd: &Path| match (std::fs::canonicalize(cwd), std::fs::canonicalize(&current.path)) {
+        (Ok(cwd), Ok(root)) => cwd.starts_with(root),
+        _ => false,
+    };
+    match std::env::current_dir() {
+        Ok(cwd) if inside(&cwd) => cwd,
+        _ => current.path.clone(),
     }
-    match wt.path.strip_prefix(main) {
-        Ok(rel) if !rel.as_os_str().is_empty() => rel
-            .components()
-            .map(|c| c.as_os_str().to_string_lossy())
-            .collect::<Vec<_>>()
-            .join("/"),
-        _ => wt.path.display().to_string(),
+}
+
+/// `bytes` for people: `512 B`, `4.0 KB`, `1.2 GB` (powers of 1024).
+fn human_size(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["KB", "MB", "GB", "TB", "PB"];
+    if bytes < 1024 {
+        return format!("{bytes} B");
     }
+    let mut size = bytes as f64 / 1024.0;
+    let mut unit = 0;
+    while size >= 1024.0 && unit + 1 < UNITS.len() {
+        size /= 1024.0;
+        unit += 1;
+    }
+    format!("{size:.1} {}", UNITS[unit])
 }
 
 /// The confirmation for removing `wt` (shown as `name`), or why it can't be.
@@ -1202,7 +1263,11 @@ impl Component for BranchesPane {
             .map(|(tab, xs)| (tab, area.y, (start + xs.start).min(end)..(start + xs.end).min(end)))
             .filter(|(_, _, xs)| !xs.is_empty())
             .collect();
-        let block = pane_block(PaneId::Branches, title, focused, theme);
+        let mut block = pane_block(PaneId::Branches, title, focused, theme);
+        if self.tab == BranchTab::Worktrees {
+            let total = format!(" total {} ", self.worktrees_total());
+            block = block.title_bottom(Line::from(Span::styled(total, theme.muted)).right_aligned());
+        }
         let inner = block.inner(area);
         frame.render_widget(block, area);
         self.dates = DrawnDates::new(self.clock.now());
@@ -1224,14 +1289,12 @@ impl Component for BranchesPane {
         } else {
             0
         };
-        let state_width = if self.tab == BranchTab::Worktrees {
-            self.worktrees
-                .iter()
-                .map(|w| self.worktree_state(w).width())
-                .max()
-                .unwrap_or(0)
+        let (state_width, size_width) = if self.tab == BranchTab::Worktrees {
+            let widest =
+                |text: &dyn Fn(&Worktree) -> String| self.worktrees.iter().map(|w| text(w).width()).max().unwrap_or(0);
+            (widest(&|w| self.worktree_state(w)), widest(&|w| self.worktree_size(w)))
         } else {
-            0
+            (0, 0)
         };
         let lines: Vec<Line> = (start..end)
             .map(|pos| {
@@ -1240,7 +1303,7 @@ impl Component for BranchesPane {
                     BranchTab::All => self.render_entry(&list[i], width, theme),
                     BranchTab::Tags => self.render_tag(&self.tags[i], name_width, distance_width, width, theme),
                     BranchTab::Stash => self.render_stash(&self.stashes[i], width, theme),
-                    BranchTab::Worktrees => self.render_worktree(i, name_width, state_width, width, theme),
+                    BranchTab::Worktrees => self.render_worktree(i, name_width, state_width, size_width, width, theme),
                     _ => self.render_compared(&list[i], name_width, width, theme),
                 };
                 if pos == cursor.selected {

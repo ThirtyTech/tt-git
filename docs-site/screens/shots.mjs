@@ -472,12 +472,14 @@ export const shots = [
 	{
 		name: 'worktrees-tab',
 		capture: 'worktrees-tab',
-		view: { region: { cells: [95, 35, 95, 4] } },
+		view: { region: { cells: [95, 35, 95, 15] } },
 		callouts: [
 			{ target: { find: 'Worktrees 3', in: 'branches' }, text: 'The **Worktrees** tab, once there is a linked worktree', markerSide: 'above' },
-			{ target: { find: '* lumen-web', in: 'branches' }, text: 'The worktree tt-git is **running in**', markerSide: 'left' },
+			{ target: { find: '* .', in: 'branches' }, text: 'The worktree tt-git is **running in**; paths are from here', markerSide: 'left' },
 			{ target: { find: '(detached f33b691)', in: 'branches' }, text: 'Its **branch**, or the commit it has detached', markerSide: 'below' },
-			{ target: { find: '2 changed', in: 'branches' }, text: 'Files with **uncommitted changes** in it', markerSide: 'right' },
+			{ target: { find: '2 changed', in: 'branches' }, text: 'Files with **uncommitted changes** in it', markerSide: 'left' },
+			{ target: { find: ' KB', in: 'branches', dx: -4, w: 7 }, text: 'The **disk space** each takes', markerSide: 'right' },
+			{ target: { find: 'total', in: 'branches', w: 13 }, text: 'All of them **together**', markerSide: 'below' },
 		],
 	},
 	{

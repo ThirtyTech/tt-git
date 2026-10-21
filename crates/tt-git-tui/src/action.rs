@@ -105,6 +105,9 @@ pub enum Action {
     /// How many files have changes in each worktree (by path), or why it
     /// couldn't be told.
     WorktreeChanges(Vec<(std::path::PathBuf, Result<usize, String>)>),
+    /// The bytes the folder of the worktree at this path takes, or why it
+    /// couldn't be read.
+    WorktreeSize(std::path::PathBuf, Result<u64, String>),
     /// Close this repository and open the worktree at this path instead.
     OpenWorktree(std::path::PathBuf),
     /// The branch the graph should show on its own, or `None` for the

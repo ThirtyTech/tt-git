@@ -131,7 +131,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `enter` | show what it holds fullscreen, untracked files included (`esc` back) |
 | worktrees tab | `enter` `space` | open the selected worktree in place of this one (tt-git starts over there) |
 | | `d` | remove it (asks first; asks again before `--force` if it has changes; never the main worktree or the one tt-git is in) |
-| | `n` / `c` | new branch in a new worktree from it / copy its path |
+| | `n` / `c` | new branch in a new worktree from it / copy its absolute path |
 | details | `}` | show / hide the commit's changed files below the diff (`j`/`k` pick a file); fullscreen puts them on the left |
 | | `o` | open the link in view with a plugin link handler |
 | | `e` | open the file in view in your editor, at the line at the top of the diff |

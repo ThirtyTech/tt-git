@@ -2,6 +2,6 @@
 source: crates/tt-git-tui/tests/worktrees.rs
 expression: "t.pane_lines(PaneId::Branches)[..3].join(\"\\n\")"
 ---
-* repo              main                                     main · clean
-  .worktrees/review (detached b290cb5)                     locked · clean
-  .worktrees/side   side                                        1 changed
+* .                 main                              main · clean 1.5 MB
+  .worktrees/review (detached b290cb5)              locked · clean 2.0 KB
+  .worktrees/side   side                                 1 changed  512 B

@@ -156,6 +156,11 @@ pub struct App {
     /// Worktree changes are being counted, and whether to count again
     /// when that's done (something changed meanwhile).
     worktree_count: (bool, bool),
+    /// Worktrees whose sizes are still being measured.
+    worktree_sizing: usize,
+    /// The worktrees whose sizes were last measured. Walking a folder can
+    /// be slow, so a refresh measures again only when this list changes.
+    worktree_sized: Vec<std::path::PathBuf>,
     /// The worktree to open in place of this repository once the app quits.
     reopen: Option<Repo>,
     watcher: Option<RepoWatcher>,
@@ -238,6 +243,8 @@ impl App {
             select_head: false,
             undo_pending: false,
             worktree_count: (false, false),
+            worktree_sizing: 0,
+            worktree_sized: Vec::new(),
             reopen: None,
             watcher: None,
             plugins: None,
@@ -753,6 +760,7 @@ impl App {
                 self.branches.set_entries(branches, base, &refs, stashes, worktrees);
                 if self.branches.tab() == BranchTab::Worktrees {
                     self.count_worktree_changes();
+                    self.measure_worktree_sizes(false);
                 }
                 self.head = Some(head);
                 self.track_head();
@@ -762,7 +770,17 @@ impl App {
                 }
             }
             Action::BranchSelected(oid) => self.graph.select_when_loaded(oid, &self.ctx),
-            Action::CountWorktreeChanges => self.count_worktree_changes(),
+            Action::CountWorktreeChanges => {
+                self.count_worktree_changes();
+                self.measure_worktree_sizes(true);
+            }
+            Action::WorktreeSize(path, size) => {
+                self.branches.set_worktree_size(path, size);
+                self.worktree_sizing = self.worktree_sizing.saturating_sub(1);
+                if self.worktree_sizing == 0 {
+                    self.measure_worktree_sizes(false);
+                }
+            }
             Action::WorktreeChanges(counts) => {
                 self.branches.set_worktree_changes(counts);
                 let (_, again) = std::mem::take(&mut self.worktree_count);
@@ -1076,6 +1094,29 @@ impl App {
         let repo = self.repo.clone();
         let paths = self.branches.countable_worktrees();
         self.ctx.spawn(move || loaders::count_worktree_changes(repo, paths));
+    }
+
+    /// Measures each worktree's disk space in the background, one job per
+    /// worktree so the quick ones show while a big one is still walked:
+    /// `again` even if the same worktrees were measured before, else only
+    /// when the list changed. One round at a time; when it's done the list
+    /// is checked again.
+    fn measure_worktree_sizes(&mut self, again: bool) {
+        let paths = self.branches.countable_worktrees();
+        if self.worktree_sizing > 0 || (!again && paths == self.worktree_sized) {
+            return;
+        }
+        self.worktree_sizing = paths.len();
+        for path in &paths {
+            let nested: Vec<_> = paths
+                .iter()
+                .filter(|p| *p != path && p.starts_with(path))
+                .cloned()
+                .collect();
+            let path = path.clone();
+            self.ctx.spawn(move || loaders::measure_worktree_size(path, nested));
+        }
+        self.worktree_sized = paths;
     }
 
     /// Quits so the worktree at `path` can be opened in its place, unless a
