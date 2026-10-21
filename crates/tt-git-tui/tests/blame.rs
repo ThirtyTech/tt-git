@@ -337,3 +337,65 @@ fn a_number_in_the_palette_goes_to_that_line_in_blame() {
     t.press("esc").press(":").type_text("33");
     assert!(!t.screen().contains("Go to line"), "{}", t.screen());
 }
+
+/// The pane row showing `needle`.
+fn row_of(t: &TestDriver, needle: &str) -> usize {
+    let lines = t.pane_lines(PaneId::Details);
+    lines
+        .iter()
+        .position(|l| l.contains(needle))
+        .unwrap_or_else(|| panic!("no {needle:?} in\n{}", lines.join("\n")))
+}
+
+#[test]
+fn brackets_follow_the_line_by_its_text_and_keep_its_row() {
+    let sb = Sandbox::new();
+    let numbered = |i: usize| format!("line {i}");
+    let v1: Vec<String> = (1..=60).map(numbered).collect();
+    sb.write("f.ts", &(v1.join("\n") + "\n"));
+    commit_as(&sb, "Ada Park <ada@lumen.dev>", &["Add f"]);
+    // Five lines added at the top, and line 40 changed.
+    let mut v2: Vec<String> = (1..=5).map(|i| format!("new {i}")).collect();
+    v2.extend(v1.iter().map(|l| {
+        if l == "line 40" {
+            "line 40 changed".into()
+        } else {
+            l.clone()
+        }
+    }));
+    sb.write("f.ts", &(v2.join("\n") + "\n"));
+    let change = commit_as(&sb, "Sam Rivera <sam@lumen.dev>", &["Change line 40"]);
+
+    let mut t = TestDriver::with_size(Config::default(), &sb, 120, 20);
+    t.press("1")
+        .press("g")
+        .press("enter")
+        .wait_idle()
+        .press("b")
+        .wait_idle();
+    // "line 40 changed", line 45 here, five rows down from the top.
+    t.press("G");
+    for _ in 40..65 {
+        t.press("k");
+    }
+    t.press_all(&["j", "j", "j", "j", "j"]);
+    let row = row_of(&t, " 45 line 40 changed");
+    assert_eq!(row, 5);
+
+    // Before the commit it was "line 40", on line 40, and on the same row.
+    t.press_frame("[");
+    // While the older version loads, the newer one stays on screen.
+    assert_eq!(row_of(&t, " 45 line 40 changed"), row);
+    t.wait_idle();
+    let blame = t.app().details().blame().unwrap();
+    assert_eq!(blame.label(), format!("{}^", short(&change)));
+    assert_eq!(blame.selected_line(), 40);
+    assert_eq!(row_of(&t, " 40 line 40"), row);
+
+    // Down two lines and forward again: the same line, "line 42", there.
+    t.press("j").press("j").press("]");
+    let blame = t.app().details().blame().unwrap();
+    assert_eq!(blame.depth(), 1);
+    assert_eq!(blame.selected_line(), 47);
+    assert_eq!(row_of(&t, " 47 line 42"), row + 2);
+}

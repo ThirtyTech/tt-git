@@ -140,11 +140,17 @@ From there, <kbd>esc</kbd> goes back to the commit, and <kbd>esc</kbd> again to 
 
 The commit that last changed a line often just moved it or reformatted it. To see what was there
 before, press <kbd>[</kbd>. Blame shows the file as it was just before the selected line's commit,
-following it through a rename, on the line's number in that commit. Press <kbd>[</kbd> again to
-go further back.
+following it through a rename. Press <kbd>[</kbd> again to go further back.
 
-Press <kbd>]</kbd> to go forward again, to the newer version you stepped back from. At the newest
-one, the help bar says `this is the newest version`.
+Blame stays on the same line of code as you step. It compares the two versions' text, so when
+lines were added or removed above it, the selection moves with the line rather than staying on
+its old number. A line the commit changed lands on the most similar line it replaced. A line the
+commit added lands where it was added. The selected line keeps its row on screen. While the older
+version loads, the newer one stays on screen, so you don't lose your place.
+
+Press <kbd>]</kbd> to go forward again, to the newer version you stepped back from. Blame follows
+the selected line forward the same way, so a line you moved to in the older version is still
+selected in the newer one. At the newest one, the help bar says `this is the newest version`.
 
 On a line that isn't committed yet, <kbd>[</kbd> steps back to `HEAD`. If the commit added the file,
 there's nothing earlier to show:
