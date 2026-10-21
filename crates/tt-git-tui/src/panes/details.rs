@@ -17,7 +17,7 @@ use crate::action::Action;
 use crate::component::{Component, EventState};
 use crate::editor::EditTarget;
 use crate::jobs::Ctx;
-use crate::keymap::{Command, Context};
+use crate::keymap::{Command, Context, KeyCombo};
 use crate::syntax::{HunkTokens, LineTokens, Tokens};
 use crate::theme::Theme;
 use crate::widgets::{Cursor, code_spans, split_lines, truncate};
@@ -735,6 +735,11 @@ impl Component for DetailsPane {
         self.scroll(cmd)
     }
 
+    /// In blame, digits count lines, vim style.
+    fn on_key(&mut self, key: KeyCombo, _ctx: &Ctx) -> bool {
+        self.stage.is_none() && self.blame.as_mut().is_some_and(|view| view.on_key(key))
+    }
+
     /// In blame, a click selects a line.
     fn on_click(&mut self, row: usize, ctx: &Ctx) {
         if let Some(view) = &mut self.blame {
@@ -787,6 +792,7 @@ impl Component for DetailsPane {
         }
         if self.blame.is_some() {
             return &[
+                Command::GoToLine,
                 Command::OpenCommit,
                 Command::ToggleDetails,
                 Command::BlameBack,
@@ -825,6 +831,9 @@ impl Component for DetailsPane {
         }
         if let Some(position) = self.blame.as_ref().and_then(BlameView::position) {
             title.push_str(&format!(" {position}"));
+        }
+        if let Some(count) = self.blame.as_ref().and_then(BlameView::count) {
+            title.push_str(&format!(" go to {count}…"));
         }
         if self.loading || self.blame.as_ref().is_some_and(BlameView::loading) {
             title.push_str(" loading…");

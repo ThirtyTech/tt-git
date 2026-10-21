@@ -234,3 +234,106 @@ fn b_in_a_commit_blames_its_file_as_of_that_commit() {
     t.press("esc");
     assert_eq!(t.app().focus(), PaneId::Graph);
 }
+
+/// long.txt, 60 numbered lines in one commit, blamed from the status pane
+/// (where it's the only file, changed in the working tree).
+fn blame_long(t: &mut TestDriver) {
+    t.press("2").press("g").press("b").wait_idle();
+    assert_eq!(t.app().details().blame().unwrap().line_count(), 60);
+}
+
+fn long_file() -> Sandbox {
+    let sb = Sandbox::new();
+    let text: String = (1..=60).map(|n| format!("line {n}\n")).collect();
+    sb.write("long.txt", &text);
+    commit_as(&sb, "Ada Park <ada@lumen.dev>", &["Add long"]);
+    sb.write("long.txt", &text.replacen("line 1\n", "LINE 1\n", 1));
+    sb
+}
+
+fn selected_line(t: &TestDriver) -> usize {
+    t.app().details().blame().unwrap().selected_line()
+}
+
+#[test]
+fn ctrl_g_asks_for_a_line_and_goes_there() {
+    let sb = long_file();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 120, 20);
+    blame_long(&mut t);
+    assert!(t.screen().contains("go to line"), "{}", t.screen());
+
+    t.press("ctrl+g");
+    assert!(t.screen().contains("Go to line (1-60)"), "{}", t.screen());
+    assert!(t.screen().contains("type a line number"), "{}", t.screen());
+    t.type_text("42");
+    assert!(t.screen().contains("Go to line 42"), "{}", t.screen());
+    t.press("enter");
+    assert!(t.app().modal().is_none());
+    assert_eq!(selected_line(&t), 42);
+    t.assert_pane_contains(PaneId::Details, "line 42");
+    assert!(t.pane_title(PaneId::Details).contains(" 42/60"));
+
+    // Past the end is the last line; esc goes nowhere.
+    t.press("ctrl+g").type_text("999").press("enter");
+    assert_eq!(selected_line(&t), 60);
+    t.press("ctrl+g").type_text("3").press("esc");
+    assert!(t.app().modal().is_none());
+    assert_eq!(selected_line(&t), 60);
+}
+
+#[test]
+fn a_count_before_g_or_j_goes_to_a_line_or_moves_that_far() {
+    let sb = long_file();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 120, 20);
+    blame_long(&mut t);
+
+    t.type_text("25");
+    assert!(
+        t.pane_title(PaneId::Details).contains("1/60 go to 25…"),
+        "{}",
+        t.pane_title(PaneId::Details)
+    );
+    // Digits count here rather than switching panes.
+    assert_eq!(t.app().focus(), PaneId::Details);
+    t.press("G");
+    assert_eq!(selected_line(&t), 25);
+    assert!(!t.pane_title(PaneId::Details).contains("go to"));
+    t.assert_pane_contains(PaneId::Details, "line 25");
+
+    t.type_text("10").press("g");
+    assert_eq!(selected_line(&t), 10);
+    t.type_text("5").press("j");
+    assert_eq!(selected_line(&t), 15);
+    t.type_text("20").press("k");
+    assert_eq!(selected_line(&t), 1);
+    // Without a count, G and g are still the ends.
+    t.press("G");
+    assert_eq!(selected_line(&t), 60);
+    t.press("g");
+    assert_eq!(selected_line(&t), 1);
+
+    // esc drops a count without leaving blame; another key just uses it up.
+    t.type_text("7").press("esc");
+    assert!(t.app().details().blame().is_some());
+    t.press("G");
+    assert_eq!(selected_line(&t), 60);
+    t.type_text("7").press("t").press("G");
+    assert_eq!(selected_line(&t), 60);
+}
+
+#[test]
+fn a_number_in_the_palette_goes_to_that_line_in_blame() {
+    let sb = long_file();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 120, 20);
+    blame_long(&mut t);
+    t.press(":");
+    assert!(t.screen().contains("Commands or a line number"), "{}", t.screen());
+    t.type_text(":33");
+    assert!(t.screen().contains("Go to line 33"), "{}", t.screen());
+    t.press("enter");
+    assert_eq!(selected_line(&t), 33);
+
+    // Outside blame a number is just a filter.
+    t.press("esc").press(":").type_text("33");
+    assert!(!t.screen().contains("Go to line"), "{}", t.screen());
+}

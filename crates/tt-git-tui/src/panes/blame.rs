@@ -1,10 +1,12 @@
 //! Blaming one file: when each line last changed, who changed it and in
 //! which commit, reading right to left from the code. `[` steps back to the
 //! file as it was before the selected line's commit; `]` comes forward again.
+//! Digits count, vim style: `42G` goes to line 42, `5j` down five lines.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
@@ -18,7 +20,7 @@ use crate::action::Action;
 use crate::component::EventState;
 use crate::editor::EditTarget;
 use crate::jobs::Ctx;
-use crate::keymap::Command;
+use crate::keymap::{Command, KeyCombo};
 use crate::syntax::LineTokens;
 use crate::theme::Theme;
 use crate::widgets::{Cursor, code_spans, expand_tabs, fit, fit_right};
@@ -33,6 +35,8 @@ const WHO_WIDTH: usize = 14;
 const WHY_MIN_WIDTH: u16 = 100;
 /// The most rows the commit details take below the code.
 const COMMIT_ROWS: u16 = 10;
+/// The largest count digits can type.
+const MAX_COUNT: usize = 9_999_999;
 
 /// One version of the file: the one opened, then one more for each `[`.
 #[derive(Debug)]
@@ -102,6 +106,10 @@ pub struct BlameView {
     show_commit: bool,
     /// Commit messages below the subject line, by commit; `None` while loading.
     messages: HashMap<String, Option<String>>,
+    /// A count being typed, vim style.
+    count: Option<usize>,
+    /// The count for the command the last key resolves to.
+    pending: Option<usize>,
 }
 
 impl BlameView {
@@ -124,6 +132,8 @@ impl BlameView {
             clock,
             show_commit: false,
             messages: HashMap::new(),
+            count: None,
+            pending: None,
         }
     }
 
@@ -155,6 +165,54 @@ impl BlameView {
 
     pub fn blame(&self) -> Option<&Blame> {
         self.level().blame()
+    }
+
+    /// How many lines the file has, once loaded.
+    pub fn line_count(&self) -> usize {
+        self.level().len()
+    }
+
+    /// The count typed so far, before the key it applies to.
+    pub fn count(&self) -> Option<usize> {
+        self.count
+    }
+
+    /// Digits build a count for the next key, vim style (a first `0`
+    /// doesn't start one); `esc` drops it. Returns whether the key was one
+    /// of those. Any other key takes the count along to its command.
+    pub fn on_key(&mut self, key: KeyCombo) -> bool {
+        let typed = self.count.take();
+        self.pending = None;
+        match key.code {
+            KeyCode::Char(c @ '0'..='9') if key.modifiers == KeyModifiers::NONE && (typed.is_some() || c != '0') => {
+                let digit = c as usize - '0' as usize;
+                self.count = Some((typed.unwrap_or(0) * 10 + digit).min(MAX_COUNT));
+                true
+            }
+            KeyCode::Esc if typed.is_some() => true,
+            _ => {
+                self.pending = typed;
+                false
+            }
+        }
+    }
+
+    /// Selects line `line` (from 1; past the end is the last line),
+    /// scrolling it a third of the way down if it's out of view. Before the
+    /// blame arrives, it's the line to open on.
+    pub fn go_to_line(&mut self, line: usize, ctx: &Ctx) {
+        let len = self.level().len();
+        let level = self.level_mut();
+        if len == 0 {
+            level.want_line = line.min(u32::MAX as usize) as u32;
+            return;
+        }
+        let cursor = &mut level.cursor;
+        cursor.selected = (line.max(1) - 1).min(len - 1);
+        if cursor.selected < cursor.offset || cursor.selected >= cursor.offset + cursor.height {
+            level.center = true;
+        }
+        self.want_message(ctx);
     }
 
     pub fn show_commit(&self) -> bool {
@@ -249,7 +307,18 @@ impl BlameView {
     }
 
     pub fn on_command(&mut self, cmd: Command, ctx: &Ctx) -> EventState {
+        let count = self.pending.take();
         match cmd {
+            Command::Top | Command::Bottom if count.is_some() => self.go_to_line(count.unwrap_or(1), ctx),
+            Command::MoveUp | Command::MoveDown if count.is_some() => {
+                let (n, line) = (count.unwrap_or(1), self.selected_line());
+                let line = if cmd == Command::MoveUp {
+                    line.saturating_sub(n)
+                } else {
+                    line + n
+                };
+                self.go_to_line(line, ctx);
+            }
             Command::ToggleDetails => {
                 self.show_commit = !self.show_commit;
                 self.want_message(ctx);

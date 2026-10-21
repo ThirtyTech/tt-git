@@ -266,6 +266,7 @@ pub enum Command {
     OpenCommit,
     BlameBack,
     BlameForward,
+    GoToLine,
 }
 
 impl Command {
@@ -341,6 +342,7 @@ impl Command {
             Command::OpenCommit => "open commit",
             Command::BlameBack => "step back past commit",
             Command::BlameForward => "forward again",
+            Command::GoToLine => "go to line",
         }
     }
 }
@@ -507,6 +509,7 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Details, Command::ToggleFiles, &["}"]),
     (Context::Details, Command::OpenInEditor, &["e"]),
     (Context::Details, Command::Blame, &["b"]),
+    (Context::Blame, Command::GoToLine, &["ctrl+g"]),
     (Context::Blame, Command::OpenCommit, &["enter"]),
     (Context::Blame, Command::ToggleDetails, &["space"]),
     (Context::Blame, Command::BlameBack, &["["]),

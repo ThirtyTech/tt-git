@@ -38,6 +38,12 @@ pub trait Component {
 
     fn on_text_key(&mut self, _key: KeyCombo, _ctx: &Ctx) {}
 
+    /// A key press tried before the keymap, for keys the pane reads itself
+    /// (blame's vim-style line count). Returns whether it was used.
+    fn on_key(&mut self, _key: KeyCombo, _ctx: &Ctx) -> bool {
+        false
+    }
+
     /// A click on the `row`-th visible line of the pane's body.
     fn on_click(&mut self, _row: usize, _ctx: &Ctx) {}
 
