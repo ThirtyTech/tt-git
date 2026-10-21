@@ -245,9 +245,9 @@ export const shots = [
 		capture: 'stash-prompt',
 		view: { region: { box: 'Stash' } },
 		callouts: [
-			{ target: { find: 'Everything · Staged · Keep staged · notifications.md' }, text: '**tab** picks what to stash; last is the selected file', markerSide: 'above' },
+			{ target: { find: 'Everything · Staged · Unstaged · Keep staged · notifications.md' }, text: '**tab** picks what to stash; last is the selected file', markerSide: 'above' },
 			{ target: { find: 'try a pulse animation█' }, text: 'A **message**, optional', markerSide: 'left' },
-			{ target: { find: 'everything, leaving staged', w: 54, h: 2 }, text: 'What will be stashed', markerSide: 'left' },
+			{ target: { find: 'unstaged and untracked changes; staged ones stay' }, text: 'What will be stashed', markerSide: 'left' },
 			{ target: { find: 'enter stash · tab what to stash' }, text: '**enter** stashes', markerSide: 'left' },
 		],
 	},

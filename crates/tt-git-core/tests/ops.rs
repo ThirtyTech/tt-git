@@ -552,6 +552,151 @@ mod stash {
         assert_eq!(read(&sb, "f.txt").as_deref(), Some("2\n"));
     }
 
+    const TEN: &str = "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n";
+
+    /// a.txt: staged "1" -> "ONE" and unstaged "10" -> "TEN"; b.txt
+    /// unstaged; c.txt staged; u.txt untracked.
+    fn mixed() -> Sandbox {
+        let sb = Sandbox::new();
+        sb.write("a.txt", TEN).write("b.txt", "b\n").write("c.txt", "c\n");
+        sb.git(&["add", "."]);
+        sb.commit_staged("base");
+        sb.write("a.txt", &TEN.replace("1\n2", "ONE\n2"));
+        sb.git(&["add", "a.txt"]);
+        sb.write("a.txt", &TEN.replace("1\n2", "ONE\n2").replace("10", "TEN"));
+        sb.write("b.txt", "B\n").write("c.txt", "C\n").write("u.txt", "u\n");
+        sb.git(&["add", "c.txt"]);
+        sb
+    }
+
+    fn short_status(sb: &Sandbox) -> String {
+        sb.git(&["status", "--short"])
+    }
+
+    #[test]
+    fn unstaged_only_keeps_the_staged_changes() {
+        let sb = mixed();
+        let repo = open(&sb);
+        let staged = sb.git(&["diff", "--cached"]);
+
+        repo.stash_push(Some("rest"), &StashScope::Unstaged).unwrap();
+        assert_eq!(sb.git(&["diff", "--cached"]), staged);
+        assert_eq!(sb.git(&["diff"]), "");
+        assert_eq!(read(&sb, "a.txt"), Some(TEN.replace("1\n2", "ONE\n2")));
+        assert_eq!(read(&sb, "b.txt").as_deref(), Some("b\n"));
+        assert_eq!(read(&sb, "c.txt").as_deref(), Some("C\n"));
+        assert_eq!(read(&sb, "u.txt"), None);
+        let stashes = repo.stashes().unwrap();
+        assert_eq!(stashes.len(), 1, "{stashes:?}");
+        assert!(stashes[0].message.ends_with(": rest"));
+
+        // The stash holds only the unstaged changes: it applies on top of
+        // the staged ones without conflict.
+        let shown = sb.git(&["stash", "show", "--include-untracked", "--name-only", "stash@{0}"]);
+        let mut files: Vec<&str> = shown.lines().collect();
+        files.sort();
+        assert_eq!(files, ["a.txt", "b.txt", "u.txt"]);
+        repo.stash_apply(0, true).unwrap();
+        assert_eq!(
+            read(&sb, "a.txt"),
+            Some(TEN.replace("1\n2", "ONE\n2").replace("10", "TEN"))
+        );
+        assert_eq!(read(&sb, "u.txt").as_deref(), Some("u\n"));
+        assert_eq!(sb.git(&["diff", "--cached"]), staged);
+    }
+
+    #[test]
+    fn unstaged_with_nothing_staged_is_a_plain_stash() {
+        let sb = Sandbox::new();
+        sb.commit_file("f.txt", "1\n", "base");
+        sb.write("f.txt", "2\n").write("new.txt", "new\n");
+        let repo = open(&sb);
+        repo.stash_push(None, &StashScope::Unstaged).unwrap();
+        assert_eq!(short_status(&sb), "");
+        assert_eq!(repo.stashes().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn unstaged_with_nothing_unstaged_refuses() {
+        let sb = Sandbox::new();
+        sb.commit_file("f.txt", "1\n", "base");
+        sb.write("f.txt", "2\n");
+        sb.git(&["add", "f.txt"]);
+        let repo = open(&sb);
+        let err = repo.stash_push(None, &StashScope::Unstaged).unwrap_err();
+        assert_eq!(err.to_string(), "no unstaged changes to stash");
+        assert!(repo.stashes().unwrap().is_empty());
+        assert_eq!(short_status(&sb), "M  f.txt");
+    }
+
+    #[test]
+    fn overlapping_staged_and_unstaged_changes_refuse_cleanly() {
+        let sb = Sandbox::new();
+        sb.commit_file("f.txt", "1\n", "base");
+        sb.write("f.txt", "2\n");
+        sb.git(&["add", "f.txt"]);
+        sb.write("f.txt", "3\n");
+        let repo = open(&sb);
+        for scope in [StashScope::Staged, StashScope::Unstaged] {
+            let err = repo.stash_push(None, &scope).unwrap_err();
+            assert!(err.to_string().contains("overlap"), "{scope:?}: {err}");
+            // git saves a stash before it fails; it's dropped again.
+            assert!(repo.stashes().unwrap().is_empty(), "{scope:?}");
+            assert_eq!(short_status(&sb), "MM f.txt");
+            assert_eq!(read(&sb, "f.txt").as_deref(), Some("3\n"));
+            assert_eq!(sb.git(&["show", ":f.txt"]), "2");
+        }
+    }
+
+    #[test]
+    fn a_path_is_not_a_glob() {
+        let sb = Sandbox::new();
+        sb.write("a[b].txt", "x\n").write("ab.txt", "y\n");
+        sb.git(&["add", "."]);
+        sb.commit_staged("base");
+        sb.write("a[b].txt", "X\n").write("ab.txt", "Y\n");
+        let repo = open(&sb);
+        repo.stash_push(None, &StashScope::Paths(paths(&["a[b].txt"]))).unwrap();
+        assert_eq!(read(&sb, "a[b].txt").as_deref(), Some("x\n"));
+        assert_eq!(read(&sb, "ab.txt").as_deref(), Some("Y\n"));
+    }
+
+    #[test]
+    fn push_a_staged_rename() {
+        let sb = Sandbox::new();
+        sb.write("old.txt", "o\n").write("other.txt", "1\n");
+        sb.git(&["add", "."]);
+        sb.commit_staged("base");
+        sb.git(&["mv", "old.txt", "new.txt"]);
+        sb.write("other.txt", "2\n");
+        let repo = open(&sb);
+        repo.stash_push(None, &StashScope::Paths(paths(&["new.txt", "old.txt"])))
+            .unwrap();
+        assert_eq!(short_status(&sb), " M other.txt");
+        assert_eq!(read(&sb, "old.txt").as_deref(), Some("o\n"));
+        assert_eq!(repo.stashes().unwrap().len(), 1);
+
+        // Back as an added file and an unstaged deletion.
+        sb.git(&["stash", "pop", "--index"]);
+        assert_eq!(read(&sb, "new.txt").as_deref(), Some("o\n"));
+        assert_eq!(read(&sb, "old.txt"), None);
+    }
+
+    #[test]
+    fn push_a_staged_deletion() {
+        let sb = Sandbox::new();
+        sb.write("gone.txt", "g\n").write("other.txt", "1\n");
+        sb.git(&["add", "."]);
+        sb.commit_staged("base");
+        sb.git(&["rm", "-q", "gone.txt"]);
+        sb.write("other.txt", "2\n");
+        let repo = open(&sb);
+        repo.stash_push(None, &StashScope::Paths(paths(&["gone.txt"]))).unwrap();
+        assert_eq!(short_status(&sb), " M other.txt");
+        assert_eq!(read(&sb, "gone.txt").as_deref(), Some("g\n"));
+        assert_eq!(repo.stashes().unwrap().len(), 1);
+    }
+
     #[test]
     fn branch_from_a_stash() {
         let sb = Sandbox::new();

@@ -102,7 +102,7 @@ To discard only part of a file, use the [staging view](/panes/staging/#discardin
 
 ## Stashing
 
-<Screenshot name="status-stash" alt="The Stash dialog with Keep staged chosen and a message typed" />
+<Screenshot name="status-stash" alt="The Stash dialog with Unstaged chosen and a message typed" />
 
 Press <kbd>s</kbd> to stash. The **Stash** dialog asks what to stash; <kbd>tab</kbd> (and
 <kbd>shift+tab</kbd>) moves between the choices:
@@ -111,11 +111,16 @@ Press <kbd>s</kbd> to stash. The **Stash** dialog asks what to stash; <kbd>tab</
 |---|---|
 | **Everything** | Staged, unstaged and untracked changes |
 | **Staged** | Only what's staged |
+| **Unstaged** | Only the unstaged and untracked changes; the staged ones stay staged |
 | **Keep staged** | Everything, but leaves the staged changes in place too |
-| *the selected file* | Only that file |
+| *the selected file* | Only that file, untracked or not (both paths of a rename) |
 
 The message is optional: press <kbd>enter</kbd> with it empty to stash with git's default message.
 With nothing changed, tt-git says `nothing to stash`.
+
+**Staged** and **Unstaged** need git 2.35 or newer. Both refuse, leaving everything as it was, when
+a file's staged and unstaged changes touch the same lines, since git can't pull them apart. See
+[Stash](/panes/stash/#making-a-stash) for the details.
 
 Your stashes appear on the branches pane's [Stash tab](/panes/stash/), where you can pop, apply, drop
 and inspect them.

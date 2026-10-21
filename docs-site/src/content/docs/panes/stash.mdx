@@ -9,8 +9,8 @@ import { Aside } from '@astrojs/starlight/components';
 A stash puts your uncommitted changes aside so you can work on something
 else, then brings them back later. You make one from the [status
 pane](/panes/status/) with <kbd>s</kbd>, choosing whether to stash
-everything, only what's staged, everything but the staged changes, or just
-one file. Once you have a stash, the [branches pane](/panes/branches/) grows
+everything, only what's staged, only what isn't staged, everything but the
+staged changes, or just one file. Once you have a stash, the [branches pane](/panes/branches/) grows
 a **Stash** tab that lists them, newest first, where you can pop, apply,
 drop, branch from and look inside each one.
 
@@ -25,8 +25,16 @@ dialog has a row of choices; <kbd>tab</kbd> moves between them:
 |---|---|---|
 | **Everything** | Staged, unstaged and untracked changes | `git stash push --include-untracked` |
 | **Staged** | Only what's staged | `git stash push --staged` |
+| **Unstaged** | Only the unstaged and untracked changes; the staged ones stay staged and aren't in the stash | see below |
 | **Keep staged** | Everything, but leaves the staged changes in place | `git stash push --include-untracked --keep-index` |
 | *the selected file* | Only that file (both paths of a rename), untracked or not | `git stash push --include-untracked -- <path>` |
+
+**Unstaged** and **Keep staged** both leave your staged changes in place.
+The difference is what goes in the stash: **Keep staged** stashes the staged
+changes too, so popping it later brings them back a second time, while
+**Unstaged** stashes only what you hadn't staged. With nothing staged,
+**Unstaged** is the same as **Everything**; with nothing unstaged, it says
+`no unstaged changes to stash`.
 
 The last choice is named after the file selected in the status pane. Type a
 message if you want one (it's optional) and press <kbd>enter</kbd>, or
@@ -40,11 +48,24 @@ after undoing a checkout the stash stays here, and after undoing a merge,
 reset or rebase it's popped straight back unless the changes conflict.
 Undoing a commit never stashes.
 
-<Screenshot name="status-stash" alt="The Stash dialog with Keep staged chosen and a message typed" />
+<Screenshot name="status-stash" alt="The Stash dialog with Unstaged chosen and a message typed" />
 
 <Aside>
-**Staged** uses `git stash push --staged`, which needs git 2.35 or newer.
+**Staged** and **Unstaged** use `git stash push --staged`, which needs git
+2.35 or newer. With an older git, tt-git says so.
 </Aside>
+
+When one file has staged and unstaged changes on the same lines, git can't
+stash one without the other. **Staged** and **Unstaged** then refuse with
+`the staged and unstaged changes overlap`, leaving your files and the stash
+list as they were. Stage or unstage the rest of the file, or stash
+**Everything**.
+
+Stashing a single file that's a staged deletion, or a staged rename, unstages
+the deletion first, because git can't stash a staged deletion by path. When
+you pop that stash, the file comes back deleted but not staged; a rename comes
+back as the new file staged and the old one deleted. Stage the deletion again
+with <kbd>space</kbd>.
 
 ## The Stash tab
 
@@ -98,7 +119,7 @@ On the status pane:
 
 | Key | Does |
 |---|---|
-| <kbd>s</kbd> | Stash (<kbd>tab</kbd> in the dialog: everything, staged, keep staged, or the selected file) |
+| <kbd>s</kbd> | Stash (<kbd>tab</kbd> in the dialog: everything, staged, unstaged, keep staged, or the selected file) |
 
 On the Stash tab:
 
