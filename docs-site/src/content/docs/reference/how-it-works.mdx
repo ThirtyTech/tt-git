@@ -229,12 +229,20 @@ without stashes pays nothing for it.
 |---|---|
 | Stash everything | `git stash push --include-untracked [-m <message>]` |
 | Stash staged | `git stash push --staged` |
+| Stash unstaged | `git stash push --staged -m "tt-git: staged changes set aside"`, `git stash push --include-untracked [-m <message>]`, then `git stash pop --index stash@{1}` to put the staged changes back. With nothing staged, just the middle command |
 | Stash, keep staged | `git stash push --include-untracked --keep-index` |
-| Stash one file | `git stash push --include-untracked -- <paths>` |
+| Stash one file | `git stash push --include-untracked -- :(literal)<path>…`, after `git restore --staged` for a staged deletion (the old path of a rename) |
 | Pop / apply | `git stash pop stash@{n}` / `git stash apply stash@{n}` |
 | Drop | `git stash drop stash@{n}` |
 | Branch | `git stash branch <name> stash@{n}` |
 | Show | `git show --stat --patch` of the stash commit, then of its untracked-files commit if it has one |
+
+`git stash push --staged` saves its stash before it takes the staged changes
+out of the working tree. When that step fails because a file's staged and
+unstaged changes overlap ("Cannot remove worktree changes"), git leaves the
+files alone but keeps the stash; tt-git runs `git stash drop stash@{0}` to
+remove that duplicate. git older than 2.35 doesn't know `--staged`, and tt-git
+says it needs 2.35 instead of showing git's usage text.
 
 ### Undo
 

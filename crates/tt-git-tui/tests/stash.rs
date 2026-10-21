@@ -73,6 +73,76 @@ fn tab_picks_what_to_stash() {
 }
 
 #[test]
+fn unstaged_leaves_the_staged_changes() {
+    let sb = Sandbox::new();
+    sb.commit_file(
+        "a.txt", "a
+", "base",
+    );
+    sb.commit_file(
+        "b.txt", "b
+", "more",
+    );
+    sb.write(
+        "a.txt", "A
+",
+    )
+    .write(
+        "b.txt", "B
+",
+    )
+    .write(
+        "new.txt", "new
+",
+    );
+    sb.git(&["add", "a.txt"]);
+    let mut t = TestDriver::new(&sb);
+
+    t.press("2").press("s").press("tab").press("tab");
+    let screen = t.screen();
+    assert!(
+        screen.contains("Everything · Staged · Unstaged · Keep staged"),
+        "{screen}"
+    );
+    assert!(
+        screen.contains("unstaged and untracked changes; staged ones stay"),
+        "{screen}"
+    );
+    t.type_text("rest").press("enter").wait_idle();
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(sb.git(&["status", "--short"]), "M  a.txt");
+    assert_eq!(
+        read(&sb, "b.txt").as_deref(),
+        Some(
+            "b
+"
+        )
+    );
+    assert_eq!(read(&sb, "new.txt"), None);
+    stash_tab(&mut t);
+    let messages = stash_messages(&t);
+    assert_eq!(messages.len(), 1, "{messages:?}");
+    assert!(messages[0].ends_with(": rest"), "{messages:?}");
+}
+
+#[test]
+fn the_selected_file_can_be_a_staged_rename() {
+    let sb = Sandbox::new();
+    sb.commit_file(
+        "old.txt", "o
+", "base",
+    );
+    sb.git(&["mv", "old.txt", "new.txt"]);
+    let mut t = TestDriver::new(&sb);
+    t.press("2").press("s").press("shift+tab");
+    assert!(t.screen().contains("only new.txt, old.txt"), "{}", t.screen());
+    t.press("enter").wait_idle();
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert!(t.app().status().entries().is_empty());
+    assert_eq!(sb.git(&["stash", "list"]).lines().count(), 1);
+}
+
+#[test]
 fn nothing_to_stash() {
     let sb = Sandbox::new();
     sb.commit("base");

@@ -165,6 +165,7 @@ impl GitOp {
             GitOp::StashPush { scope, .. } => match scope {
                 StashScope::All => "stash".into(),
                 StashScope::Staged => "stash staged changes".into(),
+                StashScope::Unstaged => "stash unstaged changes".into(),
                 StashScope::KeepStaged => "stash, keeping staged changes".into(),
                 StashScope::Paths(paths) => format!("stash {}", paths.join(" ")),
             },
@@ -210,7 +211,12 @@ pub enum PromptAction {
 impl PromptAction {
     /// The next choice of what to stash after `scope`.
     fn next_scope(scope: &StashScope, file: Option<&Vec<String>>, back: bool) -> StashScope {
-        let mut choices = vec![StashScope::All, StashScope::Staged, StashScope::KeepStaged];
+        let mut choices = vec![
+            StashScope::All,
+            StashScope::Staged,
+            StashScope::Unstaged,
+            StashScope::KeepStaged,
+        ];
         if let Some(paths) = file {
             choices.push(StashScope::Paths(paths.clone()));
         }
@@ -453,6 +459,8 @@ impl Modal {
                             Span::styled(" · ", theme.muted),
                             tab("Staged".into(), *scope == StashScope::Staged),
                             Span::styled(" · ", theme.muted),
+                            tab("Unstaged".into(), *scope == StashScope::Unstaged),
+                            Span::styled(" · ", theme.muted),
                             tab("Keep staged".into(), *scope == StashScope::KeepStaged),
                         ];
                         if let Some(paths) = file {
@@ -463,6 +471,7 @@ impl Modal {
                         let note = match scope {
                             StashScope::All => "staged, unstaged and untracked changes".to_string(),
                             StashScope::Staged => "only what's staged".to_string(),
+                            StashScope::Unstaged => "unstaged and untracked changes; staged ones stay".to_string(),
                             StashScope::KeepStaged => "everything, leaving staged changes in place".to_string(),
                             StashScope::Paths(paths) => format!("only {}", paths.join(", ")),
                         };
@@ -501,7 +510,15 @@ impl Modal {
                 "y confirm · n/esc cancel",
             ),
         };
-        let width = 60.min(area.width);
+        // The stash dialog's row of choices ends in a file name.
+        let wide = matches!(
+            self,
+            Modal::Prompt {
+                action: PromptAction::Stash { .. },
+                ..
+            }
+        );
+        let width = if wide { 72 } else { 60 }.min(area.width);
         let inner_width = width.saturating_sub(2).max(1) as usize;
         let body_rows: usize = body.iter().map(|l| l.width().div_ceil(inner_width).max(1)).sum();
         let height = (body_rows as u16 + 4).min(area.height);

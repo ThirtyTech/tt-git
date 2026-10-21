@@ -661,30 +661,168 @@ pub enum StashScope {
     All,
     /// Only what's staged (`--staged`, git 2.35).
     Staged,
+    /// Only unstaged and untracked changes; the staged ones stay staged
+    /// and out of the stash. git has no flag for this, see
+    /// [`Repo::stash_push`].
+    Unstaged,
     /// Everything, leaving the staged changes in place (`--keep-index`).
     KeepStaged,
     /// Changes to these paths, untracked ones included.
     Paths(Vec<String>),
 }
 
+/// The message on the stash [`StashScope::Unstaged`] parks the staged
+/// changes in while it stashes the rest. It's popped straight back, so
+/// it's only ever seen if that fails.
+pub const STAGED_ASIDE: &str = "tt-git: staged changes set aside";
+
+/// `path` as a pathspec that matches only that path, so a file called
+/// `a[b].txt` doesn't also stash `ab.txt`.
+fn literal(path: &str) -> String {
+    format!(":(literal){path}")
+}
+
 impl Repo {
     /// Stashes `scope`'s changes, with `message` if given.
+    ///
+    /// [`StashScope::Unstaged`] runs `git stash push --staged` to set the
+    /// staged changes aside, `git stash push --include-untracked` for the
+    /// rest, then `git stash pop --index` on the first stash to put the
+    /// staged changes back. With nothing staged it's a plain stash.
     pub fn stash_push(&self, message: Option<&str>, scope: &StashScope) -> Result<String> {
-        let mut args = vec!["stash", "push"];
         match scope {
-            StashScope::All => args.push("--include-untracked"),
-            StashScope::Staged => args.push("--staged"),
-            StashScope::KeepStaged => args.extend(["--include-untracked", "--keep-index"]),
-            StashScope::Paths(_) => args.push("--include-untracked"),
+            StashScope::All => self.stash_cmd(&["--include-untracked"], message, &[]).map(text),
+            StashScope::KeepStaged => self
+                .stash_cmd(&["--include-untracked", "--keep-index"], message, &[])
+                .map(text),
+            StashScope::Staged => self.stash_staged(message),
+            StashScope::Unstaged => self.stash_unstaged(message),
+            StashScope::Paths(paths) => self.stash_paths(message, paths),
         }
+    }
+
+    fn stash_cmd(&self, flags: &[&str], message: Option<&str>, paths: &[String]) -> Result<GitOutput> {
+        let mut args: Vec<String> = ["stash", "push"].iter().chain(flags).map(|s| s.to_string()).collect();
         if let Some(message) = message {
-            args.extend(["-m", message]);
+            args.extend(["-m".to_string(), message.to_string()]);
         }
-        if let StashScope::Paths(paths) = scope {
-            args.push("--");
-            args.extend(paths.iter().map(String::as_str));
+        if !paths.is_empty() {
+            args.push("--".into());
+            args.extend(paths.iter().map(|p| literal(p)));
         }
-        self.git().run(&args).map(text)
+        self.git().run(&args)
+    }
+
+    fn stash_staged(&self, message: Option<&str>) -> Result<String> {
+        let before = self.stash_tip();
+        self.stash_cmd(&["--staged"], message, &[])
+            .map(text)
+            .map_err(|e| self.staged_failure(e, before.as_deref()))
+    }
+
+    /// Explains a failed `git stash push --staged`. When the staged and
+    /// unstaged changes touch the same lines, git can't take the staged
+    /// ones out of the working tree: it says "Cannot remove worktree
+    /// changes" and leaves the files alone, but it has already saved a
+    /// stash by then. That stash only duplicates what's still in the
+    /// working tree, so it's dropped.
+    fn staged_failure(&self, e: GitError, before: Option<&str>) -> GitError {
+        let stderr = e.stderr().unwrap_or_default();
+        if stderr.contains("unknown option") && stderr.contains("staged") {
+            return GitError::Refused(
+                "stashing staged or unstaged changes on their own needs git 2.35 or newer".into(),
+            );
+        }
+        if stderr.contains("Cannot remove worktree changes") {
+            let tip = self.stash_tip();
+            if tip.is_some()
+                && tip.as_deref() != before
+                && let Err(drop) = self.stash_drop(0)
+            {
+                tracing::warn!("dropping the stash a failed --staged push left behind failed: {drop}");
+            }
+            return GitError::Refused(
+                "the staged and unstaged changes overlap, so git can't stash them apart; \
+                 stage or unstage the rest of the file, or stash everything"
+                    .into(),
+            );
+        }
+        e
+    }
+
+    fn stash_unstaged(&self, message: Option<&str>) -> Result<String> {
+        let entries = self.status()?.entries;
+        if !entries.iter().any(|e| e.has_unstaged()) {
+            return Err(GitError::Refused("no unstaged changes to stash".into()));
+        }
+        if !entries.iter().any(|e| e.has_staged()) {
+            return self.stash_push(message, &StashScope::All);
+        }
+        let before = self.stash_tip();
+        self.stash_cmd(&["--staged"], Some(STAGED_ASIDE), &[])
+            .map_err(|e| self.staged_failure(e, before.as_deref()))?;
+        let Some(aside) = self.stash_tip().filter(|tip| Some(tip) != before.as_ref()) else {
+            return Err(GitError::Refused("git didn't stash the staged changes".into()));
+        };
+        let pushed = self.stash_cmd(&["--include-untracked"], message, &[]);
+        // The staged changes are stash@{1} under the new stash, or still
+        // stash@{0} if that push failed or saved nothing.
+        let at = if self.stash_tip().as_deref() == Some(aside.as_str()) {
+            0
+        } else {
+            1
+        };
+        let name = format!("stash@{{{at}}}");
+        let restored = match self.git().run(&["rev-parse", "-q", "--verify", name.as_str()]) {
+            Ok(out) if out.stdout_str() == aside => {
+                self.git().run(&["stash", "pop", "--index", name.as_str()]).map(|_| ())
+            }
+            _ => Err(GitError::Refused(format!("{name} isn't the stash tt-git just made"))),
+        };
+        if let Err(e) = restored {
+            let why = match e.stderr().map(str::trim) {
+                Some(stderr) if !stderr.is_empty() => stderr.to_string(),
+                _ => e.to_string(),
+            };
+            return Err(GitError::Refused(format!(
+                "couldn't put the staged changes back; they're on the Stash tab as \"{STAGED_ASIDE}\": {why}"
+            )));
+        }
+        pushed.map(text)
+    }
+
+    /// git can't stash a staged deletion by path (the old side of a
+    /// staged rename is one): it saves the stash, then fails to find the
+    /// file and leaves everything in place. Unstaging the deletion first
+    /// makes it an unstaged one, which stashes fine; popping the stash
+    /// brings the file back deleted but not staged.
+    fn stash_paths(&self, message: Option<&str>, paths: &[String]) -> Result<String> {
+        if !self.head_is_unborn() {
+            let specs: Vec<String> = paths.iter().map(|p| literal(p)).collect();
+            let mut args = vec![
+                "diff",
+                "--cached",
+                "--no-renames",
+                "--name-only",
+                "-z",
+                "--diff-filter=D",
+                "--",
+            ];
+            args.extend(specs.iter().map(String::as_str));
+            let out = self.git().run(&args)?;
+            let deleted: Vec<String> = out
+                .stdout_str()
+                .split('\0')
+                .filter(|p| !p.is_empty())
+                .map(literal)
+                .collect();
+            if !deleted.is_empty() {
+                let mut args = vec!["restore", "--staged", "--"];
+                args.extend(deleted.iter().map(String::as_str));
+                self.git().run(&args)?;
+            }
+        }
+        self.stash_cmd(&["--include-untracked"], message, paths).map(text)
     }
 
     /// Applies `stash@{index}` to the working tree, dropping it afterwards

@@ -118,7 +118,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `a` | stage everything (or unstage, if all staged) |
 | | `d` | discard changes to the file (asks first) |
 | | `c` / `A` | commit / amend keeping the message |
-| | `s` | stash: everything, only what's staged, everything but leave staged changes in place, or just the selected file (`tab` in the dialog picks; the message is optional) |
+| | `s` | stash: everything, only what's staged, only what isn't staged, everything but leave staged changes in place, or just the selected file (`tab` in the dialog picks; the message is optional) |
 | | `e` | open the file in your editor at its first change (a conflicted file: at its first conflict marker) |
 | | `C` / `X` | continue / abort a merge, rebase or cherry-pick |
 | stash tab | `space` / `a` | pop / apply the selected stash (pop drops it once applied) |
