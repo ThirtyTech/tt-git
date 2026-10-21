@@ -48,6 +48,8 @@ struct Level {
     syntax: LineTokens,
     /// Each commit's index into the theme's heat colors, by age.
     heat: Vec<usize>,
+    /// Each commit's index into the theme's author colors.
+    authors: Vec<usize>,
     cursor: Cursor,
     /// The line (from 1) to select once the blame arrives.
     want_line: u32,
@@ -65,6 +67,7 @@ impl Level {
             blame: None,
             syntax: Vec::new(),
             heat: Vec::new(),
+            authors: Vec::new(),
             cursor: Cursor::default(),
             want_line: line,
             center: true,
@@ -184,6 +187,7 @@ impl BlameView {
         };
         if let Ok(blame) = &result {
             level.heat = heat(blame);
+            level.authors = author_colors(blame);
             let last = blame.lines.len().saturating_sub(1);
             level.cursor.selected = (level.want_line.max(1) as usize - 1).min(last);
             level.center = true;
@@ -422,7 +426,7 @@ impl BlameView {
             if uncommitted {
                 spans.push(Span::styled(fit_right("You", WHO_WIDTH), theme.blame_uncommitted));
             } else {
-                let style = Style::new().fg(author_color(&commit.author, theme));
+                let style = Style::new().fg(author_color(level.authors.get(line.commit).copied(), theme));
                 spans.push(Span::styled(fit_right(&commit.author, WHO_WIDTH), style));
             }
             spans.push(Span::raw(" "));
@@ -552,13 +556,52 @@ fn heat_color(bucket: Option<usize>, theme: &Theme) -> Color {
     theme.blame_heat[bucket.unwrap_or(last).min(last)]
 }
 
-/// The author's color: the same for the same name, every time (FNV-1a, not
-/// the std hasher, whose output may change between Rust releases).
-fn author_color(author: &str, theme: &Theme) -> Color {
+/// Each commit's index into the theme's author colors. Every author starts
+/// from a slot hashed from their name, so they usually get the same color in
+/// every file, and moves on to the next free one if another author in this
+/// file already has it. Authors are placed in name order, so the result
+/// doesn't depend on where in the file they appear. Only with more authors
+/// than colors do two share one.
+fn author_colors(blame: &Blame) -> Vec<usize> {
+    let slots = Theme::default().blame_authors.len();
+    let mut names: Vec<&str> = blame
+        .commits
+        .iter()
+        .filter(|c| !c.is_uncommitted())
+        .map(|c| c.author.as_str())
+        .collect();
+    names.sort_unstable();
+    names.dedup();
+    let mut taken = vec![false; slots];
+    let mut slot_of = HashMap::with_capacity(names.len());
+    for name in names {
+        let home = author_slot(name, slots);
+        let slot = (0..slots)
+            .map(|step| (home + step) % slots)
+            .find(|s| !taken[*s])
+            .unwrap_or(home);
+        taken[slot] = true;
+        slot_of.insert(name, slot);
+    }
+    blame
+        .commits
+        .iter()
+        .map(|c| slot_of.get(c.author.as_str()).copied().unwrap_or(0))
+        .collect()
+}
+
+/// The slot an author starts from: the same for the same name, every time
+/// (FNV-1a, not the std hasher, whose output may change between Rust
+/// releases).
+fn author_slot(author: &str, slots: usize) -> usize {
     let hash = author.bytes().fold(0xcbf2_9ce4_8422_2325_u64, |h, b| {
         (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
     });
-    theme.blame_authors[(hash % theme.blame_authors.len() as u64) as usize]
+    (hash % slots as u64) as usize
+}
+
+fn author_color(slot: Option<usize>, theme: &Theme) -> Color {
+    theme.blame_authors[slot.unwrap_or(0) % theme.blame_authors.len()]
 }
 
 #[cfg(test)]
@@ -590,14 +633,43 @@ mod tests {
         assert_eq!(heat(&one), vec![0]);
     }
 
+    fn by(oid: char, author: &str) -> BlameCommit {
+        BlameCommit {
+            author: author.to_string(),
+            ..commit(oid, 100)
+        }
+    }
+
     #[test]
-    fn an_author_keeps_their_color() {
-        let theme = Theme::default();
-        assert_eq!(author_color("Ada Park", &theme), author_color("Ada Park", &theme));
-        let colors: std::collections::HashSet<_> = ["Ada Park", "Sam Rivera", "Mia Chen", "Linus Brandt"]
+    fn authors_in_a_file_get_different_colors() {
+        let slots = Theme::default().blame_authors.len();
+        let names: Vec<String> = (0..slots).map(|i| format!("Author {i}")).collect();
+        let oids = "abcdefghijklmnopqrstuvwxyz";
+        // Each author twice, so their commits share a color.
+        let commits: Vec<_> = names
             .iter()
-            .map(|a| format!("{:?}", author_color(a, &theme)))
+            .chain(&names)
+            .zip(oids.chars().cycle())
+            .map(|(name, oid)| by(oid, name))
             .collect();
-        assert!(colors.len() > 1);
+        let blame = Blame {
+            commits,
+            ..Blame::default()
+        };
+        let colors = author_colors(&blame);
+        let distinct: std::collections::HashSet<_> = colors[..slots].iter().collect();
+        assert_eq!(distinct.len(), slots);
+        assert_eq!(colors[..slots], colors[slots..]);
+        assert_eq!(author_colors(&blame), colors);
+    }
+
+    #[test]
+    fn an_author_keeps_their_color_without_a_clash() {
+        let alone = Blame {
+            commits: vec![by('a', "Ada Park")],
+            ..Blame::default()
+        };
+        let slots = Theme::default().blame_authors.len();
+        assert_eq!(author_colors(&alone), vec![author_slot("Ada Park", slots)]);
     }
 }
