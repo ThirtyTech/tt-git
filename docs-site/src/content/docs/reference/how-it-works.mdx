@@ -440,6 +440,12 @@ The porcelain output gives each commit's author, date and summary, and the
 was in that commit's parent, under its old name if it was renamed. A commit
 with no `previous` added the file, so there's nothing to step back to.
 
+Stepping back or forward doesn't run git to find the line in the other
+version. tt-git diffs the two blames' text in memory (a line diff, like
+`git diff`'s) and follows the selected line through it. Past a thousand
+added and removed lines it gives up on diffing and keeps the line's place
+in the file instead.
+
 The commit message that <kbd>space</kbd> shows is
 `git show -s --format=%b <commit> --`, loaded for the selected line's commit
 and kept while blame is open. <kbd>enter</kbd> opens the commit with the

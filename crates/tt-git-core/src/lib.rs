@@ -19,7 +19,7 @@ pub mod repo;
 pub mod time;
 pub mod undo;
 
-pub use blame::{Blame, BlameCommit, BlameLine};
+pub use blame::{Blame, BlameCommit, BlameLine, follow_line};
 pub use branches::{AheadBehind, BaseBranches, BranchEntry, BranchState, CheckoutPlan};
 pub use git::{GitCli, GitError};
 pub use ignored::IgnoreRules;

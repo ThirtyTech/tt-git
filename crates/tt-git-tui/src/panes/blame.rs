@@ -1,6 +1,7 @@
 //! Blaming one file: when each line last changed, who changed it and in
 //! which commit, reading right to left from the code. `[` steps back to the
 //! file as it was before the selected line's commit; `]` comes forward again.
+//! Both keep the selected line by its text, on the same row of the screen.
 
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -11,7 +12,7 @@ use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use tt_git_core::time::{SharedClock, clock_time, relative};
-use tt_git_core::{Blame, BlameCommit};
+use tt_git_core::{Blame, BlameCommit, follow_line};
 
 use super::DateStyle;
 use crate::action::Action;
@@ -49,10 +50,20 @@ struct Level {
     /// Each commit's index into the theme's heat colors, by age.
     heat: Vec<usize>,
     cursor: Cursor,
-    /// The line (from 1) to select once the blame arrives.
+    /// The line (from 1) to select once the blame arrives, when there's no
+    /// newer version to follow it from.
     want_line: u32,
-    /// Put the selection a third of the way down at the next draw.
-    center: bool,
+    /// Where to put the selection on screen at the next draw.
+    place: Option<Place>,
+}
+
+/// Where the next draw puts the selected line.
+#[derive(Debug, Clone, Copy)]
+enum Place {
+    /// A third of the way down.
+    Center,
+    /// On this row, where it was in the version it came from.
+    Row(usize),
 }
 
 impl Level {
@@ -67,7 +78,7 @@ impl Level {
             heat: Vec::new(),
             cursor: Cursor::default(),
             want_line: line,
-            center: true,
+            place: Some(Place::Center),
         }
     }
 
@@ -85,6 +96,22 @@ impl Level {
 
     fn len(&self) -> usize {
         self.blame().map_or(0, |b| b.lines.len())
+    }
+
+    fn texts(&self) -> Vec<&str> {
+        self.blame()
+            .map_or_else(Vec::new, |b| b.lines.iter().map(|l| l.text.as_str()).collect())
+    }
+
+    fn selected(&self) -> Option<(&BlameCommit, &str, u32)> {
+        let blame = self.blame()?;
+        let line = blame.lines.get(self.cursor.selected)?;
+        Some((&blame.commits[line.commit], &blame.paths[line.path], line.orig_line))
+    }
+
+    /// The selected line's row on screen as of the last draw.
+    fn row(&self) -> usize {
+        self.cursor.selected.saturating_sub(self.cursor.offset)
     }
 }
 
@@ -132,6 +159,16 @@ impl BlameView {
         self.levels.last_mut().expect("a blame view has a level")
     }
 
+    /// The version on screen: the newest, or while an older one `[` asked
+    /// for is loading, the one it steps back from.
+    fn shown(&self) -> usize {
+        let last = self.levels.len() - 1;
+        if self.levels[last].blame.is_some() {
+            return last;
+        }
+        self.levels.iter().rposition(|l| l.blame().is_some()).unwrap_or(last)
+    }
+
     pub fn path(&self) -> &str {
         &self.level().path
     }
@@ -170,23 +207,29 @@ impl BlameView {
     /// The selected line's commit, the file's path in that commit and the
     /// line's number there.
     pub fn selected(&self) -> Option<(&BlameCommit, &str, u32)> {
-        let level = self.level();
-        let blame = level.blame()?;
-        let line = blame.lines.get(level.cursor.selected)?;
-        Some((&blame.commits[line.commit], &blame.paths[line.path], line.orig_line))
+        self.level().selected()
     }
 
     /// Takes blame load `id`'s result. Returns whether it was one of this
     /// view's.
     pub fn set_blame(&mut self, id: u64, result: Result<Blame, String>, syntax: LineTokens, ctx: &Ctx) -> bool {
-        let Some(level) = self.levels.iter_mut().find(|l| l.id == id) else {
+        let Some(index) = self.levels.iter().position(|l| l.id == id) else {
             return false;
         };
+        let (newer, rest) = self.levels.split_at_mut(index);
+        let level = &mut rest[0];
         if let Ok(blame) = &result {
             level.heat = heat(blame);
             let last = blame.lines.len().saturating_sub(1);
             level.cursor.selected = (level.want_line.max(1) as usize - 1).min(last);
-            level.center = true;
+            level.place = Some(Place::Center);
+            // Stepped back: follow the newer version's selected line by its
+            // text, and keep it where it was on screen.
+            if let Some(newer) = newer.last().filter(|n| n.blame().is_some()) {
+                let to: Vec<&str> = blame.lines.iter().map(|l| l.text.as_str()).collect();
+                level.cursor.selected = follow_line(&newer.texts(), &to, newer.cursor.selected);
+                level.place = Some(Place::Row(newer.row()));
+            }
         }
         level.blame = Some(result);
         level.syntax = syntax;
@@ -253,7 +296,13 @@ impl BlameView {
             Command::BlameBack => self.step_back(ctx),
             Command::BlameForward => {
                 if self.levels.len() > 1 {
-                    self.levels.pop();
+                    let older = self.levels.pop().expect("more than one level");
+                    // Bring the line selected back there forward with it.
+                    let newer = self.level_mut();
+                    if older.blame().is_some() && newer.blame().is_some() {
+                        newer.cursor.selected = follow_line(&older.texts(), &newer.texts(), older.cursor.selected);
+                        newer.place = Some(Place::Row(older.row()));
+                    }
                     self.want_message(ctx);
                 } else {
                     ctx.emit(Action::Notify("this is the newest version".into()));
@@ -335,7 +384,7 @@ impl BlameView {
     }
 
     pub fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
-        let commit_rows = if self.show_commit && self.level().len() > 0 {
+        let commit_rows = if self.show_commit && self.levels[self.shown()].len() > 0 {
             COMMIT_ROWS.min(area.height / 2)
         } else {
             0
@@ -355,7 +404,8 @@ impl BlameView {
         let dates = self.dates;
         let clock = self.clock.clone();
         let height = area.height as usize;
-        let level = self.levels.last_mut().expect("a blame view has a level");
+        let shown = self.shown();
+        let level = &mut self.levels[shown];
         level.cursor.height = height;
         match &level.blame {
             None => {
@@ -369,10 +419,15 @@ impl BlameView {
             }
             Some(Ok(_)) => {}
         }
-        if std::mem::take(&mut level.center) {
-            // A third of the way down, without scrolling past the end.
-            let last_page = level.len().saturating_sub(height);
-            level.cursor.offset = level.cursor.selected.saturating_sub(height / 3).min(last_page);
+        match level.place.take() {
+            Some(Place::Center) => {
+                // A third of the way down, without scrolling past the end.
+                let last_page = level.len().saturating_sub(height);
+                level.cursor.offset = level.cursor.selected.saturating_sub(height / 3).min(last_page);
+            }
+            // Where it was, even if that leaves room below the end.
+            Some(Place::Row(row)) => level.cursor.offset = level.cursor.selected.saturating_sub(row),
+            None => {}
         }
         level.cursor.scroll_into_view(height);
         let level = &*level;
@@ -462,8 +517,9 @@ impl BlameView {
 
     /// The selected line's commit: subject, who and when, and its message.
     fn draw_commit(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        let Some((commit, _, _)) = self.selected() else { return };
-        let blame = self.blame().expect("a line is selected");
+        let level = &self.levels[self.shown()];
+        let Some((commit, _, _)) = level.selected() else { return };
+        let blame = level.blame().expect("a line is selected");
         let index = blame.commits.iter().position(|c| c.oid == commit.oid).unwrap_or(0);
         let count = blame.lines_from(index);
         let title = if commit.is_uncommitted() {
