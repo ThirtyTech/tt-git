@@ -1,5 +1,6 @@
 //! Blaming a file: opening it from the status pane and from a commit, the
-//! commit behind a line and back, stepping back past a commit, dates.
+//! commit behind a line and back, stepping back past a commit, dates,
+//! searching the code.
 
 use tt_git_testkit::{Sandbox, TestDriver};
 use tt_git_tui::Config;
@@ -251,6 +252,18 @@ fn long_file() -> Sandbox {
     sb
 }
 
+/// notes.txt blamed from the status pane, its last line changed in the
+/// working tree.
+fn blame_notes() -> (Sandbox, TestDriver) {
+    let sb = Sandbox::new();
+    let notes = "alpha one\nbeta two\nAlpha three\ngamma four\nalpha five\ndelta six\n";
+    sb.commit_file("notes.txt", notes, "Add notes");
+    sb.write("notes.txt", &notes.replace("six", "SIX"));
+    let mut t = TestDriver::with_size(Config::default(), &sb, 120, 20);
+    blame_from_status(&mut t);
+    (sb, t)
+}
+
 fn selected_line(t: &TestDriver) -> usize {
     t.app().details().blame().unwrap().selected_line()
 }
@@ -398,4 +411,118 @@ fn brackets_follow_the_line_by_its_text_and_keep_its_row() {
     assert_eq!(blame.depth(), 1);
     assert_eq!(blame.selected_line(), 47);
     assert_eq!(row_of(&t, " 47 line 42"), row + 2);
+}
+
+#[test]
+fn slash_searches_as_you_type_and_n_steps_through_the_matches() {
+    let (_sb, mut t) = blame_notes();
+    t.press("j").press("/");
+    assert!(
+        t.pane_title(PaneId::Details).contains("2/6 /█─"),
+        "{}",
+        t.pane_title(PaneId::Details)
+    );
+    // From line 2: the first "gam" is on line 4.
+    t.type_text("gam");
+    assert_eq!(selected_line(&t), 4);
+    // Lower case ignores case: line 3's "Alpha" matches too, and it's the
+    // first match from line 2.
+    t.press("backspace")
+        .press("backspace")
+        .press("backspace")
+        .type_text("alpha");
+    assert_eq!(selected_line(&t), 3);
+    assert!(
+        t.pane_title(PaneId::Details).contains(" /alpha█ 2/3"),
+        "{}",
+        t.pane_title(PaneId::Details)
+    );
+    t.press("enter");
+    let title = t.pane_title(PaneId::Details);
+    assert!(title.contains("3/6 /alpha 2/3"), "{title}");
+
+    // Keys are commands again: n and N go through the matches, round the end.
+    t.press("n");
+    assert_eq!(selected_line(&t), 5);
+    t.press("n");
+    assert_eq!(selected_line(&t), 1);
+    assert_eq!(t.app().notice(), Some("search wrapped to the top"));
+    t.press("N");
+    assert_eq!(selected_line(&t), 5);
+    assert_eq!(t.app().notice(), Some("search wrapped to the bottom"));
+    // Off a match, the title counts them.
+    t.press("j");
+    assert!(t.pane_title(PaneId::Details).contains(" /alpha 3 matches"));
+}
+
+#[test]
+fn a_capital_letter_makes_the_search_match_case() {
+    let (_sb, mut t) = blame_notes();
+    t.press("/").type_text("Alpha").press("enter");
+    assert_eq!(selected_line(&t), 3);
+    assert!(t.pane_title(PaneId::Details).contains(" /Alpha 1/1"));
+    // The changed line is searched as it is in the working tree.
+    t.press("/").type_text("SIX$").press("enter");
+    assert_eq!(selected_line(&t), 6);
+}
+
+#[test]
+fn esc_drops_the_search_and_goes_back_to_the_line() {
+    let (_sb, mut t) = blame_notes();
+    t.press("j").press("/").type_text("delta");
+    assert_eq!(selected_line(&t), 6);
+    t.press("esc");
+    assert_eq!(selected_line(&t), 2);
+    assert!(!t.pane_title(PaneId::Details).contains(" /"));
+    // Still in blame: esc only closed the search.
+    assert!(t.app().details().blame().is_some());
+    t.press("n");
+    assert_eq!(t.app().notice(), Some("nothing to search for yet"));
+}
+
+#[test]
+fn a_bad_regex_or_no_match_leaves_the_selection_alone() {
+    let (_sb, mut t) = blame_notes();
+    t.press("j").press("/").type_text("be(");
+    assert_eq!(selected_line(&t), 2);
+    assert!(t.pane_title(PaneId::Details).contains(" /be(█ invalid regex"));
+    t.press("enter");
+    assert!(t.app().notice().unwrap().starts_with("invalid regex:"));
+    assert!(!t.pane_title(PaneId::Details).contains(" /"));
+
+    t.press("j").press("/").type_text("zeta").press("enter");
+    assert_eq!(selected_line(&t), 3);
+    assert!(t.pane_title(PaneId::Details).contains(" /zeta no match"));
+    t.press("n");
+    assert_eq!(t.app().notice(), Some("no match for /zeta"));
+}
+
+#[test]
+fn matches_are_marked_in_the_code() {
+    let (_sb, mut t) = blame_notes();
+    t.press("/").type_text("a f").press("enter");
+    let theme = tt_git_tui::theme::Theme::default();
+    let (x, y) = t.find_text("alpha five").expect("on screen");
+    let bg = |dx: u16| t.buffer()[(x + dx, y)].bg;
+    assert_eq!(bg(4), theme.search_match.bg.unwrap());
+    assert_eq!(bg(6), theme.search_match.bg.unwrap());
+    assert_ne!(bg(3), theme.search_match.bg.unwrap());
+    assert_ne!(bg(7), theme.search_match.bg.unwrap());
+}
+
+#[test]
+fn the_search_carries_over_when_stepping_back() {
+    let (_sb, mut t) = blame_notes();
+    // Line 6 isn't committed: before it, as of HEAD, it says "six".
+    t.press("/").type_text("six").press("enter");
+    assert_eq!(selected_line(&t), 6);
+    t.press("[").wait_idle();
+    assert_eq!(t.app().details().blame().unwrap().depth(), 2);
+    assert!(
+        t.pane_title(PaneId::Details).contains(" /six 1/1"),
+        "{}",
+        t.pane_title(PaneId::Details)
+    );
+    t.press("]");
+    assert!(t.pane_title(PaneId::Details).contains(" /six 1/1"));
 }

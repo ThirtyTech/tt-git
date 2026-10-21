@@ -154,6 +154,8 @@ command palette, which lists built-in commands and plugin actions.
 | | `enter` | open the line's commit fullscreen, scrolled to the line (`b` there blames another of its files; `esc` back) |
 | | `space` | show / hide the line's commit: author, date, how many lines it gave this file, full message |
 | | `[` / `]` | step back to the file as it was before the line's commit / forward again |
+| | `/` | search the code with a regex, jumping as you type (`enter` keeps it, `esc` drops it) |
+| | `n` / `N` | next / previous matching line |
 | | `t` | ages ↔ local dates and times (shared with the graph) |
 | | `e` / `c` | open the file in your editor at the line / copy the line's commit hash |
 | | `esc` | back to where blame was opened from |

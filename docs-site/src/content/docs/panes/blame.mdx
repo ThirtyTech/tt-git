@@ -1,6 +1,6 @@
 ---
 title: Blame
-description: "See who last changed each line of a file, when and in which commit, and step back through its history."
+description: "See who last changed each line of a file, when and in which commit, search its code, and step back through its history."
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -105,6 +105,41 @@ If you're used to vim, these work too:
 While blame is focused, the digits count lines, so <kbd>1</kbd> to <kbd>4</kbd> don't switch panes.
 Use <kbd>esc</kbd> or <kbd>tab</kbd> to leave.
 
+## Searching the code
+
+Press <kbd>/</kbd> and type a regular expression to find a line. The search shows in the title as
+you type, and blame jumps to the first matching line from where you started, going round to the top
+when there's none below:
+
+```text
+Blame src/app.rs at working tree  ‹ Status 120/348 /fn draw█ 2/5
+```
+
+`2/5` says you're on the second of five matching lines. Every match is highlighted in the code.
+
+<Screenshot name="blame-search" alt="Blame searching for res\.status, on the second of four matching lines, each match highlighted" />
+
+- <kbd>enter</kbd> keeps the search. The title still shows it, and the keys work as usual again.
+- <kbd>esc</kbd> drops the search and goes back to the line you were on.
+- <kbd>backspace</kbd> deletes a character.
+
+Then <kbd>n</kbd> goes to the next matching line and <kbd>N</kbd> to the previous one. Past the
+last match they go round to the first, and the help bar says `search wrapped to the top` (or
+`to the bottom`).
+
+The search ignores case unless the pattern has a capital letter: `todo` finds `TODO` and `Todo`,
+but `Todo` finds only `Todo`. Put `(?i)` at the start to ignore case anyway, or `(?-i)` to match it
+anyway. The syntax is the [Rust `regex` crate's](https://docs.rs/regex/latest/regex/#syntax), much
+like other languages' regular expressions without look-around or backreferences. Each line is
+searched on its own.
+
+While the pattern doesn't make a valid regex, for example `foo(`, the title says `invalid regex`
+and the selection stays put. <kbd>enter</kbd> on it drops the search and the help bar says why.
+When nothing matches, the title says `no match` and <kbd>n</kbd> says `no match for /foo`.
+
+The search stays when you [step back](#stepping-back) or forward again, and finds its matches in
+the version you're looking at.
+
 ## The commit behind a line
 
 <Screenshot name="blame-commit" alt="The commit behind a blamed line, opened fullscreen with the line marked in its diff" />
@@ -208,6 +243,8 @@ The details follow the selection as you move.
 | <kbd>space</kbd> | Show / hide the line's commit details |
 | <kbd>[</kbd> | Step back past the line's commit |
 | <kbd>]</kbd> | Forward again |
+| <kbd>/</kbd> | Search the code with a regex |
+| <kbd>n</kbd> <kbd>N</kbd> | Next / previous matching line |
 | <kbd>t</kbd> | Ages ↔ dates and times |
 | <kbd>e</kbd> | Open the file in your editor at the line |
 | <kbd>c</kbd> | Copy the line's commit hash |

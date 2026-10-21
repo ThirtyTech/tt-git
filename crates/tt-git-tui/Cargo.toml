@@ -12,6 +12,7 @@ futures.workspace = true
 notify-debouncer-mini = "0.7.0"
 portable-pty = "0.9.0"
 ratatui.workspace = true
+regex.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 syntect.workspace = true

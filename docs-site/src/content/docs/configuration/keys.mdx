@@ -161,6 +161,7 @@ Every command you can bind, with its default keys:
 | `open_commit` | <kbd>enter</kbd> | blame |
 | `go_to_line` | <kbd>ctrl+g</kbd> | blame |
 | `blame_back`, `blame_forward` | <kbd>[</kbd>, <kbd>]</kbd> | blame |
+| `search`, `search_next`, `search_prev` | <kbd>/</kbd>, <kbd>n</kbd>, <kbd>N</kbd> | blame |
 
 A command does nothing in a context it isn't meant for, so binding, say,
 `commit` in `[keys.graph]` has no effect.
@@ -176,5 +177,7 @@ A few keys belong to dialogs and lists rather than to a pane, and are fixed:
   <kbd>ctrl+p</kbd>/<kbd>ctrl+n</kbd> move.
 - In the help popup: type to search, <kbd>backspace</kbd> and
   <kbd>ctrl+u</kbd> edit the search, <kbd>esc</kbd> closes.
+- While you type a filter or a blame search: <kbd>backspace</kbd> deletes,
+  <kbd>enter</kbd> keeps it and <kbd>esc</kbd> drops it.
 - In plugin panes, the keys in `[plugins] pane_release_keys` (default
   <kbd>ctrl+\\</kbd> and <kbd>f12</kbd>); every other key goes to the plugin.

@@ -43,6 +43,8 @@ pub struct Theme {
     pub blame_authors: [Color; 16],
     /// Blame's lines not committed yet: their stripe and author.
     pub blame_uncommitted: Style,
+    /// Text a search matched.
+    pub search_match: Style,
 }
 
 impl Default for Theme {
@@ -116,6 +118,7 @@ impl Default for Theme {
                 Color::Rgb(175, 188, 200),
             ],
             blame_uncommitted: Style::new().fg(Color::Green).add_modifier(Modifier::BOLD),
+            search_match: Style::new().fg(Color::Black).bg(Color::Yellow),
         }
     }
 }

@@ -2678,6 +2678,7 @@ dependencies = [
  "notify-debouncer-mini",
  "portable-pty",
  "ratatui",
+ "regex",
  "serde",
  "serde_json",
  "syntect",

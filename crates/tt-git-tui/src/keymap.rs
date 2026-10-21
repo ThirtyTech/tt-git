@@ -267,6 +267,9 @@ pub enum Command {
     BlameBack,
     BlameForward,
     GoToLine,
+    Search,
+    SearchNext,
+    SearchPrev,
 }
 
 impl Command {
@@ -343,6 +346,9 @@ impl Command {
             Command::BlameBack => "step back past commit",
             Command::BlameForward => "forward again",
             Command::GoToLine => "go to line",
+            Command::Search => "search",
+            Command::SearchNext => "next match",
+            Command::SearchPrev => "prev match",
         }
     }
 }
@@ -518,6 +524,9 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Blame, Command::OpenInEditor, &["e"]),
     (Context::Blame, Command::Copy, &["c"]),
     (Context::Blame, Command::CloseDetails, &["esc"]),
+    (Context::Blame, Command::Search, &["/"]),
+    (Context::Blame, Command::SearchNext, &["n"]),
+    (Context::Blame, Command::SearchPrev, &["N"]),
     (Context::Stage, Command::StageToggle, &["space"]),
     (Context::Stage, Command::Discard, &["d"]),
     (Context::Stage, Command::SwitchSide, &["tab"]),
