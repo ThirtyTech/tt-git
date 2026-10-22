@@ -199,6 +199,21 @@ pub enum Action {
         /// The code, line by line.
         syntax: LineTokens,
     },
+    /// Find the version of `path` before the one at `rev` (the working tree
+    /// when `None`), or with `newest`, after it on the way to the version at
+    /// that rev and path, for blame load `id`.
+    StepBlame {
+        id: u64,
+        rev: Option<String>,
+        path: String,
+        newest: Option<(Option<String>, String)>,
+    },
+    /// The version (rev and path) blame load `id` stepped to; `None` when
+    /// there's none that way.
+    BlameStepped {
+        id: u64,
+        version: Result<Option<(String, String)>, String>,
+    },
     /// Load a commit's full message, for the blame view's commit details.
     LoadCommitMessage(String),
     /// A commit's message below its subject line (empty when there's none).

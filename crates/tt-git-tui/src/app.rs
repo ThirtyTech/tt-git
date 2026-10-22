@@ -946,6 +946,16 @@ impl App {
                     view.set_blame(id, result, syntax, &ctx);
                 }
             }
+            Action::StepBlame { id, rev, path, newest } => {
+                let repo = self.repo.clone();
+                self.ctx.spawn(move || loaders::step_blame(repo, id, rev, path, newest));
+            }
+            Action::BlameStepped { id, version } => {
+                let ctx = self.ctx.clone();
+                if let Some(view) = self.details.blame_mut() {
+                    view.set_version(id, version, &ctx);
+                }
+            }
             Action::LoadCommitMessage(oid) => {
                 let repo = self.repo.clone();
                 self.ctx.spawn(move || loaders::load_commit_message(repo, oid));

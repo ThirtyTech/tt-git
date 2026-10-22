@@ -1,7 +1,8 @@
 //! Blaming one file: when each line last changed, who changed it and in
 //! which commit, reading right to left from the code. `[` steps back to the
 //! file as it was before the selected line's commit; `]` comes forward again.
-//! Both keep the selected line by its text, on the same row of the screen.
+//! `{` and `}` step one commit of the file at a time, back and forward. All
+//! of them keep the selected line by its text, on the same row of the screen.
 //! Digits count, vim style: `42G` goes to line 42, `5j` down five lines.
 //! `/` searches the code for a regex, jumping as you type; `n` and `N` go to
 //! the next and previous matching line.
@@ -43,10 +44,15 @@ const COMMIT_ROWS: u16 = 10;
 /// The largest count digits can type.
 const MAX_COUNT: usize = 9_999_999;
 
-/// One version of the file: the one opened, then one more for each `[`.
+/// One version of the file: the one opened, then one more for each `[`
+/// or `{`.
 #[derive(Debug)]
 struct Level {
     id: u64,
+    /// Which version this is, still to be found from another one's.
+    step: Option<Step>,
+    /// Takes the place of the version below it once loaded, for `}`.
+    replaces: bool,
     /// `None` for the working tree.
     rev: Option<String>,
     /// How the title names `rev`: `working tree`, `HEAD`, `19373b2^`.
@@ -67,6 +73,15 @@ struct Level {
     place: Option<Place>,
 }
 
+/// How to find a version from the one it steps from, for `{` and `}`.
+#[derive(Debug, Clone)]
+struct Step {
+    rev: Option<String>,
+    path: String,
+    /// For `}`: the newest version to step toward, its rev and path.
+    newest: Option<(Option<String>, String)>,
+}
+
 /// Where the next draw puts the selected line.
 #[derive(Debug, Clone, Copy)]
 enum Place {
@@ -80,6 +95,8 @@ impl Level {
     fn new(rev: Option<String>, label: String, path: String, line: u32) -> Self {
         Self {
             id: NEXT_LOAD.fetch_add(1, Ordering::Relaxed),
+            step: None,
+            replaces: false,
             rev,
             label,
             path,
@@ -93,7 +110,35 @@ impl Level {
         }
     }
 
+    /// A version stepped to from `from` with `{`, or with `}` toward
+    /// `newest`, found before it's loaded.
+    fn step(from: &Level, newest: Option<&Level>) -> Self {
+        let step = Step {
+            rev: from.rev.clone(),
+            path: from.path.clone(),
+            newest: newest.map(|n| (n.rev.clone(), n.path.clone())),
+        };
+        let label = if newest.is_some() {
+            "next commit"
+        } else {
+            "previous commit"
+        };
+        let mut level = Self::new(None, label.into(), from.path.clone(), 1);
+        level.replaces = step.newest.is_some();
+        level.step = Some(step);
+        level
+    }
+
     fn load(&self, ctx: &Ctx) {
+        if let Some(step) = &self.step {
+            ctx.emit(Action::StepBlame {
+                id: self.id,
+                rev: step.rev.clone(),
+                path: step.path.clone(),
+                newest: step.newest.clone(),
+            });
+            return;
+        }
         ctx.emit(Action::LoadBlame {
             id: self.id,
             rev: self.rev.clone(),
@@ -340,8 +385,49 @@ impl BlameView {
         }
         level.blame = Some(result);
         level.syntax = syntax;
+        if level.replaces && index > 0 {
+            self.levels.remove(index - 1);
+        }
         self.find_matches();
         self.want_message(ctx);
+        true
+    }
+
+    /// Takes the version blame load `id` stepped to, and loads it. With
+    /// none that way, `{` says so and `}` comes forward to the version
+    /// below. Returns whether it was one of this view's.
+    pub fn set_version(&mut self, id: u64, version: Result<Option<(String, String)>, String>, ctx: &Ctx) -> bool {
+        let Some(index) = self.levels.iter().position(|l| l.id == id) else {
+            return false;
+        };
+        let level = &mut self.levels[index];
+        match version {
+            Ok(Some((rev, path))) => {
+                level.label = if rev.len() == 40 {
+                    rev[..7].to_string()
+                } else {
+                    rev.clone()
+                };
+                level.rev = Some(rev);
+                level.path = path;
+                level.step = None;
+                level.load(ctx);
+            }
+            Ok(None) if level.replaces => {
+                // The next version is the one below: come forward to it.
+                self.levels.remove(index);
+                self.forward(ctx);
+            }
+            Ok(None) => {
+                let path = level.path.clone();
+                self.levels.remove(index);
+                ctx.emit(Action::Notify(format!("no older commit changed {path}")));
+            }
+            Err(why) => {
+                self.levels.remove(index);
+                ctx.emit(Action::Notify(why));
+            }
+        }
         true
     }
 
@@ -415,15 +501,22 @@ impl BlameView {
             Command::BlameBack => self.step_back(ctx),
             Command::BlameForward => {
                 if self.levels.len() > 1 {
-                    let older = self.levels.pop().expect("more than one level");
-                    // Bring the line selected back there forward with it.
-                    let newer = self.level_mut();
-                    if older.blame().is_some() && newer.blame().is_some() {
-                        newer.cursor.selected = follow_line(&older.texts(), &newer.texts(), older.cursor.selected);
-                        newer.place = Some(Place::Row(older.row()));
-                    }
-                    self.find_matches();
-                    self.want_message(ctx);
+                    self.forward(ctx);
+                } else {
+                    ctx.emit(Action::Notify("this is the newest version".into()));
+                }
+            }
+            Command::BlameOlder | Command::BlameNewer if self.loading() => {}
+            Command::BlameOlder => {
+                let older = Level::step(self.level(), None);
+                older.load(ctx);
+                self.levels.push(older);
+            }
+            Command::BlameNewer => {
+                if let [.., newest, from] = &self.levels[..] {
+                    let newer = Level::step(from, Some(newest));
+                    newer.load(ctx);
+                    self.levels.push(newer);
                 } else {
                     ctx.emit(Action::Notify("this is the newest version".into()));
                 }
@@ -592,6 +685,19 @@ impl BlameView {
         if row < level.cursor.height && level.cursor.click(row, len) {
             self.want_message(ctx);
         }
+    }
+
+    /// Drops the version shown for the one below it, bringing the selected
+    /// line with it.
+    fn forward(&mut self, ctx: &Ctx) {
+        let older = self.levels.pop().expect("more than one level");
+        let newer = self.level_mut();
+        if older.blame().is_some() && newer.blame().is_some() {
+            newer.cursor.selected = follow_line(&older.texts(), &newer.texts(), older.cursor.selected);
+            newer.place = Some(Place::Row(older.row()));
+        }
+        self.find_matches();
+        self.want_message(ctx);
     }
 
     /// Blames the file as it was just before the selected line's commit,

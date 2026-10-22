@@ -440,6 +440,28 @@ The porcelain output gives each commit's author, date and summary, and the
 was in that commit's parent, under its old name if it was renamed. A commit
 with no `previous` added the file, so there's nothing to step back to.
 
+<kbd>{'{'}</kbd> and <kbd>{'}'}</kbd> step through the commits that changed the file,
+found with `git log`. Back, from the version at `<rev>` (`HEAD` for the
+working tree):
+
+```sh
+git log --follow --name-only --format="commit %H" -n2 <rev> -- <path>
+```
+
+The first commit listed made the version shown; the second is the one to
+blame next, and `--name-only` gives the file's name there. From a working
+tree where `git status --porcelain -- <path>` shows changes, the first step
+is `HEAD`. Forward, it finds the commit that made the version shown
+(`git log --follow -n1 <rev> -- <path>`), then lists the newer ones up to
+the version it's heading for:
+
+```sh
+git log --follow --name-only --format="commit %H" <commit>..<newer rev> -- <newer path>
+```
+
+and blames the oldest of them. When that's the newer version's own commit,
+it goes back to that version instead.
+
 Stepping back or forward doesn't run git to find the line in the other
 version. tt-git diffs the two blames' text in memory (a line diff, like
 `git diff`'s) and follows the selected line through it. Past a thousand

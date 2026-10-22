@@ -56,7 +56,8 @@ Blame src/app.rs at working tree  ‹ Status 120/348
 
 The version is `working tree`, `HEAD`, a short commit id such as `59f1c2a`, or `59f1c2a^` once
 you've stepped back past a commit. After you [step back](#stepping-back), the `‹ …` names the newer
-version <kbd>]</kbd> returns to instead.
+version <kbd>]</kbd> returns to instead. While <kbd>{'{'}</kbd> or <kbd>{'}'}</kbd> looks for the
+next version, it says `previous commit` or `next commit`.
 
 ## Reading a line
 
@@ -194,6 +195,28 @@ there's nothing earlier to show:
 59f1c2a added src/app.rs: there's nothing before it
 ```
 
+### One commit of the file at a time
+
+<kbd>[</kbd> jumps straight to before the selected line's commit, past every commit that changed
+other lines. To walk the file's history one commit at a time instead, press <kbd>{'{'}</kbd>. It
+shows the file as it was before the newest commit that changed it, whichever lines that commit
+touched, following renames. From a working tree with uncommitted changes to the file, the first
+<kbd>{'{'}</kbd> goes to `HEAD`. The title names each version by its commit, such as `3a9c0e1`.
+
+Press <kbd>{'}'}</kbd> to go forward one commit of the file, toward the newer version below it in
+the title's `‹ …`. When you got here with <kbd>[</kbd>, <kbd>{'}'}</kbd> stops at each commit
+<kbd>[</kbd> jumped over. Once the next version is the one below, <kbd>{'}'}</kbd> goes back to it,
+the same as <kbd>]</kbd>.
+
+Both keep the selected line by its text and on its row, as <kbd>[</kbd> and <kbd>]</kbd> do. At the
+first commit of the file, <kbd>{'{'}</kbd> says:
+
+```text
+no older commit changed src/app.rs
+```
+
+At the version you opened, <kbd>{'}'}</kbd> says `this is the newest version`.
+
 <Aside type="tip">
   If the repository has a `.git-blame-ignore-revs` file at its root, blame skips the commits listed
   in it, such as a big reformat, and shows the commit before them instead. See
@@ -243,6 +266,7 @@ The details follow the selection as you move.
 | <kbd>space</kbd> | Show / hide the line's commit details |
 | <kbd>[</kbd> | Step back past the line's commit |
 | <kbd>]</kbd> | Forward again |
+| <kbd>{'{'}</kbd> <kbd>{'}'}</kbd> | Back / forward one commit of the file |
 | <kbd>/</kbd> | Search the code with a regex |
 | <kbd>n</kbd> <kbd>N</kbd> | Next / previous matching line |
 | <kbd>t</kbd> | Ages ↔ dates and times |
