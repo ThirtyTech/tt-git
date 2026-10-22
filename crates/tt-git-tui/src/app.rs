@@ -2098,7 +2098,10 @@ impl App {
         let block = Block::bordered()
             .border_type(BorderType::Rounded)
             .border_style(self.theme.border_focused)
-            .title(Span::styled(" Keybindings ", self.theme.title_focused));
+            .title(Span::styled(" Keybindings ", self.theme.title_focused))
+            .title_top(
+                Line::styled(concat!(" tt-git ", env!("CARGO_PKG_VERSION"), " "), self.theme.muted).right_aligned(),
+            );
         frame.render_widget(Paragraph::new(lines).block(block), popup);
     }
 }
