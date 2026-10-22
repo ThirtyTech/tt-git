@@ -112,6 +112,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `T` | new tag at the selected commit (`tab` in the dialog: annotated, with a message) |
 | | `M` / `r` / `C` | merge into current / rebase current onto / cherry-pick |
 | | `c` | copy the commit hash |
+| | `]` `[` (or `}` `{`) | next / previous tab in the branches pane, without leaving the graph |
 | branches | `enter` `space` | check out (remote-only branches get a tracking branch) |
 | | `n` `d` `R` | new (`tab` in the dialog: create it in a worktree under `.worktrees/`) / delete (asks before force-deleting unmerged) / rename |
 | | `T` | new tag at the selected branch or tag (`tab` in the dialog: annotated) |
