@@ -67,6 +67,12 @@ fn b_in_status_blames_the_working_tree_and_esc_goes_back() {
     assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
     let title = t.pane_title(PaneId::Details);
     assert!(title.contains("Blame f.ts at working tree  ‹ Status 1/5"), "{title}");
+    // At the right: when the file last changed in a commit, and that it has
+    // changed since.
+    assert!(
+        title.ends_with(" changed 2024-01-01 12:03 AM (23h ago) + uncommitted changes ╮"),
+        "{title}"
+    );
     insta::assert_snapshot!(t.pane_lines(PaneId::Details).join("\n"));
     assert!(t.screen().contains("step back past commit"), "{}", t.screen());
 
@@ -74,6 +80,16 @@ fn b_in_status_blames_the_working_tree_and_esc_goes_back() {
     assert_eq!(t.app().focus(), PaneId::Status);
     assert_eq!(t.app().zoom(), Zoom::Off);
     assert!(t.app().details().blame().is_none());
+}
+
+#[test]
+fn a_narrow_title_leaves_out_the_date() {
+    let r = blamed();
+    let mut t = TestDriver::with_size(Config::default(), &r.sb, 80, 20);
+    blame_from_status(&mut t);
+    let title = t.pane_title(PaneId::Details);
+    assert!(title.contains("Blame f.ts at working tree  ‹ Status 1/5"), "{title}");
+    assert!(!title.contains("changed"), "{title}");
 }
 
 #[test]
@@ -161,6 +177,8 @@ fn brackets_step_back_past_a_commit_and_forward_again() {
         title.contains(&format!("Blame f.ts at {}^  ‹ working tree 2/5", short(&r.shout_b))),
         "{title}"
     );
+    // The file as Ada added it, a minute after the base time.
+    assert!(title.contains(" changed 2024-01-01 12:01 AM (23h ago) "), "{title}");
     t.assert_pane_contains(PaneId::Details, "▌  2 b");
 
     // Ada's commit added the file: there's nothing before it.
@@ -177,6 +195,7 @@ fn brackets_step_back_past_a_commit_and_forward_again() {
     let blame = t.app().details().blame().unwrap();
     assert_eq!((blame.depth(), blame.label()), (1, "working tree"));
     assert_eq!(blame.selected_line(), 2);
+    assert!(t.pane_title(PaneId::Details).contains(" changed 2024-01-01 12:03 AM "));
     t.press("]");
     assert_eq!(t.app().notice(), Some("this is the newest version"));
 }
@@ -225,6 +244,8 @@ fn b_in_a_commit_blames_its_file_as_of_that_commit() {
     assert_eq!(blame.blame().unwrap().lines[4].text, "e");
     let title = t.pane_title(PaneId::Details);
     assert!(title.contains(&format!("‹ Commit {}", short(&r.shout_d))), "{title}");
+    // Committed with no changes since: just the commit's date.
+    assert!(title.contains(" changed 2024-01-01 12:03 AM (23h ago) ╮"), "{title}");
 
     t.press("esc");
     assert_eq!(

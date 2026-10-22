@@ -618,7 +618,16 @@ pub fn load_blame(repo: Repo, id: u64, rev: Option<String>, path: String, highli
         }
         _ => Vec::new(),
     };
-    Action::BlameLoaded { id, result, syntax }
+    let changed = match &result {
+        Ok(_) => repo.file_changed_at(rev.as_deref(), &path).ok().flatten(),
+        Err(_) => None,
+    };
+    Action::BlameLoaded {
+        id,
+        result,
+        syntax,
+        changed,
+    }
 }
 
 /// `oid`'s message below its subject line.

@@ -855,7 +855,19 @@ impl Component for DetailsPane {
         if self.loading || self.blame.as_ref().is_some_and(BlameView::loading) {
             title.push_str(" loading…");
         }
-        let block = pane_block(PaneId::Details, title, focused, theme);
+        // A blame's date goes at the right, where there's room for it.
+        let changed = self
+            .blame
+            .as_ref()
+            .and_then(BlameView::changed)
+            .map(|c| format!(" {c} "));
+        let used = Line::raw(format!("[{}] {title}", PaneId::Details.number())).width() + 4;
+        let mut block = pane_block(PaneId::Details, title, focused, theme);
+        if let Some(changed) = changed
+            && used + Line::raw(changed.as_str()).width() <= area.width as usize
+        {
+            block = block.title_top(Line::styled(changed, theme.date).right_aligned());
+        }
         let inner = block.inner(area);
         frame.render_widget(block, area);
 

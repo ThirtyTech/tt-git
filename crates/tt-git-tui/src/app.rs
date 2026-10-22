@@ -940,10 +940,15 @@ impl App {
                 self.ctx
                     .spawn(move || loaders::load_blame(repo, id, rev, path, highlight));
             }
-            Action::BlameLoaded { id, result, syntax } => {
+            Action::BlameLoaded {
+                id,
+                result,
+                syntax,
+                changed,
+            } => {
                 let ctx = self.ctx.clone();
                 if let Some(view) = self.details.blame_mut() {
-                    view.set_blame(id, result, syntax, &ctx);
+                    view.set_blame(id, result, syntax, changed, &ctx);
                 }
             }
             Action::LoadCommitMessage(oid) => {

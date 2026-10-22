@@ -53,6 +53,8 @@ struct Level {
     label: String,
     path: String,
     blame: Option<Result<Blame, String>>,
+    /// When the file last changed in a commit, as of `rev`.
+    changed: Option<i64>,
     /// The code, line by line.
     syntax: LineTokens,
     /// Each commit's index into the theme's heat colors, by age.
@@ -84,6 +86,7 @@ impl Level {
             label,
             path,
             blame: None,
+            changed: None,
             syntax: Vec::new(),
             heat: Vec::new(),
             authors: Vec::new(),
@@ -316,9 +319,16 @@ impl BlameView {
         self.level().selected()
     }
 
-    /// Takes blame load `id`'s result. Returns whether it was one of this
-    /// view's.
-    pub fn set_blame(&mut self, id: u64, result: Result<Blame, String>, syntax: LineTokens, ctx: &Ctx) -> bool {
+    /// Takes blame load `id`'s result, and when the file last changed in a
+    /// commit as of that version. Returns whether it was one of this view's.
+    pub fn set_blame(
+        &mut self,
+        id: u64,
+        result: Result<Blame, String>,
+        syntax: LineTokens,
+        changed: Option<i64>,
+        ctx: &Ctx,
+    ) -> bool {
         let Some(index) = self.levels.iter().position(|l| l.id == id) else {
             return false;
         };
@@ -339,6 +349,7 @@ impl BlameView {
             }
         }
         level.blame = Some(result);
+        level.changed = changed;
         level.syntax = syntax;
         self.find_matches();
         self.want_message(ctx);
@@ -368,6 +379,23 @@ impl BlameView {
             title.push_str(&format!("  ‹ {}", newer.label));
         }
         title
+    }
+
+    /// When the version shown last changed in a commit, like `changed
+    /// 2026-10-17 01:30 PM (3w ago)`, and in the working tree whether it has
+    /// changed since. `None` until it's loaded, or when no commit has the file.
+    pub fn changed(&self) -> Option<String> {
+        let level = self.level();
+        let changed = level.changed?;
+        let mut text = format!(
+            "changed {} ({} ago)",
+            clock_time(changed, self.clock.utc_offset(changed)),
+            relative(self.clock.now(), changed)
+        );
+        if level.rev.is_none() && level.blame()?.commits.iter().any(BlameCommit::is_uncommitted) {
+            text.push_str(" + uncommitted changes");
+        }
+        Some(text)
     }
 
     /// The selected line and how many there are, like `2/5`, once loaded.

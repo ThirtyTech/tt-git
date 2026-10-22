@@ -198,6 +198,8 @@ pub enum Action {
         result: Result<tt_git_core::Blame, String>,
         /// The code, line by line.
         syntax: LineTokens,
+        /// When the file last changed in a commit, as of the version blamed.
+        changed: Option<i64>,
     },
     /// Load a commit's full message, for the blame view's commit details.
     LoadCommitMessage(String),

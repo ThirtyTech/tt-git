@@ -674,6 +674,13 @@ fn blame_names_the_commit_behind_each_line() {
     assert_eq!(before.lines[1].text, "two");
     assert_eq!(before.commit_of(1).unwrap().previous, None);
 
+    // When the file last changed: as of HEAD, as of the first commit, never.
+    assert_eq!(repo.file_changed_at(None, "f.txt").unwrap(), Some(shout.author_time));
+    let added = before.commit_of(1).unwrap().author_time;
+    assert!(added < shout.author_time);
+    assert_eq!(repo.file_changed_at(Some(&first), "f.txt").unwrap(), Some(added));
+    assert_eq!(repo.file_changed_at(None, "missing.txt").unwrap(), None);
+
     // .git-blame-ignore-revs passes over a commit, to the one before.
     sb.write(".git-blame-ignore-revs", &format!("{second}\n"));
     let ignored = repo.blame(Some("HEAD"), "f.txt").unwrap();

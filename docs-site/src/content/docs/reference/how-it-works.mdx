@@ -440,6 +440,14 @@ The porcelain output gives each commit's author, date and summary, and the
 was in that commit's parent, under its old name if it was renamed. A commit
 with no `previous` added the file, so there's nothing to step back to.
 
+The date at the right of the title, when the version shown last changed,
+comes from one more command alongside each blame (`HEAD` for the working
+tree):
+
+```sh
+git log -1 --format=%at <rev> -- <path>
+```
+
 Stepping back or forward doesn't run git to find the line in the other
 version. tt-git diffs the two blames' text in memory (a line diff, like
 `git diff`'s) and follows the selected line through it. Past a thousand
