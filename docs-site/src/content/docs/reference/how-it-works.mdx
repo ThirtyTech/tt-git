@@ -133,14 +133,19 @@ refresh is 6 to 8 git processes however many branches and tags you have.
 
 Local and remote branches are grouped into one row: a remote branch joins
 the local branch that tracks it, else the one with the same name, else
-becomes a remote-only row. Remote names that contain `/` are handled: the
+becomes a remote-only row. When several local branches track the same remote
+branch, the one with the same name gets it; the others still show their
+ahead and behind counts. Remote names that contain `/` are handled: the
 longest configured remote name that prefixes the ref wins.
 
 A row's activity, which the list is sorted by, is the newest of each ref's
 tip commit date, the last entry in each ref's reflog, and for local
 branches the last `checkout: moving from A to B` entry naming it in
-`HEAD`'s reflog. Reflogs are read straight from `.git/logs/`, and only from
-the end of the file, so this costs no git processes.
+`HEAD`'s reflog. For a remote branch only `update by push` entries count;
+`fetch`, `pull` and `clone` entries are skipped, and so is a remote branch
+whose last 64 KiB of reflog holds no push. Reflogs are read straight from
+`.git/logs/`, and only from the end of the file, so this costs no git
+processes.
 
 ### The status column
 
