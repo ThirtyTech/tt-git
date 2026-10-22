@@ -125,6 +125,37 @@ command. To check UI behavior, use the existing harnesses:
 - `crates/tt-git-tui/tests/` render the app into insta snapshots. Faster, and
   enough for layout and key-handling changes.
 
+## Commit messages
+
+Every commit message starts with a type and a scope:
+
+```
+feat(blame): Step through the file's commits with { and }
+fix(graph): Keep the selection when the filter clears
+docs(stash): Describe stashing individual files
+```
+
+| Type | For |
+|---|---|
+| `feat` | A new feature or user-visible behavior |
+| `fix` | A bug fix |
+| `docs` | `docs-site/`, `README.md`, `docs/` and screenshots only |
+| `refactor` | Code changes that don't change behavior |
+| `test` | Tests only |
+| `perf` | Performance |
+| `chore` | Version bumps, dependencies, tooling, agent skills |
+| `ci` | GitHub workflows |
+
+The scope is the area touched: a pane (`graph`, `blame`, `stash`), a crate
+area (`plugins`, `cli`, `config`) or a tool (`release`, `notion-tasks`).
+The message after the colon starts with a capital letter and says what the
+change does, in the imperative, without a trailing period.
+
+Keep code and docs in separate commits: the code (with its tests and
+snapshots) first, then a `docs(...)` commit for the doc pages and
+screenshots. A merge of a worktree's work uses the type of the work it
+brings in: `git merge --no-ff -m "feat(blame): Merge regex search" <sha>`.
+
 ## Worktrees
 
 [docs/worktrees.md](docs/worktrees.md) covers worktrees in full. In short:

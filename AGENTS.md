@@ -7,7 +7,9 @@ the screenshot pipeline.
 ## The rule
 
 A change to anything a user can see or rely on isn't finished until the docs
-describe it. Update them in the same change, not as a follow-up. That covers:
+describe it. Update them as part of the same piece of work, not as a
+follow-up task, but in their own `docs(...)` commit after the code is
+committed (see "Commit messages" in [CLAUDE.md](CLAUDE.md)). That covers:
 
 - keys and their defaults, in any pane or dialog
 - what a command, pane, dialog or prompt does, including the text it shows
