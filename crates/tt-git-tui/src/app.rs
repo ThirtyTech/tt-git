@@ -1320,8 +1320,10 @@ impl App {
         }
         self.worktree_count = (true, false);
         let repo = self.repo.clone();
-        let paths = self.branches.countable_worktrees();
-        self.ctx.spawn(move || loaders::count_worktree_changes(repo, paths));
+        let worktrees = self.branches.countable_worktree_heads();
+        let base = self.branches.base().map(|b| b.base_ref.clone());
+        self.ctx
+            .spawn(move || loaders::count_worktree_changes(repo, worktrees, base));
     }
 
     /// Measures each worktree's disk space in the background, one job per

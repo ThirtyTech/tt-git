@@ -56,7 +56,10 @@ fn main() {
         ("graph-new-branch", &["j", "n", "text:fix/bell-a11y"]),
         ("graph-new-worktree", &["j", "n", "tab", "text:fix/bell-a11y"]),
         ("graph-merge-confirm", &["j", "j", "j", "j", "j", "M"]),
-        ("agent-dialog", &["j", "A", "tab", "tab", "text:start from the bell icon"]),
+        (
+            "agent-dialog",
+            &["j", "A", "tab", "tab", "text:start from the bell icon"],
+        ),
         ("details-files", &["j", "space", "4", "}"]),
         (
             "details-link",

@@ -130,17 +130,25 @@ fn load_base(
     }))
 }
 
-/// How many files have changes in each of the worktrees at `paths`.
-pub fn count_worktree_changes(repo: Repo, paths: Vec<PathBuf>) -> Action {
-    let counts = paths
+/// How many files have changes in each of the worktrees in `worktrees`
+/// (path and HEAD commit), and how many commits each HEAD has that `base`
+/// (a full ref name) doesn't.
+pub fn count_worktree_changes(repo: Repo, worktrees: Vec<(PathBuf, Option<String>)>, base: Option<String>) -> Action {
+    let counts = worktrees
         .into_iter()
-        .map(|path| {
+        .map(|(path, head)| {
             let count = repo.worktree_changes(&path).map_err(|e| {
                 let msg = e.stderr().map(str::to_string).unwrap_or_else(|| e.to_string());
                 tracing::warn!("counting changes in {} failed: {msg}", path.display());
                 msg
             });
-            (path, count)
+            let ahead = base.as_deref().zip(head.as_deref()).and_then(|(base, head)| {
+                repo.ahead_behind(base, head)
+                    .inspect_err(|e| tracing::warn!("counting commits in {} failed: {e}", path.display()))
+                    .ok()
+                    .map(|d| d.ahead)
+            });
+            (path, count, ahead)
         })
         .collect();
     Action::WorktreeChanges(counts)

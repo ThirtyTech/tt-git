@@ -106,8 +106,9 @@ pub enum Action {
     /// The worktrees tab is showing: count each worktree's changes.
     CountWorktreeChanges,
     /// How many files have changes in each worktree (by path), or why it
-    /// couldn't be told.
-    WorktreeChanges(Vec<(std::path::PathBuf, Result<usize, String>)>),
+    /// couldn't be told, and how many commits its HEAD has that the base
+    /// branch doesn't (`None` with no base, or when git couldn't tell).
+    WorktreeChanges(Vec<(std::path::PathBuf, Result<usize, String>, Option<u32>)>),
     /// The bytes the folder of the worktree at this path takes, or why it
     /// couldn't be read.
     WorktreeSize(std::path::PathBuf, Result<u64, String>),

@@ -4,4 +4,4 @@ expression: "t.pane_lines(PaneId::Branches)[..3].join(\"\\n\")"
 ---
 * .                 main                              main · clean 1.5 MB
   .worktrees/review (detached b290cb5)              locked · clean 2.0 KB
-  .worktrees/side   side                                 1 changed  512 B
+  .worktrees/side   side                            ↑1 · 1 changed  512 B
