@@ -51,6 +51,7 @@ pub(super) struct PluginState {
 
 /// Built-in commands offered in the palette (besides the focused pane's).
 const PALETTE_BUILTINS: &[Command] = &[
+    Command::Agent,
     Command::Continue,
     Command::Abort,
     Command::Undo,

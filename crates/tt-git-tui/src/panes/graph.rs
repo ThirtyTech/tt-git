@@ -799,6 +799,7 @@ impl Component for GraphPane {
             Command::CherryPick,
             Command::Filter,
             Command::Copy,
+            Command::Agent,
             Command::NextTab,
             Command::PrevTab,
         ]

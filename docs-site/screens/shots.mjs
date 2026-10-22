@@ -241,6 +241,16 @@ export const shots = [
 		],
 	},
 	{
+		name: 'agent-dialog',
+		capture: 'agent-dialog',
+		view: { region: { box: 'Ask an agent' } },
+		callouts: [
+			{ target: { find: 'Explain branch' }, text: '**tab** steps through ready-made actions', markerSide: 'above' },
+			{ target: { find: 'start from the bell icon█' }, text: 'Extra instructions, optional', markerSide: 'left' },
+			{ target: { find: 'how the feature on this branch works' }, text: 'What the action does', markerSide: 'left' },
+		],
+	},
+	{
 		name: 'status-stash',
 		capture: 'stash-prompt',
 		view: { region: { box: 'Stash' } },

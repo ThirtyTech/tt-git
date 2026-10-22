@@ -402,6 +402,25 @@ its alternate screen and raw mode, waits for the editor to exit, then
 restores all three, redraws and refreshes. A GUI editor is started with no
 input or output attached and left running.
 
+## Agent actions
+
+[<kbd>A</kbd>](/git/agents/) fills the prompt from what tt-git already has
+loaded, plus two git calls on a background job:
+`git log --oneline --no-decorate -50 <base>..<branch>` for `{log}`, and,
+while a merge, rebase, cherry-pick or revert is stopped,
+`git name-rev --name-only --always MERGE_HEAD` (or `REBASE_HEAD`,
+`CHERRY_PICK_HEAD`, `REVERT_HEAD`) for `{merge_head}`. The prompt is also
+written to `<temp>/tt-git/<repo>/agent-prompt-<pid>-<n>.md` for
+`{prompt_file}`.
+
+Inside herdr, tt-git runs `herdr tab create --cwd <repo> --label <name> --focus`
+(or `herdr pane split --direction right` for `herdr-split`), then
+`herdr agent start <name> --kind <kind> --pane <pane>` and
+`herdr agent prompt <name> <prompt>` for an agent herdr knows, or
+`herdr pane run <pane> <command>` for any other. Outside herdr the agent
+runs in a pseudo-terminal drawn in the details pane, like a
+[plugin pane](/panes/plugin-panes/).
+
 ## Details
 
 ### A commit

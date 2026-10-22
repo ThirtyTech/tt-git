@@ -1,6 +1,7 @@
 //! ratatui user interface for tt-git.
 
 pub mod action;
+pub mod agent;
 pub mod app;
 pub mod component;
 pub mod config;

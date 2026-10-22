@@ -31,6 +31,12 @@ pane_release_keys = ["ctrl+\\", "f12"]   # leave/close plugin panes
 [editor]                        # for `e`; both unset by default
 # command = "nvim"              # default: $VISUAL, $EDITOR, git's core.editor, then notepad / vi
 # terminal = true               # runs in this terminal; default: worked out from the program
+
+[agent]                         # for `A` in the graph
+command = "claude"              # the prompt is its last argument, or put {prompt} / {prompt_file} in it
+placement = "auto"              # "auto" (herdr tab inside herdr, else the details pane), "herdr-tab", "herdr-split", "details"
+# system_prompt = "..."         # default: tt-git's own; "" for none
+# [[agent.actions]]             # replaces the built-in actions: name, prompt, description, when = "always" | "merging"
 ```
 
 ## Merged and unmerged branches
@@ -195,7 +201,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `move_up`, `move_down`, `page_up`, `page_down`, `top`, `bottom` | `k`/`↑`, `j`/`↓`, `ctrl+u`, `ctrl+d`, `g`, `G` | global |
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |
 | `undo` | `z` | global |
-| `toggle_scope`, `toggle_dates`, `checkout`, `filter`, `new_branch`, `new_tag`, `merge`, `rebase`, `cherry_pick` | `a`, `t`, `o`, `f`, `n`, `T`, `M`, `r`, `C` | graph |
+| `toggle_scope`, `toggle_dates`, `checkout`, `filter`, `new_branch`, `new_tag`, `merge`, `rebase`, `cherry_pick`, `agent` | `a`, `t`, `o`, `f`, `n`, `T`, `M`, `r`, `C`, `A` | graph |
 | `checkout`, `new_branch`, `new_tag`, `delete_branch`, `rename_branch`, `fetch`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `T`, `d`, `R`, `f`, `/`, `M`, `r` | branches |
 | `push_tag` | `P` (on the Tags tab; pushes the branch on the others) | branches |
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |

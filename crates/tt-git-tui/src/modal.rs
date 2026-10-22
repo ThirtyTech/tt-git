@@ -9,6 +9,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tt_git_core::{CheckoutPlan, DiscardKind, InProgress, LogFilter, PatchOp, StashScope, UndoStep};
 
+use crate::agent::{AgentAction, AgentRequest};
 use crate::filter::FilterPanel;
 use crate::keymap::{Command, KeyCombo};
 use crate::theme::Theme;
@@ -249,6 +250,12 @@ pub enum PromptAction {
     StashBranch {
         index: usize,
     },
+    /// A request for an AI agent. `tab` steps from a custom message
+    /// (`selected` none) through the ready-made `actions`.
+    Agent {
+        actions: Vec<AgentAction>,
+        selected: Option<usize>,
+    },
 }
 
 impl PromptAction {
@@ -301,6 +308,7 @@ impl PromptAction {
                 message: Some(input.to_string()),
                 amend: false,
             },
+            PromptAction::Agent { .. } => unreachable!("an agent request isn't a git op"),
         }
     }
 }
@@ -367,6 +375,8 @@ pub enum ModalOutcome {
     Filter(LogFilter),
     /// Go to this line (from 1), typed as a number in the palette.
     GoToLine(usize),
+    /// Start an agent.
+    Agent(AgentRequest),
 }
 
 impl Modal {
@@ -514,6 +524,17 @@ impl Modal {
                 KeyCode::Esc => ModalOutcome::Cancelled,
                 KeyCode::Enter => {
                     let value = input.trim();
+                    if let PromptAction::Agent { actions, selected } = action {
+                        let picked = selected.and_then(|i| actions.get(i)).cloned();
+                        return if value.is_empty() && picked.is_none() {
+                            ModalOutcome::Open
+                        } else {
+                            ModalOutcome::Agent(AgentRequest {
+                                action: picked,
+                                message: value.to_string(),
+                            })
+                        };
+                    }
                     if value.is_empty() && !matches!(action, PromptAction::Stash { .. }) {
                         ModalOutcome::Open
                     } else if let PromptAction::CreateTag {
@@ -548,6 +569,17 @@ impl Modal {
                         PromptAction::CreateTag { annotated, .. } => *annotated = !*annotated,
                         PromptAction::Stash { scope, file } => {
                             *scope = PromptAction::next_scope(scope, file.as_ref(), key.code == KeyCode::BackTab);
+                        }
+                        PromptAction::Agent { actions, selected } => {
+                            // None (custom message), then each action, round again.
+                            let n = actions.len() + 1;
+                            let at = selected.map_or(0, |i| i + 1);
+                            let next = if key.code == KeyCode::BackTab {
+                                (at + n - 1) % n
+                            } else {
+                                (at + 1) % n
+                            };
+                            *selected = next.checked_sub(1);
                         }
                         _ => {}
                     }
@@ -667,6 +699,23 @@ impl Modal {
                         };
                         (title, body, hint.into())
                     }
+                    PromptAction::Agent { actions, selected } => {
+                        let mut tabs = vec![tab("Custom message".into(), selected.is_none())];
+                        for (i, a) in actions.iter().enumerate() {
+                            tabs.push(Span::styled(" · ", theme.muted));
+                            tabs.push(tab(a.name.clone(), *selected == Some(i)));
+                        }
+                        let picked = selected.and_then(|i| actions.get(i));
+                        let note = match picked {
+                            Some(a) => {
+                                let what = a.description.clone().unwrap_or_else(|| a.name.clone());
+                                format!("{what} · anything typed is added to it")
+                            }
+                            None => "type what you want the agent to do".into(),
+                        };
+                        let body = vec![Line::from(tabs), input_line, Line::styled(note, theme.muted)];
+                        (title, body, "enter start · tab ready-made actions · esc cancel".into())
+                    }
                     _ => (title, vec![input_line], "enter confirm · esc cancel".into()),
                 }
             }
@@ -685,7 +734,7 @@ impl Modal {
         let wide = matches!(
             self,
             Modal::Prompt {
-                action: PromptAction::Stash { .. },
+                action: PromptAction::Stash { .. } | PromptAction::Agent { .. },
                 ..
             }
         );
@@ -882,6 +931,53 @@ mod tests {
         m.handle_key(k("down"));
         assert_eq!(m.handle_key(k("enter")), ModalOutcome::Command(Command::Push));
         assert_eq!(m.handle_key(k("esc")), ModalOutcome::Cancelled);
+    }
+
+    #[test]
+    fn agent_prompt_steps_through_actions() {
+        let actions = crate::agent::default_actions();
+        let mut m = Modal::prompt(
+            "Ask an agent",
+            "",
+            PromptAction::Agent {
+                actions: actions.clone(),
+                selected: None,
+            },
+        );
+        assert_eq!(
+            m.handle_key(k("enter")),
+            ModalOutcome::Open,
+            "a custom message needs text"
+        );
+        m.handle_key(k("tab"));
+        assert_eq!(
+            m.handle_key(k("enter")),
+            ModalOutcome::Agent(AgentRequest {
+                action: Some(actions[0].clone()),
+                message: String::new(),
+            })
+        );
+        m.handle_key(k("shift+tab"));
+        m.handle_key(k("shift+tab"));
+        for c in "why".chars() {
+            m.handle_key(KeyCombo::char(c));
+        }
+        assert_eq!(
+            m.handle_key(k("enter")),
+            ModalOutcome::Agent(AgentRequest {
+                action: Some(actions[actions.len() - 1].clone()),
+                message: "why".into(),
+            }),
+            "shift+tab goes round to the last action"
+        );
+        m.handle_key(k("tab"));
+        assert_eq!(
+            m.handle_key(k("enter")),
+            ModalOutcome::Agent(AgentRequest {
+                action: None,
+                message: "why".into(),
+            })
+        );
     }
 
     #[test]
