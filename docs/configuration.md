@@ -199,6 +199,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `checkout`, `new_branch`, `new_tag`, `delete_branch`, `rename_branch`, `fetch`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `T`, `d`, `R`, `f`, `/`, `M`, `r` | branches |
 | `push_tag` | `P` (on the Tags tab; pushes the branch on the others) | branches |
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |
+| `next_tab`, `prev_tab` | `]` `}`, `[` `{` (steps the branches pane's tabs) | graph |
 | `stage_toggle`, `open_staging`, `stage_all`, `discard`, `commit`, `amend`, `stash`, `continue`, `abort` | `space`, `enter`, `a`, `d`, `c`, `A`, `s`, `C`, `X` | status |
 | `stash_pop`, `stash_apply`, `stash_drop`, `new_branch`, `expand_details`, `next_tab`, `prev_tab`, `filter` | `space`, `a`, `d`, `n`, `enter`, `]` `}`, `[` `{`, `/` | stash |
 | `open_worktree`, `remove_worktree`, `new_branch`, `copy`, `next_tab`, `prev_tab`, `filter` | `enter`/`space`, `d`, `n`, `c`, `]` `}`, `[` `{`, `/` | worktrees |

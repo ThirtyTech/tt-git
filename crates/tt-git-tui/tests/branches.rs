@@ -296,6 +296,24 @@ fn tabs_list_branches_merged_and_unmerged_into_the_primary_branch() {
     assert_eq!(t.app().graph().selected().map(|c| c.oid.to_string()), Some(tip));
 }
 
+#[test]
+fn brackets_on_the_graph_step_the_branch_tabs() {
+    let sb = repo_for_base_tabs();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 160, 40);
+    assert_eq!(t.app().focus(), PaneId::Graph);
+    t.press("]");
+    assert_eq!(t.app().branches().tab(), BranchTab::Tags);
+    t.press("}");
+    assert_eq!(t.app().branches().tab(), BranchTab::Unmerged);
+    t.press("[");
+    assert_eq!(t.app().branches().tab(), BranchTab::Tags);
+    t.press("{");
+    assert_eq!(t.app().branches().tab(), BranchTab::All);
+    t.press("[");
+    assert_eq!(t.app().branches().tab(), BranchTab::Merged, "wraps round");
+    assert_eq!(t.app().focus(), PaneId::Graph, "focus stays on the graph");
+}
+
 /// The first `n` words of a row.
 fn cols(line: &str, n: usize) -> Vec<&str> {
     line.split_whitespace().take(n).collect()
