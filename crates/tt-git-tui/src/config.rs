@@ -4,6 +4,7 @@ use std::path::Path;
 
 use serde::Deserialize;
 
+use crate::agent::AgentConfig;
 use crate::editor::EditorConfig;
 use crate::keymap::{Keymap, KeymapError, KeysConfig};
 use crate::layout::Layout;
@@ -24,6 +25,7 @@ pub struct Config {
     pub branches: BranchesConfig,
     pub plugins: PluginsConfig,
     pub editor: EditorConfig,
+    pub agent: AgentConfig,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -72,6 +74,7 @@ impl Default for Config {
             branches: BranchesConfig::default(),
             plugins: PluginsConfig::default(),
             editor: EditorConfig::default(),
+            agent: AgentConfig::default(),
         }
     }
 }

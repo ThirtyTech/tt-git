@@ -273,6 +273,7 @@ pub enum Command {
     Search,
     SearchNext,
     SearchPrev,
+    Agent,
 }
 
 impl Command {
@@ -355,6 +356,7 @@ impl Command {
             Command::Search => "search",
             Command::SearchNext => "next match",
             Command::SearchPrev => "prev match",
+            Command::Agent => "ask agent",
         }
     }
 }
@@ -511,6 +513,7 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Graph, Command::CherryPick, &["C"]),
     (Context::Graph, Command::Filter, &["f"]),
     (Context::Graph, Command::Copy, &["c"]),
+    (Context::Graph, Command::Agent, &["A"]),
     (Context::Graph, Command::PrevTab, &["[", "{"]),
     (Context::Graph, Command::NextTab, &["]", "}"]),
     (Context::Branches, Command::Copy, &["c"]),

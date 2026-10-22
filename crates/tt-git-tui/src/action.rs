@@ -140,6 +140,9 @@ pub enum Action {
     /// it has one) or, for one with a window of its own, started. `Err` says
     /// why it couldn't start.
     EditorFinished(Result<Option<i32>, String>),
+    /// The agent was started in herdr, or is ready to start in a pane
+    /// (`Err` says why it couldn't be).
+    AgentStarted(Result<crate::agent::AgentStart, String>),
     /// A request arrived on the API socket.
     Socket(Call),
     /// A plugin command finished.

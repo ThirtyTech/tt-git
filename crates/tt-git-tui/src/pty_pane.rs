@@ -22,6 +22,19 @@ use crate::theme::Theme;
 
 pub type PaneId = u64;
 
+/// The `plugin_id` of panes tt-git opens itself rather than for a plugin.
+pub const BUILTIN: &str = "tt-git";
+
+/// Who a pane belongs to and where it goes.
+struct PaneMeta {
+    plugin_id: String,
+    entrypoint: String,
+    title: String,
+    placement: Placement,
+    width: Option<Dimension>,
+    height: Option<Dimension>,
+}
+
 /// Lines the emulator keeps after they scroll off. Panes only ever show the
 /// live screen (nothing scrolls back), so none are kept.
 const SCROLLBACK: usize = 0;
@@ -81,14 +94,6 @@ impl PtyPane {
         ctx: Ctx,
     ) -> Result<Self, String> {
         let (program, args) = req.argv.split_first().ok_or("pane command is empty")?;
-        let pty = native_pty_system()
-            .openpty(PtySize {
-                rows: rows.max(1),
-                cols: cols.max(1),
-                pixel_width: 0,
-                pixel_height: 0,
-            })
-            .map_err(|e| format!("could not open a pty: {e}"))?;
         let mut cmd = CommandBuilder::new(resolve_program(program, &req.plugin_root));
         cmd.args(args);
         cmd.cwd(&req.plugin_root);
@@ -100,6 +105,64 @@ impl PtyPane {
         for (k, v) in plugin_env(host, req) {
             cmd.env(k, v);
         }
+        let meta = PaneMeta {
+            plugin_id: req.plugin_id.clone(),
+            entrypoint: spec.id.clone(),
+            title: spec.title.clone(),
+            placement: effective_placement(placement.unwrap_or(spec.placement)),
+            width: spec.width.clone(),
+            height: spec.height.clone(),
+        };
+        Self::start(id, cmd, program, meta, rows, cols, ctx)
+    }
+
+    /// Starts `argv` in `cwd` as a split pane titled `title`, for tt-git's
+    /// own use (the agent). It reports as plugin [`BUILTIN`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn spawn_command(
+        id: PaneId,
+        entrypoint: &str,
+        title: &str,
+        argv: &[String],
+        cwd: &std::path::Path,
+        rows: u16,
+        cols: u16,
+        ctx: Ctx,
+    ) -> Result<Self, String> {
+        let (program, args) = argv.split_first().ok_or("pane command is empty")?;
+        let mut cmd = CommandBuilder::new(program);
+        cmd.args(args);
+        cmd.cwd(cwd);
+        cmd.env("TERM", "xterm-256color");
+        let meta = PaneMeta {
+            plugin_id: BUILTIN.into(),
+            entrypoint: entrypoint.into(),
+            title: title.into(),
+            placement: Placement::Split,
+            width: None,
+            height: None,
+        };
+        Self::start(id, cmd, program, meta, rows, cols, ctx)
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn start(
+        id: PaneId,
+        cmd: CommandBuilder,
+        program: &str,
+        meta: PaneMeta,
+        rows: u16,
+        cols: u16,
+        ctx: Ctx,
+    ) -> Result<Self, String> {
+        let pty = native_pty_system()
+            .openpty(PtySize {
+                rows: rows.max(1),
+                cols: cols.max(1),
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| format!("could not open a pty: {e}"))?;
         let mut child = pty
             .slave
             .spawn_command(cmd)
@@ -164,12 +227,12 @@ impl PtyPane {
 
         Ok(Self {
             id,
-            plugin_id: req.plugin_id.clone(),
-            entrypoint: spec.id.clone(),
-            title: spec.title.clone(),
-            placement: effective_placement(placement.unwrap_or(spec.placement)),
-            width: spec.width.clone(),
-            height: spec.height.clone(),
+            plugin_id: meta.plugin_id,
+            entrypoint: meta.entrypoint,
+            title: meta.title,
+            placement: meta.placement,
+            width: meta.width,
+            height: meta.height,
             parser,
             writer,
             master: pty.master,

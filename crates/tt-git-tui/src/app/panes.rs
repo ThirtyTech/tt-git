@@ -150,6 +150,7 @@ impl App {
     }
 
     pub(super) fn pane_exited(&mut self, id: pty_pane::PaneId, status: String) {
+        let agent = self.is_agent_pane(id);
         let Some(pane) = self.panes.iter_mut().find(|p| p.id == id) else {
             return;
         };
@@ -160,6 +161,10 @@ impl App {
             self.close_pane(id);
         }
         self.notice = Some(format!("{title}: {why}"));
+        if agent {
+            // It may have staged, committed or resolved files.
+            self.update(crate::action::Action::Refresh);
+        }
     }
 
     /// Draws the split pane into `details` if there is one. Returns whether it did.

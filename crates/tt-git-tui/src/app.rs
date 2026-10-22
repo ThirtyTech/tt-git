@@ -33,6 +33,7 @@ use crate::theme::Theme;
 use crate::watcher::RepoWatcher;
 use crate::widgets::truncate_spans;
 
+mod agent;
 mod panes;
 mod plugins;
 pub use panes::PaneRequest;
@@ -655,6 +656,10 @@ impl App {
                     view.go_to_line(line, &ctx);
                 }
             }
+            ModalOutcome::Agent(req) => {
+                self.modal = None;
+                self.start_agent(req);
+            }
             ModalOutcome::PluginAction(action) => {
                 self.modal = None;
                 let _ = self.invoke_plugin_action(&action, "palette");
@@ -781,6 +786,7 @@ impl App {
                 self.start_editor(&snap.file, snap.line);
             }
             Action::EditSnapshot(Err(e)) => self.error = Some(e),
+            Action::AgentStarted(result) => self.agent_started(result),
             Action::EditorFinished(result) => {
                 match result {
                     Ok(Some(code)) if code != 0 => self.notice = Some(format!("editor exited with status {code}")),
@@ -2077,6 +2083,7 @@ impl App {
             Command::Push => self.update(Action::Run(GitOp::Push)),
             Command::Pull => self.update(Action::Run(GitOp::Pull)),
             Command::Undo => self.plan_undo(),
+            Command::Agent => self.open_agent_dialog(),
             _ => {
                 let ctx = self.ctx.clone();
                 if self.focused_mut().on_command(cmd, &ctx) == EventState::NotConsumed {
