@@ -91,7 +91,10 @@ The last line lists the most useful keys for the focused pane, followed by
 changes as you move between panes. Keys that don't fit are left off; press
 <kbd>?</kbd> for the full list.
 
-On the right, the help bar shows what tt-git is doing: `push…` while a push
-runs, then `✓ push` when it's done. When something fails, an **Error** box
-opens with git's own message. Press <kbd>enter</kbd> or <kbd>esc</kbd> to
-close it.
+On the right, the help bar shows what tt-git is doing. While git works, a
+spinner turns beside what it's doing, like `pushing main → origin/main`,
+with the seconds it has taken. When it's done the help bar says what
+happened, like `✓ pushed main → origin/main`, in green for a few seconds
+before it fades. See [While it runs](/git/remotes/#while-it-runs). When
+something fails, an **Error** box opens with git's own message. Press
+<kbd>enter</kbd> or <kbd>esc</kbd> to close it.

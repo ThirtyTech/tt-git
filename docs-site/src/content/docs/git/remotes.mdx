@@ -23,9 +23,10 @@ Press <kbd>P</kbd> (shift+p) from any pane to push the current branch.
   first remote. With no remotes at all, it tells you there's nothing to push
   to.
 
-The help bar shows `push…` while it runs and `✓ push` when it's done. If git
-refuses, for example because the remote has commits you don't, the error box
-shows git's message. Pull, then push again.
+While it runs, the help bar shows `pushing main → origin/main` with a
+spinner (see [While it runs](#while-it-runs)), then `✓ pushed main →
+origin/main`. If git refuses, for example because the remote has commits you
+don't, the error box shows git's message. Pull, then push again.
 
 Pushing a branch doesn't push tags. On the branches pane's Tags tab,
 <kbd>P</kbd> pushes the selected tag instead; see [Tags](/panes/tags/#pushing-a-tag).
@@ -36,6 +37,9 @@ Press <kbd>p</kbd> from any pane. tt-git runs `git pull --no-edit`, so
 whether it merges or rebases is up to your git config (`pull.rebase`,
 `pull.ff`), and a merge commit keeps git's default message instead of
 opening an editor.
+
+The help bar shows `pulling origin/main into main` while it runs, then
+`✓ pulled origin/main into main`.
 
 If the pull stops on a conflict, the status pane shows a banner and the
 conflicted files. See [Resolving conflicts](/git/merge-rebase/#resolving-conflicts).
@@ -53,6 +57,33 @@ the branch list, which usually means it was merged and can be deleted.
 </Aside>
 
 A fetch that brings nothing new doesn't reload the graph.
+
+The help bar shows `fetching all remotes` while it runs, then
+`✓ fetched all remotes`.
+
+## While it runs
+
+Push, pull and fetch run in the background, so you can keep working. The
+right end of the help bar shows what git is doing, in the key color, with a
+spinner and, after the first second, how long it has been running:
+
+<Screenshot name="remotes-pushing" alt="The help bar showing a spinner, pushing feature/notifications → origin/feature/notifications, and 2s" />
+
+- **Done**: it says what happened, like `✓ pushed main → origin/main`, in
+  green. After five seconds it fades to grey, so a fresh result stands out
+  from an old one.
+- **Failed**: the spinner goes and an **Error** box shows git's message.
+- **Pressed again**: pressing <kbd>P</kbd> while a push runs (or
+  <kbd>p</kbd> during a pull, <kbd>f</kbd> during a fetch, <kbd>P</kbd> on
+  a tag being pushed) says `already pushing` instead of starting a second
+  one.
+- **Several at once**: a fetch and a push together show `fetching · pushing`.
+- **Other messages**: something else that happens meanwhile, such as
+  `copied …`, shows beside the spinner for three seconds and then makes
+  way for it.
+
+Other git operations (commit, checkout, stash and so on) show the same
+spinner with their name while they run, usually too briefly to notice.
 
 ## Credentials
 
