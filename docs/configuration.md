@@ -210,6 +210,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `go_to_line` | `ctrl+g` | blame |
 | `copy` (commit hash / branch name / absolute worktree path) | `c` | graph, branches, worktrees, blame |
 | `plugin_logs` | (palette only) | global |
+| `self_update` | (palette only) | global |
 
 ### Plugin action bindings
 

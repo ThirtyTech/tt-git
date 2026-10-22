@@ -158,6 +158,43 @@ Print the [unified branch list](/panes/branches/#one-row-per-branch), most
 recently active first, with `*` on the checked-out branch. `--json` adds each
 branch's refs, dates and `state` (the status column).
 
+## tt-git update
+
+```sh
+tt-git update [VERSION]
+tt-git update --check
+```
+
+Update tt-git to the latest release. It finds the newest release on GitHub,
+and if that's newer than the one you're running, downloads that release's
+[install script](/getting-started/install/#install-script) and runs it, with
+the script's output shown as it goes. The script checks the download against
+the release's checksums and replaces the binary you ran, in the folder it's
+in. If you're already on the latest release, it says so and stops.
+
+| Argument | |
+|---|---|
+| `VERSION` | Install this release instead, such as `v0.2.0` or `0.2.0`, even if it's older than yours. |
+| `--check` | Only say whether there's a newer release. Can't be combined with `VERSION`. |
+
+Restart tt-git afterwards to use the new version. A tt-git that's running
+keeps working: on Windows the old `tt-git.exe` is renamed to `tt-git.exe.old`
+first and removed by the next update.
+
+It needs `curl`, plus `sh` on Linux and macOS or Windows PowerShell on
+Windows. All three come with the operating system. It refuses a tt-git that
+was built with cargo and run from its `target` folder; build that one again
+instead.
+
+```sh
+tt-git update --check    # is there a newer release?
+tt-git update            # install it
+tt-git update v0.2.0     # go back to v0.2.0
+```
+
+The command palette has the same thing as *Update tt-git*. See
+[Command palette](/git/palette/#updating-tt-git).
+
 ## Environment variables
 
 | Variable | |

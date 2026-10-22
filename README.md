@@ -74,6 +74,9 @@ a specific one, or `TTGIT_INSTALL_DIR` to change where it goes. You can also
 download an archive from
 [Releases](https://github.com/ThirtyTech/tt-git/releases).
 
+To update later, run `tt-git update` (or *Update tt-git* in the command
+palette). `tt-git update --check` only checks.
+
 To build from source:
 
 ```sh
