@@ -857,6 +857,16 @@ impl Repo {
         Ok(crate::blame::Blame::parse_porcelain(&out.stdout))
     }
 
+    /// When `path` last changed as of `rev` (`HEAD` when `None`): the author
+    /// time, in Unix seconds, of the newest commit there that touched it.
+    /// `None` when no commit has it.
+    pub fn file_changed_at(&self, rev: Option<&str>, path: &str) -> Result<Option<i64>> {
+        let out = self
+            .git
+            .run(&["log", "-1", "--format=%at", rev.unwrap_or("HEAD"), "--", path])?;
+        Ok(out.into_stdout_string().trim().parse().ok())
+    }
+
     /// Loads up to `limit` commits into a Vec.
     pub fn commits(&self, scope: &LogScope, limit: usize) -> Result<Vec<Commit>> {
         let mut commits = Vec::new();

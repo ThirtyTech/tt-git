@@ -58,6 +58,17 @@ The version is `working tree`, `HEAD`, a short commit id such as `59f1c2a`, or `
 you've stepped back past a commit. After you [step back](#stepping-back), the `‹ …` names the newer
 version <kbd>]</kbd> returns to instead.
 
+At the right of the top border is when that version of the file was made: the date of the last
+commit that changed it, at or before the version you're looking at.
+
+```text
+changed 2026-10-17 01:30 PM (3w ago)
+```
+
+It changes as you step back and forward, so you can see how old each version is. In the working
+tree, `+ uncommitted changes` follows it when some lines aren't committed yet. When the pane is too
+narrow for the title and the date both, the date is left out.
+
 ## Reading a line
 
 Each line reads right to left from the code: when it changed, who changed it, and why.
