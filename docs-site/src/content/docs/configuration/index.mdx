@@ -60,6 +60,11 @@ pane_release_keys = ["ctrl+\\", "f12"]   # leave or close plugin panes
 [editor]
 # command = "nvim"   # unset: $VISUAL, $EDITOR, git's core.editor, then notepad / vi
 # terminal = true    # unset: worked out from the program
+
+[agent]
+command = "claude"   # the agent A starts
+placement = "auto"   # a herdr tab inside herdr, else in place of details
+# system_prompt = "" # unset: tt-git's own
 ```
 
 Two more tables, `[layout]` and `[keys]`, have pages of their own:
@@ -143,6 +148,33 @@ opens in its own window and tt-git keeps running.
 A GUI editor tt-git doesn't recognize is treated as a terminal editor, so
 tt-git waits until it exits. Set `terminal = false` for it.
 </Aside>
+
+### `[agent]`
+
+The AI agent <kbd>A</kbd> starts from the graph. See [Agent actions](/git/agents/).
+
+| Setting | Default | What it does |
+|---|---|---|
+| `command` | `"claude"` | The agent to run, in the repository's root. The prompt is added as its last argument, unless `command` has `{prompt}` (the prompt's text) or `{prompt_file}` (a file holding it) in it. |
+| `placement` | `"auto"` | Where it runs. `"auto"`: a new herdr tab when tt-git runs inside [herdr](https://herdr.dev/), else in place of the details pane. `"herdr-tab"` and `"herdr-split"` (a herdr pane beside tt-git's) fall back to the details pane outside herdr; `"details"` always uses it. |
+| `system_prompt` | unset | Goes ahead of every prompt, with the same placeholders. Unset, tt-git tells the agent which repository and branch it's in, to read history with git, and not to push or commit unless asked. `""` sends none. |
+| `actions` | unset | The ready-made actions <kbd>tab</kbd> steps through, as `[[agent.actions]]` tables. Unset, tt-git offers *Resolve conflicts*, *Explain commit*, *Explain branch* and *Review commit*. Setting it replaces them all. |
+
+Each `[[agent.actions]]` has:
+
+| Field | Required | What it is |
+|---|---|---|
+| `name` | yes | Shown in the dialog and in the agent's tab or pane title. |
+| `prompt` | yes | What the agent is asked. Placeholders such as `{commit}`, `{branch}`, `{base}`, `{conflicts}` and `{log}` are filled in; see [What the agent is told](/git/agents/#what-the-agent-is-told). |
+| `description` | no | One line shown under the input while the action is selected. |
+| `when` | no | `"always"` (the default) or `"merging"`: only while a merge, rebase, cherry-pick or revert is stopped, and then first. |
+
+```toml
+[[agent.actions]]
+name = "Write release notes"
+description = "user-facing notes for this branch"
+prompt = "Write release notes for what {branch} adds since {base}:\n{log}"
+```
 
 ### Per-repository settings
 

@@ -106,6 +106,7 @@ export default defineConfig({
 						{ label: 'Merge, rebase and cherry-pick', slug: 'git/merge-rebase' },
 						{ label: 'Undo', slug: 'git/undo' },
 						{ label: 'Worktrees', slug: 'git/worktrees' },
+						{ label: 'Agent actions', slug: 'git/agents' },
 						{ label: 'Refreshing', slug: 'git/refreshing' },
 					],
 				},
