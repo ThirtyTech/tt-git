@@ -7,12 +7,14 @@ use tt_git_tui::modal::Modal;
 use tt_git_tui::panes::{BranchTab, PaneId};
 use tt_git_tui::{Action, Config};
 
-/// main, plus `.worktrees/side` (branch side, one untracked file) and
-/// `.worktrees/review` (detached, locked).
+/// main, plus `.worktrees/side` (branch side, one commit main doesn't
+/// have and one untracked file) and `.worktrees/review` (detached, locked).
 fn repo_with_worktrees() -> Sandbox {
     let sb = Sandbox::new();
     sb.commit("base");
-    add_worktree(&sb, "side", &["-b", "side"]);
+    let side = add_worktree(&sb, "side", &["-b", "side"]);
+    let side = side.to_str().unwrap();
+    sb.git(&["-C", side, "commit", "-q", "--allow-empty", "-m", "side work"]);
     std::fs::write(sb.path().join(".worktrees/side/wip.txt"), "wip\n").unwrap();
     let review = add_worktree(&sb, "review", &["--detach"]);
     sb.git(&["worktree", "lock", "--reason", "reviewing", review.to_str().unwrap()]);

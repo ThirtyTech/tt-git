@@ -69,7 +69,7 @@ click its name in the title.
 
 ```
 * .                    main                  main · clean  1.2 GB
-  .worktrees/fix-login fix-login                3 changed 48.3 MB
+  .worktrees/fix-login fix-login           ↑2 · 3 changed 48.3 MB
   .worktrees/review    (detached 1a2b3c4)  locked · clean 47.9 MB
 ```
 
@@ -85,8 +85,11 @@ Each row shows:
   in full.
 - What it has checked out: a branch, or `(detached <commit>)`.
 - Its state: `main` for the main worktree, `locked` if it was locked with
-  `git worktree lock`, `missing` if its folder is gone, and how many files
-  have uncommitted or untracked changes (`clean` for none). The counts are
+  `git worktree lock`, `missing` if its folder is gone, `↑2` for two
+  commits it has checked out that the
+  [base branch](/panes/merged-unmerged/#the-base-branch) doesn't have yet
+  (nothing when there are none), and how many files have uncommitted or
+  untracked changes (`clean` for none). The counts are
   worked out in the background each time you open the tab and when the
   branches reload, so `…` shows until they're in.
 - How much disk space its folder takes, ignored files like build output

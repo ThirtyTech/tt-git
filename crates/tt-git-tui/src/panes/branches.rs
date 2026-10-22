@@ -97,6 +97,9 @@ pub struct BranchesPane {
     /// Files with changes in each worktree, by path, once counted (`Err`
     /// when git couldn't tell).
     worktree_changes: HashMap<PathBuf, Result<usize, String>>,
+    /// Commits each worktree's HEAD has that the base doesn't, by path,
+    /// once counted.
+    worktree_ahead: HashMap<PathBuf, u32>,
     /// Bytes each worktree's folder takes, by path, once measured (`Err`
     /// when it couldn't be read).
     worktree_sizes: HashMap<PathBuf, Result<u64, String>>,
@@ -127,6 +130,7 @@ impl BranchesPane {
             worktrees: Vec::new(),
             worktree_names: Vec::new(),
             worktree_changes: HashMap::new(),
+            worktree_ahead: HashMap::new(),
             worktree_sizes: HashMap::new(),
             tab: BranchTab::default(),
             visible: Vec::new(),
@@ -288,9 +292,24 @@ impl BranchesPane {
             .collect()
     }
 
-    /// Takes counts of each worktree's changed files.
-    pub fn set_worktree_changes(&mut self, counts: Vec<(PathBuf, Result<usize, String>)>) {
-        self.worktree_changes = counts.into_iter().collect();
+    /// [`countable_worktrees`](Self::countable_worktrees) with the commit
+    /// each has checked out.
+    pub fn countable_worktree_heads(&self) -> Vec<(PathBuf, Option<String>)> {
+        self.worktrees
+            .iter()
+            .filter(|w| !w.bare && w.prunable.is_none())
+            .map(|w| (w.path.clone(), w.head.clone()))
+            .collect()
+    }
+
+    /// Takes counts of each worktree's changed files and of its commits the
+    /// base doesn't have.
+    pub fn set_worktree_changes(&mut self, counts: Vec<(PathBuf, Result<usize, String>, Option<u32>)>) {
+        self.worktree_ahead = counts
+            .iter()
+            .filter_map(|(path, _, ahead)| Some((path.clone(), (*ahead)?)))
+            .collect();
+        self.worktree_changes = counts.into_iter().map(|(path, changes, _)| (path, changes)).collect();
     }
 
     /// Takes the disk space the folder of the worktree at `path` takes.
@@ -717,7 +736,8 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
     }
 
     /// What a worktree row says about its state: main, locked, missing,
-    /// and how many files have changes once that's counted.
+    /// `↑n` for commits the base doesn't have, and how many files have
+    /// changes once that's counted.
     fn worktree_state(&self, wt: &Worktree) -> String {
         let mut parts = Vec::new();
         if wt.main {
@@ -729,6 +749,11 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
         if wt.prunable.is_some() {
             parts.push("missing".into());
         } else if !wt.bare {
+            if let Some(&ahead) = self.worktree_ahead.get(&wt.path)
+                && ahead > 0
+            {
+                parts.push(format!("↑{ahead}"));
+            }
             parts.push(match self.worktree_changes.get(&wt.path) {
                 Some(Ok(0)) => "clean".into(),
                 Some(Ok(n)) => format!("{n} changed"),
@@ -769,7 +794,7 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
         let state = self.worktree_state(wt);
         let state_style = if wt.prunable.is_some() {
             theme.error
-        } else if wt.locked.is_some() || state.ends_with("changed") {
+        } else if wt.locked.is_some() || state.ends_with("changed") || state.contains('↑') {
             theme.label_tag
         } else {
             theme.muted
