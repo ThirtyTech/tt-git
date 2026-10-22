@@ -592,8 +592,8 @@ impl<'a> Mock<'a> {
         self.sb.write("src/hooks/useNotifications.ts", USE_NOTIFICATIONS);
     }
 
-    /// A worktree for a new fix branch with work in progress, and a
-    /// detached one for reviewing a feature, both under `.worktrees/`.
+    /// A worktree for a new fix branch with a commit and work in progress,
+    /// and a detached one for reviewing a feature, both under `.worktrees/`.
     fn worktrees(&self) {
         let fix = self.sb.path().join(".worktrees/fix/bell-a11y");
         let review = self.sb.path().join(".worktrees/review-search");
@@ -605,6 +605,8 @@ impl<'a> Mock<'a> {
         let bell = BELL.replace("<button", "<button aria-label=\"Notifications\"");
         std::fs::write(fix.join("src/components/NotificationBell.tsx"), bell).unwrap();
         std::fs::write(fix.join("src/components/bell.test.tsx"), "// TODO\n").unwrap();
+        self.sb.git(&["-C", fix_s, "add", "src/components/bell.test.tsx"]);
+        self.sb.git(&["-C", fix_s, "commit", "-q", "-m", "Test the bell's label"]);
     }
 
     /// src/api/client.ts built up line by line (see [`CLIENT`]), one commit
