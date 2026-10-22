@@ -511,6 +511,8 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Graph, Command::CherryPick, &["C"]),
     (Context::Graph, Command::Filter, &["f"]),
     (Context::Graph, Command::Copy, &["c"]),
+    (Context::Graph, Command::PrevTab, &["[", "{"]),
+    (Context::Graph, Command::NextTab, &["]", "}"]),
     (Context::Branches, Command::Copy, &["c"]),
     (Context::Branches, Command::Merge, &["M"]),
     (Context::Branches, Command::Rebase, &["r"]),

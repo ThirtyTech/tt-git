@@ -2051,6 +2051,11 @@ impl App {
             }
             Command::CloseDetails if matches!(self.focus, PaneId::Graph | PaneId::Details) => self.close_details(),
             Command::Filter if self.focus == PaneId::Graph => self.open_graph_filter(),
+            // The graph has no tabs of its own; step the branches pane's.
+            Command::NextTab | Command::PrevTab if self.focus == PaneId::Graph => {
+                let ctx = self.ctx.clone();
+                self.branches.on_command(cmd, &ctx);
+            }
             Command::Refresh => self.update(Action::Refresh),
             Command::Palette => {
                 // In blame, a number typed there goes to that line, as `:42` in vim.
