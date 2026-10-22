@@ -197,7 +197,9 @@ in. If you're already on the latest release, it says so and stops.
 
 Restart tt-git afterwards to use the new version. A tt-git that's running
 keeps working: on Windows the old `tt-git.exe` is renamed to `tt-git.exe.old`
-first and removed by the next update.
+first, with a unique suffix if an earlier backup is still in use. This also
+works across several updates with older copies still open. Later installs
+remove backups once those copies have exited.
 
 It needs `curl`, plus `sh` on Linux and macOS or Windows PowerShell on
 Windows. All three come with the operating system. It refuses a tt-git that
