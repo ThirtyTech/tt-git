@@ -67,8 +67,23 @@ changed 2026-10-17 01:30 PM (3w ago)
 ```
 
 It changes as you step back and forward, so you can see how old each version is. In the working
-tree, `+ uncommitted changes` follows it when some lines aren't committed yet. When the pane is too
-narrow for the title and the date both, the date is left out.
+tree, `+ uncommitted changes` follows it when some lines aren't committed yet.
+
+At the very end, after a `·`, blame says whether you're looking at the latest version of the file:
+
+| It says | When |
+|---|---|
+| `latest`, in green | The file is the same as in `HEAD`: no commit since has changed it. The working tree is always the latest. |
+| `3 newer commits`, in yellow | That many commits between this version and `HEAD` have changed the file, counting a rename and the commits under its new name. |
+| `not on HEAD`, in yellow | The version is from a commit that isn't in `HEAD`'s history, such as one on another branch, and the file differs from `HEAD`'s. |
+
+```text
+changed 2026-10-17 01:30 PM (3w ago) · 2 newer commits
+```
+
+So after you [step back](#stepping-back), or open blame from an older commit in the graph, you can
+see how far you are from the latest at a glance. When the pane is too narrow for the title and all
+of this, the date is left out first, and `latest` or the count stays.
 
 ## Reading a line
 

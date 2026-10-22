@@ -474,6 +474,28 @@ tree):
 git log -1 --format=%at <rev> -- <path>
 ```
 
+Whether that's the latest version is found by comparing the file's blob in
+`<rev>` with the one in `HEAD`. The working tree is always the latest, so
+blaming it runs none of these.
+
+```sh
+git rev-parse --verify -q <rev>:<path>
+git rev-parse --verify -q HEAD:<path>
+```
+
+When they're the same, the title says `latest`. When `HEAD` has no file at
+`<path>`, tt-git looks for where it was renamed to with
+`git diff --name-status -M --diff-filter=R -z <rev> HEAD` and compares with
+that. When they differ, `git merge-base --is-ancestor <rev> HEAD` says
+whether the version is in `HEAD`'s history. If it is, the count of newer
+commits is:
+
+```sh
+git rev-list --count <rev>..HEAD -- <path> [<new path>]
+```
+
+If it isn't, the title says `not on HEAD`.
+
 <kbd>{'{'}</kbd> and <kbd>{'}'}</kbd> step through the commits that changed the file,
 found with `git log`. Back, from the version at `<rev>` (`HEAD` for the
 working tree):
