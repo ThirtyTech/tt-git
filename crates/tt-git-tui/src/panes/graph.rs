@@ -584,21 +584,23 @@ impl GraphPane {
                 spans.push(Span::raw(" "));
             }
         }
-        push_fit(&mut spans, &commit.summary, text_width, Style::default());
+        // Merge commits are dimmed so the work itself stands out.
+        let dim = |style: Style| if row.is_merge() { theme.muted } else { style };
+        push_fit(&mut spans, &commit.summary, text_width, dim(Style::default()));
 
         if meta > 0 {
             if show_author {
                 spans.push(Span::raw(" "));
-                push_fit(&mut spans, &commit.author_name, AUTHOR_WIDTH, theme.author);
+                push_fit(&mut spans, &commit.author_name, AUTHOR_WIDTH, dim(theme.author));
             }
             spans.push(Span::raw(" "));
             let date = match self.dates {
                 DateStyle::Relative => relative(now, commit.commit_time),
                 DateStyle::Clock => clock_time(commit.commit_time, self.clock.utc_offset(commit.commit_time)),
             };
-            spans.push(Span::styled(fit_right(&date, date_width), theme.date));
+            spans.push(Span::styled(fit_right(&date, date_width), dim(theme.date)));
             spans.push(Span::raw(" "));
-            spans.push(Span::styled(commit.short_oid().to_string(), theme.sha));
+            spans.push(Span::styled(commit.short_oid().to_string(), dim(theme.sha)));
         }
         Line::from(spans)
     }
@@ -1046,6 +1048,33 @@ mod tests {
                 }
             }
         }
+    }
+
+    #[test]
+    fn merge_commits_are_dimmed() {
+        let (m, a, b) = ("a".repeat(40), "b".repeat(40), "c".repeat(40));
+        let commits = vec![commit(&m, &[&a, &b]), commit(&a, &[]), commit(&b, &[])];
+        let theme = Theme::default();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let ctx = Ctx::new(tx);
+        let mut graph = GraphPane::new(Arc::new(tt_git_core::time::FixedClock(0)));
+        let load = graph.begin_load();
+        graph.apply_batch(load.generation(), commits, true, &ctx);
+
+        let style_of = |i: usize, text: &str| {
+            let line = graph.render_row(i, 2, 200, 0, &theme);
+            line.spans
+                .iter()
+                .find(|s| s.content.starts_with(text))
+                .expect(text)
+                .style
+        };
+        for text in ["a commit", "Ann", "aaaaaaa"] {
+            assert_eq!(style_of(0, text), theme.muted, "merge {text}");
+        }
+        assert_eq!(style_of(1, "a commit"), Style::default());
+        assert_eq!(style_of(1, "Ann"), theme.author);
+        assert_eq!(style_of(1, "bbbbbbb"), theme.sha);
     }
 
     #[test]
