@@ -129,6 +129,10 @@ fn help_popup_lists_bindings() {
     t.press("?");
     let screen = t.screen();
     assert!(screen.contains("Keybindings"), "{screen}");
+    assert!(
+        screen.contains(concat!("tt-git ", env!("CARGO_PKG_VERSION"))),
+        "{screen}"
+    );
     assert!(screen.contains("all/current"), "{screen}");
     // Keys don't leak through to panes while the popup is open.
     t.press("a").press("esc");
