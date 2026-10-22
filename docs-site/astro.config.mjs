@@ -126,6 +126,7 @@ export default defineConfig({
 						{ label: 'Events', slug: 'plugins/events' },
 						{ label: 'CLI and socket API', slug: 'plugins/api' },
 						{ label: 'Example plugins', slug: 'plugins/examples' },
+						{ label: 'Azure DevOps', slug: 'plugins/azure-devops' },
 					],
 				},
 				{

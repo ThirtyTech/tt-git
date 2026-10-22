@@ -158,6 +158,24 @@ Print the [unified branch list](/panes/branches/#one-row-per-branch), most
 recently active first, with `*` on the checked-out branch. `--json` adds each
 branch's refs, dates and `state` (the status column).
 
+## tt-git branch decorate
+
+```sh
+tt-git branch decorate [--plugin ID] [BRANCH=TEXT]...
+tt-git branch decorate [--plugin ID] --clear
+```
+
+Set the text a plugin shows in its [column of the branch
+list](/panes/branches/#plugin-columns), replacing everything that plugin set
+before. `--plugin` defaults to `TTGIT_PLUGIN_ID`, so a plugin doesn't need it.
+With no `BRANCH=TEXT`, or with `--clear`, the plugin's column goes away.
+Needs a running tt-git (`TTGIT_SOCKET_PATH`, or `--socket`), and the plugin
+must be installed and enabled. Text is cut to 10 cells.
+
+```sh
+tt-git branch decorate feature/login=!1423 fix/typo=!1431
+```
+
 ## tt-git update
 
 ```sh

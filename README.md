@@ -256,6 +256,13 @@ tt-git plugin list
 variables, events, panes, the socket API and the CLI.
 [examples/plugins](examples/plugins) has working examples.
 
+The [Azure DevOps plugin](plugins/azure-devops) shows each branch's active
+pull request in the branch list:
+
+```sh
+tt-git plugin install ThirtyTech/tt-git/plugins/azure-devops
+```
+
 ## Development
 
 You need Rust 1.89 or newer (the workspace uses edition 2024) and git 2.31
