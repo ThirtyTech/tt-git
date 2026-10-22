@@ -2592,7 +2592,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "color-eyre",
@@ -2614,7 +2614,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "chrono",
  "etcetera",
@@ -2630,7 +2630,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-graph"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "criterion",
  "insta",
@@ -2639,7 +2639,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-plugin"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "interprocess",
  "regex",
@@ -2655,7 +2655,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-testkit"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "crossterm",
  "ratatui",
@@ -2670,7 +2670,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-tui"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "crossterm",
  "futures",
