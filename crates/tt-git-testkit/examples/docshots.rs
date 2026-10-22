@@ -110,6 +110,16 @@ children = [
     driver.press("j");
     save(&out, "layout-four-pane", &driver);
 
+    // A push two seconds in, in its own repo since it pushes for real.
+    // Drawn before the push reports back, so it still shows running.
+    let pushing = Sandbox::named(REPO);
+    let mock = Mock::new(&pushing);
+    mock.build();
+    mock.working_changes();
+    let mut driver = TestDriver::with_size(Config::default(), &pushing, WIDTH, HEIGHT);
+    driver.press_frame("P").tick(9);
+    save(&out, "pushing", &driver);
+
     // A merge stopped on a conflict.
     let conflict = Sandbox::named(REPO);
     let mock = Mock::new(&conflict);

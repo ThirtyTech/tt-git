@@ -585,6 +585,14 @@ export const shots = [
 
 	// ---- remotes, worktrees -------------------------------------------------------------
 	{
+		name: 'remotes-pushing',
+		capture: 'pushing',
+		view: { region: { cells: [96, 48, 94, 3] } },
+		callouts: [
+			{ target: { find: '⠏ pushing' }, text: '**Running**: what git is doing, and for how long', markerSide: 'above' },
+		],
+	},
+	{
 		name: 'remotes-title',
 		capture: 'overview',
 		view: { region: { cells: [0, 35, 95, 3] } },

@@ -1,0 +1,5 @@
+---
+source: crates/tt-git-tui/tests/sync.rs
+expression: help_bar(&t)
+---
+enter files + diff  space show/hide details  a all/current  t relative/clock dates  tab next pane  ? help  q quit       │ ⠋ pushing main → origin/main

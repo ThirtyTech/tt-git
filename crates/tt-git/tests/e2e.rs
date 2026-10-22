@@ -126,6 +126,24 @@ fn stage_and_commit_in_the_real_binary() {
 }
 
 #[test]
+fn push_says_where_it_pushed_in_the_real_binary() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.add_remote("origin");
+    sb.git(&["push", "-q", "-u", "origin", "HEAD"]);
+    sb.commit("local work");
+    let mut t = spawn(&sb, &[]);
+    t.wait_until(|s| s.contains("main → origin/main ↑1"))
+        .expect("one ahead");
+    t.send_str("P").unwrap();
+    t.wait_until(|s| s.contains("✓ pushed main → origin/main") && !s.contains("↑1"))
+        .expect("pushed");
+    t.send_str("q").unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert_eq!(sb.rev_parse("origin/main"), sb.rev_parse("main"));
+}
+
+#[test]
 fn blame_a_line_open_its_commit_and_come_back() {
     let sb = Sandbox::new();
     sb.commit_file(

@@ -4,7 +4,7 @@ use std::borrow::Cow;
 use std::ops::Range;
 
 use ratatui::style::Style;
-use ratatui::text::Span;
+use ratatui::text::{Line, Span};
 use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::keymap::Command;
@@ -87,6 +87,29 @@ pub fn truncate(s: &str, width: usize) -> String {
     }
     out.push('…');
     out
+}
+
+/// Like [`truncate`] for differently styled pieces of one line: cuts at
+/// `width` columns, ending with `…` in the style of the piece it cut.
+pub fn truncate_spans(parts: Vec<(String, Style)>, width: usize) -> Line<'static> {
+    let total: usize = parts.iter().map(|(t, _)| t.width()).sum();
+    if total <= width {
+        return Line::from(parts.into_iter().map(|(t, s)| Span::styled(t, s)).collect::<Vec<_>>());
+    }
+    let mut spans = Vec::new();
+    let mut left = width;
+    for (text, style) in parts {
+        if text.width() < left {
+            left -= text.width();
+            spans.push(Span::styled(text, style));
+        } else {
+            // Something comes after this piece even when it fits exactly,
+            // so it always ends with `…`.
+            spans.push(Span::styled(truncate(&format!("{text}…"), left), style));
+            break;
+        }
+    }
+    Line::from(spans)
 }
 
 /// Pads or truncates `s` to exactly `width` columns.
@@ -209,6 +232,25 @@ fn mark<'a>(pieces: Vec<(&'a str, Style)>, marks: &[Range<usize>], style: Style)
 mod tests {
     use super::*;
     use ratatui::style::Color;
+
+    #[test]
+    fn styled_pieces_are_cut_in_the_piece_that_overflows() {
+        let red = Style::new().fg(Color::Red);
+        let blue = Style::new().fg(Color::Blue);
+        let parts = || vec![("abc".to_string(), red), ("defgh".to_string(), blue)];
+        let line = truncate_spans(parts(), 8);
+        assert_eq!(
+            line,
+            Line::from(vec![Span::styled("abc", red), Span::styled("defgh", blue)])
+        );
+        let line = truncate_spans(parts(), 6);
+        assert_eq!(
+            line,
+            Line::from(vec![Span::styled("abc", red), Span::styled("de…", blue)])
+        );
+        let line = truncate_spans(parts(), 3);
+        assert_eq!(line, Line::from(vec![Span::styled("ab…", red)]));
+    }
 
     #[test]
     fn marks_split_across_pieces() {
