@@ -168,9 +168,12 @@ open handle makes removal fail halfway.
 
 ```powershell
 git worktree remove .worktrees/graph-colors   # deletes ignored files like target/ too
-git branch -d graph-colors                    # once merged
 git worktree prune                            # clears records of folders deleted by hand
 ```
+
+Removing the worktree frees the disk space. Keep the branch: it stays in the
+git graph, which is fine. Delete it (`git branch -d graph-colors`) only when
+asked to.
 
 `git worktree remove` refuses if there are uncommitted or untracked files.
 Check what they are before reaching for `--force`.
