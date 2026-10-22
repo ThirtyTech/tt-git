@@ -395,6 +395,92 @@ fn socket_api() {
     assert!(t.app().plugin_host().unwrap().actions().is_empty());
 }
 
+/// The branches pane's row for `branch`.
+fn branch_row(t: &TestDriver, branch: &str) -> String {
+    t.pane_lines(PaneId::Branches)
+        .into_iter()
+        .find(|row| row.get(2..).is_some_and(|r| r.starts_with(&format!("{branch} "))))
+        .unwrap_or_else(|| {
+            panic!(
+                "no row for {branch}:
+{}",
+                t.screen()
+            )
+        })
+}
+
+#[test]
+fn branch_decorations_show_in_an_aligned_column() {
+    let sb = repo();
+    sb.branch("other");
+    sb.branch("plain");
+    PluginFixture::new(&sb, "acme.prs", bin())
+        .action(
+            "mark",
+            "Mark branches",
+            &["global"],
+            &["cli", "branch", "decorate", "other=!7"],
+        )
+        .install(&sb);
+    let mut t = TestDriver::with_plugins(Config::default(), &sb, bin());
+
+    let set = call_api(
+        &mut t,
+        "branch.decorations.set",
+        json!({ "plugin_id": "acme.prs", "decorations": { "main": "!1234", "other": "!7\u{1b}", "gone": "!9" } }),
+    )
+    .unwrap();
+    assert_eq!(set["count"], 3);
+    t.render();
+    let (main, other, plain) = (branch_row(&t, "main"), branch_row(&t, "other"), branch_row(&t, "plain"));
+    let col = |row: &str, text: &str| row.find(text).unwrap_or_else(|| panic!("{text:?} not in {row:?}"));
+    assert_eq!(col(&main, "!1234"), col(&other, "!7"), "\n{main}\n{other}");
+    // Rows without a decoration keep the state column where the others have it.
+    assert_eq!(col(&plain, "local"), col(&other, "local"), "\n{plain}\n{other}");
+
+    let branches = call_api(&mut t, "branch.list", Value::Null).unwrap();
+    let by_name = |name: &str| {
+        branches
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["name"] == name)
+            .unwrap()
+            .clone()
+    };
+    assert_eq!(by_name("main")["decorations"], json!({ "acme.prs": "!1234" }));
+    assert_eq!(by_name("other")["decorations"], json!({ "acme.prs": "!7" }));
+    assert_eq!(by_name("plain")["decorations"], json!({}));
+
+    let err = call_api(
+        &mut t,
+        "branch.decorations.set",
+        json!({ "plugin_id": "acme.nobody", "decorations": {} }),
+    )
+    .unwrap_err();
+    assert!(err.to_string().starts_with("plugin_not_found"), "{err}");
+    let err = call_api(
+        &mut t,
+        "branch.decorations.set",
+        json!({ "plugin_id": "acme.prs", "decorations": ["main"] }),
+    )
+    .unwrap_err();
+    assert!(err.to_string().starts_with("invalid_params"), "{err}");
+
+    // `tt-git branch decorate` from the plugin replaces its whole set.
+    t.press(":").type_text("mark branches").press("enter");
+    until(&mut t, "decorate through the CLI", |t| {
+        t.app().branches().decorations_for("main").is_empty()
+    });
+    t.render();
+    assert!(branch_row(&t, "other").contains("!7"));
+    assert!(!branch_row(&t, "main").contains("!1234"));
+
+    call_api(&mut t, "plugin.disable", json!({ "plugin_id": "acme.prs" })).unwrap();
+    t.render();
+    assert!(!branch_row(&t, "other").contains("!7"));
+}
+
 #[test]
 fn events_subscribe_streams_events() {
     let sb = repo();

@@ -8,7 +8,7 @@ mod stage;
 mod status;
 
 pub use blame::BlameView;
-pub use branches::{BranchTab, BranchesPane};
+pub use branches::{BranchTab, BranchesPane, DECORATION_WIDTH};
 pub use details::{DetailsPane, DetailsSubject, SavedDetails};
 pub use graph::{BranchFocus, DateStyle, GraphPane, GraphScope, LabelKind, LoadToken, RefLabel, build_labels};
 pub use stage::{StageSideId, StageView};

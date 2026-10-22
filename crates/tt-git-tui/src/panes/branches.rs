@@ -4,7 +4,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use tt_git_core::branches::{matches_filter, tags_newest_first};
 use tt_git_core::time::{SharedClock, relative};
@@ -26,6 +26,8 @@ const DATE_WIDTH: usize = 4;
 const AUTHOR_WIDTH: usize = 14;
 /// Narrowest commit subject column worth showing in tag and merged/unmerged rows.
 const SUBJECT_MIN_WIDTH: usize = 12;
+/// Widest a plugin's decoration column gets.
+pub const DECORATION_WIDTH: usize = 10;
 
 /// The pane's lists, switched lazygit-style with `[` and `]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -109,6 +111,9 @@ pub struct BranchesPane {
     /// Where each tab's name was drawn in the title last frame: its row and
     /// columns, for clicks.
     tab_cells: Vec<(BranchTab, u16, std::ops::Range<u16>)>,
+    /// Short text plugins put next to branches: by plugin id, then by
+    /// branch name. Each plugin gets a column in the full list.
+    decorations: BTreeMap<String, HashMap<String, String>>,
 }
 
 impl BranchesPane {
@@ -130,7 +135,48 @@ impl BranchesPane {
             cursors: [Cursor::default(); BranchTab::ALL.len()],
             dates: DrawnDates::default(),
             tab_cells: Vec::new(),
+            decorations: BTreeMap::new(),
         }
+    }
+
+    /// Replaces `plugin`'s decorations; an empty map removes its column.
+    pub fn set_decorations(&mut self, plugin: &str, decorations: HashMap<String, String>) {
+        if decorations.is_empty() {
+            self.decorations.remove(plugin);
+        } else {
+            self.decorations.insert(plugin.to_string(), decorations);
+        }
+    }
+
+    /// Drops the decorations of every plugin `keep` returns false for.
+    pub fn retain_decorations(&mut self, keep: impl Fn(&str) -> bool) {
+        self.decorations.retain(|plugin, _| keep(plugin));
+    }
+
+    /// Each plugin's decoration for `branch`.
+    pub fn decorations_for(&self, branch: &str) -> BTreeMap<&str, &str> {
+        self.decorations
+            .iter()
+            .filter_map(|(plugin, map)| Some((plugin.as_str(), map.get(branch)?.as_str())))
+            .collect()
+    }
+
+    /// The decoration columns of the full list: each plugin with a value for
+    /// a listed branch, and the widest of those values.
+    fn decoration_columns(&self) -> Vec<(&str, usize)> {
+        self.decorations
+            .iter()
+            .filter_map(|(plugin, map)| {
+                let widest = self
+                    .entries
+                    .iter()
+                    .filter_map(|e| map.get(&e.name))
+                    .map(|text| text.width())
+                    .max()?;
+                Some((plugin.as_str(), widest.min(DECORATION_WIDTH)))
+            })
+            .filter(|(_, width)| *width > 0)
+            .collect()
     }
 
     /// Whether a relative date drawn last frame would read differently at `now`.
@@ -827,12 +873,26 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
         }
     }
 
-    fn render_entry<'a>(&self, entry: &'a BranchEntry, width: usize, theme: &Theme) -> Line<'a> {
+    fn render_entry<'a>(
+        &self,
+        entry: &'a BranchEntry,
+        columns: &[(&str, usize)],
+        width: usize,
+        theme: &Theme,
+    ) -> Line<'a> {
         let (state, state_style) = state_text(&entry.state(), theme);
-        let name_width = width.saturating_sub(2 + 1 + STATE_WIDTH + 1 + DATE_WIDTH);
-        Line::from(vec![
+        let decorations: usize = columns.iter().map(|(_, w)| w + 1).sum();
+        let name_width = width.saturating_sub(2 + 1 + STATE_WIDTH + 1 + DATE_WIDTH + decorations);
+        let mut spans = vec![
             Self::marker(entry, theme),
             Span::styled(fit(&entry.name, name_width), Self::name_style(entry, theme)),
+        ];
+        for (plugin, w) in columns {
+            let text = self.decorations[*plugin].get(&entry.name).map_or("", String::as_str);
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(fit(text, *w), theme.sha));
+        }
+        spans.extend([
             Span::raw(" "),
             Span::styled(fit(&state, STATE_WIDTH), state_style),
             Span::raw(" "),
@@ -840,7 +900,8 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
                 fit_right(&relative(self.clock.now(), entry.activity), DATE_WIDTH),
                 theme.date,
             ),
-        ])
+        ]);
+        Line::from(spans)
     }
 
     /// A merged/unmerged row: name, tip subject, author and commit date,
@@ -1296,11 +1357,16 @@ impl Component for BranchesPane {
         } else {
             (0, 0)
         };
+        let columns = if self.tab == BranchTab::All {
+            self.decoration_columns()
+        } else {
+            Vec::new()
+        };
         let lines: Vec<Line> = (start..end)
             .map(|pos| {
                 let i = self.visible[pos];
                 let line = match self.tab {
-                    BranchTab::All => self.render_entry(&list[i], width, theme),
+                    BranchTab::All => self.render_entry(&list[i], &columns, width, theme),
                     BranchTab::Tags => self.render_tag(&self.tags[i], name_width, distance_width, width, theme),
                     BranchTab::Stash => self.render_stash(&self.stashes[i], width, theme),
                     BranchTab::Worktrees => self.render_worktree(i, name_width, state_width, size_width, width, theme),
