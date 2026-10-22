@@ -81,8 +81,10 @@ impl BranchEntry {
         if local.upstream_gone {
             return BranchState::Gone;
         }
+        // The upstream may be in another entry, when a same-named branch
+        // also tracks it.
         if let Some(up) = &local.upstream
-            && self.remotes.iter().any(|r| &r.full_name == up)
+            && (up.starts_with("refs/remotes/") || self.remotes.iter().any(|r| &r.full_name == up))
         {
             return if local.ahead == 0 && local.behind == 0 {
                 BranchState::InSync
@@ -462,6 +464,7 @@ mod tests {
             assert_eq!(dev.state(), BranchState::InSync);
             let feat = entries.iter().find(|e| e.name == "feat/x").unwrap();
             assert!(feat.remotes.is_empty());
+            assert_eq!(feat.state(), BranchState::Diverged { ahead: 1, behind: 0 });
         }
     }
 
