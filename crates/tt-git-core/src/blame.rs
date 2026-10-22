@@ -140,6 +140,17 @@ impl Blame {
     }
 }
 
+/// How a committed version of a file stands against `HEAD`'s.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Recency {
+    /// The same as in `HEAD`: no commit since has changed it.
+    Latest,
+    /// This many commits on the way to `HEAD` have changed it since.
+    Behind(usize),
+    /// Different from `HEAD`'s, and not in its history: from another branch.
+    Elsewhere,
+}
+
 /// The most edits [`follow_line`] looks through before it gives up on
 /// diffing and keeps the line's place instead.
 const FOLLOW_MAX_EDITS: usize = 1000;

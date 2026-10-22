@@ -875,6 +875,50 @@ impl Repo {
         Ok(out.into_stdout_string().trim().parse().ok())
     }
 
+    /// How `path` as of `rev` stands against `HEAD`'s version of it,
+    /// following it to its new name when it was renamed since.
+    pub fn file_recency(&self, rev: &str, path: &str) -> Result<crate::blame::Recency> {
+        use crate::blame::Recency;
+        let blob = |rev: &str, path: &str| {
+            let spec = format!("{rev}:{path}");
+            let out = self.git.run(&["rev-parse", "--verify", "-q", spec.as_str()]).ok()?;
+            Some(out.into_stdout_string().trim().to_string())
+        };
+        let mut paths = vec![path.to_string()];
+        let mut head = blob("HEAD", path);
+        if head.is_none()
+            && let Some(renamed) = self.renamed_since(rev, path)?
+        {
+            head = blob("HEAD", &renamed);
+            paths.push(renamed);
+        }
+        if head.is_some() && head == blob(rev, path) {
+            return Ok(Recency::Latest);
+        }
+        if !self.is_ancestor(rev, "HEAD")? {
+            return Ok(Recency::Elsewhere);
+        }
+        let range = format!("{rev}..HEAD");
+        let mut args = vec!["rev-list", "--count", range.as_str(), "--"];
+        args.extend(paths.iter().map(String::as_str));
+        let count = self.git.run(&args)?.into_stdout_string().trim().parse().unwrap_or(0);
+        Ok(Recency::Behind(count))
+    }
+
+    /// Where `path` at `rev` is in `HEAD` when it was renamed in between.
+    fn renamed_since(&self, rev: &str, path: &str) -> Result<Option<String>> {
+        let out = self
+            .git
+            .run(&["diff", "--name-status", "-M", "--diff-filter=R", "-z", rev, "HEAD"])?
+            .into_stdout_string();
+        // Each rename is `R<score>`, the old path and the new one.
+        let fields: Vec<&str> = out.split('\0').collect();
+        Ok(fields
+            .chunks(3)
+            .find(|c| c.len() == 3 && c[1] == path)
+            .map(|c| c[2].to_string()))
+    }
+
     /// The version of `path` before the one at `rev` (the working tree when
     /// `None`): the commit before the newest one that changed it, and the
     /// file's path there, following renames. From a working tree with

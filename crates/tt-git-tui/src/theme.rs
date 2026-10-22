@@ -43,6 +43,10 @@ pub struct Theme {
     pub blame_authors: [Color; 16],
     /// Blame's lines not committed yet: their stripe and author.
     pub blame_uncommitted: Style,
+    /// Blame's title when it shows the file as in `HEAD`, and when newer
+    /// commits have changed it.
+    pub blame_latest: Style,
+    pub blame_older: Style,
     /// Text a search matched.
     pub search_match: Style,
 }
@@ -118,6 +122,8 @@ impl Default for Theme {
                 Color::Rgb(175, 188, 200),
             ],
             blame_uncommitted: Style::new().fg(Color::Green).add_modifier(Modifier::BOLD),
+            blame_latest: Style::new().fg(Color::Green).add_modifier(Modifier::BOLD),
+            blame_older: Style::new().fg(Color::Yellow).add_modifier(Modifier::BOLD),
             search_match: Style::new().fg(Color::Black).bg(Color::Yellow),
         }
     }

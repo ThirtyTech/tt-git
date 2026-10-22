@@ -1,4 +1,4 @@
-use tt_git_core::{BranchHistory, FileState, GitCli, GitError, Head, LogFilter, LogScope, RefKind, Repo};
+use tt_git_core::{BranchHistory, FileState, GitCli, GitError, Head, LogFilter, LogScope, Recency, RefKind, Repo};
 use tt_git_testkit::{BASE_TIME, Sandbox};
 
 fn open(sb: &Sandbox) -> Repo {
@@ -748,6 +748,35 @@ fn file_versions_step_through_the_commits_that_changed_the_file() {
     // A file not yet committed has nothing before it.
     sb.write("fresh.txt", "new\n");
     assert_eq!(repo.file_version_before(None, "fresh.txt").unwrap(), None);
+}
+
+#[test]
+fn file_recency_says_whether_a_version_is_heads() {
+    let sb = Sandbox::new();
+    let text = |last: &str| format!("one\ntwo\nthree\nfour\nfive\n{last}\n");
+    let one = sb.commit_file("old.txt", &text("a"), "add old");
+    let two = sb.commit_file("old.txt", &text("b"), "edit old");
+    let other = sb.commit_file("other.txt", "x\n", "elsewhere");
+    let repo = open(&sb);
+
+    // A commit after the file's last change still has HEAD's version.
+    assert_eq!(repo.file_recency("HEAD", "old.txt").unwrap(), Recency::Latest);
+    assert_eq!(repo.file_recency(&two, "old.txt").unwrap(), Recency::Latest);
+    assert_eq!(repo.file_recency(&other, "old.txt").unwrap(), Recency::Latest);
+    assert_eq!(repo.file_recency(&one, "old.txt").unwrap(), Recency::Behind(1));
+
+    // Renamed since, then changed under its new name: both count.
+    sb.git(&["mv", "old.txt", "new.txt"]);
+    sb.commit_staged("rename");
+    sb.commit_file("new.txt", &text("c"), "edit new");
+    assert_eq!(repo.file_recency(&one, "old.txt").unwrap(), Recency::Behind(3));
+    assert_eq!(repo.file_recency(&two, "old.txt").unwrap(), Recency::Behind(2));
+
+    // A version on another branch, not in HEAD's history.
+    sb.git(&["checkout", "-q", "-b", "side", &two]);
+    let side = sb.commit_file("old.txt", "side\n", "side edit");
+    sb.git(&["checkout", "-q", "-"]);
+    assert_eq!(repo.file_recency(&side, "old.txt").unwrap(), Recency::Elsewhere);
 }
 
 #[test]

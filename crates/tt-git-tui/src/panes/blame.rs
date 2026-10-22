@@ -19,7 +19,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use regex::{Regex, RegexBuilder};
 use tt_git_core::time::{SharedClock, clock_time, relative};
-use tt_git_core::{Blame, BlameCommit, follow_line};
+use tt_git_core::{Blame, BlameCommit, Recency, follow_line};
 
 use super::DateStyle;
 use crate::action::Action;
@@ -61,6 +61,8 @@ struct Level {
     blame: Option<Result<Blame, String>>,
     /// When the file last changed in a commit, as of `rev`.
     changed: Option<i64>,
+    /// How this version stands against `HEAD`'s.
+    recency: Option<Recency>,
     /// The code, line by line.
     syntax: LineTokens,
     /// Each commit's index into the theme's heat colors, by age.
@@ -104,6 +106,7 @@ impl Level {
             path,
             blame: None,
             changed: None,
+            recency: None,
             syntax: Vec::new(),
             heat: Vec::new(),
             authors: Vec::new(),
@@ -364,14 +367,16 @@ impl BlameView {
         self.level().selected()
     }
 
-    /// Takes blame load `id`'s result, and when the file last changed in a
-    /// commit as of that version. Returns whether it was one of this view's.
+    /// Takes blame load `id`'s result, when the file last changed in a
+    /// commit as of that version, and how that version stands against
+    /// `HEAD`'s. Returns whether it was one of this view's.
     pub fn set_blame(
         &mut self,
         id: u64,
         result: Result<Blame, String>,
         syntax: LineTokens,
         changed: Option<i64>,
+        recency: Option<Recency>,
         ctx: &Ctx,
     ) -> bool {
         let Some(index) = self.levels.iter().position(|l| l.id == id) else {
@@ -395,6 +400,7 @@ impl BlameView {
         }
         level.blame = Some(result);
         level.changed = changed;
+        level.recency = recency;
         level.syntax = syntax;
         if level.replaces && index > 0 {
             self.levels.remove(index - 1);
@@ -482,6 +488,19 @@ impl BlameView {
             text.push_str(" + uncommitted changes");
         }
         Some(text)
+    }
+
+    /// Whether the version shown is the newest, for the title: `latest`,
+    /// or how many commits have changed the file since, in a color that
+    /// stands out. `None` until it's loaded.
+    pub fn recency(&self, theme: &Theme) -> Option<Span<'static>> {
+        let (text, style) = match self.level().recency? {
+            Recency::Latest => ("latest".to_string(), theme.blame_latest),
+            Recency::Behind(1) => ("1 newer commit".to_string(), theme.blame_older),
+            Recency::Behind(n) => (format!("{n} newer commits"), theme.blame_older),
+            Recency::Elsewhere => ("not on HEAD".to_string(), theme.blame_older),
+        };
+        Some(Span::styled(text, style))
     }
 
     /// The selected line and how many there are, like `2/5`, once loaded.

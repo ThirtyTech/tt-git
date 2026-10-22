@@ -992,10 +992,11 @@ impl App {
                 result,
                 syntax,
                 changed,
+                recency,
             } => {
                 let ctx = self.ctx.clone();
                 if let Some(view) = self.details.blame_mut() {
-                    view.set_blame(id, result, syntax, changed, &ctx);
+                    view.set_blame(id, result, syntax, changed, recency, &ctx);
                 }
             }
             Action::StepBlame { id, rev, path, newest } => {

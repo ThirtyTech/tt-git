@@ -2,7 +2,9 @@
 
 use tt_git_core::patch::FileDiff;
 use tt_git_core::update;
-use tt_git_core::{BaseBranches, BranchEntry, CommitFile, GitError, GitRef, LogFilter, LogScope, RemoteConfig, Repo};
+use tt_git_core::{
+    BaseBranches, BranchEntry, CommitFile, GitError, GitRef, LogFilter, LogScope, Recency, RemoteConfig, Repo,
+};
 
 use crate::action::{Action, RefsSnapshot};
 use crate::config::BranchesConfig;
@@ -659,15 +661,21 @@ pub fn load_blame(repo: Repo, id: u64, rev: Option<String>, path: String, highli
         }
         _ => Vec::new(),
     };
-    let changed = match &result {
-        Ok(_) => repo.file_changed_at(rev.as_deref(), &path).ok().flatten(),
-        Err(_) => None,
+    let (changed, recency) = match (&result, &rev) {
+        (Ok(_), Some(rev)) => (
+            repo.file_changed_at(Some(rev), &path).ok().flatten(),
+            repo.file_recency(rev, &path).ok(),
+        ),
+        // The working tree is the newest there is.
+        (Ok(_), None) => (repo.file_changed_at(None, &path).ok().flatten(), Some(Recency::Latest)),
+        (Err(_), _) => (None, None),
     };
     Action::BlameLoaded {
         id,
         result,
         syntax,
         changed,
+        recency,
     }
 }
 

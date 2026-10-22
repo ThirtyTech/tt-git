@@ -857,18 +857,31 @@ impl Component for DetailsPane {
         if self.loading || self.blame.as_ref().is_some_and(BlameView::loading) {
             title.push_str(" loading…");
         }
-        // A blame's date goes at the right, where there's room for it.
-        let changed = self
-            .blame
-            .as_ref()
-            .and_then(BlameView::changed)
-            .map(|c| format!(" {c} "));
+        // A blame's date and whether it's the latest version go at the
+        // right, where there's room: the date goes first when there isn't.
+        let changed = self.blame.as_ref().and_then(BlameView::changed);
+        let recency = self.blame.as_ref().and_then(|v| v.recency(theme));
         let used = Line::raw(format!("[{}] {title}", PaneId::Details.number())).width() + 4;
         let mut block = pane_block(PaneId::Details, title, focused, theme);
-        if let Some(changed) = changed
-            && used + Line::raw(changed.as_str()).width() <= area.width as usize
+        let mut options: Vec<Vec<Span>> = Vec::new();
+        match (changed, recency) {
+            (Some(changed), Some(recency)) => {
+                options.push(vec![
+                    Span::styled(format!(" {changed} · "), theme.date),
+                    recency.clone(),
+                    Span::raw(" "),
+                ]);
+                options.push(vec![Span::raw(" "), recency, Span::raw(" ")]);
+            }
+            (Some(changed), None) => options.push(vec![Span::styled(format!(" {changed} "), theme.date)]),
+            (None, Some(recency)) => options.push(vec![Span::raw(" "), recency, Span::raw(" ")]),
+            (None, None) => {}
+        }
+        if let Some(right) = options
+            .into_iter()
+            .find(|o| used + Line::from(o.clone()).width() <= area.width as usize)
         {
-            block = block.title_top(Line::styled(changed, theme.date).right_aligned());
+            block = block.title_top(Line::from(right).right_aligned());
         }
         let inner = block.inner(area);
         frame.render_widget(block, area);

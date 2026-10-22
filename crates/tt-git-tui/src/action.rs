@@ -206,6 +206,8 @@ pub enum Action {
         syntax: LineTokens,
         /// When the file last changed in a commit, as of the version blamed.
         changed: Option<i64>,
+        /// How the version blamed stands against `HEAD`'s.
+        recency: Option<tt_git_core::Recency>,
     },
     /// Find the version of `path` before the one at `rev` (the working tree
     /// when `None`), or with `newest`, after it on the way to the version at
