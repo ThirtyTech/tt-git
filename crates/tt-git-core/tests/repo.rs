@@ -247,6 +247,36 @@ fn checkout_history_and_ref_activity() {
 }
 
 #[test]
+fn remote_ref_activity_counts_pushes_not_fetches() {
+    let sb = Sandbox::new();
+    sb.commit("one");
+    let a = "1".repeat(40);
+    let b = "2".repeat(40);
+    let line = |t: i64, msg: &str| format!("{a} {b} Test User <t@e.com> {t} +0000\t{msg}\n");
+    sb.write(
+        ".git/logs/refs/remotes/origin/pushed",
+        &[
+            line(1_700_000_000, "fetch: fast-forward"),
+            line(1_700_000_100, "update by push"),
+            line(1_700_000_200, "pull --no-edit: fast-forward"),
+            line(1_700_000_300, "fetch --all --no-write-fetch-head: fast-forward"),
+        ]
+        .concat(),
+    );
+    sb.write(
+        ".git/logs/refs/remotes/origin/fetched",
+        &[
+            line(1_700_000_000, "clone: from x"),
+            line(1_700_000_300, "fetch: fast-forward"),
+        ]
+        .concat(),
+    );
+    let repo = open(&sb);
+    assert_eq!(repo.ref_activity("refs/remotes/origin/pushed"), Some(1_700_000_100));
+    assert_eq!(repo.ref_activity("refs/remotes/origin/fetched"), None);
+}
+
+#[test]
 fn command_log_records_calls() {
     let sb = Sandbox::new();
     sb.commit("one");

@@ -4,15 +4,17 @@
 //! Grouping rules:
 //! 1. Every local branch is an entry.
 //! 2. A remote branch joins the local branch that has it as its configured
-//!    upstream (so local `x` tracking `origin/feature-x` is one entry).
+//!    upstream (so local `x` tracking `origin/feature-x` is one entry). When
+//!    several do, the one with the same name gets it.
 //! 3. Otherwise it joins the local branch with the same name, after
 //!    stripping `<remote>/`.
 //! 4. Remaining remote branches are grouped by name into remote-only
 //!    entries (`origin/bar` and `upstream/bar` → `bar`).
 //!
 //! Activity is the latest of: any member's tip commit date, any member's
-//! last reflog update (commits, resets, fetches), and the last time HEAD was
-//! checked out to the local branch.
+//! last reflog update (commits and resets; for remote refs only pushes, see
+//! [`Repo::ref_activity`](crate::Repo::ref_activity)), and the last time
+//! HEAD was checked out to the local branch.
 
 use std::collections::{HashMap, HashSet};
 
@@ -169,7 +171,14 @@ pub fn unify(
         .filter(|r| matches!(r.kind, RefKind::RemoteBranch { .. }) && r.symref.is_none())
     {
         let name = r.branch_name().to_string();
-        let idx = match by_upstream.get(&r.full_name).or_else(|| by_name.get(&name)) {
+        let tracks =
+            |idx: &&usize| entries[**idx].local.as_ref().and_then(|l| l.upstream.as_ref()) == Some(&r.full_name);
+        let idx = match by_name
+            .get(&name)
+            .filter(tracks)
+            .or_else(|| by_upstream.get(&r.full_name))
+            .or_else(|| by_name.get(&name))
+        {
             Some(&idx) => idx,
             None => {
                 let idx = entries.len();
@@ -440,6 +449,23 @@ mod tests {
     }
 
     #[test]
+    fn shared_upstream_goes_to_the_same_named_branch() {
+        let up = "refs/remotes/origin/development";
+        let development = tracking(local("development", "a", 100), up, 0, 0);
+        let feature = tracking(local("feat/x", "b", 90), up, 1, 0);
+        for locals in [[development.clone(), feature.clone()], [feature, development]] {
+            let mut refs = locals.to_vec();
+            refs.push(remote("origin", "development", "a", 100));
+            let entries = unify(&refs, &head("development"), &[], |_| None);
+            let dev = entries.iter().find(|e| e.name == "development").unwrap();
+            assert_eq!(dev.remotes.len(), 1);
+            assert_eq!(dev.state(), BranchState::InSync);
+            let feat = entries.iter().find(|e| e.name == "feat/x").unwrap();
+            assert!(feat.remotes.is_empty());
+        }
+    }
+
+    #[test]
     fn merges_local_and_remote_by_upstream_and_name() {
         let refs = vec![
             tracking(local("main", "a", 100), "refs/remotes/origin/main", 0, 0),
@@ -529,7 +555,7 @@ mod tests {
             local("old-tip-recently-checked-out", "a", 10),
             local("old-tip-recently-reset", "b", 20),
             local("newest-commit", "c", 500),
-            remote("origin", "fetched-recently", "d", 30),
+            remote("origin", "pushed-recently", "d", 30),
         ];
         let checkouts = vec![
             Checkout {
@@ -545,7 +571,7 @@ mod tests {
         ];
         let entries = unify(&refs, &head("newest-commit"), &checkouts, |r| match r {
             "refs/heads/old-tip-recently-reset" => Some(700),
-            "refs/remotes/origin/fetched-recently" => Some(600),
+            "refs/remotes/origin/pushed-recently" => Some(600),
             _ => None,
         });
         assert_eq!(
@@ -553,7 +579,7 @@ mod tests {
             vec![
                 "old-tip-recently-checked-out",
                 "old-tip-recently-reset",
-                "fetched-recently",
+                "pushed-recently",
                 "newest-commit"
             ]
         );

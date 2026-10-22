@@ -496,20 +496,28 @@ impl Repo {
     }
 
     /// Time of the most recent update to `full_ref` according to its reflog
-    /// file, if it has one.
+    /// file, if it has one. A remote-tracking ref only counts your pushes:
+    /// a fetch, pull or clone says when you heard of a commit, not when the
+    /// branch changed, and background fetches would make every branch they
+    /// move look just updated.
     pub fn ref_activity(&self, full_ref: &str) -> Option<i64> {
         let rel: PathBuf = full_ref.split('/').collect();
         let path = self.common_dir.join("logs").join(rel);
-        // Only the last line counts, so read just the end of the file.
+        let remote = full_ref.starts_with("refs/remotes/");
+        let keep = |msg: &str| !remote || msg.starts_with("update by push");
+        // Only the last kept line counts, so read just the end of the file,
+        // and stop looking for a push that isn't in a remote ref's recent
+        // entries.
         const WINDOW: u64 = 4096;
+        let limit = if remote { 64 * 1024 } else { u64::MAX };
         let tail = std::fs::File::open(&path).and_then(|mut file| {
             let len = file.metadata()?.len();
-            parse::tail_reflog_time(&mut file, len, WINDOW)
+            parse::tail_reflog_time(&mut file, len, WINDOW, limit, keep)
         });
         match tail {
             Ok(time) => time,
             // E.g. rewritten shorter (`reflog expire`) while being read.
-            Err(_) => std::fs::read(path).ok().and_then(|c| parse::last_reflog_time(&c)),
+            Err(_) => std::fs::read(path).ok().and_then(|c| parse::last_reflog_time(&c, keep)),
         }
     }
 

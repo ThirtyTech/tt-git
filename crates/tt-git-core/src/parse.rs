@@ -456,20 +456,23 @@ pub fn parse_name_status(out: &[u8]) -> Vec<CommitFile> {
     files
 }
 
-/// Timestamp of the last entry of a raw reflog file
-/// (`<old> <new> <name> <<email>> <time> <tz>\t<message>` per line).
-pub fn last_reflog_time(contents: &[u8]) -> Option<i64> {
+/// Timestamp of the last entry of a raw reflog file whose message `keep`
+/// accepts (`<old> <new> <name> <<email>> <time> <tz>\t<message>` per line).
+pub fn last_reflog_time(contents: &[u8], keep: impl Fn(&str) -> bool) -> Option<i64> {
     let text = String::from_utf8_lossy(contents);
-    reflog_line_time(last_nonblank_line(&text)?)
+    reflog_line_time(last_kept_line(&text, &keep)?)
 }
 
 /// [`last_reflog_time`] of a whole reflog of `len` bytes, reading only as
-/// much of its end as it takes to hold the last line: `window` bytes at
-/// first, doubling until a whole non-blank line fits.
+/// much of its end as it takes to hold the last kept line: `window` bytes at
+/// first, doubling until a whole kept line fits. Gives up with `None` once
+/// `limit` bytes hold none.
 pub fn tail_reflog_time<R: std::io::Read + std::io::Seek>(
     file: &mut R,
     len: u64,
     window: u64,
+    limit: u64,
+    keep: impl Fn(&str) -> bool,
 ) -> std::io::Result<Option<i64>> {
     let mut window = window.max(1);
     loop {
@@ -478,7 +481,7 @@ pub fn tail_reflog_time<R: std::io::Read + std::io::Seek>(
         let mut buf = vec![0; (len - start) as usize];
         file.read_exact(&mut buf)?;
         if start == 0 {
-            return Ok(last_reflog_time(&buf));
+            return Ok(last_reflog_time(&buf, keep));
         }
         // The window may start mid-line; the lines after its first newline
         // are whole, and are the file's last lines. (A newline byte is never
@@ -486,16 +489,21 @@ pub fn tail_reflog_time<R: std::io::Read + std::io::Seek>(
         // decoding the whole file.)
         if let Some(nl) = buf.iter().position(|&b| b == b'\n') {
             let text = String::from_utf8_lossy(&buf[nl + 1..]);
-            if let Some(line) = last_nonblank_line(&text) {
+            if let Some(line) = last_kept_line(&text, &keep) {
                 return Ok(reflog_line_time(line));
             }
+        }
+        if window >= limit {
+            return Ok(None);
         }
         window = window.saturating_mul(2);
     }
 }
 
-fn last_nonblank_line(text: &str) -> Option<&str> {
-    text.lines().rev().find(|l| !l.trim().is_empty())
+fn last_kept_line<'a>(text: &'a str, keep: &impl Fn(&str) -> bool) -> Option<&'a str> {
+    text.lines()
+        .rev()
+        .find(|l| !l.trim().is_empty() && keep(l.split_once('\t').map_or("", |(_, msg)| msg)))
 }
 
 fn reflog_line_time(line: &str) -> Option<i64> {
@@ -819,8 +827,30 @@ mod tests {
             "{A} {B} Test User <t@e.com> 1700000000 +0000\tcommit (initial): x\n\
              {B} {C} Test User <t@e.com> 1700000123 -0500\tfetch: fast-forward\n"
         );
-        assert_eq!(last_reflog_time(contents.as_bytes()), Some(1_700_000_123));
-        assert_eq!(last_reflog_time(b""), None);
+        assert_eq!(last_reflog_time(contents.as_bytes(), |_| true), Some(1_700_000_123));
+        assert_eq!(
+            last_reflog_time(contents.as_bytes(), |m| !m.starts_with("fetch")),
+            Some(1_700_000_000)
+        );
+        assert_eq!(last_reflog_time(contents.as_bytes(), |_| false), None);
+        assert_eq!(last_reflog_time(b"", |_| true), None);
+    }
+
+    #[test]
+    fn tail_reflog_time_gives_up_at_the_limit() {
+        let line = |t: u64, msg: &str| format!("{A} {B} Test User <t@e.com> {t} +0000\t{msg}\n");
+        let mut contents = line(1_700_000_000, "update by push");
+        for _ in 0..100 {
+            contents.push_str(&line(1_700_000_500, "fetch: fast-forward"));
+        }
+        let len = contents.len() as u64;
+        let push = |m: &str| m.starts_with("update by push");
+        let mut file = std::io::Cursor::new(contents.as_bytes());
+        assert_eq!(tail_reflog_time(&mut file, len, 64, 1024, push).unwrap(), None);
+        assert_eq!(
+            tail_reflog_time(&mut file, len, 64, len, push).unwrap(),
+            Some(1_700_000_000)
+        );
     }
 
     #[test]
@@ -862,13 +892,16 @@ mod tests {
             ]
             .concat(),
         ];
+        let keeps: [&dyn Fn(&str) -> bool; 2] = [&|_| true, &|m| m.starts_with("one")];
         for contents in cases {
-            let want = last_reflog_time(&contents);
-            let len = contents.len() as u64;
-            for window in (0..=len + 2).filter(|w| *w < 200 || w % 97 == 0 || *w + 3 > len) {
-                let mut file = std::io::Cursor::new(&contents);
-                let got = tail_reflog_time(&mut file, len, window).unwrap();
-                assert_eq!(got, want, "window {window} of {:?}", String::from_utf8_lossy(&contents));
+            for keep in keeps {
+                let want = last_reflog_time(&contents, keep);
+                let len = contents.len() as u64;
+                for window in (0..=len + 2).filter(|w| *w < 200 || w % 97 == 0 || *w + 3 > len) {
+                    let mut file = std::io::Cursor::new(&contents);
+                    let got = tail_reflog_time(&mut file, len, window, u64::MAX, keep).unwrap();
+                    assert_eq!(got, want, "window {window} of {:?}", String::from_utf8_lossy(&contents));
+                }
             }
         }
     }
