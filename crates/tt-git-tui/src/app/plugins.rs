@@ -64,6 +64,7 @@ const PALETTE_BUILTINS: &[Command] = &[
     Command::FocusDetails,
     Command::Zoom,
     Command::PluginLogs,
+    Command::SelfUpdate,
     Command::Help,
     Command::Quit,
 ];
@@ -360,6 +361,8 @@ impl App {
             ),
             // HEAD moving is reported as `head.changed`.
             GitOp::Abort(_) | GitOp::SetBaseBranch(_) | GitOp::Undo { .. } => return,
+            // Not about the repository.
+            GitOp::SelfUpdate { .. } => return,
             GitOp::Commit { message, amend } => (
                 "commit.created",
                 json!({

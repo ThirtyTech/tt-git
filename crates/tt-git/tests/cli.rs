@@ -114,3 +114,18 @@ fn status_and_branch_list() {
     let out = cmd.output().unwrap();
     assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "?? dirty.txt");
 }
+
+#[test]
+fn update_refuses_a_cargo_build_before_going_online() {
+    let sb = Sandbox::new();
+    // The test binary lives in a cargo profile directory.
+    let err = fails(&sb, &["update"]);
+    assert!(
+        err.starts_with("tt-git update: tt-git is running from a cargo build directory"),
+        "{err}"
+    );
+    let err = fails(&sb, &["update", "v0.2.0"]);
+    assert!(err.contains("cargo build directory"), "{err}");
+    let err = fails(&sb, &["update", "--check", "v0.2.0"]);
+    assert!(err.contains("cannot be used with"), "{err}");
+}

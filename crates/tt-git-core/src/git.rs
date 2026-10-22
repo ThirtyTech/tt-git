@@ -346,11 +346,11 @@ fn display_args<S: AsRef<OsStr>>(args: &[S]) -> String {
 }
 
 #[cfg(windows)]
-fn hide_console_window(cmd: &mut Command) {
+pub(crate) fn hide_console_window(cmd: &mut Command) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
     cmd.creation_flags(CREATE_NO_WINDOW);
 }
 
 #[cfg(not(windows))]
-fn hide_console_window(_cmd: &mut Command) {}
+pub(crate) fn hide_console_window(_cmd: &mut Command) {}

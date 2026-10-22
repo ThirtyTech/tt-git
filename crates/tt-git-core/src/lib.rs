@@ -18,6 +18,7 @@ pub mod paths;
 pub mod repo;
 pub mod time;
 pub mod undo;
+pub mod update;
 
 pub use blame::{Blame, BlameCommit, BlameLine, follow_line};
 pub use branches::{AheadBehind, BaseBranches, BranchEntry, BranchState, CheckoutPlan};

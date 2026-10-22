@@ -42,6 +42,8 @@ pub enum Action {
     Tick,
     /// Show a transient message in the help bar.
     Notify(String),
+    /// The latest tt-git release's tag, or why it couldn't be found.
+    UpdateChecked(Result<String, String>),
     /// Show an error popup.
     Error(String),
     /// Put this text on the clipboard.

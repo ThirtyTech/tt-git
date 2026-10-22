@@ -125,6 +125,10 @@ pub enum GitOp {
         branch: Option<String>,
         force: bool,
     },
+    /// Not git: installs tt-git release `tag` over the running binary.
+    SelfUpdate {
+        tag: String,
+    },
 }
 
 impl GitOp {
@@ -202,6 +206,7 @@ impl GitOp {
             GitOp::Undo { step, stash: true } => format!("stash and {}", step.label()),
             GitOp::RemoveWorktree { name, force: false, .. } => format!("remove worktree {name}"),
             GitOp::RemoveWorktree { name, force: true, .. } => format!("force-remove worktree {name}"),
+            GitOp::SelfUpdate { tag } => format!("update tt-git to {tag}"),
         }
     }
 }
