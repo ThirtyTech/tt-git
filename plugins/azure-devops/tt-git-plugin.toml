@@ -1,0 +1,52 @@
+id = "thirtytech.azure-devops"
+name = "Azure DevOps"
+version = "0.1.0"
+min_tt_git_version = "0.3.0"
+description = "Shows each branch's active Azure DevOps pull request in the branch list"
+platforms = ["linux", "macos", "windows"]
+
+# Installing downloads the prebuilt tt-git-ado for this version into bin/
+# (or builds it with Go when there's no release for it).
+[[build]]
+command = ["sh", "scripts/download.sh"]
+platforms = ["linux", "macos"]
+
+[[build]]
+command = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/download.ps1"]
+platforms = ["windows"]
+
+[[actions]]
+id = "refresh"
+title = "Refresh Azure DevOps pull requests"
+command = ["bin/tt-git-ado", "refresh", "--notify"]
+
+[[actions]]
+id = "open"
+title = "Open pull request in Azure DevOps"
+contexts = ["branch"]
+command = ["bin/tt-git-ado", "open"]
+
+# Each of these looks the pull requests up again (one API call).
+[[events]]
+on = "app.started"
+command = ["bin/tt-git-ado", "refresh"]
+
+[[events]]
+on = "fetch.completed"
+command = ["bin/tt-git-ado", "refresh"]
+
+[[events]]
+on = "pull.completed"
+command = ["bin/tt-git-ado", "refresh"]
+
+[[events]]
+on = "push.completed"
+command = ["bin/tt-git-ado", "refresh"]
+
+[[events]]
+on = "branch.created"
+command = ["bin/tt-git-ado", "refresh"]
+
+[[events]]
+on = "branch.renamed"
+command = ["bin/tt-git-ado", "refresh"]

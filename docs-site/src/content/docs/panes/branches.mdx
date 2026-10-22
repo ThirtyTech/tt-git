@@ -109,6 +109,25 @@ upstream, and `=origin` is safe to set an upstream for.
 
 <Screenshot name="branches-states" alt="The branches status column with each state called out" />
 
+## Plugin columns
+
+[Plugins](/plugins/) can add a column of short text next to the branch
+names, such as the [Azure DevOps plugin](/plugins/azure-devops/)'s pull
+request numbers. Each plugin's column sits between the name and the status
+column. It's as wide as its widest value, up to 10 cells, so the values line
+up, and branches without one are left blank:
+
+```
+* main                     ✓          2h
+  feature/login   !1423    ↑2         3h
+  feature/search  !1431    ✓          1d
+  fix-typo                 local      1d
+```
+
+The columns show on the Branches tab only. A plugin's column goes away when
+you disable or remove the plugin. See [Branch
+columns](/plugins/api/#branch-columns) for writing one.
+
 ## Checking out
 
 <kbd>enter</kbd> or <kbd>space</kbd> checks out the selected branch.

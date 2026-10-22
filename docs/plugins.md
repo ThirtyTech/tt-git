@@ -190,6 +190,7 @@ method `plugin.pane.open`. The keys that leave or close a pane are set by
 | `tt-git ui notify MSG` / `ui error MSG` / `ui refresh` / `ui focus PANE` | needs a running tt-git |
 | `tt-git events [--event NAME]…` | stream events as JSON lines |
 | `tt-git status [--json]` / `tt-git branch list [--json]` | read the repo directly (uses `TTGIT_REPO_PATH`) |
+| `tt-git branch decorate [--plugin ID] [--clear] [BRANCH=TEXT]…` | set this plugin's branch list column (`--plugin` defaults to `$TTGIT_PLUGIN_ID`); needs a running tt-git |
 | `tt-git api METHOD [PARAMS_JSON]` | any socket method |
 
 Commands marked "needs a running tt-git" connect to `$TTGIT_SOCKET_PATH`,
@@ -211,7 +212,8 @@ named pipe on Windows:
 | `ping` | | `{pong, version}` |
 | `repo.info` | | `{path, name, head, branch, upstream, ahead, behind}` |
 | `status.get` | | branch headers, entries, in-progress operation |
-| `branch.list` | | the unified branch list, with `state` |
+| `branch.list` | | the unified branch list, with `state` and `decorations` (`{plugin_id: text}`) |
+| `branch.decorations.set` | `{plugin_id, decorations: {branch: text}}` | `{count}`; replaces the plugin's branch column (below) |
 | `graph.selection` | | `{scope, branch, index, commit}`; `branch` is set while the graph shows one branch from the merged/unmerged tabs |
 | `ui.notify` / `ui.error` | `{message}` | |
 | `ui.refresh` | | |
@@ -227,6 +229,17 @@ named pipe on Windows:
 | `plugin.pane.list` | | open panes |
 | `popup.close` | | `{closed}` |
 | `events.subscribe` | `{events?: [names]}` | `{subscribed}`, then one event envelope per line |
+
+## Branch columns
+
+`branch.decorations.set` (or `tt-git branch decorate`) puts short text next
+to branches in the full branch list, such as a PR number. Each call replaces
+everything that plugin set; `{}` removes its column. Every plugin gets one
+column between the name and the status, as wide as its widest value (at most
+10 cells), so values line up. Text is matched against `name` in
+`branch.list`, control characters are dropped, and text is cut to 10 cells.
+The plugin must be enabled (`plugin_not_found` otherwise); disabling or
+removing it clears the column. Columns aren't saved across restarts.
 
 ## Lifecycle and files
 

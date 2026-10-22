@@ -260,6 +260,21 @@ pub enum BranchCmd {
         #[command(flatten)]
         repo: RepoArg,
     },
+    /// Set the text a plugin shows in its column of the branch list,
+    /// replacing everything it set before. Needs a running tt-git.
+    Decorate {
+        /// The plugin whose column this is (default: the calling plugin).
+        #[arg(long, env = "TTGIT_PLUGIN_ID")]
+        plugin: String,
+        /// Remove the plugin's column. Same as passing no BRANCH=TEXT.
+        #[arg(long, conflicts_with = "decorations")]
+        clear: bool,
+        /// A branch and its text, like `feature/login=!1423`.
+        #[arg(value_name = "BRANCH=TEXT")]
+        decorations: Vec<String>,
+        #[command(flatten)]
+        socket: SocketArg,
+    },
 }
 
 fn print_json(v: &Value) {
@@ -310,6 +325,27 @@ pub fn run(cmd: Cmd) -> Result<()> {
                     println!("{} {}", e.short_code(), e.path);
                 }
             }
+            Ok(())
+        }
+        Cmd::Branch(BranchCmd::Decorate {
+            plugin,
+            clear: _,
+            decorations,
+            socket,
+        }) => {
+            let mut map = serde_json::Map::new();
+            for pair in decorations {
+                let (branch, text) = pair
+                    .split_once('=')
+                    .ok_or_else(|| eyre!("{pair:?} is not BRANCH=TEXT"))?;
+                map.insert(branch.to_string(), Value::String(text.to_string()));
+            }
+            let result = api(
+                &socket,
+                "branch.decorations.set",
+                json!({ "plugin_id": plugin, "decorations": map }),
+            )?;
+            print_json(&result);
             Ok(())
         }
         Cmd::Branch(BranchCmd::List { json, repo }) => {

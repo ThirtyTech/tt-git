@@ -17,7 +17,8 @@ use super::App;
 use crate::action::Action;
 use crate::keymap::{Command, Context};
 use crate::modal::{GitOp, PaletteItem, PaletteTarget};
-use crate::panes::{DetailsSubject, PaneId};
+
+use crate::panes::{DECORATION_WIDTH, DetailsSubject, PaneId};
 
 /// How to set up the plugin host.
 #[derive(Debug, Clone)]
@@ -188,7 +189,18 @@ impl App {
         if let Some(lease) = &state.lease {
             let _ = lease.set_paths(&state.host.registered_paths());
         }
+        self.prune_decorations();
         true
+    }
+
+    /// Drops the branch decorations of plugins that were disabled or removed.
+    fn prune_decorations(&mut self) {
+        let Some(state) = &self.plugins else {
+            return;
+        };
+        let records = state.host.records();
+        self.branches
+            .retain_decorations(|id| records.iter().any(|r| r.installed.id == id && r.is_runnable()));
     }
 
     pub(super) fn invocation_context(&mut self, source: &str) -> InvocationContext {
@@ -644,10 +656,50 @@ impl App {
                     .map(|e| {
                         let mut v = to_json(e);
                         v["state"] = to_json(&e.state());
+                        v["decorations"] = to_json(&self.branches.decorations_for(&e.name));
                         v
                     })
                     .collect();
                 ok(Value::Array(list))
+            }
+            "branch.decorations.set" => {
+                let plugin =
+                    str_param(params, "plugin_id").ok_or(("invalid_params", "plugin_id is required".into()))?;
+                let state = self
+                    .plugins
+                    .as_ref()
+                    .ok_or(("plugins_disabled", "plugins are not enabled".into()))?;
+                if !state
+                    .host
+                    .records()
+                    .iter()
+                    .any(|r| r.installed.id == plugin && r.is_runnable())
+                {
+                    return Err(("plugin_not_found", format!("no enabled plugin {plugin:?}")));
+                }
+                let map = match params.get("decorations") {
+                    Some(Value::Object(map)) => map,
+                    None | Some(Value::Null) => &serde_json::Map::new(),
+                    Some(_) => {
+                        return Err((
+                            "invalid_params",
+                            "decorations must be an object of branch names to text".into(),
+                        ));
+                    }
+                };
+                let mut decorations = std::collections::HashMap::new();
+                for (branch, text) in map {
+                    let text = text
+                        .as_str()
+                        .ok_or(("invalid_params", format!("decoration for {branch:?} must be a string")))?;
+                    let text = decoration_text(text);
+                    if !text.is_empty() {
+                        decorations.insert(branch.clone(), text);
+                    }
+                }
+                let count = decorations.len();
+                self.branches.set_decorations(plugin, decorations);
+                ok(json!({ "count": count }))
             }
             "graph.selection" => ok(json!({
                 "scope": self.graph.scope.label(),
@@ -776,8 +828,16 @@ impl App {
             _ => json!({ "id": registry::set_enabled(&dirs, id()?, false).map_err(fail)?.id }),
         };
         state.host.reload();
+        self.prune_decorations();
         Ok(result)
     }
+}
+
+/// A decoration as drawn: one line, no control characters, at most
+/// [`DECORATION_WIDTH`] cells.
+fn decoration_text(text: &str) -> String {
+    let clean: String = text.chars().filter(|c| !c.is_control()).collect();
+    crate::widgets::truncate(clean.trim(), DECORATION_WIDTH)
 }
 
 /// The first `http(s)://` URL in `lines`, without trailing punctuation.

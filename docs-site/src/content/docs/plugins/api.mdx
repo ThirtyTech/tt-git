@@ -26,6 +26,7 @@ so these commands find the right tt-git without any flags:
 "$TTGIT_BIN_PATH" ui error "Deploy failed"      # an error popup
 "$TTGIT_BIN_PATH" ui refresh                    # reload everything
 "$TTGIT_BIN_PATH" ui focus branches             # status, branches, graph or details
+"$TTGIT_BIN_PATH" branch decorate feature/login=!1423  # this plugin's column in the branch list
 
 "$TTGIT_BIN_PATH" plugin pane open --plugin "$TTGIT_PLUGIN_ID" --entrypoint list --env PR_BRANCH=main
 "$TTGIT_BIN_PATH" plugin action invoke acme.github.open-commit
@@ -101,7 +102,8 @@ sock.on("data", (buf) => {
 | `ping` | | `{pong, version}` |
 | `repo.info` | | `{path, name, head, branch, upstream, ahead, behind}` |
 | `status.get` | | Branch headers, file entries and any merge, rebase or cherry-pick in progress. |
-| `branch.list` | | The unified branch list, each row with its `state`. |
+| `branch.list` | | The unified branch list, each row with its `state` and `decorations` (`{plugin_id: text}`). |
+| `branch.decorations.set` | `{plugin_id, decorations: {branch: text}}` | `{count}`. Replaces the plugin's [branch column](#branch-columns); `{}` removes it. |
 | `graph.selection` | | `{scope, branch, index, commit}`. `branch` is set while the graph shows one branch from the Merged or Unmerged tab. |
 | `ui.notify` | `{message}` | `{}`. Shows the message in the help bar. |
 | `ui.error` | `{message}` | `{}`. Shows an error popup. |
@@ -121,6 +123,35 @@ sock.on("data", (buf) => {
 | `popup.close` | | `{closed}` |
 | `events.subscribe` | `{events?: [names]}` | `{subscribed}`, then one event envelope per line. See [Events](/plugins/events/#subscribing-to-a-stream). |
 
+## Branch columns
+
+A plugin can show a few characters next to each branch in the branch list,
+such as a pull request number. Call `branch.decorations.set` with your
+plugin's id and a map from branch names to text, or run
+`tt-git branch decorate`:
+
+```sh
+"$TTGIT_BIN_PATH" branch decorate feature/login=!1423 fix/typo=!1431
+"$TTGIT_BIN_PATH" branch decorate --clear
+```
+
+- Each call replaces everything the plugin set before, so send the whole
+  set every time. An empty map, or `--clear`, removes the column.
+- Each plugin gets its own column, between the branch name and the status
+  column, in plugin id order. It's as wide as its widest value among the
+  branches listed, up to 10 cells, so the values line up.
+- Names are matched against the rows of the full list (`name` in
+  `branch.list`), which are local branch names or remote branch names
+  without the remote. Text for a branch that isn't listed is kept, and shows
+  if the branch appears later.
+- Control characters are removed and text is cut to 10 cells.
+- The plugin must be installed and enabled. When it's disabled or removed,
+  its column goes away. Columns aren't saved, so set them again when tt-git
+  starts (on `app.started`).
+
+The [Azure DevOps plugin](/plugins/azure-devops/) uses this to show pull
+request numbers.
+
 `plugin.action.invoke` accepts a local action id when you also pass
 `plugin_id`; otherwise give the qualified id. `plugin.pane.open` fails with
 `ui_busy` if a popup is already open, since only one can be open at a time.
@@ -138,4 +169,5 @@ Errors have a `code` and a `message`. Codes you may see:
 | `plugin_action_failed` | The action couldn't start: for example, no such action, or 32 plugin commands are already running. The message says which. |
 | `plugin_pane_failed`, `ui_busy` | The pane couldn't open, or a popup is already open. |
 | `plugin_registry_error` | Linking, unlinking, enabling or disabling failed. |
+| `plugin_not_found` | `branch.decorations.set` named a plugin that isn't installed and enabled. |
 | `server_shutting_down` | tt-git is quitting. |

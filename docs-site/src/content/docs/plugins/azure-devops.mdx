@@ -1,0 +1,138 @@
+---
+title: Azure DevOps
+description: Show each branch's active Azure DevOps pull request in the branch list.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The Azure DevOps plugin looks up the active pull requests of a repository
+hosted on Azure DevOps and shows each one's number next to its source branch
+in the [branch list](/panes/branches/#plugin-columns):
+
+```
+* main                     ✓          2h
+  feature/login   !1423    ↑2         3h
+  feature/search  !1431    ✓          1d
+  fix-typo                 local      1d
+```
+
+It's a separate plugin, not part of tt-git itself. It lives in the tt-git
+repository under
+[`plugins/azure-devops`](https://github.com/thirtytech/tt-git/tree/main/plugins/azure-devops)
+and is written in Go, but you don't need Go: installing it downloads the
+prebuilt program for your platform.
+
+## Installing
+
+<Steps>
+
+1. Install it from GitHub:
+
+   ```sh
+   tt-git plugin install ThirtyTech/tt-git/plugins/azure-devops
+   ```
+
+   tt-git shows what will run and asks first. The build step downloads
+   `tt-git-ado` for the plugin's version from its
+   [GitHub release](https://github.com/thirtytech/tt-git/releases) into the
+   plugin's `bin` folder, with `curl` on Linux and macOS or PowerShell on
+   Windows.
+
+2. Set `ADO_MCP_AUTH_TOKEN` to an Azure DevOps token in the environment you
+   start tt-git from. It's the same variable the Azure DevOps MCP server
+   reads, so if you use that you may have it already.
+
+3. Start tt-git in a repository whose `origin` is on Azure DevOps.
+
+</Steps>
+
+`tt-git plugin update thirtytech.azure-devops` downloads the newest release's
+program, and `tt-git plugin uninstall thirtytech.azure-devops` removes it.
+
+## The token
+
+The plugin sends `ADO_MCP_AUTH_TOKEN` as a bearer token, which is what a
+Microsoft Entra access token needs. If Azure DevOps refuses it, the plugin
+tries it again as a personal access token. Either way, the token needs
+**Code (Read)** access to the repository.
+
+For an Entra token from the Azure CLI:
+
+```sh
+export ADO_MCP_AUTH_TOKEN=$(az account get-access-token \
+  --resource 499b84ac-1321-427f-aa17-267ca6975798 --query accessToken -o tsv)
+```
+
+Entra tokens expire after about an hour. A personal access token lasts as
+long as you choose when you create it.
+
+## Which repository
+
+The plugin reads the repository from the `origin` remote, or, if `origin`
+isn't on Azure DevOps, from the first remote that is. It understands these
+remote URLs:
+
+| Form | Example |
+|---|---|
+| HTTPS | `https://dev.azure.com/acme/Web%20Shop/_git/api` |
+| HTTPS with a user | `https://acme@dev.azure.com/acme/Web%20Shop/_git/api` |
+| SSH | `git@ssh.dev.azure.com:v3/acme/Web%20Shop/api` |
+| Older HTTPS | `https://acme.visualstudio.com/Web%20Shop/_git/api` |
+| Older SSH | `acme@vs-ssh.visualstudio.com:v3/acme/Web%20Shop/api` |
+
+In a repository that isn't on Azure DevOps, the plugin does nothing.
+
+## When it looks
+
+Each lookup is one request for the repository's active pull requests. The
+plugin looks again when:
+
+- tt-git starts,
+- you fetch, pull or push,
+- you create or rename a branch,
+- you run **Refresh Azure DevOps pull requests** from the
+  [palette](/git/palette/), which also says in the help bar how many of your
+  branches have one.
+
+A branch with more than one active pull request shows the newest. Pull
+requests from forks don't match any of your branches.
+
+## Opening a pull request
+
+Select a branch in the branch list, press <kbd>:</kbd> and run **Open pull
+request in Azure DevOps**. It opens the branch's pull request in your
+browser, or says in the help bar that the branch has none.
+
+## When something's wrong
+
+A lookup that fails shows a ✗ notice in the help bar, and **Refresh Azure
+DevOps pull requests** shows the reason in an error popup. Open *Plugin logs*
+from the palette to see the full message:
+
+| Message | Means |
+|---|---|
+| `ADO_MCP_AUTH_TOKEN is not set` | Set it before starting tt-git. tt-git passes its environment to plugins when it starts them, so changing it afterwards needs a restart. |
+| `Azure DevOps refused ADO_MCP_AUTH_TOKEN` | The token has expired, or can't read the repository's code. |
+| `Azure DevOps answered 404 …` | The organization, project or repository in the remote URL doesn't exist, or the token's account can't see it. |
+
+<Aside>
+The plugin needs a tt-git with the
+[branch columns API](/plugins/api/#branch-columns): any release after 0.3.0.
+</Aside>
+
+## Developing it
+
+To work on the plugin from a clone of the tt-git repository, build it into
+`bin` and link it:
+
+```sh
+cd plugins/azure-devops
+go build -o bin/tt-git-ado .     # bin/tt-git-ado.exe on Windows
+go test ./...
+tt-git plugin link .
+```
+
+A release is cut by bumping `version` in `tt-git-plugin.toml` and pushing an
+`azure-devops-v<version>` tag. The *Azure DevOps plugin* workflow then builds
+the program for each platform and attaches it to a release. If there's no
+release for a plugin version, the build step builds it with Go instead.
