@@ -1,7 +1,7 @@
 id = "thirtytech.azure-devops"
 name = "Azure DevOps"
 version = "0.1.0"
-min_tt_git_version = "0.3.0"
+min_tt_git_version = "0.4.0"
 description = "Shows each branch's active Azure DevOps pull request in the branch list"
 platforms = ["linux", "macos", "windows"]
 
