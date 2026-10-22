@@ -90,8 +90,9 @@ func TestRefreshDecoratesBranchesWithPRs(t *testing.T) {
 	if err := json.Unmarshal([]byte(got[0][2]), &params); err != nil {
 		t.Fatal(err)
 	}
-	if params.PluginID != "thirtytech.azure-devops" || len(params.Decorations) != 1 ||
-		params.Decorations["feature/login"] != "!1423" {
+	// feature/search isn't in tt-git's branch list (yet), and is sent anyway.
+	if params.PluginID != "thirtytech.azure-devops" || len(params.Decorations) != 2 ||
+		params.Decorations["feature/login"] != "!1423" || params.Decorations["feature/search"] != "!1431" {
 		t.Errorf("params: %+v", params)
 	}
 	if got[1][0] != "ui" || got[1][1] != "notify" || !strings.Contains(got[1][2], "1 of your branches") {

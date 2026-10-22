@@ -68,7 +68,9 @@ func fakeADO(t *testing.T, scheme string) *httptest.Server {
 			w.WriteHeader(http.StatusUnauthorized)
 			return
 		}
-		fmt.Fprint(w, `{"count":1,"value":[{"pullRequestId":1423,"title":"Login","sourceRefName":"refs/heads/feature/login"}]}`)
+		fmt.Fprint(w, `{"count":2,"value":[`+
+			`{"pullRequestId":1423,"title":"Login","sourceRefName":"refs/heads/feature/login"},`+
+			`{"pullRequestId":1431,"title":"Search","sourceRefName":"refs/heads/feature/search"}]}`)
 	}))
 }
 
@@ -78,7 +80,7 @@ func TestActivePullRequests(t *testing.T) {
 		srv := fakeADO(t, scheme)
 		prs, err := Client{Token: "secret", APIBase: srv.URL}.ActivePullRequests(repo)
 		srv.Close()
-		if err != nil || len(prs) != 1 || prs[0].ID != 1423 || prs[0].Branch() != "feature/login" {
+		if err != nil || len(prs) != 2 || prs[0].ID != 1423 || prs[0].Branch() != "feature/login" {
 			t.Errorf("%s: got %+v, %v", scheme, prs, err)
 		}
 	}

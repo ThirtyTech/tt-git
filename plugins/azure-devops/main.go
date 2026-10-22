@@ -72,24 +72,43 @@ func refresh(notify bool) error {
 		}
 		return err
 	}
-	names, err := branchNames()
-	if err != nil {
-		return err
-	}
+	// Every PR's branch, not only the ones tt-git lists: on app.started the
+	// branch list may not have loaded yet, and tt-git keeps text for
+	// branches it doesn't list. Only a set too long for one command line
+	// is cut down to the listed branches.
 	decorations := map[string]string{}
-	for _, name := range names {
-		if pr, ok := saved.PRs[name]; ok {
-			decorations[name] = Label(pr)
+	for branch, pr := range saved.PRs {
+		decorations[branch] = Label(pr)
+	}
+	params, _ := json.Marshal(decorations)
+	tooLong := len(params) > maxParams
+	var listed map[string]string
+	if tooLong || notify {
+		names, err := branchNames()
+		if err != nil {
+			return err
 		}
+		listed = map[string]string{}
+		for _, name := range names {
+			if text, ok := decorations[name]; ok {
+				listed[name] = text
+			}
+		}
+	}
+	if tooLong {
+		decorations = listed
 	}
 	if err := setDecorations(decorations); err != nil {
 		return err
 	}
 	if notify {
-		tt("ui", "notify", fmt.Sprintf("Azure DevOps: %d of your branches have an active PR", len(decorations)))
+		tt("ui", "notify", fmt.Sprintf("Azure DevOps: %d of your branches have an active PR", len(listed)))
 	}
 	return nil
 }
+
+// Windows caps a command line at 32767 characters; leave room for the rest.
+const maxParams = 24000
 
 // lookUp fetches repo's active PRs and saves them for `open`.
 func lookUp(repo Repo) (Saved, error) {
