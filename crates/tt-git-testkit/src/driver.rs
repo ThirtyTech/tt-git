@@ -267,6 +267,30 @@ impl TestDriver {
         self.wait_idle()
     }
 
+    /// Like [`send`](Self::send), but renders the next frame without
+    /// applying anything the action queued, as [`press_frame`](Self::press_frame) does.
+    pub fn send_frame(&mut self, action: Action) -> &mut Self {
+        {
+            let _guard = self.runtime.enter();
+            self.app.update(action);
+        }
+        self.render();
+        self
+    }
+
+    /// Lets `n` ticks of the app's timer go by and renders, without applying
+    /// anything queued, so a git operation still running stays running.
+    pub fn tick(&mut self, n: u64) -> &mut Self {
+        {
+            let _guard = self.runtime.enter();
+            for _ in 0..n {
+                self.app.update(Action::Tick);
+            }
+        }
+        self.render();
+        self
+    }
+
     /// Processes actions until `pred` holds, for events the driver can't wait
     /// on directly (the file watcher). Panics after `timeout`.
     pub fn wait_until(&mut self, timeout: Duration, mut pred: impl FnMut(&App) -> bool) -> &mut Self {

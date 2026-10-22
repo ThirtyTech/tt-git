@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Position, Rect};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
@@ -30,6 +31,7 @@ use crate::panes::{
 };
 use crate::theme::Theme;
 use crate::watcher::RepoWatcher;
+use crate::widgets::truncate_spans;
 
 mod panes;
 mod plugins;
@@ -74,6 +76,32 @@ const ALL_GLOBAL: &[Command] = &[
     Command::Help,
     Command::Quit,
 ];
+
+/// Ticks of [`crate::runner::TICK`] in a second.
+const TICKS_PER_SEC: u64 = 1000 / crate::runner::TICK.as_millis() as u64;
+
+/// The spinner beside a running git operation, one frame per tick.
+const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+/// How long a notice shows next to a running operation before only the
+/// operation is left.
+const NOTICE_HOLD: u64 = 3 * TICKS_PER_SEC;
+
+/// How long a `✓` notice stays green before it fades to muted.
+const SUCCESS_FADE: u64 = 5 * TICKS_PER_SEC;
+
+/// A git write in flight, shown in the help bar until it's done.
+#[derive(Debug)]
+struct Busy {
+    /// The op's [`GitOp::label`], to find it again when it's done.
+    label: String,
+    /// What the help bar says while it runs: `pushing main → origin/main`.
+    doing: String,
+    /// What it says once it's done: `pushed main → origin/main`.
+    done: String,
+    /// [`App::ticks`] when it started.
+    since: u64,
+}
 
 /// A git load for the details pane's subject.
 #[derive(Debug, Clone, PartialEq)]
@@ -167,8 +195,13 @@ pub struct App {
     clock: SharedClock,
     graph_limit: usize,
     modal: Option<Modal>,
-    /// Labels of write operations in flight.
-    busy: Vec<String>,
+    /// Write operations in flight, oldest first.
+    busy: Vec<Busy>,
+    /// Ticks since the app started, for the spinner and how long things
+    /// have been showing.
+    ticks: u64,
+    /// The notice last drawn and the tick it was first drawn at.
+    notice_drawn: (Option<String>, u64),
     /// Select HEAD in the graph once refs reload (after commit/checkout).
     select_head: bool,
     /// An undo is being worked out or run; another press waits.
@@ -268,6 +301,8 @@ impl App {
             clock,
             modal: None,
             busy: Vec::new(),
+            ticks: 0,
+            notice_drawn: (None, 0),
             select_head: false,
             undo_pending: false,
             update_checking: false,
@@ -702,9 +737,10 @@ impl App {
 
     fn apply(&mut self, action: Action) {
         // A tick only matters if plugins reloaded, the last frame showed the
-        // cursor, or a relative date drawn ("now", "5m") would read
-        // differently. Word from a pane already closed (its process dies
-        // after) changes nothing; anything else may change what's shown.
+        // cursor, a relative date drawn ("now", "5m") would read
+        // differently, or the help bar is turning a spinner or fading a
+        // notice. Word from a pane already closed (its process dies after)
+        // changes nothing; anything else may change what's shown.
         let quiet = match &action {
             Action::Tick => true,
             Action::PaneOutput(id) | Action::PaneExited { id, .. } => !self.panes.iter().any(|p| p.id == *id),
@@ -716,7 +752,8 @@ impl App {
         match action {
             Action::Command(cmd) => self.run_command(cmd),
             Action::Tick => {
-                if self.poll_plugins() || self.cursor_shown || self.dates_stale() {
+                self.ticks += 1;
+                if self.poll_plugins() || self.cursor_shown || self.dates_stale() || self.help_bar_moving() {
                     self.dirty = true;
                 }
             }
@@ -1130,6 +1167,16 @@ impl App {
     }
 
     fn run_op(&mut self, op: GitOp) {
+        let label = op.label();
+        let (doing, done) = self.describe_op(&op);
+        // A second pull, push or fetch would only race the first.
+        if matches!(op, GitOp::Push | GitOp::Pull | GitOp::FetchAll | GitOp::PushTag { .. })
+            && self.busy.iter().any(|b| b.label == label)
+        {
+            let verb = doing.split(' ').next().unwrap_or_default();
+            self.renew_notice(format!("already {verb}"));
+            return;
+        }
         if matches!(op, GitOp::ApplyPatch { .. })
             && let Some(view) = self.details.stage_mut()
         {
@@ -1138,15 +1185,98 @@ impl App {
         if matches!(op, GitOp::Undo { .. }) {
             self.undo_pending = true;
         }
-        let label = op.label();
-        self.notice = Some(format!("{label}…"));
-        self.busy.push(label);
+        // The help bar shows it running from here on.
+        self.notice = None;
+        self.busy.push(Busy {
+            label,
+            doing,
+            done,
+            since: self.ticks,
+        });
         if let GitOp::SelfUpdate { tag } = op {
             self.ctx.spawn_streaming(move |ctx| loaders::self_update(ctx, tag));
             return;
         }
         let repo = self.repo.clone();
         self.ctx.spawn(move || loaders::run_op(repo, op));
+    }
+
+    /// What the help bar says while `op` runs and once it's done. Pulls,
+    /// pushes and fetches say where they go; anything else is its label.
+    fn describe_op(&self, op: &GitOp) -> (String, String) {
+        let branch = self.status.status().map(|s| &s.branch);
+        let head = branch.and_then(|b| b.head.as_deref());
+        let upstream = branch.and_then(|b| b.upstream.as_deref());
+        let both = |doing: &str, done: &str, what: String| {
+            if what.is_empty() {
+                (doing.to_string(), done.to_string())
+            } else {
+                (format!("{doing} {what}"), format!("{done} {what}"))
+            }
+        };
+        match op {
+            GitOp::Push => {
+                let what = match (head, upstream) {
+                    (Some(head), Some(up)) => format!("{head} → {up}"),
+                    (Some(head), None) => head.to_string(),
+                    _ => String::new(),
+                };
+                both("pushing", "pushed", what)
+            }
+            GitOp::Pull => {
+                let what = match (head, upstream) {
+                    (Some(head), Some(up)) => format!("{up} into {head}"),
+                    _ => String::new(),
+                };
+                both("pulling", "pulled", what)
+            }
+            GitOp::FetchAll => both("fetching", "fetched", "all remotes".into()),
+            GitOp::PushTag { name } => both("pushing", "pushed", format!("tag {name}")),
+            _ => (op.label(), op.label()),
+        }
+    }
+
+    /// The running operations as the help bar shows them: the spinner, what
+    /// one is doing (just the verbs of several), and for how long once it's
+    /// been a second.
+    fn busy_line(&self) -> Option<String> {
+        let first = self.busy.first()?;
+        let doing = if self.busy.len() == 1 {
+            first.doing.clone()
+        } else {
+            let verbs: Vec<_> = self
+                .busy
+                .iter()
+                .map(|b| b.doing.split(' ').next().unwrap_or_default())
+                .collect();
+            verbs.join(" · ")
+        };
+        let spinner = SPINNER[(self.ticks % SPINNER.len() as u64) as usize];
+        let secs = (self.ticks - first.since) / TICKS_PER_SEC;
+        Some(if secs >= 1 {
+            format!("{spinner} {doing}  {secs}s")
+        } else {
+            format!("{spinner} {doing}")
+        })
+    }
+
+    /// Shows `notice` as new even if the same text is showing already, so a
+    /// second `✓ pushed …` turns green again.
+    fn renew_notice(&mut self, notice: String) {
+        self.notice = Some(notice);
+        self.notice_drawn.0 = None;
+    }
+
+    /// Ticks since the notice on screen was first drawn.
+    fn notice_age(&self) -> u64 {
+        self.ticks - self.notice_drawn.1
+    }
+
+    /// The help bar changes from one tick to the next: a spinner is
+    /// turning, or a fresh `✓` notice has yet to fade.
+    fn help_bar_moving(&self) -> bool {
+        !self.busy.is_empty()
+            || self.notice.as_deref().is_some_and(|n| n.starts_with('✓')) && self.notice_age() <= SUCCESS_FADE
     }
 
     /// Checks out `plan`, or with uncommitted changes asks to stash them first.
@@ -1229,7 +1359,7 @@ impl App {
     /// git write is still running here or it isn't a repository.
     fn open_worktree(&mut self, path: std::path::PathBuf) {
         if let Some(op) = self.busy.first() {
-            self.notice = Some(format!("wait for {op} to finish first"));
+            self.notice = Some(format!("wait for {} to finish first", op.label));
             return;
         }
         match Repo::discover(&path, self.repo.git()) {
@@ -1310,7 +1440,7 @@ impl App {
     /// Looks up the latest tt-git release in the background, unless this
     /// binary can't be updated (a cargo build, say).
     fn check_update(&mut self) {
-        if self.update_checking || self.busy.iter().any(|b| b.starts_with("update tt-git")) {
+        if self.update_checking || self.busy.iter().any(|b| b.label.starts_with("update tt-git")) {
             return;
         }
         if let Err(e) = tt_git_core::update::current_install_dir() {
@@ -1348,9 +1478,10 @@ impl App {
 
     fn op_done(&mut self, op: GitOp, result: Result<String, String>, head: Option<String>) {
         let label = op.label();
-        if let Some(pos) = self.busy.iter().position(|b| *b == label) {
-            self.busy.remove(pos);
-        }
+        let done = match self.busy.iter().position(|b| b.label == label) {
+            Some(pos) => self.busy.remove(pos).done,
+            None => label.clone(),
+        };
         // Nothing in the repository changed.
         if let (GitOp::SelfUpdate { tag }, Ok(_)) = (&op, &result) {
             self.notice = Some(format!("✓ installed tt-git {tag}; restart tt-git to use it"));
@@ -1384,7 +1515,7 @@ impl App {
             self.op_event(&op, head.as_deref());
         }
         match result {
-            Ok(_) => self.notice = Some(format!("✓ {label}")),
+            Ok(_) => self.renew_notice(format!("✓ {done}")),
             Err(err) => match op {
                 GitOp::DeleteBranch { name, force: false } if err.contains("not fully merged") => {
                     self.notice = None;
@@ -2018,6 +2149,9 @@ impl App {
 
     pub fn draw(&mut self, frame: &mut Frame) {
         self.cursor_shown = false;
+        if self.notice != self.notice_drawn.0 {
+            self.notice_drawn = (self.notice.clone(), self.ticks);
+        }
         let [main, help] = Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(frame.area());
         self.pane_areas = match self.zoom {
             Zoom::Full(pane) => vec![(pane, main)],
@@ -2069,16 +2203,35 @@ impl App {
     fn draw_help_bar(&self, frame: &mut Frame, area: Rect) {
         use unicode_width::UnicodeWidthStr;
 
-        // The notice gets its own right-aligned slot (up to half the width)
-        // so a long list of key hints can't push it off screen.
+        // The notice and any running git operation get their own
+        // right-aligned slot (up to half the width) so a long list of key
+        // hints can't push them off screen. While something runs, a notice
+        // shows beside it for a moment, then only the operation is left.
         let mut keys_area = area;
-        if let Some(notice) = &self.notice {
-            let text = format!(" │ {notice}");
+        let mut parts: Vec<(String, Style)> = Vec::new();
+        if let Some(notice) = &self.notice
+            && (self.busy.is_empty() || self.notice_age() < NOTICE_HOLD)
+        {
+            let style = if notice.starts_with('✓') && self.notice_age() < SUCCESS_FADE {
+                self.theme.diff_add
+            } else {
+                self.theme.muted
+            };
+            parts.push((notice.clone(), style));
+        }
+        if let Some(line) = self.busy_line() {
+            if !parts.is_empty() {
+                parts.push((" · ".into(), self.theme.muted));
+            }
+            parts.push((line, self.theme.help_key.add_modifier(Modifier::BOLD)));
+        }
+        if !parts.is_empty() {
+            parts.insert(0, (" │ ".into(), self.theme.muted));
+            let text: String = parts.iter().map(|(t, _)| t.as_str()).collect();
             let width = (text.width() as u16).min(area.width / 2);
             let [left, right] = Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]).areas(area);
             keys_area = left;
-            let shown = crate::widgets::truncate(&text, width as usize);
-            frame.render_widget(Paragraph::new(Span::styled(shown, self.theme.muted)), right);
+            frame.render_widget(Paragraph::new(truncate_spans(parts, width as usize)), right);
         }
 
         // Global hints always show; pane hints fill what's left, in order,

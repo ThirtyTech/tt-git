@@ -15,7 +15,7 @@ use crate::action::Action;
 use crate::app::App;
 use crate::editor::EditorLaunch;
 
-const TICK: Duration = Duration::from_millis(250);
+pub const TICK: Duration = Duration::from_millis(250);
 
 /// Runs until the app asks to quit or input ends.
 pub async fn run(
