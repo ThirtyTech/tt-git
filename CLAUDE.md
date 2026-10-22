@@ -154,11 +154,11 @@ change does, in the imperative, without a trailing period.
 Keep code and docs in separate commits: the code (with its tests and
 snapshots) first, then a `docs(...)` commit for the doc pages and
 screenshots. A merge of a worktree's work uses the type of the work it
-brings in: `git merge --no-ff -m "feat(blame): Merge regex search" <sha>`.
+brings in: `git merge --no-ff -m "feat(blame): Merge regex search" <branch>`.
 
 ## Worktrees
 
 [docs/worktrees.md](docs/worktrees.md) covers worktrees in full. In short:
-they go in `.worktrees/<name>`. Use a branch only when the user names one,
-otherwise `--detach`. The rules above still apply inside a worktree, since the
+they go in `.worktrees/<name>`, each on its own new branch: `<name>`, or the
+branch the user names. The rules above still apply inside a worktree, since the
 user may be running `cargo run` there too.

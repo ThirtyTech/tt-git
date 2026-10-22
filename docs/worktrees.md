@@ -35,10 +35,11 @@ search and watchers, Windows Defender scans) should exclude `.worktrees/` too.
 
 ### Branches
 
-A worktree needs either a branch or a detached HEAD. Use the branch name the
-user asked for; don't invent one. With no branch requested, use `--detach`
-(fine for reviews, bisecting and experiments). A branch can be checked out in
-only one worktree at a time, so `main` stays in the primary checkout.
+Each worktree gets its own new branch off `main`, named after the worktree
+folder unless the user asked for a different name. That makes the work easy
+to find, merge and clean up by name. `--detach` is still fine for a quick
+review or bisect you don't mean to commit from. A branch can be checked out
+in only one worktree at a time, so `main` stays in the primary checkout.
 
 ## What is shared and what is separate
 
@@ -98,8 +99,8 @@ PowerShell first, since that's the main dev shell; sh equivalents follow.
 From the primary checkout:
 
 ```powershell
-git worktree add .worktrees/graph-colors -b graph-colors main   # new branch, when asked for one
-git worktree add --detach .worktrees/review main                # no branch
+git worktree add .worktrees/graph-colors -b graph-colors main   # the usual case
+git worktree add --detach .worktrees/review main                # throwaway review, no commits
 cd .worktrees/graph-colors
 $env:TTGIT_CONFIG_DIR = "$PWD\target\dev\config"
 $env:TTGIT_STATE_DIR  = "$PWD\target\dev\state"
