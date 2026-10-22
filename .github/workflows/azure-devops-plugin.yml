@@ -1,0 +1,80 @@
+name: Azure DevOps plugin
+
+# Tests plugins/azure-devops on changes, and publishes its binaries when a
+# plugin tag (azure-devops-v0.1.0) is pushed:
+#
+#   git tag azure-devops-v0.1.0 && git push origin azure-devops-v0.1.0
+#
+# The plugin's build step (scripts/download.*) downloads the binary for its
+# manifest version from that release, so bump `version` in
+# plugins/azure-devops/tt-git-plugin.toml first. Go cross-compiles every
+# target from one runner.
+
+# No `paths` on push: with one, a tag push only runs when its diff matches.
+on:
+  push:
+    branches: [main]
+    tags: ['azure-devops-v[0-9]+.[0-9]+.[0-9]+*']
+  pull_request:
+    paths: ['plugins/azure-devops/**', '.github/workflows/azure-devops-plugin.yml']
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: plugins/azure-devops
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: plugins/azure-devops/go.mod
+      - run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
+      - run: go vet ./...
+      - run: go test ./...
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/azure-devops-v')
+    needs: test
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: plugins/azure-devops/go.mod
+      - name: Tag matches the manifest version
+        run: |
+          manifest=$(sed -n 's/^version *= *"\(.*\)"/\1/p' tt-git-plugin.toml | head -n 1)
+          tag="${GITHUB_REF_NAME#azure-devops-v}"
+          if [ "$manifest" != "$tag" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME doesn't match version $manifest in tt-git-plugin.toml"
+            exit 1
+          fi
+      - name: Build
+        env:
+          CGO_ENABLED: '0'
+        run: |
+          mkdir dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            os=${target%/*} arch=${target#*/} ext=""
+            [ "$os" = windows ] && ext=.exe
+            GOOS=$os GOARCH=$arch go build -trimpath -ldflags='-s -w' -o "dist/tt-git-ado-$os-$arch$ext" .
+          done
+          (cd dist && sha256sum tt-git-ado-* > SHA256SUMS.txt)
+      # --latest=false: tt-git's install scripts and `tt-git update` follow
+      # the repository's latest release, which must stay a tt-git one.
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Azure DevOps plugin ${GITHUB_REF_NAME#azure-devops-}" \
+            --notes "Install with: tt-git plugin install ThirtyTech/tt-git/plugins/azure-devops" \
+            --latest=false
