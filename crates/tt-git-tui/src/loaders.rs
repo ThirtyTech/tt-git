@@ -630,6 +630,29 @@ pub fn load_blame(repo: Repo, id: u64, rev: Option<String>, path: String, highli
     }
 }
 
+/// The version of `path` before the one at `rev`, or after it on the way
+/// to `newest`, for a blame view stepping through the file's commits.
+pub fn step_blame(
+    repo: Repo,
+    id: u64,
+    rev: Option<String>,
+    path: String,
+    newest: Option<(Option<String>, String)>,
+) -> Action {
+    let version = match (&rev, newest) {
+        (Some(rev), Some((newest, newest_path))) => {
+            repo.file_version_after(rev, &path, newest.as_deref(), &newest_path)
+        }
+        (_, None) => repo.file_version_before(rev.as_deref(), &path),
+        // The working tree is the newest there is.
+        (None, Some(_)) => Ok(None),
+    };
+    Action::BlameStepped {
+        id,
+        version: version.map_err(message),
+    }
+}
+
 /// `oid`'s message below its subject line.
 pub fn load_commit_message(repo: Repo, oid: String) -> Action {
     let body = match repo.git().run(&["show", "-s", "--format=%b", &oid, "--"]) {

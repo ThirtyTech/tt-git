@@ -867,6 +867,74 @@ impl Repo {
         Ok(out.into_stdout_string().trim().parse().ok())
     }
 
+    /// The version of `path` before the one at `rev` (the working tree when
+    /// `None`): the commit before the newest one that changed it, and the
+    /// file's path there, following renames. From a working tree with
+    /// changes to `path`, `HEAD`. `None` when there's nothing older.
+    pub fn file_version_before(&self, rev: Option<&str>, path: &str) -> Result<Option<(String, String)>> {
+        if rev.is_none() && self.path_changed(path)? {
+            let committed = self.file_commits("HEAD", path, Some(1))?;
+            return Ok(committed.into_iter().next().map(|(_, path)| ("HEAD".to_string(), path)));
+        }
+        Ok(self
+            .file_commits(rev.unwrap_or("HEAD"), path, Some(2))?
+            .into_iter()
+            .nth(1))
+    }
+
+    /// The version of `path` after the one at `rev`, on the way to the one
+    /// at `newest` (the working tree when `None`), where the file is
+    /// `newest_path`: the oldest commit after `rev`'s version that changed
+    /// it, and the file's path there. `None` when the next version is
+    /// `newest`'s own.
+    pub fn file_version_after(
+        &self,
+        rev: &str,
+        path: &str,
+        newest: Option<&str>,
+        newest_path: &str,
+    ) -> Result<Option<(String, String)>> {
+        let Some((current, _)) = self.file_commits(rev, path, Some(1))?.into_iter().next() else {
+            return Ok(None);
+        };
+        let range = format!("{current}..{}", newest.unwrap_or("HEAD"));
+        let mut newer = self.file_commits(&range, newest_path, None)?;
+        // The newest of them is `newest`'s own version, unless that's a
+        // working tree with changes still to commit.
+        if newer.len() == 1 && !(newest.is_none() && self.path_changed(newest_path)?) {
+            return Ok(None);
+        }
+        Ok(newer.pop())
+    }
+
+    /// The commits in `revs` that changed `path`, newest first, each with
+    /// the file's path there (following renames); at most `limit` of them.
+    fn file_commits(&self, revs: &str, path: &str, limit: Option<usize>) -> Result<Vec<(String, String)>> {
+        let limit = limit.map(|n| format!("-n{n}"));
+        let mut args = vec!["log", "--follow", "--name-only", "--format=commit %H"];
+        args.extend(limit.as_deref());
+        args.extend([revs, "--", path]);
+        let out = self.git.run(&args)?.into_stdout_string();
+        let mut commits: Vec<(String, String)> = Vec::new();
+        for line in out.lines().filter(|l| !l.is_empty()) {
+            match line.strip_prefix("commit ") {
+                Some(oid) => commits.push((oid.to_string(), path.to_string())),
+                None => {
+                    if let Some(last) = commits.last_mut() {
+                        last.1 = line.to_string();
+                    }
+                }
+            }
+        }
+        Ok(commits)
+    }
+
+    /// Whether `path` in the working tree or index differs from `HEAD`.
+    fn path_changed(&self, path: &str) -> Result<bool> {
+        let out = self.git.run(&["status", "--porcelain", "--", path])?;
+        Ok(!out.stdout.is_empty())
+    }
+
     /// Loads up to `limit` commits into a Vec.
     pub fn commits(&self, scope: &LogScope, limit: usize) -> Result<Vec<Commit>> {
         let mut commits = Vec::new();

@@ -200,6 +200,67 @@ fn brackets_step_back_past_a_commit_and_forward_again() {
     assert_eq!(t.app().notice(), Some("this is the newest version"));
 }
 
+/// The blame view's depth, the version it shows and the selected line's text.
+fn at(t: &TestDriver) -> (usize, String, String) {
+    let blame = t.app().details().blame().unwrap();
+    let line = blame.blame().unwrap().lines[blame.selected_line() - 1].text.clone();
+    (blame.depth(), blame.label().to_string(), line)
+}
+
+#[test]
+fn braces_step_through_the_files_commits_one_at_a_time() {
+    let r = blamed();
+    let mut t = TestDriver::with_size(Config::default(), &r.sb, 120, 20);
+    blame_from_status(&mut t);
+    let v = |depth: usize, label: &str, line: &str| (depth, label.to_string(), line.to_string());
+    // Line 2 ("B") last changed in Sam's commit, but { goes one commit of
+    // the file at a time: the working tree has changes, so HEAD first.
+    t.press("j").press("{").wait_idle();
+    assert_eq!(at(&t), v(2, "HEAD", "B"));
+    // HEAD's version is Mia's; before it, Sam's, which still has "B".
+    t.press("{").wait_idle();
+    assert_eq!(at(&t), v(3, short(&r.shout_b), "B"));
+    assert!(
+        t.pane_title(PaneId::Details)
+            .contains(&format!("at {}  ‹ HEAD", short(&r.shout_b)))
+    );
+    t.press("{").wait_idle();
+    assert_eq!(at(&t), v(4, short(&r.add), "b"));
+    t.press("{").wait_idle();
+    assert_eq!(at(&t).0, 4);
+    assert_eq!(t.app().notice(), Some("no older commit changed f.ts"));
+
+    // } comes forward the same way, back up to the working tree.
+    t.press("}").wait_idle();
+    assert_eq!(at(&t), v(3, short(&r.shout_b), "B"));
+    t.press("}").wait_idle();
+    assert_eq!(at(&t), v(2, "HEAD", "B"));
+    t.press("}").wait_idle();
+    assert_eq!(at(&t), v(1, "working tree", "B"));
+    t.press("}");
+    assert_eq!(t.app().notice(), Some("this is the newest version"));
+}
+
+#[test]
+fn close_brace_after_open_bracket_stops_at_each_commit_in_between() {
+    let r = blamed();
+    let mut t = TestDriver::with_size(Config::default(), &r.sb, 120, 20);
+    blame_from_status(&mut t);
+    let v = |depth: usize, label: &str, line: &str| (depth, label.to_string(), line.to_string());
+    // Line 2 ("B") is Sam's: [ jumps from the working tree past Mia's
+    // commit and Sam's, to Ada's version...
+    t.press("j").press("[").wait_idle();
+    assert_eq!(at(&t), v(2, &format!("{}^", short(&r.shout_b)), "b"));
+    // ...which } walks forward through, Sam's then Mia's, in place.
+    t.press("}").wait_idle();
+    assert_eq!(at(&t), v(2, short(&r.shout_b), "B"));
+    t.press("}").wait_idle();
+    assert_eq!(at(&t), v(2, short(&r.shout_d), "B"));
+    // Then the working tree it started from, with its line still selected.
+    t.press("}").wait_idle();
+    assert_eq!(at(&t), v(1, "working tree", "B"));
+}
+
 #[test]
 fn t_switches_blame_and_the_graph_to_clock_times() {
     let r = blamed();

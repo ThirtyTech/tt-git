@@ -808,6 +808,8 @@ impl Component for DetailsPane {
                 Command::ToggleDetails,
                 Command::BlameBack,
                 Command::BlameForward,
+                Command::BlameOlder,
+                Command::BlameNewer,
                 Command::Search,
                 Command::SearchNext,
                 Command::SearchPrev,

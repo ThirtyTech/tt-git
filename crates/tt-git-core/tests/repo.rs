@@ -645,6 +645,82 @@ fn disk_usage_sums_files_and_skips_nested_worktrees() {
 }
 
 #[test]
+fn file_versions_step_through_the_commits_that_changed_the_file() {
+    let sb = Sandbox::new();
+    let one = sb.commit_file("old.txt", "a\nb\nc\n", "add old");
+    let two = sb.commit_file("old.txt", "a\nB\nc\n", "edit b");
+    sb.commit_file("other.txt", "x\n", "elsewhere");
+    sb.git(&["mv", "old.txt", "new.txt"]);
+    let moved = sb.commit_staged("rename");
+    let four = sb.commit_file("new.txt", "a\nB\nC\n", "edit c");
+    sb.commit_file("other.txt", "y\n", "elsewhere again");
+    let repo = open(&sb);
+    let at = |oid: &str, path: &str| Some((oid.to_string(), path.to_string()));
+
+    // Back from a clean working tree: past HEAD's version (four's) to the one before.
+    assert_eq!(
+        repo.file_version_before(None, "new.txt").unwrap(),
+        at(&moved, "new.txt")
+    );
+    // Back from a commit that didn't change the file goes past its version too.
+    assert_eq!(
+        repo.file_version_before(Some("HEAD"), "new.txt").unwrap(),
+        at(&moved, "new.txt")
+    );
+    // Past the rename, to the old name.
+    assert_eq!(
+        repo.file_version_before(Some(&moved), "new.txt").unwrap(),
+        at(&two, "old.txt")
+    );
+    assert_eq!(
+        repo.file_version_before(Some(&two), "old.txt").unwrap(),
+        at(&one, "old.txt")
+    );
+    assert_eq!(repo.file_version_before(Some(&one), "old.txt").unwrap(), None);
+
+    // Forward again, toward the working tree, back over the rename.
+    assert_eq!(
+        repo.file_version_after(&one, "old.txt", None, "new.txt").unwrap(),
+        at(&two, "old.txt")
+    );
+    assert_eq!(
+        repo.file_version_after(&two, "old.txt", None, "new.txt").unwrap(),
+        at(&moved, "new.txt")
+    );
+    // The next is the working tree's own version: nothing in between.
+    assert_eq!(
+        repo.file_version_after(&moved, "new.txt", None, "new.txt").unwrap(),
+        None
+    );
+    // Toward a commit: stops short of its version.
+    assert_eq!(
+        repo.file_version_after(&one, "old.txt", Some(&moved), "new.txt")
+            .unwrap(),
+        at(&two, "old.txt")
+    );
+    assert_eq!(
+        repo.file_version_after(&two, "old.txt", Some(&moved), "new.txt")
+            .unwrap(),
+        None
+    );
+
+    // With changes in the working tree, back goes to HEAD first, and
+    // forward stops at HEAD's version on the way.
+    sb.write("new.txt", "a\nB\nC\nd\n");
+    assert_eq!(
+        repo.file_version_before(None, "new.txt").unwrap(),
+        Some(("HEAD".into(), "new.txt".into()))
+    );
+    assert_eq!(
+        repo.file_version_after(&moved, "new.txt", None, "new.txt").unwrap(),
+        at(&four, "new.txt")
+    );
+    // A file not yet committed has nothing before it.
+    sb.write("fresh.txt", "new\n");
+    assert_eq!(repo.file_version_before(None, "fresh.txt").unwrap(), None);
+}
+
+#[test]
 fn blame_names_the_commit_behind_each_line() {
     let sb = Sandbox::new();
     let first = sb.commit_file("f.txt", "one\ntwo\nthree\n", "add f");
