@@ -173,6 +173,8 @@ pub struct App {
     select_head: bool,
     /// An undo is being worked out or run; another press waits.
     undo_pending: bool,
+    /// A check for a tt-git update is running.
+    update_checking: bool,
     /// Worktree changes are being counted, and whether to count again
     /// when that's done (something changed meanwhile).
     worktree_count: (bool, bool),
@@ -268,6 +270,7 @@ impl App {
             busy: Vec::new(),
             select_head: false,
             undo_pending: false,
+            update_checking: false,
             worktree_count: (false, false),
             worktree_sizing: 0,
             worktree_size_queue: Vec::new(),
@@ -839,6 +842,7 @@ impl App {
             Action::Run(op) => self.run_op(op),
             Action::Checkout(plan) => self.checkout(plan),
             Action::UndoPlanned(planned) => self.undo_planned(planned),
+            Action::UpdateChecked(latest) => self.update_checked(latest),
             Action::OpDone { op, result, head } => self.op_done(op, result, head),
             Action::StatusLoaded(Ok(status)) => {
                 self.status.set_status(status);
@@ -1137,6 +1141,10 @@ impl App {
         let label = op.label();
         self.notice = Some(format!("{label}…"));
         self.busy.push(label);
+        if let GitOp::SelfUpdate { tag } = op {
+            self.ctx.spawn_streaming(move |ctx| loaders::self_update(ctx, tag));
+            return;
+        }
         let repo = self.repo.clone();
         self.ctx.spawn(move || loaders::run_op(repo, op));
     }
@@ -1299,10 +1307,54 @@ impl App {
         ));
     }
 
+    /// Looks up the latest tt-git release in the background, unless this
+    /// binary can't be updated (a cargo build, say).
+    fn check_update(&mut self) {
+        if self.update_checking || self.busy.iter().any(|b| b.starts_with("update tt-git")) {
+            return;
+        }
+        if let Err(e) = tt_git_core::update::current_install_dir() {
+            self.error = Some(format!("can't update tt-git:\n{e}"));
+            return;
+        }
+        self.update_checking = true;
+        self.notice = Some("checking for a tt-git update…".into());
+        self.ctx.spawn(loaders::check_update);
+    }
+
+    /// Offers to install the latest release when it's newer than this one.
+    fn update_checked(&mut self, latest: Result<String, String>) {
+        self.update_checking = false;
+        let current = tt_git_core::update::CURRENT_VERSION;
+        match latest {
+            Ok(tag) if tt_git_core::update::is_newer(&tag, current) => {
+                self.notice = None;
+                self.modal = Some(Modal::confirm(
+                    "Update tt-git",
+                    format!(
+                        "tt-git {tag} is out (you have {current}).\nDownload and install it now?\n\n\
+                         Restart tt-git afterwards to use it."
+                    ),
+                    GitOp::SelfUpdate { tag },
+                ));
+            }
+            Ok(_) => self.notice = Some(format!("tt-git {current} is up to date")),
+            Err(e) => {
+                self.notice = None;
+                self.error = Some(format!("checking for a tt-git update failed:\n{e}"));
+            }
+        }
+    }
+
     fn op_done(&mut self, op: GitOp, result: Result<String, String>, head: Option<String>) {
         let label = op.label();
         if let Some(pos) = self.busy.iter().position(|b| *b == label) {
             self.busy.remove(pos);
+        }
+        // Nothing in the repository changed.
+        if let (GitOp::SelfUpdate { tag }, Ok(_)) = (&op, &result) {
+            self.notice = Some(format!("✓ installed tt-git {tag}; restart tt-git to use it"));
+            return;
         }
         if matches!(op, GitOp::Undo { .. }) {
             self.undo_pending = false;
@@ -1879,6 +1931,7 @@ impl App {
                 lines => self.modal = Some(Modal::go_to_line(lines)),
             },
             Command::PluginLogs => self.show_plugin_logs(),
+            Command::SelfUpdate => self.check_update(),
             Command::OpenLink if self.focus == PaneId::Details => self.open_link(),
             Command::ToggleFiles if self.focus == PaneId::Details => self.toggle_files(),
             Command::Continue | Command::Abort if self.focus != PaneId::Status => {

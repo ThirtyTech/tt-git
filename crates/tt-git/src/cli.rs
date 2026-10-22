@@ -7,6 +7,7 @@ use clap::{Args, Subcommand};
 use color_eyre::eyre::{Result, WrapErr, eyre};
 use serde_json::{Value, json};
 use tt_git_core::branches::unify;
+use tt_git_core::update;
 use tt_git_core::{GitCli, Repo};
 use tt_git_plugin::install::{self, GithubSpec};
 use tt_git_plugin::registry::{self, PluginDirs, Registry};
@@ -45,6 +46,16 @@ pub enum Cmd {
     /// Branch commands.
     #[command(subcommand)]
     Branch(BranchCmd),
+    /// Update tt-git to the latest release (or VERSION) with the release's
+    /// install script.
+    Update {
+        /// Release to install, such as v0.2.0 (default: the latest, when it's
+        /// newer than this one).
+        version: Option<String>,
+        /// Only say whether there's a newer release.
+        #[arg(long, conflicts_with = "version")]
+        check: bool,
+    },
     /// Internal: a scriptable fake plugin used by the test suite.
     #[command(name = "__test-plugin", hide = true)]
     TestPlugin {
@@ -322,8 +333,45 @@ pub fn run(cmd: Cmd) -> Result<()> {
             }
             Ok(())
         }
+        Cmd::Update { version, check } => {
+            // Expected failures (offline, a cargo build) read better
+            // without a report around them.
+            if let Err(e) = self_update(version, check) {
+                eprintln!("tt-git update: {e}");
+                std::process::exit(1);
+            }
+            Ok(())
+        }
         Cmd::TestPlugin { steps } => crate::test_plugin::run(&steps),
     }
+}
+
+fn self_update(version: Option<String>, check: bool) -> Result<(), update::UpdateError> {
+    let current = update::CURRENT_VERSION;
+    // Before going online, so a build that can't be updated says so at once.
+    let dir = if check {
+        None
+    } else {
+        Some(update::current_install_dir()?)
+    };
+    let tag = match version {
+        Some(v) => update::normalize_tag(&v),
+        None => {
+            let latest = update::latest_release()?;
+            if !update::is_newer(&latest, current) {
+                println!("tt-git {current} is up to date (latest release: {latest})");
+                return Ok(());
+            }
+            latest
+        }
+    };
+    let Some(dir) = dir else {
+        println!("tt-git {tag} is available (you have {current}); run `tt-git update` to install it");
+        return Ok(());
+    };
+    println!("Updating tt-git {current} → {tag}");
+    update::install(&tag, &dir, update::Output::Inherit).map_err(|e| e.error)?;
+    Ok(())
 }
 
 /// Asks before running someone else's code, unless `--yes`.

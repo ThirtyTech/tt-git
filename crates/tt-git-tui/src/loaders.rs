@@ -1,6 +1,7 @@
 //! Background jobs that read from git and report back as actions.
 
 use tt_git_core::patch::FileDiff;
+use tt_git_core::update;
 use tt_git_core::{BaseBranches, BranchEntry, CommitFile, GitError, GitRef, LogFilter, LogScope, RemoteConfig, Repo};
 
 use crate::action::{Action, RefsSnapshot};
@@ -486,6 +487,7 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::StashBranch { name, index } => repo.stash_branch(name, *index),
         GitOp::Undo { step, stash } => repo.apply_undo(step, *stash),
         GitOp::RemoveWorktree { path, force, .. } => repo.remove_worktree(path, *force),
+        GitOp::SelfUpdate { .. } => unreachable!("run by self_update"),
     };
     let head = match result {
         Ok(_) => repo.head().ok().and_then(|h| h.oid().map(str::to_string)),
@@ -495,6 +497,37 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         op,
         result: result.map_err(|e| e.stderr().map(str::to_string).unwrap_or_else(|| e.to_string())),
         head,
+    }
+}
+
+/// Looks up the latest tt-git release.
+pub fn check_update() -> Action {
+    Action::UpdateChecked(update::latest_release().map_err(|e| e.to_string()))
+}
+
+/// Installs tt-git release `tag` over the running binary, showing each line
+/// the install script prints in the help bar as it goes.
+pub fn self_update(ctx: &Ctx, tag: String) -> Action {
+    let mut progress = |line: &str| {
+        if !line.is_empty() {
+            ctx.emit(Action::Notify(format!("{line}…")));
+        }
+    };
+    let result = update::current_install_dir()
+        .map_err(|e| e.to_string())
+        .and_then(|dir| {
+            update::install(&tag, &dir, update::Output::Lines(&mut progress)).map_err(|e| {
+                if e.output.is_empty() {
+                    e.error.to_string()
+                } else {
+                    format!("{}\n\n{}", e.error, e.output)
+                }
+            })
+        });
+    Action::OpDone {
+        op: GitOp::SelfUpdate { tag },
+        result,
+        head: None,
     }
 }
 

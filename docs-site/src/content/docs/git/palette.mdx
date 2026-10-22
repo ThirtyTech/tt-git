@@ -28,7 +28,7 @@ The list depends on which pane is focused. In order, it shows:
 3. **Plugin panes**, as *Open &lt;title&gt;*.
 4. **Common commands** that aren't already listed: continue or abort a merge
    or rebase, [undo](/git/undo/), pull, push, refresh, switch the graph between all and current
-   branch, focus a pane, zoom, *Plugin logs* and help.
+   branch, focus a pane, zoom, *Plugin logs*, *Update tt-git* and help.
 
 The right side of each row shows its key, if it has one, so the palette
 doubles as a way to learn the keys. For a plugin action it shows the
@@ -36,6 +36,26 @@ plugin's name.
 
 *Plugin logs* is only in the palette. It opens a list of recent plugin runs
 with their exit codes and output; see [Plugins](/plugins/#plugin-logs).
+
+## Updating tt-git
+
+*Update tt-git* is only in the palette (bind `self_update` to give it a key).
+It checks GitHub for a newer release, with *checking for a tt-git update…* in
+the help bar while it looks:
+
+- If you have the latest release, the help bar says
+  *tt-git 0.3.0 is up to date*.
+- If there's a newer one, it asks first: *tt-git v0.4.0 is out (you have
+  0.3.0). Download and install it now?* Press <kbd>y</kbd> to install it or
+  <kbd>n</kbd> to leave it.
+
+The install runs in the background while you keep working, and the help bar
+shows each line the install script prints. When it's done it reads *✓
+installed tt-git v0.4.0; restart tt-git to use it*. If the check or the install
+fails (no network, say), an error popup shows why, with the script's output.
+
+It does the same as [`tt-git update`](/reference/cli/#tt-git-update), and
+refuses in the same cases, such as a tt-git run from a cargo build.
 
 ## Searching
 
