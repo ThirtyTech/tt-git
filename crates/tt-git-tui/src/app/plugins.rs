@@ -65,6 +65,7 @@ const PALETTE_BUILTINS: &[Command] = &[
     Command::FocusBranches,
     Command::FocusDetails,
     Command::Zoom,
+    Command::Theme,
     Command::PluginLogs,
     Command::SelfUpdate,
     Command::Help,

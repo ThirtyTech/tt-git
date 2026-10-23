@@ -321,6 +321,8 @@ pub enum PaletteTarget {
     /// (plugin id, pane entry point)
     PluginPane(String, String),
     Op(GitOp),
+    /// A color theme, by name.
+    Theme(String),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -377,6 +379,8 @@ pub enum ModalOutcome {
     GoToLine(usize),
     /// Start an agent.
     Agent(AgentRequest),
+    /// Keep this color theme.
+    Theme(String),
 }
 
 impl Modal {
@@ -477,6 +481,16 @@ impl Modal {
             .collect()
     }
 
+    /// What the palette's highlighted entry runs.
+    pub fn palette_selection(&self) -> Option<&PaletteTarget> {
+        match self {
+            Modal::Palette {
+                input, items, selected, ..
+            } => Self::palette_matches(items, input).get(*selected).map(|i| &i.target),
+            _ => None,
+        }
+    }
+
     pub fn handle_key(&mut self, key: KeyCombo) -> ModalOutcome {
         match self {
             Modal::Palette {
@@ -500,6 +514,7 @@ impl Modal {
                                 PaletteTarget::PluginAction(a) => ModalOutcome::PluginAction(a.clone()),
                                 PaletteTarget::PluginPane(p, e) => ModalOutcome::PluginPane(p.clone(), e.clone()),
                                 PaletteTarget::Op(op) => ModalOutcome::Run(op.clone()),
+                                PaletteTarget::Theme(name) => ModalOutcome::Theme(name.clone()),
                             },
                             None => ModalOutcome::Open,
                         };

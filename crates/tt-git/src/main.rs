@@ -5,6 +5,7 @@ use color_eyre::eyre::{Result, WrapErr};
 use tt_git_core::{GitCli, GitError, Repo};
 use tt_git_plugin::registry::PluginDirs;
 use tt_git_tui::app::PluginOptions;
+use tt_git_tui::themes::{ThemeDirs, ThemeOptions};
 use tt_git_tui::{App, Config};
 
 mod cli;
@@ -54,6 +55,10 @@ fn main() -> Result<()> {
     let no_plugins = args.no_plugins;
     let new_app = |repo: Repo| -> Result<_> {
         let (mut app, rx) = App::new(config.clone(), repo, tt_git_core::time::system_clock())?;
+        app.enable_themes(ThemeOptions {
+            dirs: ThemeDirs::from_env(),
+            config_path: Some(config_path.clone()),
+        });
         if !no_plugins {
             app.enable_plugins(PluginOptions {
                 dirs: PluginDirs::from_env(),

@@ -17,6 +17,7 @@ pub mod pty_pane;
 pub mod runner;
 pub mod syntax;
 pub mod theme;
+pub mod themes;
 pub mod watcher;
 pub mod widgets;
 

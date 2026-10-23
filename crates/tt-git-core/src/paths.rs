@@ -33,6 +33,11 @@ pub fn state_dir() -> PathBuf {
     }
 }
 
+/// The user's home directory.
+pub fn home_dir() -> Option<PathBuf> {
+    etcetera::home_dir().ok()
+}
+
 /// Path of the user's main config file.
 pub fn config_file() -> PathBuf {
     config_dir().join("config.toml")

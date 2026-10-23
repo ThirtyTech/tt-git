@@ -36,6 +36,7 @@ use crate::widgets::truncate_spans;
 mod agent;
 mod panes;
 mod plugins;
+mod themes;
 pub use panes::PaneRequest;
 pub use plugins::PluginOptions;
 
@@ -182,6 +183,16 @@ pub struct App {
     config: Config,
     keymap: Keymap,
     theme: Theme,
+    /// Where themes are found and config.toml is, once
+    /// [`enable_themes`](Self::enable_themes) has run.
+    themes: Option<crate::themes::ThemeOptions>,
+    /// The name of the theme on screen.
+    theme_name: String,
+    /// The file the theme came from and how it looked when read, checked
+    /// every second so a change (`omarchy theme set`, an edit) shows at once.
+    theme_file: Option<(std::path::PathBuf, crate::themes::Stamp)>,
+    /// The theme to go back to if the theme picker is cancelled.
+    theme_before_picker: Option<crate::themes::LoadedTheme>,
     repo: Repo,
     focus: PaneId,
     zoom: Zoom,
@@ -290,6 +301,10 @@ impl App {
             config,
             keymap,
             theme: Theme::default(),
+            themes: None,
+            theme_name: crate::themes::DEFAULT.into(),
+            theme_file: None,
+            theme_before_picker: None,
             status: StatusPane::new(repo.name()),
             repo,
             focus: PaneId::Graph,
@@ -417,6 +432,10 @@ impl App {
 
     pub fn modal(&self) -> Option<&Modal> {
         self.modal.as_ref()
+    }
+
+    pub fn theme(&self) -> &Theme {
+        &self.theme
     }
 
     pub fn jobs(&self) -> &JobTracker {
@@ -634,6 +653,11 @@ impl App {
 
     /// Acts on what the open modal made of a key or click.
     fn modal_outcome(&mut self, outcome: ModalOutcome) {
+        self.handle_modal_outcome(outcome);
+        self.preview_theme();
+    }
+
+    fn handle_modal_outcome(&mut self, outcome: ModalOutcome) {
         match outcome {
             ModalOutcome::Open => {}
             ModalOutcome::Cancelled => self.modal = None,
@@ -659,6 +683,10 @@ impl App {
             ModalOutcome::Agent(req) => {
                 self.modal = None;
                 self.start_agent(req);
+            }
+            ModalOutcome::Theme(name) => {
+                self.modal = None;
+                self.pick_theme(name);
             }
             ModalOutcome::PluginAction(action) => {
                 self.modal = None;
@@ -758,6 +786,7 @@ impl App {
             Action::Command(cmd) => self.run_command(cmd),
             Action::Tick => {
                 self.ticks += 1;
+                self.poll_theme();
                 if self.poll_plugins() || self.cursor_shown || self.dates_stale() || self.help_bar_moving() {
                     self.dirty = true;
                 }
@@ -2076,6 +2105,7 @@ impl App {
                 lines => self.modal = Some(Modal::go_to_line(lines)),
             },
             Command::PluginLogs => self.show_plugin_logs(),
+            Command::Theme => self.open_theme_picker(),
             Command::SelfUpdate => self.check_update(),
             Command::OpenLink if self.focus == PaneId::Details => self.open_link(),
             Command::ToggleFiles if self.focus == PaneId::Details => self.toggle_files(),
@@ -2213,6 +2243,11 @@ impl App {
         if let Some(err) = &self.error {
             draw_error_popup(frame, main, err, &self.theme);
         }
+        if self.config.theme_background
+            && let (Some(bg), Some(fg)) = (self.theme.background, self.theme.foreground)
+        {
+            paint_background(frame, bg, fg);
+        }
     }
 
     fn draw_help_bar(&self, frame: &mut Frame, area: Rect) {
@@ -2324,6 +2359,21 @@ impl App {
                 Line::styled(concat!(" tt-git ", env!("CARGO_PKG_VERSION"), " "), self.theme.muted).right_aligned(),
             );
         frame.render_widget(Paragraph::new(lines).block(block), popup);
+    }
+}
+
+/// Gives every cell left in the terminal's own colors the theme's instead.
+/// Done to the finished frame, so it also covers popups that cleared their
+/// area and plugin panes' default colors.
+fn paint_background(frame: &mut Frame, bg: ratatui::style::Color, fg: ratatui::style::Color) {
+    use ratatui::style::Color;
+    for cell in frame.buffer_mut().content.iter_mut() {
+        if cell.bg == Color::Reset {
+            cell.bg = bg;
+        }
+        if cell.fg == Color::Reset {
+            cell.fg = fg;
+        }
     }
 }
 
