@@ -43,6 +43,8 @@ This is every setting, at its default:
 watch = true        # refresh when files or refs change outside tt-git
 mouse = true        # click, wheel, ctrl+click links
 syntax = true       # color code by language in diffs, staging and blame
+theme = "default"   # color theme: a built-in name, "omarchy", "omarchy:<name>" or your own
+theme_background = false  # paint the theme's background instead of leaving the terminal's
 
 [graph]
 max_commits = 20000               # loaded at a time; scrolling near the end loads more
@@ -69,6 +71,7 @@ placement = "auto"   # a herdr tab inside herdr, else in place of details
 
 Two more tables, `[layout]` and `[keys]`, have pages of their own:
 [Layout](/configuration/layout/) and [Key bindings](/configuration/keys/).
+Themes have one too: [Themes](/configuration/themes/).
 
 ### Top level
 
@@ -77,6 +80,8 @@ Two more tables, `[layout]` and `[keys]`, have pages of their own:
 | `watch` | `true` | Watch the working tree and `.git`, and refresh when something changes outside tt-git. See [Refreshing](/git/refreshing/). With `false`, press <kbd>ctrl+r</kbd> to refresh. |
 | `mouse` | `true` | Click a pane or row to focus and select it (or a branches tab, a changed file, or a Filter graph entry), double-click a commit to open its files, scroll the pane under the pointer with the wheel, and <kbd>ctrl</kbd>+click links in the details pane. Turn it off to let your terminal handle the mouse (for example, to select text). |
 | `syntax` | `true` | Color code by language in diffs, the [staging view](/panes/staging/) and [blame](/panes/blame/), with added and removed lines on a green or red background. With `false`, code is plain, and diffs show added lines in green and removed lines in red. See [Code colors](/panes/details/#code-colors). |
+| `theme` | `"default"` | The color theme: one of the built-in themes such as `"tokyo-night"`, `"omarchy"` to follow Omarchy's current theme, `"omarchy:<name>"` for one of Omarchy's, or your own from `themes/<name>.toml`. *Theme* in the command palette picks one and saves it here. See [Themes](/configuration/themes/). |
+| `theme_background` | `false` | Paint the theme's background behind everything, instead of leaving the terminal's. See [The background](/configuration/themes/#the-background). |
 
 ### `[graph]`
 

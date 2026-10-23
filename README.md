@@ -21,6 +21,10 @@ A terminal git client in Rust ([ratatui](https://ratatui.rs)), inspired by
 - **Code colored by language** in diffs, the staging view and blame, with
   added and removed lines on a green or red background. Around 200 languages,
   from bat's syntax definitions.
+- **Color themes**: Catppuccin, Tokyo Night, Gruvbox, Nord, Dracula and more
+  built in, your own in Omarchy's `colors.toml` format, or `theme = "omarchy"`
+  to follow Omarchy's current theme as you switch it. *Theme* in the command
+  palette previews each one live.
 - **One branch list for local and remote branches**, sorted by recent
   activity (commits, pushes, checkouts). If you check out a branch that only
   exists on a remote, tt-git creates the local tracking branch for you
@@ -193,6 +197,8 @@ The full documentation is at <https://thirtytech.github.io/tt-git/>. For how eac
 - [How it works](https://thirtytech.github.io/tt-git/reference/how-it-works/): the git commands behind each
   pane
 - [Configuration](https://thirtytech.github.io/tt-git/configuration/): settings, keys and layout
+- [Themes](https://thirtytech.github.io/tt-git/configuration/themes/): built-in themes, Omarchy's,
+  and writing your own
 
 ## Memory and speed
 

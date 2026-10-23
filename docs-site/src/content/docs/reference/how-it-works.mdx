@@ -537,7 +537,8 @@ when it opens, and doesn't reload as files change.
 [Code colors](/panes/details/#code-colors) run no git command. tt-git colors
 the text git already gave it with [syntect](https://github.com/trishume/syntect)
 and the syntax definitions [bat](https://github.com/sharkdp/bat) ships, built
-into the binary. The colors themselves are tt-git's, not a bat theme.
+into the binary. The colors themselves come from tt-git's
+[theme](/configuration/themes/), not a bat theme.
 
 Coloring runs in the background job that loaded the text, right after the git
 command, so the pane draws the result without redoing it. Blame colors the

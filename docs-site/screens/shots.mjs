@@ -557,6 +557,20 @@ export const shots = [
 		callouts: [{ target: { find: '> sta█' }, text: '**sta**: in the name, or as letters in order', markerSide: 'left' }],
 	},
 	{
+		name: 'theme-picker',
+		capture: 'theme-picker',
+		highlights: [{ target: { box: 'Theme' } }],
+		legend: { ...BESIDE_DIALOG, y: 220 },
+		callouts: [
+			{ target: { find: 'catppuccin-mocha' }, text: 'The highlighted one **shows**', markerSide: 'left' },
+			{ target: { find: 'terminal colors' }, text: 'Where each one **comes from**', markerSide: 'right' },
+		],
+	},
+	{
+		name: 'theme-light',
+		capture: 'theme-light',
+	},
+	{
 		name: 'help',
 		capture: 'help',
 		dim: true,

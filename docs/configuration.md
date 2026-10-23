@@ -14,6 +14,8 @@ Unknown keys are reported as errors, so typos don't go unnoticed.
 watch = true        # refresh when files or refs change outside tt-git
 mouse = true        # click, wheel, ctrl+click links
 syntax = true       # color code by language in diffs, staging and blame
+theme = "default"   # color theme; see Themes below
+theme_background = false  # paint the theme's background instead of leaving the terminal's
 
 [graph]
 max_commits = 20000             # loaded at a time; scrolling near the end loads more
@@ -38,6 +40,31 @@ placement = "auto"              # "auto" (herdr tab inside herdr, else the detai
 # system_prompt = "..."         # default: tt-git's own; "" for none
 # [[agent.actions]]             # replaces the built-in actions: name, prompt, description, when = "always" | "merging"
 ```
+
+## Themes
+
+`theme` picks the colors. Leave it out (or set `"default"`) for tt-git's own
+colors in the terminal's palette. Otherwise it's one of:
+
+- a built-in theme: `catppuccin-mocha`, `catppuccin-macchiato`,
+  `catppuccin-frappe`, `catppuccin-latte`, `dracula`, `everforest`,
+  `gruvbox-dark`, `gruvbox-light`, `kanagawa`, `nord`, `one-dark`,
+  `rose-pine`, `rose-pine-dawn`, `solarized-dark`, `solarized-light`,
+  `tokyo-night`
+- `"omarchy"`: Omarchy's current theme
+  (`~/.local/state/omarchy/current/theme/colors.toml`). tt-git follows it as
+  you switch themes in Omarchy.
+- `"omarchy:<name>"`: one of Omarchy's themes, from
+  `~/.config/omarchy/themes/<name>` or `$OMARCHY_PATH/themes/<name>`
+- your own: `<config dir>/themes/<name>.toml`, in Omarchy's `colors.toml`
+  format (`accent`, `selection`, `muted`, `background`, `foreground`,
+  `dark_foreground`, `red` … `magenta`, `bright_*`; all optional). A file
+  named like a built-in replaces it.
+
+tt-git watches the theme's file and redraws when it changes. *Theme* in the
+command palette lists every theme, shows each as you move through the list,
+and saves the one you pick with `enter` to `config.toml`. A theme leaves the
+terminal's background alone unless `theme_background = true`.
 
 ## Merged and unmerged branches
 
@@ -217,6 +244,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `go_to_line` | `ctrl+g` | blame |
 | `copy` (commit hash / branch name / absolute worktree path) | `c` | graph, branches, worktrees, blame |
 | `plugin_logs` | (palette only) | global |
+| `theme` | (palette only) | global |
 | `self_update` | (palette only) | global |
 
 ### Plugin action bindings

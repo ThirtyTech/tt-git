@@ -16,6 +16,7 @@ use ratatui::style::{Color, Modifier};
 use serde_json::{Value, json};
 use tt_git_testkit::{NOW, Sandbox, TestDriver};
 use tt_git_tui::Config;
+use tt_git_tui::themes::ThemeOptions;
 use tt_git_tui::panes::PaneId;
 
 /// 1920×1080 at 10×20 px cells, less the window frame the renderer draws.
@@ -97,6 +98,23 @@ fn main() {
         press(&mut driver, keys);
         save(&out, name, &driver);
     }
+
+    // The theme picker, four down the list so Catppuccin Mocha shows behind
+    // it, and a light theme on its own background. Only the built-in
+    // themes, so the user's own and Omarchy's don't show up.
+    let mut driver = TestDriver::with_size(Config::default(), &sb, WIDTH, HEIGHT);
+    driver.app_mut().enable_themes(ThemeOptions::default());
+    press(&mut driver, &[":", "text:theme", "enter", "down", "down", "down", "down"]);
+    save(&out, "theme-picker", &driver);
+    let light = Config {
+        theme: Some("catppuccin-latte".into()),
+        theme_background: true,
+        ..Config::default()
+    };
+    let mut driver = TestDriver::with_size(light, &sb, WIDTH, HEIGHT);
+    driver.app_mut().enable_themes(ThemeOptions::default());
+    driver.render();
+    save(&out, "theme-light", &driver);
 
     // The earlier four-pane layout, with details always on screen.
     let four_pane = Config::parse(

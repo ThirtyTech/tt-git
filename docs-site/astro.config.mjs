@@ -116,6 +116,7 @@ export default defineConfig({
 						{ label: 'Configuration file', slug: 'configuration' },
 						{ label: 'Layout', slug: 'configuration/layout' },
 						{ label: 'Key bindings', slug: 'configuration/keys' },
+						{ label: 'Themes', slug: 'configuration/themes' },
 					],
 				},
 				{
