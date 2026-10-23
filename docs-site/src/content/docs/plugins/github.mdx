@@ -1,0 +1,154 @@
+---
+title: GitHub
+description: Show each branch's open GitHub pull request in the branch list.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+The GitHub plugin looks up the open pull requests of a repository hosted on
+GitHub and shows each one's number next to its head branch in the
+[branch list](/panes/branches/#plugin-columns):
+
+```
+* main                     ✓          2h
+  feature/login   #1423    ↑2         3h
+  feature/search  #1431    ✓          1d
+  fix-typo                 local      1d
+```
+
+It's a separate plugin, not part of tt-git itself. It lives in the tt-git
+repository under
+[`plugins/github`](https://github.com/thirtytech/tt-git/tree/main/plugins/github)
+and is written in Go, but you don't need Go: installing it downloads the
+prebuilt program for your platform. It works with github.com and with
+GitHub Enterprise Server.
+
+## Installing
+
+<Steps>
+
+1. Install it from GitHub:
+
+   ```sh
+   tt-git plugin install ThirtyTech/tt-git/plugins/github
+   ```
+
+   tt-git shows what will run and asks first. The build step downloads
+   `tt-git-github` for the plugin's version from its
+   [GitHub release](https://github.com/thirtytech/tt-git/releases) into the
+   plugin's `bin` folder, with `curl` on Linux and macOS or PowerShell on
+   Windows.
+
+2. Sign in with the [GitHub CLI](https://cli.github.com/) (`gh auth login`),
+   or set `GH_TOKEN` in the environment you start tt-git from. A public
+   repository works without either.
+
+3. Start tt-git in a repository whose `origin` is on GitHub.
+
+</Steps>
+
+`tt-git plugin update thirtytech.github` downloads the newest release's
+program, and `tt-git plugin uninstall thirtytech.github` removes it.
+
+## The token
+
+The plugin uses the first token it finds:
+
+1. the GitHub CLI's, from `gh auth token --hostname <host>`,
+2. `GH_TOKEN`, then `GITHUB_TOKEN`; on a GitHub Enterprise host,
+   `GH_ENTERPRISE_TOKEN`, then `GITHUB_ENTERPRISE_TOKEN`.
+
+These are the variables `gh` itself reads, so if `gh` works in your shell,
+the plugin does too. The token needs read access to the repository's pull
+requests: the `repo` scope for a classic token on a private repository, or
+**Pull requests (Read)** for a fine-grained one.
+
+With no token, the plugin asks GitHub anonymously. That works for public
+repositories, within GitHub's limit of 60 requests an hour. A private
+repository looks missing without a token.
+
+## Which repository
+
+The plugin reads the repository from the `origin` remote, or, if `origin`
+isn't on GitHub, from the first remote that is. It understands these remote
+URLs:
+
+| Form | Example |
+|---|---|
+| HTTPS | `https://github.com/acme/api.git` |
+| HTTPS with a user | `https://jon@github.com/acme/api.git` |
+| SSH | `git@github.com:acme/api.git` |
+| SSH URL | `ssh://git@github.com/acme/api.git` |
+| SSH over port 443 | `ssh://git@ssh.github.com:443/acme/api.git` |
+
+In a repository that isn't on GitHub, the plugin does nothing.
+
+### GitHub Enterprise Server
+
+For a GitHub Enterprise Server host, set `TTGIT_GITHUB_HOSTS` to its host
+name before starting tt-git. Separate several hosts with commas:
+
+```sh
+export TTGIT_GITHUB_HOSTS=github.acme.com
+```
+
+`GH_HOST`, which `gh` reads, counts as one too. Remotes on those hosts take
+the same forms as above, and the plugin calls the host's API at
+`https://<host>/api/v3`.
+
+## When it looks
+
+Each lookup is one request for the repository's open pull requests (one per
+100 of them, up to 1000). The plugin looks again when:
+
+- tt-git starts,
+- you fetch, pull or push,
+- you create or rename a branch,
+- you run **Refresh GitHub pull requests** from the
+  [palette](/git/palette/), which also says in the help bar how many of your
+  branches have one.
+
+A branch with more than one open pull request shows the newest. Pull
+requests from forks don't match any of your branches, even when the fork's
+branch has the same name as one of yours.
+
+## Opening a pull request
+
+Select a branch in the branch list, press <kbd>:</kbd> and run **Open pull
+request on GitHub**. It opens the branch's pull request in your browser, or
+says in the help bar that the branch has none.
+
+## When something's wrong
+
+A lookup that fails shows a ✗ notice in the help bar, and **Refresh GitHub
+pull requests** shows the reason in an error popup. Open *Plugin logs* from
+the palette to see the full message:
+
+| Message | Means |
+|---|---|
+| `GitHub refused the token from …` | The token named there has expired or been revoked. Run `gh auth login` again, or set a new one. |
+| `GitHub answered 404 Not Found` | The repository in the remote URL doesn't exist, or the token can't see it. Without a token, a private repository answers this too. |
+| `GitHub's API rate limit is used up until …` | You've used up the hour's requests. The plugin stops asking until the time shown and keeps the column as it was; only **Refresh GitHub pull requests** says so again. |
+| `GitHub answered 403 …` | The token can't read the repository's pull requests, or an organization's policy blocks it. |
+
+<Aside>
+The plugin needs a tt-git with the
+[branch columns API](/plugins/api/#branch-columns): any release after 0.3.0.
+</Aside>
+
+## Developing it
+
+To work on the plugin from a clone of the tt-git repository, build it into
+`bin` and link it:
+
+```sh
+cd plugins/github
+go build -o bin/tt-git-github .     # bin/tt-git-github.exe on Windows
+go test ./...
+tt-git plugin link .
+```
+
+A release is cut by bumping `version` in `tt-git-plugin.toml` and pushing a
+`github-v<version>` tag. The *GitHub plugin* workflow then builds the
+program for each platform and attaches it to a release. If there's no
+release for a plugin version, the build step builds it with Go instead.

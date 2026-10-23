@@ -149,8 +149,8 @@ plugin's id and a map from branch names to text, or run
   its column goes away. Columns aren't saved, so set them again when tt-git
   starts (on `app.started`).
 
-The [Azure DevOps plugin](/plugins/azure-devops/) uses this to show pull
-request numbers.
+The [GitHub](/plugins/github/) and [Azure DevOps](/plugins/azure-devops/)
+plugins use this to show pull request numbers.
 
 `plugin.action.invoke` accepts a local action id when you also pass
 `plugin_id`; otherwise give the qualified id. `plugin.pane.open` fails with

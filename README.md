@@ -267,10 +267,11 @@ tt-git plugin list
 variables, events, panes, the socket API and the CLI.
 [examples/plugins](examples/plugins) has working examples.
 
-The [Azure DevOps plugin](plugins/azure-devops) shows each branch's active
-pull request in the branch list:
+The [GitHub](plugins/github) and [Azure DevOps](plugins/azure-devops) plugins
+show each branch's open pull request in the branch list:
 
 ```sh
+tt-git plugin install ThirtyTech/tt-git/plugins/github
 tt-git plugin install ThirtyTech/tt-git/plugins/azure-devops
 ```
 
