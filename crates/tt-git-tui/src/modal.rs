@@ -7,7 +7,9 @@ use ratatui::layout::Rect;
 use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
-use tt_git_core::{CheckoutPlan, DiscardKind, InProgress, LogFilter, PatchOp, StashScope, UndoStep};
+use tt_git_core::{
+    CheckoutPlan, DiscardKind, DiscardScope, InProgress, LogFilter, PatchOp, StashScope, StatusEntry, UndoStep,
+};
 
 use crate::agent::{AgentAction, AgentRequest};
 use crate::filter::FilterPanel;
@@ -67,6 +69,8 @@ pub enum GitOp {
         path: String,
         kind: DiscardKind,
     },
+    /// Every change `scope` covers, in every file.
+    DiscardAll(DiscardScope),
     /// Applies part of one file's changes (`patch`, built for `op`) by hunk, or
     /// by line with `lines`.
     ApplyPatch {
@@ -174,6 +178,12 @@ impl GitOp {
             GitOp::StageAll => "stage all".into(),
             GitOp::UnstageAll => "unstage all".into(),
             GitOp::Discard { path, .. } => format!("discard {path}"),
+            GitOp::DiscardAll(scope) => match scope {
+                DiscardScope::Everything => "discard everything".into(),
+                DiscardScope::Unstaged => "discard unstaged changes".into(),
+                DiscardScope::UnstagedAndUntracked => "discard unstaged changes and untracked files".into(),
+                DiscardScope::Untracked => "delete untracked files".into(),
+            },
             GitOp::ApplyPatch { path, op, lines, .. } => {
                 let verb = match op {
                     PatchOp::Stage => "stage",
@@ -335,6 +345,80 @@ pub struct PaletteItem {
 
 const PALETTE_ROWS: usize = 12;
 
+/// How many files the discard-all dialog would touch, from the status
+/// pane's entries. A file with staged and unstaged changes counts in both.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct DiscardCounts {
+    pub staged: usize,
+    pub unstaged: usize,
+    pub untracked: usize,
+    /// Untracked folders holding a repository of their own, which `git
+    /// clean -fd` leaves alone.
+    pub nested: usize,
+}
+
+impl DiscardCounts {
+    pub fn of(entries: &[StatusEntry]) -> Self {
+        let mut counts = Self::default();
+        for e in entries {
+            if e.is_untracked() {
+                // With --untracked-files=all a folder only shows up when
+                // it's a repository of its own.
+                if e.path.ends_with('/') {
+                    counts.nested += 1;
+                } else {
+                    counts.untracked += 1;
+                }
+                continue;
+            }
+            counts.staged += usize::from(e.has_staged());
+            counts.unstaged += usize::from(e.has_unstaged());
+        }
+        counts
+    }
+
+    /// What `scope` throws away, as `2 staged files`, `1 untracked file`;
+    /// empty if nothing.
+    fn lost(&self, scope: DiscardScope) -> Vec<String> {
+        let mut parts = Vec::new();
+        if scope.drops_staged() && self.staged > 0 {
+            parts.push(files(self.staged, "staged"));
+        }
+        if scope.drops_unstaged() && self.unstaged > 0 {
+            parts.push(files(self.unstaged, "unstaged"));
+        }
+        if scope.drops_untracked() && self.untracked > 0 {
+            parts.push(files(self.untracked, "untracked"));
+        }
+        parts
+    }
+
+    /// What stays that the user might expect to go.
+    fn kept(&self, scope: DiscardScope) -> Vec<String> {
+        let mut parts = Vec::new();
+        if !scope.drops_staged() && self.staged > 0 {
+            parts.push(files(self.staged, "staged"));
+        }
+        if !scope.drops_unstaged() && self.unstaged > 0 {
+            parts.push(files(self.unstaged, "unstaged"));
+        }
+        if !scope.drops_untracked() && self.untracked > 0 {
+            parts.push(files(self.untracked, "untracked"));
+        }
+        if scope.drops_untracked() && self.nested > 0 {
+            let s = if self.nested == 1 { "repository" } else { "repositories" };
+            parts.push(format!("{} nested {s}", self.nested));
+        }
+        parts.push("ignored files".into());
+        parts
+    }
+}
+
+/// `1 staged file`, `2 staged files`.
+fn files(n: usize, what: &str) -> String {
+    format!("{n} {what} file{}", if n == 1 { "" } else { "s" })
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Modal {
     /// Fuzzy-filtered list: the command palette (built-in commands and
@@ -361,6 +445,9 @@ pub enum Modal {
     },
     /// Pick an author or file to narrow the graph to.
     Filter(Box<FilterPanel>),
+    /// Discard every change: `tab` cycles through what to discard, `y`
+    /// does it.
+    DiscardAll { scope: DiscardScope, counts: DiscardCounts },
 }
 
 /// Result of feeding a key to a modal.
@@ -424,6 +511,14 @@ impl Modal {
                 alt: Some(Box::new((key, hint.into(), alt_op))),
             },
             other => other,
+        }
+    }
+
+    /// The discard-all dialog, starting on discarding everything.
+    pub fn discard_all(counts: DiscardCounts) -> Self {
+        Modal::DiscardAll {
+            scope: DiscardScope::Everything,
+            counts,
         }
     }
 
@@ -615,6 +710,24 @@ impl Modal {
                 _ => ModalOutcome::Open,
             },
             Modal::Filter(panel) => panel.handle_key(key),
+            Modal::DiscardAll { scope, counts } => match key.code {
+                KeyCode::Tab | KeyCode::BackTab => {
+                    let all = DiscardScope::ALL;
+                    let at = all.iter().position(|s| s == scope).unwrap_or(0);
+                    let n = all.len();
+                    *scope = all[if key.code == KeyCode::BackTab {
+                        (at + n - 1) % n
+                    } else {
+                        (at + 1) % n
+                    }];
+                    ModalOutcome::Open
+                }
+                KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter if !counts.lost(*scope).is_empty() => {
+                    ModalOutcome::Run(GitOp::DiscardAll(*scope))
+                }
+                KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => ModalOutcome::Cancelled,
+                _ => ModalOutcome::Open,
+            },
         }
     }
 
@@ -744,6 +857,51 @@ impl Modal {
                     None => "y confirm · n/esc cancel".into(),
                 },
             ),
+            Modal::DiscardAll { scope, counts } => {
+                let tab = |label: &'static str, s: DiscardScope| {
+                    if s == *scope {
+                        Span::styled(label, theme.help_key.add_modifier(Modifier::UNDERLINED))
+                    } else {
+                        Span::styled(label, theme.muted)
+                    }
+                };
+                let sep = || Span::styled(" · ", theme.muted);
+                let what = match scope {
+                    DiscardScope::Everything => "every file back to HEAD, untracked files deleted",
+                    DiscardScope::Unstaged => "files back to what's staged; staged changes and untracked files stay",
+                    DiscardScope::UnstagedAndUntracked => {
+                        "files back to what's staged, untracked files deleted; staged changes stay"
+                    }
+                    DiscardScope::Untracked => "untracked files deleted; changes to tracked files stay",
+                };
+                let lost = counts.lost(*scope);
+                let mut body = vec![
+                    Line::from(vec![
+                        tab("Everything", DiscardScope::Everything),
+                        sep(),
+                        tab("Unstaged", DiscardScope::Unstaged),
+                        sep(),
+                        tab("Unstaged + untracked", DiscardScope::UnstagedAndUntracked),
+                        sep(),
+                        tab("Untracked", DiscardScope::Untracked),
+                    ]),
+                    Line::styled(what, theme.muted),
+                    Line::raw(""),
+                ];
+                if lost.is_empty() {
+                    body.push(Line::raw("Nothing to discard here."));
+                } else {
+                    body.push(Line::raw(format!("Lost: {}.", lost.join(", "))));
+                }
+                body.push(Line::raw(format!("Kept: {}.", counts.kept(*scope).join(", "))));
+                let hint = if lost.is_empty() {
+                    "tab what to discard · n/esc cancel"
+                } else {
+                    body.push(Line::styled("This cannot be undone.", theme.error));
+                    "y discard · tab what to discard · n/esc cancel"
+                };
+                ("Discard all", body, hint.into())
+            }
         };
         // The stash dialog's row of choices ends in a file name.
         let wide = matches!(
@@ -751,7 +909,7 @@ impl Modal {
             Modal::Prompt {
                 action: PromptAction::Stash { .. } | PromptAction::Agent { .. },
                 ..
-            }
+            } | Modal::DiscardAll { .. }
         );
         let width = if wide { 72 } else { 60 }.min(area.width);
         let inner_width = width.saturating_sub(2).max(1) as usize;
@@ -993,6 +1151,41 @@ mod tests {
                 message: "why".into(),
             })
         );
+    }
+
+    #[test]
+    fn discard_all_cycles_what_to_discard() {
+        let counts = DiscardCounts {
+            staged: 1,
+            unstaged: 0,
+            untracked: 2,
+            nested: 0,
+        };
+        let mut m = Modal::discard_all(counts);
+        assert_eq!(
+            m.handle_key(k("y")),
+            ModalOutcome::Run(GitOp::DiscardAll(DiscardScope::Everything))
+        );
+        m.handle_key(k("tab"));
+        assert_eq!(
+            m.handle_key(k("enter")),
+            ModalOutcome::Open,
+            "no unstaged changes to discard"
+        );
+        m.handle_key(k("tab"));
+        assert_eq!(
+            m.handle_key(k("y")),
+            ModalOutcome::Run(GitOp::DiscardAll(DiscardScope::UnstagedAndUntracked))
+        );
+        for _ in 0..3 {
+            m.handle_key(k("shift+tab"));
+        }
+        assert_eq!(
+            m.handle_key(k("y")),
+            ModalOutcome::Run(GitOp::DiscardAll(DiscardScope::Untracked)),
+            "shift+tab goes round"
+        );
+        assert_eq!(m.handle_key(k("esc")), ModalOutcome::Cancelled);
     }
 
     #[test]

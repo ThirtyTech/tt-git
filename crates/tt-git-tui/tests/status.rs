@@ -111,6 +111,62 @@ fn discard_asks_then_restores() {
 }
 
 #[test]
+fn shift_d_asks_what_to_discard_then_discards_it() {
+    let sb = Sandbox::new();
+    sb.commit_file("f.txt", "original\n", "base");
+    sb.commit_file("g.txt", "original\n", "base2");
+    sb.write("f.txt", "staged\n");
+    sb.git(&["add", "f.txt"]);
+    sb.write("g.txt", "oops\n");
+    sb.write("new.txt", "new\n");
+    let mut t = TestDriver::new(&sb);
+    t.press("2").press("D");
+    insta::assert_snapshot!(t.screen());
+    t.press("n");
+    assert!(t.app().modal().is_none());
+    assert_eq!(codes(&t).len(), 3, "nothing discarded");
+
+    // Unstaged + untracked keeps f.txt staged.
+    t.press("D").press("tab").press("tab");
+    assert!(t.screen().contains("Lost: 1 unstaged file, 1 untracked file."));
+    assert!(t.screen().contains("Kept: 1 staged file, ignored files."));
+    t.press("y");
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(codes(&t), vec![("M ".into(), "f.txt".into())]);
+    assert!(!sb.path().join("new.txt").exists());
+
+    t.press("D").press("y");
+    assert!(t.app().status().entries().is_empty());
+    assert_eq!(std::fs::read_to_string(sb.path().join("f.txt")).unwrap(), "original\n");
+    t.press("D");
+    assert!(t.app().modal().is_none());
+    assert!(t.app().notice().unwrap_or_default().contains("nothing to discard"));
+}
+
+#[test]
+fn shift_d_refuses_during_a_merge() {
+    let sb = Sandbox::new();
+    sb.commit_file("f.txt", "base\n", "base");
+    sb.checkout_new("other");
+    sb.commit_file("f.txt", "theirs\n", "theirs");
+    sb.checkout("main");
+    sb.commit_file("f.txt", "ours\n", "ours");
+    // The merge stops on the conflict, so it fails.
+    let mut merge = std::process::Command::new("git");
+    sb.apply_env(&mut merge);
+    let out = merge.current_dir(sb.path()).args(["merge", "other"]).output().unwrap();
+    assert!(!out.status.success());
+    let mut t = TestDriver::new(&sb);
+    t.press("2").press("D");
+    assert!(t.app().modal().is_none());
+    assert!(
+        t.app().notice().unwrap_or_default().contains("a merge is in progress"),
+        "{:?}",
+        t.app().notice()
+    );
+}
+
+#[test]
 fn details_show_file_diff_then_commit_again() {
     let sb = Sandbox::new();
     sb.commit_file("f.txt", "one\n", "base");

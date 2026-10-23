@@ -233,6 +233,51 @@ impl DiscardKind {
     }
 }
 
+/// What `discard_all` throws away. Ignored files and nested repositories
+/// are always kept.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DiscardScope {
+    /// Staged, unstaged and untracked changes.
+    Everything,
+    /// Unstaged changes to tracked files; staged ones and untracked files stay.
+    Unstaged,
+    /// Unstaged changes and untracked files; staged ones stay.
+    UnstagedAndUntracked,
+    /// Untracked files only.
+    Untracked,
+}
+
+impl DiscardScope {
+    pub const ALL: [DiscardScope; 4] = [
+        DiscardScope::Everything,
+        DiscardScope::Unstaged,
+        DiscardScope::UnstagedAndUntracked,
+        DiscardScope::Untracked,
+    ];
+
+    /// The name plugins see in `files.discarded`.
+    pub fn name(self) -> &'static str {
+        match self {
+            DiscardScope::Everything => "everything",
+            DiscardScope::Unstaged => "unstaged",
+            DiscardScope::UnstagedAndUntracked => "unstaged_and_untracked",
+            DiscardScope::Untracked => "untracked",
+        }
+    }
+
+    pub fn drops_staged(self) -> bool {
+        self == DiscardScope::Everything
+    }
+
+    pub fn drops_unstaged(self) -> bool {
+        self != DiscardScope::Untracked
+    }
+
+    pub fn drops_untracked(self) -> bool {
+        self != DiscardScope::Unstaged
+    }
+}
+
 impl Repo {
     fn head_is_unborn(&self) -> bool {
         self.git()
@@ -293,6 +338,33 @@ impl Repo {
                 .run(&["restore", "--source=HEAD", "--staged", "--worktree", "--", path])
                 .map(text),
         }
+    }
+
+    /// Throws away every change `scope` covers: `reset --hard` for
+    /// everything, `restore --worktree` for unstaged changes, `clean -fd` for
+    /// untracked files. `clean` runs without `-x` (ignored files stay) and
+    /// without `-ff` (nested repositories stay). Refused while a merge,
+    /// rebase, cherry-pick or revert is in progress.
+    pub fn discard_all(&self, scope: DiscardScope) -> Result<String> {
+        if let Some(op) = self.in_progress() {
+            return Err(GitError::Refused(format!(
+                "a {} is in progress; finish or abort it first",
+                op.command()
+            )));
+        }
+        let mut out = Vec::new();
+        if scope.drops_staged() {
+            out.push(self.git().run(&["reset", "--hard", "-q"]).map(text)?);
+        } else if scope.drops_unstaged() && self.git().run(&["diff", "--quiet"]).is_err() {
+            // `restore` errors when nothing is tracked, so only run it when
+            // there's something to restore.
+            out.push(self.git().run(&["restore", "--worktree", "--", "."]).map(text)?);
+        }
+        if scope.drops_untracked() {
+            out.push(self.git().run(&["clean", "-fd", "-q"]).map(text)?);
+        }
+        out.retain(|s| !s.is_empty());
+        Ok(out.join("\n"))
     }
 
     /// Commits the index with `message`; with `amend` and no message, amends

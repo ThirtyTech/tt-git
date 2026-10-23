@@ -126,6 +126,30 @@ fn stage_and_commit_in_the_real_binary() {
 }
 
 #[test]
+fn discard_everything_in_the_real_binary() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.commit_file("f.txt", "original\n", "second");
+    sb.write("f.txt", "changed\n");
+    sb.write("new.txt", "new\n");
+    let mut t = spawn(&sb, &[]);
+    t.wait_until(|s| s.contains("?? new.txt")).expect("status lists files");
+    t.send_str("2").unwrap();
+    t.send_str("D").unwrap();
+    t.wait_until(|s| s.contains("Lost: 1 unstaged file, 1 untracked file."))
+        .expect("dialog says what goes");
+    t.send_str("y").unwrap();
+    t.wait_until(|s| s.contains("working tree clean")).expect("discarded");
+    assert!(!sb.path().join("new.txt").exists());
+    // Undo passes over the discard to the commit before it.
+    t.send_str("z").unwrap();
+    t.wait_until(|s| s.contains("undo commit: second"))
+        .expect("undo skips the discard");
+    t.send_str("q").unwrap();
+    assert!(t.wait_exit().unwrap().success());
+}
+
+#[test]
 fn push_says_where_it_pushed_in_the_real_binary() {
     let sb = Sandbox::new();
     sb.commit("base");
