@@ -8,9 +8,12 @@ use tt_git_tui::panes::PaneId;
 
 /// The "agent" is git: it stores the prompt file in the repo as a blob and
 /// prints its hash, so tests can read back exactly what it was given.
+/// `--no-filters` keeps `core.autocrlf` from converting it or warning.
 fn driver(sb: &Sandbox) -> TestDriver {
-    let cfg =
-        Config::parse("[agent]\ncommand = \"git hash-object -w {prompt_file}\"\nplacement = \"details\"\n").unwrap();
+    let cfg = Config::parse(
+        "[agent]\ncommand = \"git hash-object -w --no-filters {prompt_file}\"\nplacement = \"details\"\n",
+    )
+    .unwrap();
     TestDriver::with_size(cfg, sb, 120, 30)
 }
 
@@ -82,10 +85,11 @@ fn conflicts_are_offered_first_while_merging() {
     sb.commit_file("f.txt", "theirs\n", "theirs");
     sb.checkout("main");
     sb.commit_file("f.txt", "ours\n", "ours");
-    let _ = std::process::Command::new("git")
-        .args(["merge", "other"])
-        .current_dir(sb.path())
-        .output();
+    // The merge stops on the conflict, so it fails.
+    let mut merge = std::process::Command::new("git");
+    sb.apply_env(&mut merge);
+    let out = merge.current_dir(sb.path()).args(["merge", "other"]).output().unwrap();
+    assert!(!out.status.success());
     let mut t = driver(&sb);
     t.press("A");
     assert!(t.screen().contains("resolve the conflicts using both sides' history"));
