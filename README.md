@@ -15,7 +15,7 @@ A terminal git client in Rust ([ratatui](https://ratatui.rs)), inspired by
   Press `a` to switch between all branches and just the current branch (plus
   its upstream).
 - **A status pane** like lazygit's files panel: stage, unstage, discard,
-  commit, amend and stash. Press `enter` on a file to see its changes
+  ignore, commit, amend and stash. Press `enter` on a file to see its changes
   fullscreen and stage, unstage or discard them a hunk or a line at a time.
   It also handles merge/rebase/cherry-pick conflicts.
 - **Code colored by language** in diffs, the staging view and blame, with
@@ -134,6 +134,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `enter` | open the file's changes fullscreen to stage them by hunk or line (below) |
 | | `a` | stage everything (or unstage, if all staged) |
 | | `d` | discard changes to the file (asks first) |
+| | `i` | ignore the file or its folder: add it to `.gitignore` or `.git/info/exclude` (a tracked file asks, then `git rm --cached`) |
 | | `c` / `A` | commit / amend keeping the message |
 | | `s` | stash: everything, only what's staged, only what isn't staged, everything but leave staged changes in place, or just the selected file (`tab` in the dialog picks; the message is optional) |
 | | `e` | open the file in your editor at its first change (a conflicted file: at its first conflict marker) |

@@ -1,13 +1,13 @@
 ---
 title: Status
-description: "The status pane: changed files, staging, committing, discarding and stashing."
+description: "The status pane: changed files, staging, committing, discarding, ignoring and stashing."
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
 import { Aside, Steps } from '@astrojs/starlight/components';
 
 The status pane lists every file you've changed, like lazygit's files panel. From here you stage and
-unstage files, commit, amend, discard changes, stash, and finish or abort a merge, rebase or
+unstage files, commit, amend, discard changes, ignore files, stash, and finish or abort a merge, rebase or
 cherry-pick. Its title tells you which branch you're on and how far it is from its upstream. Press
 <kbd>2</kbd> to focus it from anywhere.
 
@@ -99,6 +99,38 @@ What discarding does depends on the file:
 - anything else goes back to how it is in the last commit, staged and unstaged changes both.
 
 To discard only part of a file, use the [staging view](/panes/staging/#discarding).
+
+## Ignoring a file
+
+Press <kbd>i</kbd> to stop the selected file showing up, as lazygit's <kbd>i</kbd> does. The
+**Ignore** list asks where to put it:
+
+<Screenshot name="status-ignore" alt="The Ignore list for src/styles/bell.css, with .gitignore and .git/info/exclude for the file and its folder" />
+
+| Choice | Adds |
+|---|---|
+| **Add /src/debug.log to .gitignore** | The file to the `.gitignore` at the root of the working tree, which you commit and share |
+| **Add /src/debug.log to .git/info/exclude** | The file to `.git/info/exclude`, which stays in this clone |
+| **Add /src/ to .gitignore** | The folder the file is in, with everything under it |
+| **Add /src/ to .git/info/exclude** | The same folder, in this clone only |
+
+The folder choices only appear for a file inside a folder. Type to narrow the list, then press
+<kbd>enter</kbd>; <kbd>esc</kbd> cancels.
+
+tt-git writes the path as a pattern anchored to the root (`/src/debug.log`, `/src/` for a folder),
+so it matches only that path and not a file of the same name elsewhere. It creates the file if it's
+missing, ends the line with a newline, and leaves the file alone if the pattern is already in it.
+In a [linked worktree](/git/worktrees/), `.gitignore` is the one at that worktree's root and
+`.git/info/exclude` is the shared one in the main repository's `.git` folder.
+
+Ignoring doesn't hide a file git already tracks. If the file, or anything in the folder, is
+tracked, tt-git asks before writing anything: `src/debug.log is tracked, so ignoring it alone won't
+hide it. Add it to .gitignore and stop tracking it (git rm --cached)? It stays on disk.` Press
+<kbd>y</kbd> to add the pattern and remove the file from the index. A file that's in the last
+commit then shows as a staged deletion, which your next commit records; the file itself stays.
+Press <kbd>n</kbd> to leave everything as it was.
+
+The status pane refreshes once the pattern is written, and the file drops out of the list.
 
 ## Stashing
 
@@ -196,6 +228,7 @@ changes.
 | <kbd>enter</kbd> | Stage by hunk or line |
 | <kbd>a</kbd> | Stage all (or unstage all) |
 | <kbd>d</kbd> | Discard changes to the file (asks first) |
+| <kbd>i</kbd> | Ignore the file or its folder (`.gitignore` or `.git/info/exclude`) |
 | <kbd>c</kbd> | Commit what's staged |
 | <kbd>A</kbd> | Amend the last commit, keeping its message |
 | <kbd>s</kbd> | Stash |

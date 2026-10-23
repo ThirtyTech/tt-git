@@ -339,6 +339,8 @@ files git leaves behind (`rebase-merge/`, `rebase-apply/`, `MERGE_HEAD`,
 | Discard a new file | `git rm -f` |
 | Discard a rename | Undone on both paths |
 | Discard anything else | `git restore --source=HEAD --staged --worktree` |
+| Ignore | Appends `/<path>` (`/<folder>/` for a folder) to the root `.gitignore`, or to the file `git rev-parse --git-path info/exclude` names. `git ls-files -z -- :(literal)<path>` checks whether it's tracked first |
+| Ignore a tracked path | The same, then `git rm --cached -r -q -- :(literal)<path>` |
 | Commit | `git commit -F -`, with the message on stdin, so multi-line messages and ones starting with `-` are safe |
 | Amend | `git commit --amend --no-edit` |
 | Continue a merge | `git commit --no-edit` |

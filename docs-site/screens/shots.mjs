@@ -286,6 +286,16 @@ export const shots = [
 		view: { region: { box: 'Discard' } },
 		callouts: [{ target: { find: 'y confirm', w: 24 }, text: '**y** discards; it can\'t be undone', markerSide: 'left', tone: 'pink' }],
 	},
+	{
+		name: 'status-ignore',
+		capture: 'ignore-picker',
+		view: { region: { box: 'Ignore' } },
+		callouts: [
+			{ target: { find: 'Add /src/styles/bell.css to .gitignore', w: 38 }, text: '**The file**, anchored to the root', markerSide: 'left' },
+			{ target: { find: 'Add /src/styles/ to .gitignore', w: 30 }, text: 'Or **the folder** it is in', markerSide: 'left' },
+			{ target: { find: 'this clone only' }, text: '**.git/info/exclude** stays in this clone', markerSide: 'right' },
+		],
+	},
 
 	// ---- staging -------------------------------------------------------------------
 	{
