@@ -375,6 +375,8 @@ impl App {
             ),
             // HEAD moving is reported as `head.changed`.
             GitOp::Abort(_) | GitOp::SetBaseBranch(_) | GitOp::Undo { .. } => return,
+            // No event for ignore files yet.
+            GitOp::Ignore { .. } => return,
             // Not about the repository.
             GitOp::SelfUpdate { .. } => return,
             GitOp::Commit { message, amend } => (

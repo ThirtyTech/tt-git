@@ -902,3 +902,135 @@ impl Repo {
         self.git().run(&["stash", "branch", name, stash.as_str()]).map(text)
     }
 }
+
+/// Which file [`Repo::ignore`] adds a pattern to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IgnoreTarget {
+    /// The `.gitignore` at the root of the working tree, which is committed
+    /// and shared.
+    Gitignore,
+    /// `.git/info/exclude`, which stays on this machine.
+    Exclude,
+}
+
+impl IgnoreTarget {
+    /// The file as the UI names it.
+    pub fn label(self) -> &'static str {
+        match self {
+            IgnoreTarget::Gitignore => ".gitignore",
+            IgnoreTarget::Exclude => ".git/info/exclude",
+        }
+    }
+}
+
+/// Starts the error [`Repo::ignore`] returns when the path is tracked and
+/// it wasn't asked to stop tracking it.
+pub const IGNORE_TRACKED: &str = "is tracked, so ignoring it wouldn't hide it";
+
+/// The ignore pattern for `path` (relative to the root, `/`-separated):
+/// anchored to the root, ending in `/` for a directory, with the
+/// characters gitignore treats specially escaped.
+pub fn ignore_pattern(path: &str, dir: bool) -> String {
+    let path = path.trim_end_matches('/');
+    let mut pattern = String::with_capacity(path.len() + 2);
+    pattern.push('/');
+    for c in path.chars() {
+        if matches!(c, '\\' | '*' | '?' | '[') {
+            pattern.push('\\');
+        }
+        pattern.push(c);
+    }
+    // Trailing spaces are dropped unless escaped.
+    let spaces = pattern.len() - pattern.trim_end_matches(' ').len();
+    if spaces > 0 {
+        pattern.truncate(pattern.len() - spaces);
+        pattern.push_str(&"\\ ".repeat(spaces));
+    }
+    if dir {
+        pattern.push('/');
+    }
+    pattern
+}
+
+impl Repo {
+    /// Where `target`'s patterns live. In a linked worktree `info/exclude`
+    /// is the common git dir's, as `git rev-parse --git-path` says.
+    pub fn ignore_file(&self, target: IgnoreTarget) -> Result<std::path::PathBuf> {
+        match target {
+            IgnoreTarget::Gitignore => Ok(self.root().join(".gitignore")),
+            IgnoreTarget::Exclude => {
+                let out = self.git().run(&["rev-parse", "--git-path", "info/exclude"])?;
+                let path = std::path::PathBuf::from(out.stdout_str().trim());
+                Ok(if path.is_absolute() {
+                    path
+                } else {
+                    self.root().join(path)
+                })
+            }
+        }
+    }
+
+    /// Whether anything at or under `path` is in the index.
+    pub fn is_tracked(&self, path: &str) -> Result<bool> {
+        let spec = literal(path.trim_end_matches('/'));
+        let out = self.git().run(&["ls-files", "-z", "--", spec.as_str()])?;
+        Ok(!out.stdout.is_empty())
+    }
+
+    /// Adds `path` (a file, or a directory with a trailing `/`) to
+    /// `target` as a pattern anchored to the root, creating the file if it's
+    /// missing and leaving it alone if the pattern is already there.
+    ///
+    /// Ignoring doesn't hide a tracked path, so if anything at or under
+    /// `path` is tracked this refuses with [`IGNORE_TRACKED`] and writes
+    /// nothing, unless `untrack` is set: then it also runs
+    /// `git rm --cached -r`, which keeps the files on disk.
+    pub fn ignore(&self, path: &str, target: IgnoreTarget, untrack: bool) -> Result<String> {
+        let tracked = self.is_tracked(path)?;
+        if tracked && !untrack {
+            return Err(GitError::Refused(format!("{path} {IGNORE_TRACKED}")));
+        }
+        let dir = path.ends_with('/') || self.root().join(path).is_dir();
+        let pattern = ignore_pattern(path, dir);
+        let file = self.ignore_file(target)?;
+        let failed = |e: std::io::Error| GitError::Refused(format!("could not write {}: {e}", file.display()));
+        let existing = match std::fs::read_to_string(&file) {
+            Ok(text) => text,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+            Err(e) => return Err(failed(e)),
+        };
+        let mut out = String::new();
+        // git drops trailing spaces that aren't escaped.
+        if existing
+            .lines()
+            .any(|line| line == pattern || line.trim_end() == pattern)
+        {
+            push_line(&mut out, &format!("{pattern} is already in {}", target.label()));
+        } else {
+            let newline = if existing.contains("\r\n") { "\r\n" } else { "\n" };
+            let mut add = String::new();
+            if !existing.is_empty() && !existing.ends_with('\n') {
+                add.push_str(newline);
+            }
+            add.push_str(&pattern);
+            add.push_str(newline);
+            if let Some(parent) = file.parent() {
+                std::fs::create_dir_all(parent).map_err(failed)?;
+            }
+            use std::io::Write;
+            std::fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&file)
+                .and_then(|mut f| f.write_all(add.as_bytes()))
+                .map_err(failed)?;
+            push_line(&mut out, &format!("added {pattern} to {}", target.label()));
+        }
+        if tracked {
+            let spec = literal(path.trim_end_matches('/'));
+            self.git().run(&["rm", "--cached", "-r", "-q", "--", spec.as_str()])?;
+            push_line(&mut out, &format!("stopped tracking {path}"));
+        }
+        Ok(out)
+    }
+}

@@ -25,6 +25,9 @@ pub use branches::{AheadBehind, BaseBranches, BranchEntry, BranchState, Checkout
 pub use git::{GitCli, GitError};
 pub use ignored::IgnoreRules;
 pub use model::*;
-pub use ops::{DiscardKind, PatchOp, STAGED_ASIDE, StageSide, StashScope, UNDO_CHANGES_KEPT};
+pub use ops::{
+    DiscardKind, IGNORE_TRACKED, IgnoreTarget, PatchOp, STAGED_ASIDE, StageSide, StashScope, UNDO_CHANGES_KEPT,
+    ignore_pattern,
+};
 pub use repo::{LogFilter, LogScope, RemoteConfig, Repo};
 pub use undo::{NoStep, UndoStep, UndoTarget};

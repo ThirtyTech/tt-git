@@ -476,6 +476,7 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::StageAll => repo.stage_all(),
         GitOp::UnstageAll => repo.unstage_all(),
         GitOp::Discard { path, kind } => repo.discard(path, kind),
+        GitOp::Ignore { path, target, untrack } => repo.ignore(path, *target, *untrack),
         GitOp::ApplyPatch {
             path,
             patch,

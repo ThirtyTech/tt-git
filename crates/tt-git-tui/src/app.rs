@@ -12,7 +12,8 @@ use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tt_git_core::branches::matches_filter;
 use tt_git_core::time::SharedClock;
 use tt_git_core::{
-    CheckoutPlan, CommitFile, FileState, Head, LogFilter, NoStep, Repo, Stash, StatusEntry, UNDO_CHANGES_KEPT, UndoStep,
+    CheckoutPlan, CommitFile, FileState, Head, IGNORE_TRACKED, LogFilter, NoStep, Repo, Stash, StatusEntry,
+    UNDO_CHANGES_KEPT, UndoStep,
 };
 
 use crate::action::{Action, RefsSnapshot};
@@ -1582,6 +1583,27 @@ impl App {
                             name,
                             branch,
                             force: true,
+                        },
+                    ));
+                }
+                GitOp::Ignore {
+                    path,
+                    target,
+                    untrack: false,
+                } if err.contains(IGNORE_TRACKED) => {
+                    self.notice = None;
+                    self.modal = Some(Modal::confirm(
+                        "Stop tracking?",
+                        format!(
+                            "{path} is tracked, so ignoring it alone won't hide it.\n\
+                             Add it to {} and stop tracking it (git rm --cached)? \
+                             It stays on disk.",
+                            target.label()
+                        ),
+                        GitOp::Ignore {
+                            path,
+                            target,
+                            untrack: true,
                         },
                     ));
                 }
