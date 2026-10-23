@@ -295,6 +295,7 @@ impl App {
         let mut graph = GraphPane::new(clock.clone());
         graph.max_lanes = config.graph.max_lanes;
         graph.dates = config.graph.dates;
+        graph.lanes = config.graph.lanes;
         let app = Self {
             ctx: Ctx::new(tx),
             graph_limit: config.graph.max_commits.max(1),

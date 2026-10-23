@@ -154,6 +154,8 @@ pub struct GraphPane {
     /// Maximum number of lanes drawn before collapsing into `…`.
     pub max_lanes: usize,
     pub dates: DateStyle,
+    /// Draws the branch lanes left of each commit.
+    pub lanes: bool,
     /// Commit limit of the current load; reaching it means more may exist.
     pub limit: usize,
     clock: SharedClock,
@@ -193,6 +195,7 @@ impl GraphPane {
             filter: LogFilter::default(),
             max_lanes: 16,
             dates: DateStyle::Relative,
+            lanes: true,
             limit: usize::MAX,
             clock,
             commits: Vec::new(),
@@ -518,37 +521,40 @@ impl GraphPane {
         t
     }
 
+    /// Draws commit `idx` with `lanes` lane columns, or none when `lanes` is 0.
     fn render_row<'a>(&'a self, idx: usize, lanes: usize, width: usize, now: i64, theme: &Theme) -> Line<'a> {
         let commit = &self.commits[idx];
         let row: RowRef = self.rows.get(idx).expect("a row per commit");
         let mut spans: Vec<Span<'a>> = Vec::new();
 
         // Graph columns.
-        let node_glyph = if row.is_merge() { "◉" } else { "●" };
-        let overflow = row.width() > lanes;
-        let shown = if overflow { lanes.saturating_sub(1) } else { row.width() };
-        for i in 0..shown {
-            let cell = row.cell(i);
-            spans.push(Span::styled(cell.glyph_str(node_glyph), theme.lane(cell.color)));
-            let filler = match row.filler(i) {
-                Some(c) if i + 1 < shown || overflow => Span::styled("─", theme.lane(c)),
-                _ => Span::raw(" "),
-            };
-            spans.push(filler);
+        if lanes > 0 {
+            let node_glyph = if row.is_merge() { "◉" } else { "●" };
+            let overflow = row.width() > lanes;
+            let shown = if overflow { lanes.saturating_sub(1) } else { row.width() };
+            for i in 0..shown {
+                let cell = row.cell(i);
+                spans.push(Span::styled(cell.glyph_str(node_glyph), theme.lane(cell.color)));
+                let filler = match row.filler(i) {
+                    Some(c) if i + 1 < shown || overflow => Span::styled("─", theme.lane(c)),
+                    _ => Span::raw(" "),
+                };
+                spans.push(filler);
+            }
+            if overflow {
+                let glyph = match (row.node_lane() >= shown, row.is_merge()) {
+                    (true, true) => "◉ ",
+                    (true, false) => "● ",
+                    (false, _) => "… ",
+                };
+                spans.push(Span::styled(glyph, theme.lane(row.node_color())));
+            }
+            let graph_used = (shown + usize::from(overflow)) * 2;
+            spans.push(Span::raw(spaces((lanes * 2).saturating_sub(graph_used) + 1)));
         }
-        if overflow {
-            let glyph = match (row.node_lane() >= shown, row.is_merge()) {
-                (true, true) => "◉ ",
-                (true, false) => "● ",
-                (false, _) => "… ",
-            };
-            spans.push(Span::styled(glyph, theme.lane(row.node_color())));
-        }
-        let graph_used = (shown + usize::from(overflow)) * 2;
-        spans.push(Span::raw(spaces((lanes * 2).saturating_sub(graph_used) + 1)));
 
         // Metadata columns, dropped from the right when narrow.
-        let graph_cols = lanes * 2 + 1;
+        let graph_cols = if lanes > 0 { lanes * 2 + 1 } else { 0 };
         let date_width = self.dates.width();
         let meta_full = 1 + AUTHOR_WIDTH + 1 + date_width + 1 + SHA_WIDTH;
         let meta_small = 1 + date_width + 1 + SHA_WIDTH;
@@ -709,6 +715,10 @@ impl Component for GraphPane {
                 self.dates = self.dates.toggled();
                 EventState::Consumed
             }
+            Command::ToggleLanes => {
+                self.lanes = !self.lanes;
+                EventState::Consumed
+            }
             Command::Checkout => {
                 self.checkout(ctx);
                 EventState::Consumed
@@ -791,6 +801,7 @@ impl Component for GraphPane {
             Command::ToggleDetails,
             Command::ToggleScope,
             Command::ToggleDates,
+            Command::ToggleLanes,
             Command::Checkout,
             Command::NewBranch,
             Command::NewTag,
@@ -826,13 +837,17 @@ impl Component for GraphPane {
         self.cursor.scroll_into_view(height);
         let start = self.cursor.offset.min(self.commits.len());
         let end = (start + height).min(self.commits.len());
-        let lanes = (start..end)
-            .filter_map(|i| self.rows.get(i))
-            .map(|r| r.width())
-            .max()
-            .unwrap_or(1)
-            // Past the cap the rows don't keep their columns.
-            .clamp(1, self.max_lanes.max(2).min(self.rows.cap()));
+        let lanes = if !self.lanes {
+            0
+        } else {
+            (start..end)
+                .filter_map(|i| self.rows.get(i))
+                .map(|r| r.width())
+                .max()
+                .unwrap_or(1)
+                // Past the cap the rows don't keep their columns.
+                .clamp(1, self.max_lanes.max(2).min(self.rows.cap()))
+        };
         let width = inner.width as usize;
 
         let lines: Vec<Line> = (start..end)

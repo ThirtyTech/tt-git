@@ -96,6 +96,8 @@ pub struct GraphConfig {
     pub current_includes_upstream: bool,
     /// How the date column reads at startup (`t` toggles it).
     pub dates: DateStyle,
+    /// Draw the branch lanes at startup (`L` toggles them).
+    pub lanes: bool,
 }
 
 impl Default for GraphConfig {
@@ -105,6 +107,7 @@ impl Default for GraphConfig {
             max_lanes: 16,
             current_includes_upstream: true,
             dates: DateStyle::Relative,
+            lanes: true,
         }
     }
 }

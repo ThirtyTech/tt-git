@@ -274,6 +274,35 @@ fn t_switches_the_graph_to_clock_times_and_back() {
 }
 
 #[test]
+fn shift_l_hides_the_graph_lanes_and_back() {
+    let sb = branchy_repo();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 120, 30);
+    let with_lanes = t.pane_lines(PaneId::Graph);
+    assert!(with_lanes[0].starts_with('●'));
+
+    t.press("L");
+    assert!(!t.app().graph().lanes);
+    insta::assert_snapshot!(t.pane_lines(PaneId::Graph).join("\n"));
+
+    t.press("L");
+    assert!(t.app().graph().lanes);
+    assert_eq!(t.pane_lines(PaneId::Graph), with_lanes);
+}
+
+#[test]
+fn config_starts_the_graph_without_lanes() {
+    let sb = branchy_repo();
+    let cfg = Config::parse("[graph]\nlanes = false\n").unwrap();
+    let t = TestDriver::with_config(cfg, &sb);
+    assert!(!t.app().graph().lanes);
+    assert!(
+        !t.pane_lines(PaneId::Graph)
+            .iter()
+            .any(|l| l.contains('●') || l.contains('│'))
+    );
+}
+
+#[test]
 fn config_starts_the_graph_on_clock_times() {
     let sb = branchy_repo();
     let cfg = Config::parse(
