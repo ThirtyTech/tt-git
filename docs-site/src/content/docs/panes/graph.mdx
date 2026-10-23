@@ -70,6 +70,15 @@ parent gets the next of eight colors.
 Only the first 16 lanes are drawn; wider histories collapse into `…`. You can change that with
 `max_lanes` in the [configuration file](/configuration/).
 
+### Hiding the lanes
+
+Press <kbd>L</kbd> to hide the lanes. Each row then starts with its badges and subject, and the
+subject gets the room the lanes took. Press <kbd>L</kbd> again to bring them back. The commits and
+their order stay the same; only the drawing goes.
+
+To start with the lanes hidden, set `lanes = false` under `[graph]` in the
+[configuration file](/configuration/).
+
 ## Branch and tag badges
 
 <Screenshot name="graph-badges" alt="A close-up of the badges for the checked-out branch, a local branch, a remote branch and a tag" />
@@ -222,6 +231,7 @@ See [How tt-git uses git](/reference/how-it-works/#graph) for the details, and
 | <kbd>esc</kbd> | Hide details; with details hidden, clear the filter |
 | <kbd>a</kbd> | All branches ↔ current branch |
 | <kbd>t</kbd> | Dates as age ↔ local date and time (also in [blame](/panes/blame/#dates)) |
+| <kbd>L</kbd> | Hide / show the lanes |
 | <kbd>f</kbd> | Filter by author or file |
 | <kbd>o</kbd> | Check out the commit (its local branch if it has one) |
 | <kbd>n</kbd> | New branch at the commit (<kbd>tab</kbd> in the dialog: in a worktree) |

@@ -22,6 +22,7 @@ max_commits = 20000             # loaded at a time; scrolling near the end loads
 max_lanes = 16                  # lanes drawn before collapsing into …
 current_includes_upstream = true  # current-branch mode also shows HEAD's upstream
 dates = "relative"              # graph and blame dates: "relative" (3h, 2d) or "clock" (2026-10-17 01:30 PM, local time)
+lanes = true                    # draw the lanes at startup; L in the graph toggles them
 
 [branches]
 unmerged_exclude = ["archive"]  # hide unmerged branches whose name contains any of these
@@ -228,7 +229,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `move_up`, `move_down`, `page_up`, `page_down`, `top`, `bottom` | `k`/`↑`, `j`/`↓`, `ctrl+u`, `ctrl+d`, `g`, `G` | global |
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |
 | `undo` | `z` | global |
-| `toggle_scope`, `toggle_dates`, `checkout`, `filter`, `new_branch`, `new_tag`, `merge`, `rebase`, `cherry_pick`, `agent` | `a`, `t`, `o`, `f`, `n`, `T`, `M`, `r`, `C`, `A` | graph |
+| `toggle_scope`, `toggle_dates`, `toggle_lanes`, `checkout`, `filter`, `new_branch`, `new_tag`, `merge`, `rebase`, `cherry_pick`, `agent` | `a`, `t`, `L`, `o`, `f`, `n`, `T`, `M`, `r`, `C`, `A` | graph |
 | `checkout`, `new_branch`, `new_tag`, `delete_branch`, `rename_branch`, `fetch`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `T`, `d`, `R`, `f`, `/`, `M`, `r` | branches |
 | `push_tag` | `P` (on the Tags tab; pushes the branch on the others) | branches |
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |

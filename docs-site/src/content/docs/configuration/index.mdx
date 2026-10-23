@@ -51,6 +51,7 @@ max_commits = 20000               # loaded at a time; scrolling near the end loa
 max_lanes = 16                    # lanes drawn before collapsing into …
 current_includes_upstream = true  # current-branch mode also shows HEAD's upstream
 dates = "relative"                # "relative" (3h, 2d) or "clock" (2026-10-17 01:30 PM); graph and blame
+lanes = true                      # draw the lanes at startup; L in the graph toggles them
 
 [branches]
 unmerged_exclude = ["archive"]    # hide unmerged branches whose name contains any of these
@@ -91,6 +92,7 @@ Themes have one too: [Themes](/configuration/themes/).
 | `max_lanes` | `16` | How many lanes are drawn. Anything wider collapses into `…`. |
 | `current_includes_upstream` | `true` | In current-branch mode (<kbd>a</kbd> in the graph), also show `HEAD`'s upstream, so you can see what you'd push or pull. |
 | `dates` | `"relative"` | How dates start out in the graph and in [blame](/panes/blame/#dates): `"relative"` shows ages (`3h`, `2d`), `"clock"` the local date and time (`2026-10-17 01:30 PM`). <kbd>t</kbd> in either switches both. |
+| `lanes` | `true` | Draw the lanes left of each commit at startup. With `false`, rows start with their badges and subject. <kbd>L</kbd> in the graph shows or hides them. See [Hiding the lanes](/panes/graph/#hiding-the-lanes). |
 
 See [Graph](/panes/graph/).
 
