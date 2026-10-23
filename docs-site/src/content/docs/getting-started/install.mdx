@@ -44,6 +44,11 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/ThirtyTech/tt-git/
 It installs into `%LOCALAPPDATA%\Programs\tt-git\bin` and adds that to your
 user `PATH`. Open a new terminal afterwards.
 
+You can update while older copies are still running, even across several
+updates. The installer moves the current binary to `tt-git.exe.old`, using
+a unique suffix if that backup is still in use. Running copies keep working.
+Later installs remove old backups once those copies have exited.
+
 </TabItem>
 </Tabs>
 

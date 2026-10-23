@@ -62,12 +62,14 @@ try {
     Expand-Archive $zip -DestinationPath $tmp
     New-Item -ItemType Directory -Force $installDir | Out-Null
 
-    # A running exe can't be overwritten but can be renamed, so move the old
-    # one aside first. It's removed on the next install once it has exited.
+    # A running exe can't be overwritten but can be renamed. Remove unused
+    # backups, keeping any that are still running from an earlier update.
+    Get-ChildItem -LiteralPath $installDir -Filter 'tt-git.exe.old*' -File |
+        Remove-Item -Force -ErrorAction SilentlyContinue
     $exe = Join-Path $installDir 'tt-git.exe'
     $old = Join-Path $installDir 'tt-git.exe.old'
-    Remove-Item $old -Force -ErrorAction SilentlyContinue
-    if (Test-Path $exe) { Move-Item $exe $old -Force }
+    if (Test-Path -LiteralPath $old) { $old = "$old-$([Guid]::NewGuid())" }
+    if (Test-Path -LiteralPath $exe) { Move-Item -LiteralPath $exe -Destination $old }
     Copy-Item (Join-Path $tmp "$name\tt-git.exe") $exe
 
     Write-Host "Installed tt-git $version to $exe"
