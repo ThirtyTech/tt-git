@@ -233,6 +233,135 @@ fn fetch_picks_up_new_remote_branches() {
     assert!(t.app().notice().unwrap_or_default().contains("fetch"));
 }
 
+/// `main` checked out, one commit behind `origin/main`, with `feature`
+/// one behind `origin/feature`.
+fn repo_with_branches_behind_remote() -> Sandbox {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.checkout_new("feature");
+    sb.commit("feature work");
+    sb.checkout("main");
+    let remote = sb.add_remote("origin");
+    sb.git(&["branch", "-q", "--set-upstream-to=origin/main", "main"]);
+    sb.git(&["branch", "-q", "--set-upstream-to=origin/feature", "feature"]);
+    sb.git(&["tag", "-a", "-m", "release", "v1"]);
+    let other = sb.clone_to(&remote, "other");
+    sb.git_in(&other, &["switch", "-q", "feature"]);
+    sb.git_in(&other, &["commit", "-q", "--allow-empty", "-m", "their feature work"]);
+    sb.git_in(&other, &["switch", "-q", "main"]);
+    sb.git_in(&other, &["commit", "-q", "--allow-empty", "-m", "their main work"]);
+    sb.git_in(&other, &["push", "-q", "origin"]);
+    sb.git(&["fetch", "-q", "origin"]);
+    sb
+}
+
+/// Moves the branches pane's selection to the row named `name`.
+fn highlight(t: &mut TestDriver, name: &str) {
+    let target = names(t).iter().position(|n| n == name).unwrap();
+    let selected = names(t)
+        .iter()
+        .position(|n| Some(n.as_str()) == t.app().branches().selected().map(|e| e.name.as_str()))
+        .unwrap_or(0);
+    for _ in selected..target {
+        t.press("j");
+    }
+    for _ in target..selected {
+        t.press("k");
+    }
+}
+
+#[test]
+fn pulling_the_highlighted_branch_updates_it_without_switching() {
+    let sb = repo_with_branches_behind_remote();
+    let mut t = TestDriver::new(&sb);
+    t.press("3");
+    highlight(&mut t, "feature");
+    t.press("p");
+    assert_eq!(t.app().notice(), Some("✓ pulled origin/feature into feature"));
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    // main stays checked out; feature caught up with its upstream.
+    assert_eq!(sb.current_branch(), "main");
+    assert_eq!(sb.rev_parse("feature"), sb.rev_parse("origin/feature"));
+    // The row reads in sync: the tracking ref moved along with the branch.
+    let row = t
+        .pane_lines(PaneId::Branches)
+        .iter()
+        .find(|l| l.contains("feature"))
+        .cloned()
+        .unwrap();
+    assert!(row.contains('✓'), "{row}");
+}
+
+#[test]
+fn pulling_the_checked_out_branch_still_pulls_it() {
+    let sb = repo_with_branches_behind_remote();
+    let mut t = TestDriver::new(&sb);
+    t.press("3");
+    highlight(&mut t, "main");
+    t.press("p");
+    assert_eq!(t.app().notice(), Some("✓ pulled origin/main into main"));
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(sb.rev_parse("main"), sb.rev_parse("origin/main"));
+    assert_eq!(sb.current_branch(), "main");
+}
+
+#[test]
+fn pulling_a_branch_that_tracks_nothing_pulls_its_same_named_remote() {
+    let sb = repo_with_branches_behind_remote();
+    sb.git(&["branch", "-q", "--unset-upstream", "feature"]);
+    let mut t = TestDriver::new(&sb);
+    t.press("3");
+    highlight(&mut t, "feature");
+    t.press("p");
+    assert_eq!(t.app().notice(), Some("✓ pulled origin/feature into feature"));
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(sb.rev_parse("feature"), sb.rev_parse("origin/feature"));
+}
+
+#[test]
+fn pulling_a_diverged_branch_errors_and_leaves_it_alone() {
+    let sb = repo_with_branches_behind_remote();
+    sb.checkout("feature");
+    sb.commit("our own work");
+    sb.checkout("main");
+    let tip = sb.rev_parse("feature");
+    let mut t = TestDriver::new(&sb);
+    t.press("3");
+    highlight(&mut t, "feature");
+    t.press("p");
+    let err = t.app().error().expect("error").to_string();
+    assert!(err.contains("fast-forwarded"), "{err}");
+    assert!(err.contains("Check feature out"), "{err}");
+    assert_eq!(sb.rev_parse("feature"), tip, "the branch moved");
+    assert_eq!(sb.current_branch(), "main");
+}
+
+#[test]
+fn pulling_where_there_is_nothing_to_pull_says_so() {
+    let sb = repo_with_remote_branch();
+    let mut t = TestDriver::new(&sb);
+    t.press("3");
+    highlight(&mut t, "local-work");
+    t.press("p");
+    assert_eq!(t.app().notice(), Some("local-work has no remote branch to pull"));
+    highlight(&mut t, "their-feature");
+    t.press("p");
+    assert_eq!(t.app().notice(), Some("their-feature has no local branch to pull"));
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+}
+
+#[test]
+fn pull_on_the_tags_tab_pulls_the_checked_out_branch() {
+    let sb = repo_with_branches_behind_remote();
+    let mut t = TestDriver::new(&sb);
+    t.press("3").press("]");
+    assert_eq!(t.app().branches().tab(), BranchTab::Tags);
+    t.press("j"); // A tag is highlighted.
+    t.press("p");
+    assert_eq!(t.app().notice(), Some("✓ pulled origin/main into main"));
+    assert_eq!(sb.rev_parse("main"), sb.rev_parse("origin/main"));
+}
+
 /// On origin: `main`, `done` (merged into main), `open` and `archive/old`
 /// (not merged), and `development`, which has `open` merged into it.
 fn repo_for_base_tabs() -> Sandbox {

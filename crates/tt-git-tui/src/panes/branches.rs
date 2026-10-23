@@ -528,6 +528,19 @@ impl BranchesPane {
             .unwrap_or_else(|| entry.name.clone())
     }
 
+    /// The remote ref a pull of `entry` fetches from: the one its local
+    /// branch tracks, wherever in the list that ref ended up, else the
+    /// preferred remote's branch of the same name.
+    fn pull_source<'a>(&'a self, entry: &'a BranchEntry) -> Option<&'a GitRef> {
+        let upstream = entry.local.as_ref()?.upstream.as_deref().and_then(|up| {
+            self.entries
+                .iter()
+                .flat_map(|e| e.remotes.iter())
+                .find(|r| r.full_name == up)
+        });
+        upstream.or_else(|| entry.preferred_remote())
+    }
+
     fn delete_modal(entry: &BranchEntry) -> Option<Modal> {
         if let Some(local) = &entry.local {
             if entry.is_head {
@@ -874,6 +887,28 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
             }
             // `P` pushes the selected tag on the Tags tab, the current branch here.
             Command::PushTag => ctx.emit(Action::Run(GitOp::Push)),
+            // `p` pulls the highlighted branch, not the checked-out one.
+            Command::Pull => {
+                if entry.is_head {
+                    ctx.emit(Action::Run(GitOp::Pull));
+                } else if let Some(local) = &entry.local
+                    && let Some(source) = self.pull_source(entry)
+                    && let RefKind::RemoteBranch { remote } = &source.kind
+                {
+                    ctx.emit(Action::Run(GitOp::PullBranch {
+                        branch: local.short_name.clone(),
+                        remote: remote.clone(),
+                        remote_branch: source.branch_name().to_string(),
+                    }));
+                } else {
+                    let why = if entry.local.is_some() {
+                        format!("{} has no remote branch to pull", entry.name)
+                    } else {
+                        format!("{} has no local branch to pull", entry.name)
+                    };
+                    ctx.emit(Action::Notify(why));
+                }
+            }
             Command::Copy => ctx.emit(Action::Copy(entry.name.clone())),
             _ => return EventState::NotConsumed,
         }

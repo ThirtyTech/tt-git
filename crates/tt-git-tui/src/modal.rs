@@ -83,6 +83,15 @@ pub enum GitOp {
     },
     Push,
     Pull,
+    /// Fast-forwards `branch` from `remote_branch` on `remote`, without
+    /// checking it out; fails when the branch has commits the remote
+    /// doesn't, where a pull of the checked-out branch would merge or
+    /// rebase.
+    PullBranch {
+        branch: String,
+        remote: String,
+        remote_branch: String,
+    },
     Merge {
         target: String,
     },
@@ -187,6 +196,7 @@ impl GitOp {
             GitOp::Commit { amend: true, .. } => "amend".into(),
             GitOp::Push => "push".into(),
             GitOp::Pull => "pull".into(),
+            GitOp::PullBranch { branch, .. } => format!("pull {branch}"),
             GitOp::Merge { target } => format!("merge {target}"),
             GitOp::Rebase { onto } => format!("rebase onto {onto}"),
             GitOp::CherryPick { oid, .. } => format!("cherry-pick {}", &oid[..oid.len().min(7)]),

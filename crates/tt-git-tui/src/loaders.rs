@@ -486,6 +486,11 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::Commit { message, amend } => repo.commit(message.as_deref(), *amend),
         GitOp::Push => repo.push(),
         GitOp::Pull => repo.pull(),
+        GitOp::PullBranch {
+            branch,
+            remote,
+            remote_branch,
+        } => repo.pull_branch(branch, remote, remote_branch),
         GitOp::Merge { target } => repo.merge(target),
         GitOp::Rebase { onto } => repo.rebase(onto),
         GitOp::CherryPick { oid, .. } => repo.cherry_pick(oid),

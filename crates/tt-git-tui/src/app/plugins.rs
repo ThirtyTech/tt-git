@@ -330,6 +330,7 @@ impl App {
             GitOp::DeleteTag { name, remote } => ("tag.deleted", json!({ "tag": name, "remote": remote })),
             GitOp::FetchAll => ("fetch.completed", json!({})),
             GitOp::Pull => ("pull.completed", json!({ "branch": branch, "head": head })),
+            GitOp::PullBranch { branch, .. } => ("pull.completed", json!({ "branch": branch, "head": head })),
             GitOp::Push => ("push.completed", json!({ "branch": branch })),
             GitOp::Stage(paths) => ("files.staged", json!({ "paths": paths })),
             GitOp::StageAll => ("files.staged", json!({ "paths": "all" })),

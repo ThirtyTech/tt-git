@@ -332,6 +332,21 @@ impl Repo {
         self.git().run(&["pull", "--no-edit"]).map(text)
     }
 
+    /// Fast-forwards `branch` to `remote_branch` on `remote` without
+    /// checking it out. One fetch writes both the branch and its
+    /// remote-tracking ref; the branch only moves forward, failing
+    /// where a pull of the checked-out branch would merge or rebase.
+    pub fn pull_branch(&self, branch: &str, remote: &str, remote_branch: &str) -> Result<String> {
+        self.git()
+            .run(&[
+                "fetch",
+                remote,
+                &format!("+refs/heads/{remote_branch}:refs/remotes/{remote}/{remote_branch}"),
+                &format!("refs/heads/{remote_branch}:refs/heads/{branch}"),
+            ])
+            .map(text)
+    }
+
     /// Diff of one file for the details pane: staged and unstaged changes,
     /// or the whole content of an untracked file.
     pub fn file_diff(&self, entry: &crate::model::StatusEntry, max_bytes: usize) -> Result<String> {

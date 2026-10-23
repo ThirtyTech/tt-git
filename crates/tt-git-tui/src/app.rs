@@ -1177,8 +1177,10 @@ impl App {
         let label = op.label();
         let (doing, done) = self.describe_op(&op);
         // A second pull, push or fetch would only race the first.
-        if matches!(op, GitOp::Push | GitOp::Pull | GitOp::FetchAll | GitOp::PushTag { .. })
-            && self.busy.iter().any(|b| b.label == label)
+        if matches!(
+            op,
+            GitOp::Push | GitOp::Pull | GitOp::PullBranch { .. } | GitOp::FetchAll | GitOp::PushTag { .. }
+        ) && self.busy.iter().any(|b| b.label == label)
         {
             let verb = doing.split(' ').next().unwrap_or_default();
             self.renew_notice(format!("already {verb}"));
@@ -1237,6 +1239,11 @@ impl App {
                 };
                 both("pulling", "pulled", what)
             }
+            GitOp::PullBranch {
+                branch,
+                remote,
+                remote_branch,
+            } => both("pulling", "pulled", format!("{remote}/{remote_branch} into {branch}")),
             GitOp::FetchAll => both("fetching", "fetched", "all remotes".into()),
             GitOp::PushTag { name } => both("pushing", "pushed", format!("tag {name}")),
             _ => (op.label(), op.label()),
@@ -1553,6 +1560,19 @@ impl App {
                             branch,
                             force: true,
                         },
+                    ));
+                }
+                GitOp::PullBranch {
+                    branch,
+                    remote,
+                    remote_branch,
+                } if err.contains("non-fast-forward") => {
+                    self.notice = None;
+                    self.error = Some(format!(
+                        "pull {branch} failed:\n\
+                         {branch} has commits {remote}/{remote_branch} doesn't, so it can only be \
+                         fast-forwarded.\n\
+                         Check {branch} out and pull to rebase or merge them."
                     ));
                 }
                 GitOp::Undo { .. } if kept => {
@@ -2084,6 +2104,14 @@ impl App {
                 self.status.on_command(cmd, &ctx);
             }
             Command::Push => self.update(Action::Run(GitOp::Push)),
+            // In the branches pane, p pulls the highlighted branch; the
+            // tags, stash and worktree tabs fall back to the checked-out one.
+            Command::Pull if self.focus == PaneId::Branches => {
+                let ctx = self.ctx.clone();
+                if self.branches.on_command(cmd, &ctx) == EventState::NotConsumed {
+                    self.update(Action::Run(GitOp::Pull));
+                }
+            }
             Command::Pull => self.update(Action::Run(GitOp::Pull)),
             Command::Undo => self.plan_undo(),
             Command::Agent => self.open_agent_dialog(),

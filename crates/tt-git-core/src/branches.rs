@@ -113,7 +113,9 @@ impl BranchEntry {
             .map(|r| r.target.as_str())
     }
 
-    fn preferred_remote(&self) -> Option<&GitRef> {
+    /// The remote ref chosen when several hold the branch: `origin` if
+    /// one of them is `origin`, else the first.
+    pub fn preferred_remote(&self) -> Option<&GitRef> {
         self.remotes
             .iter()
             .find(|r| remote_of(r).as_deref() == Some(PREFERRED_REMOTE))
