@@ -16,8 +16,8 @@ use ratatui::style::{Color, Modifier};
 use serde_json::{Value, json};
 use tt_git_testkit::{NOW, Sandbox, TestDriver};
 use tt_git_tui::Config;
-use tt_git_tui::themes::ThemeOptions;
 use tt_git_tui::panes::PaneId;
+use tt_git_tui::themes::ThemeOptions;
 
 /// 1920×1080 at 10×20 px cells, less the window frame the renderer draws.
 const WIDTH: u16 = 190;
@@ -104,7 +104,10 @@ fn main() {
     // themes, so the user's own and Omarchy's don't show up.
     let mut driver = TestDriver::with_size(Config::default(), &sb, WIDTH, HEIGHT);
     driver.app_mut().enable_themes(ThemeOptions::default());
-    press(&mut driver, &[":", "text:theme", "enter", "down", "down", "down", "down"]);
+    press(
+        &mut driver,
+        &[":", "text:theme", "enter", "down", "down", "down", "down"],
+    );
     save(&out, "theme-picker", &driver);
     let light = Config {
         theme: Some("catppuccin-latte".into()),
@@ -624,7 +627,8 @@ impl<'a> Mock<'a> {
         std::fs::write(fix.join("src/components/NotificationBell.tsx"), bell).unwrap();
         std::fs::write(fix.join("src/components/bell.test.tsx"), "// TODO\n").unwrap();
         self.sb.git(&["-C", fix_s, "add", "src/components/bell.test.tsx"]);
-        self.sb.git(&["-C", fix_s, "commit", "-q", "-m", "Test the bell's label"]);
+        self.sb
+            .git(&["-C", fix_s, "commit", "-q", "-m", "Test the bell's label"]);
     }
 
     /// src/api/client.ts built up line by line (see [`CLIENT`]), one commit
