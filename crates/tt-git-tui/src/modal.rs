@@ -8,7 +8,8 @@ use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tt_git_core::{
-    CheckoutPlan, DiscardKind, DiscardScope, InProgress, LogFilter, PatchOp, StashScope, StatusEntry, UndoStep,
+    CheckoutPlan, DiscardKind, DiscardScope, IgnoreTarget, InProgress, LogFilter, PatchOp, StashScope, StatusEntry,
+    UndoStep,
 };
 
 use crate::agent::{AgentAction, AgentRequest};
@@ -71,6 +72,13 @@ pub enum GitOp {
     },
     /// Every change `scope` covers, in every file.
     DiscardAll(DiscardScope),
+    /// Adds `path` (a directory ends in `/`) to `target`. A tracked path
+    /// is refused unless `untrack`, which also removes it from the index.
+    Ignore {
+        path: String,
+        target: IgnoreTarget,
+        untrack: bool,
+    },
     /// Applies part of one file's changes (`patch`, built for `op`) by hunk, or
     /// by line with `lines`.
     ApplyPatch {
@@ -184,6 +192,16 @@ impl GitOp {
                 DiscardScope::UnstagedAndUntracked => "discard unstaged changes and untracked files".into(),
                 DiscardScope::Untracked => "delete untracked files".into(),
             },
+            GitOp::Ignore {
+                path,
+                target,
+                untrack: false,
+            } => format!("add {path} to {}", target.label()),
+            GitOp::Ignore {
+                path,
+                target,
+                untrack: true,
+            } => format!("add {path} to {} and stop tracking it", target.label()),
             GitOp::ApplyPatch { path, op, lines, .. } => {
                 let verb = match op {
                     PatchOp::Stage => "stage",

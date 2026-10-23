@@ -1100,3 +1100,138 @@ mod stash {
         assert_eq!(repo.stashes().unwrap().len(), 1);
     }
 }
+
+mod ignore {
+    use super::*;
+    use tt_git_core::{IGNORE_TRACKED, IgnoreTarget, ignore_pattern};
+
+    fn read(sb: &Sandbox, rel: &str) -> String {
+        std::fs::read_to_string(sb.path().join(rel)).unwrap()
+    }
+
+    #[test]
+    fn patterns_are_anchored_and_escaped() {
+        assert_eq!(ignore_pattern("src/foo.log", false), "/src/foo.log");
+        assert_eq!(ignore_pattern("build/", true), "/build/");
+        assert_eq!(ignore_pattern("build", true), "/build/");
+        assert_eq!(ignore_pattern("a[1]*?.txt", false), r"/a\[1]\*\?.txt");
+        assert_eq!(ignore_pattern(r"back\slash", false), r"/back\\slash");
+        assert_eq!(ignore_pattern("#notes", false), "/#notes");
+        assert_eq!(ignore_pattern("trailing  ", false), r"/trailing\ \ ");
+    }
+
+    #[test]
+    fn creates_the_gitignore_then_appends_once() {
+        let sb = Sandbox::new();
+        sb.commit("base");
+        sb.write("src/foo.log", "x").write("other.log", "y");
+        let repo = open(&sb);
+
+        repo.ignore("src/foo.log", IgnoreTarget::Gitignore, false).unwrap();
+        assert_eq!(read(&sb, ".gitignore"), "/src/foo.log\n");
+        assert!(entry(&repo, "src/foo.log").is_none(), "it's ignored now");
+
+        let again = repo.ignore("src/foo.log", IgnoreTarget::Gitignore, false).unwrap();
+        assert!(again.contains("already in .gitignore"), "{again}");
+        assert_eq!(read(&sb, ".gitignore"), "/src/foo.log\n", "no duplicate line");
+
+        repo.ignore("other.log", IgnoreTarget::Gitignore, false).unwrap();
+        assert_eq!(read(&sb, ".gitignore"), "/src/foo.log\n/other.log\n");
+    }
+
+    #[test]
+    fn adds_a_newline_before_its_line_and_keeps_crlf() {
+        let sb = Sandbox::new();
+        sb.commit("base");
+        sb.write(".gitignore", "*.tmp").write("a.txt", "a");
+        let repo = open(&sb);
+        repo.ignore("a.txt", IgnoreTarget::Gitignore, false).unwrap();
+        assert_eq!(read(&sb, ".gitignore"), "*.tmp\n/a.txt\n");
+
+        sb.write(".gitignore", "*.tmp\r\n").write("b.txt", "b");
+        repo.ignore("b.txt", IgnoreTarget::Gitignore, false).unwrap();
+        assert_eq!(read(&sb, ".gitignore"), "*.tmp\r\n/b.txt\r\n");
+        // A CRLF line counts as the same pattern.
+        repo.ignore("b.txt", IgnoreTarget::Gitignore, false).unwrap();
+        assert_eq!(read(&sb, ".gitignore"), "*.tmp\r\n/b.txt\r\n");
+    }
+
+    #[test]
+    fn exclude_goes_in_info_exclude() {
+        let sb = Sandbox::new();
+        sb.commit("base");
+        sb.write("scratch.txt", "s");
+        let repo = open(&sb);
+        let file = repo.ignore_file(IgnoreTarget::Exclude).unwrap();
+        let _ = std::fs::remove_file(&file);
+        repo.ignore("scratch.txt", IgnoreTarget::Exclude, false).unwrap();
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), "/scratch.txt\n");
+        assert!(!sb.path().join(".gitignore").exists());
+        assert!(entry(&repo, "scratch.txt").is_none());
+    }
+
+    #[test]
+    fn a_linked_worktree_uses_the_common_exclude() {
+        let sb = Sandbox::new();
+        sb.commit("base");
+        let repo = open(&sb);
+        repo.create_worktree("wt", "main").unwrap();
+        let path = sb.path().join(".worktrees").join("wt");
+        let inner = Repo::discover(&path, &GitCli::new(".").with_env(sb.env())).unwrap();
+        std::fs::write(path.join("local.txt"), "l").unwrap();
+
+        let file = inner.ignore_file(IgnoreTarget::Exclude).unwrap();
+        assert_eq!(
+            std::fs::canonicalize(&file).unwrap(),
+            std::fs::canonicalize(sb.path().join(".git/info/exclude")).unwrap()
+        );
+        inner.ignore("local.txt", IgnoreTarget::Exclude, false).unwrap();
+        assert!(read(&sb, ".git/info/exclude").lines().any(|l| l == "/local.txt"));
+        assert!(inner.status().unwrap().entries.is_empty());
+
+        // The worktree's own root gets the .gitignore.
+        std::fs::write(path.join("other.txt"), "o").unwrap();
+        inner.ignore("other.txt", IgnoreTarget::Gitignore, false).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(path.join(".gitignore")).unwrap(),
+            "/other.txt\n"
+        );
+    }
+
+    #[test]
+    fn a_directory_gets_a_trailing_slash() {
+        let sb = Sandbox::new();
+        sb.commit("base");
+        sb.write("build/a.o", "a").write("build/sub/b.o", "b");
+        let repo = open(&sb);
+        repo.ignore("build/", IgnoreTarget::Gitignore, false).unwrap();
+        // Found to be a directory without the slash too.
+        repo.ignore("build", IgnoreTarget::Gitignore, false).unwrap();
+        assert_eq!(read(&sb, ".gitignore"), "/build/\n");
+        let rest: Vec<_> = repo.status().unwrap().entries.into_iter().map(|e| e.path).collect();
+        assert_eq!(rest, vec![".gitignore".to_string()]);
+    }
+
+    #[test]
+    fn a_tracked_path_is_refused_until_untracked() {
+        let sb = Sandbox::new();
+        sb.commit_file("secret.env", "k=v\n", "base");
+        sb.commit_file("vendor/lib.rs", "x\n", "vendor");
+        let repo = open(&sb);
+
+        let err = repo.ignore("secret.env", IgnoreTarget::Gitignore, false).unwrap_err();
+        assert!(err.to_string().contains(IGNORE_TRACKED), "{err}");
+        assert!(!sb.path().join(".gitignore").exists(), "nothing written");
+
+        repo.ignore("secret.env", IgnoreTarget::Gitignore, true).unwrap();
+        assert_eq!(read(&sb, ".gitignore"), "/secret.env\n");
+        assert!(sb.path().join("secret.env").is_file(), "kept on disk");
+        assert!(!repo.is_tracked("secret.env").unwrap());
+        assert_eq!(entry(&repo, "secret.env").unwrap().index, FileState::Deleted);
+
+        assert!(repo.ignore("vendor/", IgnoreTarget::Exclude, false).is_err());
+        repo.ignore("vendor/", IgnoreTarget::Exclude, true).unwrap();
+        assert!(!repo.is_tracked("vendor").unwrap());
+        assert!(sb.path().join("vendor/lib.rs").is_file());
+    }
+}

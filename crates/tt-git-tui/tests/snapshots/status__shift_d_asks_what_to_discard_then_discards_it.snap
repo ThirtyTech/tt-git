@@ -51,4 +51,4 @@ expression: t.screen()
 │                                                                         ││                                                                         │
 │                                                                         ││                                                                         │
 ╰─────────────────────────────────────────────────────────────────────────╯╰─────────────────────────────────────────────────────────────────────────╯
-space stage/unstage  a stage all  d discard  D discard all  c commit  A amend  s stash  e edit file  b blame  tab next pane  ? help  q quit
+space stage/unstage  a stage all  d discard  D discard all  i ignore file  c commit  A amend  s stash  e edit file  tab next pane  ? help  q quit

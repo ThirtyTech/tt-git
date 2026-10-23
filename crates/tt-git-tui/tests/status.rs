@@ -272,3 +272,71 @@ fn watcher_refreshes_on_external_changes() {
             .is_some_and(|c| &*c.summary == "made outside")
     });
 }
+
+#[test]
+fn ignore_an_untracked_file_from_the_picker() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.write("logs/run.log", "noise\n").write("keep.txt", "k\n");
+    let mut t = TestDriver::new(&sb);
+    select_file(&mut t, "logs/run.log");
+    t.press("i");
+    let screen = t.screen();
+    assert!(screen.contains("Ignore logs/run.log"), "{screen}");
+    for item in [
+        "Add /logs/run.log to .gitignore",
+        "Add /logs/run.log to .git/info/exclude",
+        "Add /logs/ to .gitignore",
+        "Add /logs/ to .git/info/exclude",
+    ] {
+        assert!(screen.contains(item), "{item}\n{screen}");
+    }
+    t.press("esc");
+    assert!(t.app().modal().is_none());
+    assert!(!sb.path().join(".gitignore").exists());
+
+    t.press("i").press("enter");
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(
+        std::fs::read_to_string(sb.path().join(".gitignore")).unwrap(),
+        "/logs/run.log\n"
+    );
+    assert_eq!(
+        codes(&t),
+        vec![("??".into(), ".gitignore".into()), ("??".into(), "keep.txt".into())]
+    );
+
+    // The exclude file, picked by typing.
+    select_file(&mut t, "keep.txt");
+    t.press("i").type_text("exclude").press("enter");
+    let exclude = sb.git(&["rev-parse", "--git-path", "info/exclude"]);
+    let exclude = std::fs::read_to_string(sb.path().join(exclude)).unwrap();
+    assert!(exclude.lines().any(|l| l == "/keep.txt"), "{exclude}");
+    assert_eq!(codes(&t), vec![("??".into(), ".gitignore".into())]);
+}
+
+#[test]
+fn ignore_a_tracked_file_asks_to_stop_tracking_it() {
+    let sb = Sandbox::new();
+    sb.commit_file("local.env", "a=1\n", "base");
+    sb.write("local.env", "a=2\n");
+    let mut t = TestDriver::new(&sb);
+    select_file(&mut t, "local.env");
+    t.press("i").press("enter");
+    assert!(t.screen().contains("local.env is tracked"), "{}", t.screen());
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    t.press("n");
+    assert!(!sb.path().join(".gitignore").exists(), "nothing written until asked");
+
+    t.press("i").press("enter").press("y");
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(
+        std::fs::read_to_string(sb.path().join(".gitignore")).unwrap(),
+        "/local.env\n"
+    );
+    assert!(sb.path().join("local.env").is_file(), "kept on disk");
+    assert_eq!(
+        codes(&t),
+        vec![("D ".into(), "local.env".into()), ("??".into(), ".gitignore".into())]
+    );
+}

@@ -150,6 +150,28 @@ fn discard_everything_in_the_real_binary() {
 }
 
 #[test]
+fn ignore_a_file_in_the_real_binary() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.write("junk.log", "noise\n");
+    let mut t = spawn(&sb, &[]);
+    t.wait_until(|s| s.contains("?? junk.log")).expect("status lists file");
+    t.send_str("2").unwrap();
+    t.send_str("i").unwrap();
+    t.wait_until(|s| s.contains("Add /junk.log to .gitignore"))
+        .expect("picker");
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("?? .gitignore") && !s.contains("?? junk.log"))
+        .expect("ignored");
+    t.send_str("q").unwrap();
+    assert!(t.wait_exit().unwrap().success());
+    assert_eq!(
+        std::fs::read_to_string(sb.path().join(".gitignore")).unwrap(),
+        "/junk.log\n"
+    );
+}
+
+#[test]
 fn push_says_where_it_pushed_in_the_real_binary() {
     let sb = Sandbox::new();
     sb.commit("base");

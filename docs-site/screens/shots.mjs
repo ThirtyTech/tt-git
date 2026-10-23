@@ -87,7 +87,7 @@ export const shots = [
 		capture: 'after-commit',
 		view: { region: { cells: [96, 48, 94, 3] } },
 		callouts: [
-			{ target: { find: 'tab next pane', w: 39 }, text: '**Keys** for the focused pane, then global ones', markerSide: 'above' },
+			{ target: { find: 'tab next pane', w: 29 }, text: '**Keys** for the focused pane, then global ones', markerSide: 'above' },
 			{ target: { find: '✓ commit' }, text: '**Notices**: what just happened (✗ for errors)', tone: 'green', markerSide: 'above' },
 		],
 	},
@@ -294,6 +294,16 @@ export const shots = [
 			{ target: { find: 'Everything · Unstaged' }, text: '**tab** picks what to discard', markerSide: 'left' },
 			{ target: { find: 'Lost:', w: 5 }, text: '**Lost** and **Kept**: counted for you', markerSide: 'left' },
 			{ target: { find: 'y discard', w: 9 }, text: '**y** discards; it can\'t be undone', markerSide: 'left', tone: 'pink' },
+		],
+	},
+	{
+		name: 'status-ignore',
+		capture: 'ignore-picker',
+		view: { region: { box: 'Ignore' } },
+		callouts: [
+			{ target: { find: 'Add /src/styles/bell.css to .gitignore', w: 38 }, text: '**The file**, anchored to the root', markerSide: 'left' },
+			{ target: { find: 'Add /src/styles/ to .gitignore', w: 30 }, text: 'Or **the folder** it is in', markerSide: 'left' },
+			{ target: { find: 'this clone only' }, text: '**.git/info/exclude** stays in this clone', markerSide: 'right' },
 		],
 	},
 

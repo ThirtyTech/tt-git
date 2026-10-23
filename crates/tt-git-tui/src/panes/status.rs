@@ -2,14 +2,14 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use tt_git_core::{DiscardKind, StashScope, Status, StatusEntry};
+use tt_git_core::{DiscardKind, IgnoreTarget, StashScope, Status, StatusEntry, ignore_pattern};
 
 use super::{PaneId, pane_block};
 use crate::action::Action;
 use crate::component::{Component, EventState};
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context};
-use crate::modal::{DiscardCounts, GitOp, Modal, PromptAction};
+use crate::modal::{DiscardCounts, GitOp, Modal, PaletteItem, PaletteTarget, PromptAction};
 use crate::theme::Theme;
 use crate::widgets::{Cursor, truncate};
 
@@ -52,6 +52,33 @@ impl StatusPane {
         if let Some(e) = self.selected() {
             ctx.emit(Action::FileSelected(e.clone()));
         }
+    }
+
+    /// Asks where to ignore the selected file, or the folder it's in.
+    fn ignore_picker(e: &StatusEntry) -> Modal {
+        let mut paths = vec![(e.path.clone(), false)];
+        if let Some((dir, _)) = e.path.rsplit_once('/') {
+            paths.push((format!("{dir}/"), true));
+        }
+        let mut items = Vec::new();
+        for (path, dir) in paths {
+            let pattern = ignore_pattern(&path, dir);
+            for (target, hint) in [
+                (IgnoreTarget::Gitignore, "committed"),
+                (IgnoreTarget::Exclude, "this clone only"),
+            ] {
+                items.push(PaletteItem {
+                    label: format!("Add {pattern} to {}", target.label()),
+                    hint: hint.into(),
+                    target: PaletteTarget::Op(GitOp::Ignore {
+                        path: path.clone(),
+                        target,
+                        untrack: false,
+                    }),
+                });
+            }
+        }
+        Modal::picker(format!("Ignore {}", e.path), items, 0)
     }
 
     fn has_staged(&self) -> bool {
@@ -178,6 +205,12 @@ impl Component for StatusPane {
                     ctx.emit(Action::OpenModal(Modal::discard_all(DiscardCounts::of(self.entries()))));
                 }
             }
+            Command::Ignore => {
+                let Some(e) = self.selected() else {
+                    return EventState::NotConsumed;
+                };
+                ctx.emit(Action::OpenModal(Self::ignore_picker(e)));
+            }
             Command::StageToggle | Command::Discard => {
                 let Some(e) = self.selected() else {
                     return EventState::NotConsumed;
@@ -222,6 +255,7 @@ impl Component for StatusPane {
             Command::StageAll,
             Command::Discard,
             Command::DiscardAll,
+            Command::Ignore,
             Command::Commit,
             Command::Amend,
             Command::Stash,
