@@ -339,6 +339,10 @@ files git leaves behind (`rebase-merge/`, `rebase-apply/`, `MERGE_HEAD`,
 | Discard a new file | `git rm -f` |
 | Discard a rename | Undone on both paths |
 | Discard anything else | `git restore --source=HEAD --staged --worktree` |
+| Discard all: everything | `git reset --hard -q`, then `git clean -fd -q` |
+| Discard all: unstaged | `git restore --worktree -- .`, skipped when `git diff --quiet` finds nothing to restore |
+| Discard all: unstaged + untracked | The same restore, then `git clean -fd -q` |
+| Discard all: untracked | `git clean -fd -q` |
 | Commit | `git commit -F -`, with the message on stdin, so multi-line messages and ones starting with `-` are safe |
 | Amend | `git commit --amend --no-edit` |
 | Continue a merge | `git commit --no-edit` |
@@ -347,6 +351,14 @@ files git leaves behind (`rebase-merge/`, `rebase-apply/`, `MERGE_HEAD`,
 
 Continue runs with `core.editor=:`, so git keeps the message it prepared
 rather than opening an editor inside the TUI.
+
+`git clean` runs without `-x`, so ignored files stay, and with a single
+`-f`, so git leaves untracked folders that hold a repository of their own.
+Discard all is refused while a merge, rebase, cherry-pick or revert is in
+progress: `git reset --hard` would end a merge half way, and `git restore`
+fails on conflicted files. The `reset: moving to HEAD` entry that
+`git reset --hard` leaves in the reflog ends on the commit it started from,
+so [undo](#undo) skips it.
 
 ### Staging hunks and lines
 

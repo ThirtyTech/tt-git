@@ -74,6 +74,7 @@ fn main() {
         ("commit", &["2", "c", "text:Show the unread count on the bell"]),
         ("stash-prompt", &["2", "s", "tab", "tab", "text:try a pulse animation"]),
         ("discard-confirm", &["2", "j", "d"]),
+        ("discard-all", &["2", "D"]),
         ("branches", &["3"]),
         ("branches-filter", &["3", "/", "text:fpp"]),
         ("branches-new", &["3", "j", "j", "n", "tab", "text:fix/footer-links"]),

@@ -34,8 +34,12 @@ There's no redo. To reword or split your last commit, press <kbd>z</kbd>,
 change what's staged, and commit again. Anything else you undo is still in
 `git reflog` if you want it back.
 
+Undo can't bring back changes you discarded with <kbd>d</kbd> or
+<kbd>D</kbd> in the [status pane](/panes/status/#discarding-changes), since
+git never saved them.
+
 Some reflog entries aren't steps, and tt-git skips them: a stash (it leaves
-`HEAD` where it was), a rebase you aborted, and moves that end on the same
+`HEAD` where it was), a discard all, a rebase you aborted, and moves that end on the same
 commit they started from.
 
 ## Uncommitted changes
