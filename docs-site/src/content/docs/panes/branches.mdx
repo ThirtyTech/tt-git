@@ -213,6 +213,16 @@ pane](/panes/status/#merges-rebases-and-cherry-picks-in-progress) shows them
 and how to continue or abort. See [Merge, rebase and
 cherry-pick](/git/merge-rebase/).
 
+## Pulling
+
+<kbd>p</kbd> pulls the selected branch. The checked-out branch pulls as
+it would from any pane, merging or rebasing per your git config. Any
+other local branch is fast-forwarded from its remote counterpart — its
+upstream, or the same-named branch on `origin` — without being checked
+out; one with commits of its own is left alone, with an error saying to
+check it out and pull instead. See [Push, pull and
+fetch](/git/remotes/#pull).
+
 ## Copying the name
 
 <kbd>c</kbd> copies the branch name to the clipboard. It uses the terminal's
@@ -233,8 +243,10 @@ OSC 52 clipboard support, so it also works over SSH.
 | <kbd>b</kbd> | Pick the base branch for the Unmerged, Merged and Tags tabs |
 | <kbd>M</kbd> | Merge the selection into the current branch |
 | <kbd>r</kbd> | Rebase the current branch onto the selection |
+| <kbd>p</kbd> | Pull the selection (the checked-out branch merges or rebases as usual) |
 | <kbd>c</kbd> | Copy the branch name |
 
 The keys that work everywhere ([push, pull](/git/remotes/), focus, zoom)
-work here too. Every key can be changed; see [Key
+work here too — but pull acts on the selected branch here, not just the
+checked-out one. Every key can be changed; see [Key
 bindings](/configuration/keys/).

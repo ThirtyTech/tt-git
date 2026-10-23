@@ -118,6 +118,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `n` `d` `R` | new (`tab` in the dialog: create it in a worktree under `.worktrees/`) / delete (asks before force-deleting unmerged) / rename |
 | | `T` | new tag at the selected branch or tag (`tab` in the dialog: annotated) |
 | | `P` | on the tags tab: push the selected tag (elsewhere: push the current branch) |
+| | `p` | pull the selected branch, without checking it out (the checked-out branch pulls as usual) |
 | | `d` (tags tab) | delete the tag: `y` here only, `r` here and on the remote |
 | | `f` | `fetch --all --prune` |
 | | `/` | filter as you type (`esc` clears) |

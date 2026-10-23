@@ -38,6 +38,18 @@ whether it merges or rebases is up to your git config (`pull.rebase`,
 `pull.ff`), and a merge commit keeps git's default message instead of
 opening an editor.
 
+In the [branches pane](/panes/branches/#pulling), <kbd>p</kbd> pulls the
+highlighted branch instead. The checked-out branch pulls as above; any
+other local branch is fast-forwarded to the branch it tracks on the
+remote — or, with no upstream configured, to the branch of the same name
+on `origin` or the first remote that has one — without being checked
+out. The help bar says which: `pulling origin/feature into feature`,
+then `✓ pulled origin/feature into feature`.
+
+A branch with commits of its own isn't pulled: merging or rebasing them
+needs the branch checked out, so tt-git shows an error saying to check
+it out and pull instead.
+
 The help bar shows `pulling origin/main into main` while it runs, then
 `✓ pulled origin/main into main`.
 

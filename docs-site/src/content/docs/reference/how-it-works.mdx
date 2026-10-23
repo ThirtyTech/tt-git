@@ -177,7 +177,7 @@ switch. If the switch fails, it runs `git stash pop` to put the changes back
 | Delete local | `git branch -d`, then `git branch -D` if you confirm a force delete |
 | Delete remote | `git push <remote> --delete <branch>` |
 | Merge | `git merge --no-edit <target>` |
-| Pull | `git pull --no-edit` |
+| Pull | `git pull --no-edit`. In the branches pane, a branch that isn't checked out fast-forwards from the remote instead: `git fetch <remote> +refs/heads/<remote-branch>:refs/remotes/<remote>/<remote-branch> refs/heads/<remote-branch>:refs/heads/<branch>` |
 | Push | `git push`, or `git push -u <remote> HEAD` the first time, to set the upstream |
 | Cherry-pick | `git cherry-pick <commit>` |
 | Rebase | `git -c core.editor=: rebase <onto>`, non-interactive |
