@@ -286,6 +286,16 @@ export const shots = [
 		view: { region: { box: 'Discard' } },
 		callouts: [{ target: { find: 'y confirm', w: 24 }, text: '**y** discards; it can\'t be undone', markerSide: 'left', tone: 'pink' }],
 	},
+	{
+		name: 'status-discard-all',
+		capture: 'discard-all',
+		view: { region: { box: 'Discard all' } },
+		callouts: [
+			{ target: { find: 'Everything · Unstaged' }, text: '**tab** picks what to discard', markerSide: 'left' },
+			{ target: { find: 'Lost:', w: 5 }, text: '**Lost** and **Kept**: counted for you', markerSide: 'left' },
+			{ target: { find: 'y discard', w: 9 }, text: '**y** discards; it can\'t be undone', markerSide: 'left', tone: 'pink' },
+		],
+	},
 
 	// ---- staging -------------------------------------------------------------------
 	{

@@ -9,7 +9,7 @@ use crate::action::Action;
 use crate::component::{Component, EventState};
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context};
-use crate::modal::{GitOp, Modal, PromptAction};
+use crate::modal::{DiscardCounts, GitOp, Modal, PromptAction};
 use crate::theme::Theme;
 use crate::widgets::{Cursor, truncate};
 
@@ -166,6 +166,18 @@ impl Component for StatusPane {
                     amend: true,
                 },
             ))),
+            Command::DiscardAll => {
+                if self.entries().is_empty() {
+                    ctx.emit(Action::Notify("nothing to discard".into()));
+                } else if let Some(op) = self.status.as_ref().and_then(|s| s.in_progress) {
+                    ctx.emit(Action::Notify(format!(
+                        "a {} is in progress: X aborts it, d discards one file",
+                        op.command()
+                    )));
+                } else {
+                    ctx.emit(Action::OpenModal(Modal::discard_all(DiscardCounts::of(self.entries()))));
+                }
+            }
             Command::StageToggle | Command::Discard => {
                 let Some(e) = self.selected() else {
                     return EventState::NotConsumed;
@@ -209,6 +221,7 @@ impl Component for StatusPane {
             Command::StageToggle,
             Command::StageAll,
             Command::Discard,
+            Command::DiscardAll,
             Command::Commit,
             Command::Amend,
             Command::Stash,

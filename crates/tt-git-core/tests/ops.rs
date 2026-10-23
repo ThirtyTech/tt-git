@@ -1,4 +1,4 @@
-use tt_git_core::{DiscardKind, FileState, GitCli, Repo, StatusEntry};
+use tt_git_core::{DiscardKind, DiscardScope, FileState, GitCli, Repo, StatusEntry};
 use tt_git_testkit::Sandbox;
 
 fn open(sb: &Sandbox) -> Repo {
@@ -82,6 +82,237 @@ fn discard_each_kind() {
     );
     assert!(sb.path().join("to-rename.txt").exists());
     assert!(!sb.path().join("untracked.txt").exists());
+}
+
+/// A repo with one file of each kind: staged, unstaged, both, untracked
+/// (one in a folder), ignored, and a nested repository.
+fn messy(sb: &Sandbox) -> Repo {
+    sb.commit_file(
+        "staged.txt",
+        "orig
+",
+        "base",
+    );
+    sb.commit_file(
+        "unstaged.txt",
+        "orig
+",
+        "base2",
+    );
+    sb.commit_file(
+        "both.txt", "orig
+", "base3",
+    );
+    sb.write(
+        "staged.txt",
+        "staged
+",
+    );
+    sb.write(
+        "new.txt",
+        "new and staged
+",
+    );
+    sb.write(
+        "both.txt", "staged
+",
+    );
+    sb.git(&["add", "staged.txt", "new.txt", "both.txt"]);
+    sb.write(
+        "both.txt",
+        "staged then changed
+",
+    );
+    sb.write(
+        "unstaged.txt",
+        "changed
+",
+    );
+    sb.write("untracked.txt", "u");
+    sb.write("dir/untracked.txt", "u");
+    sb.write(
+        ".git/info/exclude",
+        "*.log
+",
+    );
+    sb.write("kept.log", "ignored");
+    sb.write("nested/inner.txt", "inner");
+    sb.git_in(&sb.path().join("nested"), &["init", "-q"]);
+    open(sb)
+}
+
+fn read(sb: &Sandbox, path: &str) -> Option<String> {
+    std::fs::read_to_string(sb.path().join(path)).ok()
+}
+
+fn kept_ignored_and_nested(sb: &Sandbox) {
+    assert_eq!(read(sb, "kept.log").as_deref(), Some("ignored"));
+    assert_eq!(read(sb, "nested/inner.txt").as_deref(), Some("inner"));
+    assert!(sb.path().join("nested/.git").exists());
+}
+
+#[test]
+fn discard_everything() {
+    let sb = Sandbox::new();
+    let repo = messy(&sb);
+    repo.discard_all(DiscardScope::Everything).unwrap();
+    for path in ["staged.txt", "unstaged.txt", "both.txt"] {
+        assert_eq!(
+            read(&sb, path).as_deref(),
+            Some(
+                "orig
+"
+            ),
+            "{path}"
+        );
+    }
+    for path in ["new.txt", "untracked.txt", "dir/untracked.txt"] {
+        assert_eq!(read(&sb, path), None, "{path}");
+    }
+    kept_ignored_and_nested(&sb);
+    let st = repo.status().unwrap();
+    let left: Vec<&str> = st.entries.iter().map(|e| e.path.as_str()).collect();
+    assert_eq!(left, ["nested/"], "only the nested repo is left");
+}
+
+#[test]
+fn discard_unstaged_keeps_staged_and_untracked() {
+    let sb = Sandbox::new();
+    let repo = messy(&sb);
+    repo.discard_all(DiscardScope::Unstaged).unwrap();
+    assert_eq!(
+        read(&sb, "unstaged.txt").as_deref(),
+        Some(
+            "orig
+"
+        )
+    );
+    assert_eq!(
+        read(&sb, "both.txt").as_deref(),
+        Some(
+            "staged
+"
+        ),
+        "back to what's staged"
+    );
+    assert_eq!(
+        read(&sb, "staged.txt").as_deref(),
+        Some(
+            "staged
+"
+        )
+    );
+    assert_eq!(
+        read(&sb, "new.txt").as_deref(),
+        Some(
+            "new and staged
+"
+        )
+    );
+    assert_eq!(read(&sb, "untracked.txt").as_deref(), Some("u"));
+    assert_eq!(read(&sb, "dir/untracked.txt").as_deref(), Some("u"));
+    kept_ignored_and_nested(&sb);
+    assert!(
+        repo.status()
+            .unwrap()
+            .entries
+            .iter()
+            .all(|e| !e.has_unstaged() || e.is_untracked())
+    );
+}
+
+#[test]
+fn discard_unstaged_and_untracked_keeps_staged() {
+    let sb = Sandbox::new();
+    let repo = messy(&sb);
+    repo.discard_all(DiscardScope::UnstagedAndUntracked).unwrap();
+    assert_eq!(
+        read(&sb, "unstaged.txt").as_deref(),
+        Some(
+            "orig
+"
+        )
+    );
+    assert_eq!(
+        read(&sb, "both.txt").as_deref(),
+        Some(
+            "staged
+"
+        )
+    );
+    assert_eq!(
+        read(&sb, "new.txt").as_deref(),
+        Some(
+            "new and staged
+"
+        )
+    );
+    assert_eq!(read(&sb, "untracked.txt"), None);
+    assert_eq!(read(&sb, "dir/untracked.txt"), None);
+    kept_ignored_and_nested(&sb);
+}
+
+#[test]
+fn discard_untracked_only() {
+    let sb = Sandbox::new();
+    let repo = messy(&sb);
+    repo.discard_all(DiscardScope::Untracked).unwrap();
+    assert_eq!(read(&sb, "untracked.txt"), None);
+    assert!(!sb.path().join("dir").exists(), "the emptied folder goes too");
+    assert_eq!(
+        read(&sb, "unstaged.txt").as_deref(),
+        Some(
+            "changed
+"
+        )
+    );
+    assert_eq!(
+        read(&sb, "both.txt").as_deref(),
+        Some(
+            "staged then changed
+"
+        )
+    );
+    assert_eq!(
+        read(&sb, "new.txt").as_deref(),
+        Some(
+            "new and staged
+"
+        )
+    );
+    kept_ignored_and_nested(&sb);
+}
+
+#[test]
+fn discard_all_with_nothing_tracked() {
+    let sb = Sandbox::new();
+    sb.write("a.txt", "a").write("b.txt", "b");
+    sb.git(&["add", "a.txt"]);
+    let repo = open(&sb);
+    repo.discard_all(DiscardScope::Unstaged).unwrap();
+    assert!(sb.path().join("b.txt").exists());
+    repo.discard_all(DiscardScope::Everything).unwrap();
+    assert!(repo.status().unwrap().is_clean(), "{:#?}", repo.status().unwrap());
+}
+
+#[test]
+fn discard_all_refused_while_merging() {
+    let sb = Sandbox::new();
+    conflicting_branches(&sb);
+    let repo = open(&sb);
+    repo.merge("other").unwrap_err();
+    let err = repo.discard_all(DiscardScope::Everything).unwrap_err();
+    assert!(err.to_string().contains("merge is in progress"), "{err}");
+    assert_eq!(repo.in_progress(), Some(tt_git_core::InProgress::Merge));
+}
+
+#[test]
+fn undo_does_not_offer_to_undo_a_discard() {
+    let sb = Sandbox::new();
+    let repo = messy(&sb);
+    let before = repo.undo_step().unwrap();
+    repo.discard_all(DiscardScope::Everything).unwrap();
+    assert_eq!(repo.undo_step().unwrap(), before, "the reset to HEAD isn't a step");
 }
 
 #[test]

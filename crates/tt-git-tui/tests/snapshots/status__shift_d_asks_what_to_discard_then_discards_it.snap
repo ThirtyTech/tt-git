@@ -1,0 +1,54 @@
+---
+source: crates/tt-git-tui/tests/status.rs
+expression: t.screen()
+---
+╭[1] Graph [all] 1/2─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╮
+│●   main  base2                                                                                                        Test User         23h 3200fa4│
+│●  base                                                                                                                Test User         23h 1ccf1f2│
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                      ╭ Discard all ─────────────────────────────────────────────────────────╮                                      │
+│                                      │Everything · Unstaged · Unstaged + untracked · Untracked              │                                      │
+│                                      │every file back to HEAD, untracked files deleted                      │                                      │
+│                                      │                                                                      │                                      │
+│                                      │Lost: 1 staged file, 1 unstaged file, 1 untracked file.               │                                      │
+│                                      │Kept: ignored files.                                                  │                                      │
+│                                      │This cannot be undone.                                                │                                      │
+│                                      │                                                                      │                                      │
+│                                      │y discard · tab what to discard · n/esc cancel                        │                                      │
+│                                      ╰──────────────────────────────────────────────────────────────────────╯                                      │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+│                                                                                                                                                    │
+╰────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭[2] Status: repo · main──────────────────────────────────────────────────╮╭[3] Branches 1 · Tags 0 · Unmerged 0 · Merged 0──────────────────────────╮
+│M  f.txt                                                                 ││* main                                                     local      23h│
+│ M g.txt                                                                 ││                                                                         │
+│?? new.txt                                                               ││                                                                         │
+│                                                                         ││                                                                         │
+│                                                                         ││                                                                         │
+│                                                                         ││                                                                         │
+│                                                                         ││                                                                         │
+│                                                                         ││                                                                         │
+│                                                                         ││                                                                         │
+│                                                                         ││                                                                         │
+│                                                                         ││                                                                         │
+│                                                                         ││                                                                         │
+│                                                                         ││                                                                         │
+╰─────────────────────────────────────────────────────────────────────────╯╰─────────────────────────────────────────────────────────────────────────╯
+space stage/unstage  a stage all  d discard  D discard all  c commit  A amend  s stash  e edit file  b blame  tab next pane  ? help  q quit

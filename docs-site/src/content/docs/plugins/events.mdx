@@ -97,7 +97,7 @@ Leave out `events` to get every event.
 | `push.completed` | A push finished. | `{branch}` |
 | `files.staged` | Files were staged. | `{paths}`, or `"all"` for stage all. `partial: true` when only some hunks or lines were staged. |
 | `files.unstaged` | Files were unstaged. | `{paths}`, plus `partial: true` as above. |
-| `files.discarded` | A file's changes were discarded. | `{path}`, plus `partial: true` as above. |
+| `files.discarded` | A file's changes were discarded, or every file's with discard all. | `{path}`, plus `partial: true` as above. Discard all sends `path: "all"` and a `scope`: `"everything"`, `"unstaged"`, `"unstaged_and_untracked"` or `"untracked"`. |
 | `merge.completed` | A merge finished. | `{target, head}` |
 | `rebase.completed` | A rebase finished. | `{onto, head}` |
 | `cherry_pick.completed` | A cherry-pick finished. | `{picked, summary, head}` |

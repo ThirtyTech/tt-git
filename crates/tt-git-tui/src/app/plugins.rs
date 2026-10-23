@@ -337,6 +337,7 @@ impl App {
             GitOp::Unstage(paths) => ("files.unstaged", json!({ "paths": paths })),
             GitOp::UnstageAll => ("files.unstaged", json!({ "paths": "all" })),
             GitOp::Discard { path, .. } => ("files.discarded", json!({ "path": path })),
+            GitOp::DiscardAll(scope) => ("files.discarded", json!({ "path": "all", "scope": scope.name() })),
             GitOp::ApplyPatch { path, op, .. } => match op {
                 tt_git_core::PatchOp::Stage => ("files.staged", json!({ "paths": [path], "partial": true })),
                 tt_git_core::PatchOp::Unstage => ("files.unstaged", json!({ "paths": [path], "partial": true })),

@@ -100,6 +100,41 @@ What discarding does depends on the file:
 
 To discard only part of a file, use the [staging view](/panes/staging/#discarding).
 
+### Discarding everything
+
+Press <kbd>D</kbd> to throw away changes in every file at once, like lazygit's <kbd>D</kbd> menu.
+The **Discard all** dialog asks what to discard; <kbd>tab</kbd> (and <kbd>shift+tab</kbd>) moves
+between the choices:
+
+| Choice | Throws away | Keeps |
+|---|---|---|
+| **Everything** | Staged, unstaged and untracked changes: every file goes back to the last commit | Ignored files |
+| **Unstaged** | Unstaged changes: each file goes back to what's staged | Staged changes, untracked files |
+| **Unstaged + untracked** | Unstaged changes and untracked files | Staged changes |
+| **Untracked** | Untracked files and the folders they leave empty | Changes to tracked files |
+
+<Screenshot name="status-discard-all" alt="The Discard all dialog with Everything chosen, counting the files it would throw away" />
+
+The dialog counts what each choice loses and what it keeps, for example
+`Lost: 1 staged file, 1 unstaged file, 1 untracked file.` and `Kept: ignored files.` A file with
+both staged and unstaged changes counts in both. Press <kbd>y</kbd> or <kbd>enter</kbd> to
+discard, <kbd>n</kbd> or <kbd>esc</kbd> to cancel. If the choice has nothing to discard, the
+dialog says `Nothing to discard here.` and <kbd>y</kbd> does nothing.
+
+- Files git ignores are never deleted.
+- An untracked folder that's a git repository of its own is never deleted. The dialog lists it
+  under **Kept** as a nested repository. Submodules aren't touched either: tt-git doesn't recurse
+  into them.
+- While a merge, rebase, cherry-pick or revert is in progress, <kbd>D</kbd> refuses: finish it
+  with <kbd>C</kbd>, abort it with <kbd>X</kbd>, or discard single files with <kbd>d</kbd>.
+- With a clean working tree, <kbd>D</kbd> says `nothing to discard`.
+
+<Aside type="caution">
+  Discarding can't be undone, and [undo](/git/undo/) (<kbd>z</kbd>) doesn't count it as a step: it
+  passes over it to whatever you did before. To keep the changes somewhere first,
+  [stash](#stashing) them instead.
+</Aside>
+
 ## Stashing
 
 <Screenshot name="status-stash" alt="The Stash dialog with Unstaged chosen and a message typed" />
@@ -196,6 +231,7 @@ changes.
 | <kbd>enter</kbd> | Stage by hunk or line |
 | <kbd>a</kbd> | Stage all (or unstage all) |
 | <kbd>d</kbd> | Discard changes to the file (asks first) |
+| <kbd>D</kbd> | Discard all: everything, unstaged changes, or untracked files (asks first) |
 | <kbd>c</kbd> | Commit what's staged |
 | <kbd>A</kbd> | Amend the last commit, keeping its message |
 | <kbd>s</kbd> | Stash |
