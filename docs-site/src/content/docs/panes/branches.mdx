@@ -190,6 +190,27 @@ Every confirmation takes <kbd>y</kbd> to go ahead and <kbd>n</kbd> or
 remote branches that were deleted on the remote, and turns the local
 branches that tracked them `gone`. See [Push, pull and fetch](/git/remotes/).
 
+## Fast-forwarding a branch
+
+<kbd>F</kbd> moves the selected local branch up to its upstream without
+checking it out, like pulling a branch you aren't on. It runs
+`git fetch <remote> <branch>:<branch>`, so it also picks up commits pushed
+since your last fetch. The help bar shows
+`✓ fast-forwarded feature to origin/feature`, or
+`feature is already up to date` when there was nothing new.
+
+It only ever fast-forwards, so it never loses commits and doesn't ask first.
+It refuses, with a message saying why, when:
+
+- the branch is checked out: pull it with <kbd>p</kbd> instead
+- the branch is checked out in another worktree: pull it there
+- it has no upstream, or its upstream is `gone`
+- it has commits its upstream doesn't (`↑` in the list), so there's nothing
+  to fast-forward, or it has diverged (`↑` and `↓`): check it out and merge
+  or rebase instead
+
+A remote-only branch has nothing local to move; check it out instead.
+
 ## Filtering the list
 
 <kbd>/</kbd> starts a filter on the current tab. The title shows what you've
@@ -230,6 +251,7 @@ OSC 52 clipboard support, so it also works over SSH.
 | <kbd>T</kbd> | New tag at the selection's commit (<kbd>tab</kbd> in the dialog: annotated) |
 | <kbd>d</kbd> | Delete (asks; asks again before force-deleting unmerged) |
 | <kbd>f</kbd> | `git fetch --all --prune` |
+| <kbd>F</kbd> | Fast-forward the selected branch to its upstream without checking it out |
 | <kbd>/</kbd> | Filter as you type (<kbd>esc</kbd> clears) |
 | <kbd>b</kbd> | Pick the base branch for the Unmerged, Merged and Tags tabs |
 | <kbd>M</kbd> | Merge the selection into the current branch |

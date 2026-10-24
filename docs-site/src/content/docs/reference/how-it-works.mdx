@@ -171,6 +171,7 @@ switch. If the switch fails, it runs `git stash pop` to put the changes back
 | Action | Runs |
 |---|---|
 | Fetch | `git fetch --all --prune` |
+| Fast-forward a branch that isn't checked out | `git fetch <remote> <merge>:refs/heads/<branch>`, with `<remote>` and `<merge>` from the branch's `branch.<branch>.remote` and `branch.<branch>.merge` config (`.` for a local upstream). git refuses anything but a fast-forward. tt-git checks `git worktree list` first and refuses a branch checked out in any worktree. |
 | New branch | `git switch -c <name> <start>` |
 | New branch in a worktree | `git worktree add -b <name> .worktrees/<name> <start>`, and `.worktrees/` is added to `.git/info/exclude` |
 | Rename | `git branch -m <old> <new>` |
