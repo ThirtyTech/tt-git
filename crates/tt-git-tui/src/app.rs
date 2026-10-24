@@ -12,8 +12,8 @@ use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tt_git_core::branches::matches_filter;
 use tt_git_core::time::SharedClock;
 use tt_git_core::{
-    CheckoutPlan, CommitFile, FileState, Head, IGNORE_TRACKED, LogFilter, NoStep, Repo, Stash, StatusEntry,
-    UNDO_CHANGES_KEPT, UndoStep,
+    CheckoutPlan, CommitFile, FAST_FORWARD_UP_TO_DATE, FileState, Head, IGNORE_TRACKED, LogFilter, NoStep, Repo, Stash,
+    StatusEntry, UNDO_CHANGES_KEPT, UndoStep,
 };
 
 use crate::action::{Action, RefsSnapshot};
@@ -1208,8 +1208,10 @@ impl App {
         let label = op.label();
         let (doing, done) = self.describe_op(&op);
         // A second pull, push or fetch would only race the first.
-        if matches!(op, GitOp::Push | GitOp::Pull | GitOp::FetchAll | GitOp::PushTag { .. })
-            && self.busy.iter().any(|b| b.label == label)
+        if matches!(
+            op,
+            GitOp::Push | GitOp::Pull | GitOp::FetchAll | GitOp::PushTag { .. } | GitOp::FastForward { .. }
+        ) && self.busy.iter().any(|b| b.label == label)
         {
             let verb = doing.split(' ').next().unwrap_or_default();
             self.renew_notice(format!("already {verb}"));
@@ -1269,6 +1271,9 @@ impl App {
                 both("pulling", "pulled", what)
             }
             GitOp::FetchAll => both("fetching", "fetched", "all remotes".into()),
+            GitOp::FastForward { name, upstream } => {
+                both("fast-forwarding", "fast-forwarded", format!("{name} to {upstream}"))
+            }
             GitOp::PushTag { name } => both("pushing", "pushed", format!("tag {name}")),
             _ => (op.label(), op.label()),
         }
@@ -1525,6 +1530,14 @@ impl App {
         // Nothing in the repository changed.
         if let (GitOp::SelfUpdate { tag }, Ok(_)) = (&op, &result) {
             self.notice = Some(format!("✓ installed tt-git {tag}; restart tt-git to use it"));
+            return;
+        }
+        // The fetch may still have updated the remote-tracking branch.
+        if let (GitOp::FastForward { name, .. }, Ok(out)) = (&op, &result)
+            && out == FAST_FORWARD_UP_TO_DATE
+        {
+            self.renew_notice(format!("{name} is already up to date"));
+            self.update(Action::Refresh);
             return;
         }
         if matches!(op, GitOp::Undo { .. }) {

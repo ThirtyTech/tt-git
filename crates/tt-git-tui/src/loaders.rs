@@ -470,6 +470,7 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::PushTag { name } => repo.push_tag(name),
         GitOp::RenameBranch { old, new } => repo.rename_branch(old, new),
         GitOp::FetchAll => repo.fetch_all(),
+        GitOp::FastForward { name, .. } => repo.fast_forward_branch(name),
         GitOp::SetBaseBranch(base) => repo.set_base_branch(base.as_deref()),
         GitOp::Stage(paths) => repo.stage(paths),
         GitOp::Unstage(paths) => repo.unstage(paths),

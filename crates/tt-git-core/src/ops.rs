@@ -190,6 +190,58 @@ impl Repo {
         self.git().run(&["fetch", "--all", "--prune"]).map(text)
     }
 
+    /// Fast-forwards local branch `name` to its upstream without checking
+    /// it out: `git fetch <remote> <merge>:refs/heads/<name>`, where
+    /// `<remote>` and `<merge>` are the branch's `branch.<name>.*` config
+    /// (a local upstream has remote `.`). Refuses when there's no upstream,
+    /// when the branch is checked out in any worktree, and when it has
+    /// diverged from its upstream. Returns [`FAST_FORWARD_UP_TO_DATE`] when
+    /// the branch was already there.
+    pub fn fast_forward_branch(&self, name: &str) -> Result<String> {
+        let config = |key: &str| {
+            self.git()
+                .run(&["config", "--get", &format!("branch.{name}.{key}")])
+                .ok()
+                .map(|out| out.stdout_str().trim().to_string())
+                .filter(|v| !v.is_empty())
+        };
+        let (Some(remote), Some(merge)) = (config("remote"), config("merge")) else {
+            return Err(GitError::Refused(format!("{name} has no upstream to fast-forward to")));
+        };
+        if let Some(wt) = self.worktrees()?.iter().find(|w| w.branch.as_deref() == Some(name)) {
+            return Err(GitError::Refused(if wt.current {
+                format!("{name} is checked out here; pull it instead")
+            } else {
+                format!(
+                    "{name} is checked out in the worktree at {}; pull it there instead",
+                    wt.path.display()
+                )
+            }));
+        }
+        let local = format!("refs/heads/{name}");
+        let tip = || {
+            self.git()
+                .run(&["rev-parse", "--verify", "-q", &local])
+                .map(|out| out.stdout_str().trim().to_string())
+        };
+        let before = tip()?;
+        let refspec = format!("{merge}:{local}");
+        let out = match self.git().run(&["fetch", remote.as_str(), refspec.as_str()]) {
+            Ok(out) => out,
+            Err(GitError::Failed { stderr, .. }) if stderr.contains("non-fast-forward") => {
+                return Err(GitError::Refused(format!(
+                    "{name} has diverged from its upstream, so it can't be fast-forwarded; \
+                     check it out and merge or rebase instead"
+                )));
+            }
+            Err(e) => return Err(e),
+        };
+        if tip()? == before {
+            return Ok(FAST_FORWARD_UP_TO_DATE.to_string());
+        }
+        Ok(text(out))
+    }
+
     /// Saves the base branch for this repo in its local git config, or with
     /// `None` goes back to detecting it.
     pub fn set_base_branch(&self, base: Option<&str>) -> Result<String> {
@@ -998,6 +1050,10 @@ impl IgnoreTarget {
 /// Starts the error [`Repo::ignore`] returns when the path is tracked and
 /// it wasn't asked to stop tracking it.
 pub const IGNORE_TRACKED: &str = "is tracked, so ignoring it wouldn't hide it";
+
+/// What [`Repo::fast_forward_branch`] returns when the branch was already
+/// at its upstream.
+pub const FAST_FORWARD_UP_TO_DATE: &str = "already up to date";
 
 /// The ignore pattern for `path` (relative to the root, `/`-separated):
 /// anchored to the root, ending in `/` for a directory, with the

@@ -558,3 +558,83 @@ fn new_branch_as_a_worktree() {
             .contains("create worktree .worktrees/side")
     );
 }
+
+/// `main` checked out, `feature` tracking `origin/feature` and not checked
+/// out, `lonely` with no upstream; `other` is a clone to push from.
+fn repo_for_fast_forward() -> Sandbox {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let remote = sb.add_remote("origin");
+    sb.git(&["branch", "-q", "--set-upstream-to=origin/main"]);
+    sb.git(&["push", "-q", "origin", "main:feature"]);
+    sb.git(&["fetch", "-q", "origin"]);
+    sb.git(&["branch", "-q", "--track", "feature", "origin/feature"]);
+    sb.git(&["branch", "-q", "lonely"]);
+    let other = sb.clone_to(&remote, "other");
+    sb.git_in(&other, &["switch", "-q", "feature"]);
+    sb.git_in(&other, &["commit", "-q", "--allow-empty", "-m", "their work"]);
+    sb.git_in(&other, &["push", "-q", "origin", "feature"]);
+    sb
+}
+
+fn select_branch(t: &mut TestDriver, name: &str) {
+    t.press("3").press("g");
+    let idx = t.app().branches().visible().position(|b| b.name == name).unwrap();
+    for _ in 0..idx {
+        t.press("j");
+    }
+}
+
+#[test]
+fn fast_forward_moves_a_branch_without_checking_it_out() {
+    let sb = repo_for_fast_forward();
+    let mut t = TestDriver::new(&sb);
+    select_branch(&mut t, "feature");
+    // Not fetched yet, so the pane still shows it in sync.
+    t.press("F");
+    assert_eq!(sb.git(&["log", "-1", "--format=%s", "feature"]), "their work");
+    assert_eq!(sb.current_branch(), "main");
+    let notice = t.app().notice().unwrap_or_default().to_string();
+    assert!(notice.contains("fast-forwarded feature to origin/feature"), "{notice}");
+
+    select_branch(&mut t, "feature");
+    t.press("F");
+    let notice = t.app().notice().unwrap_or_default().to_string();
+    assert!(notice.contains("feature is already up to date"), "{notice}");
+}
+
+#[test]
+fn fast_forward_explains_what_it_cannot_do() {
+    let sb = repo_for_fast_forward();
+    sb.git(&["switch", "-q", "feature"]);
+    sb.git(&["commit", "-q", "--allow-empty", "-m", "my work"]);
+    sb.git(&["switch", "-q", "main"]);
+    sb.git(&["fetch", "-q", "origin"]);
+    let before = sb.git(&["rev-parse", "feature"]);
+    let mut t = TestDriver::new(&sb);
+
+    for (branch, says) in [
+        ("main", "main is checked out; pull it instead"),
+        ("lonely", "lonely has no upstream to fast-forward to"),
+        ("feature", "feature has diverged from origin/feature (↑1 ↓1)"),
+    ] {
+        select_branch(&mut t, branch);
+        t.press("F");
+        let notice = t.app().notice().unwrap_or_default().to_string();
+        assert!(notice.contains(says), "{branch}: {notice}");
+    }
+    assert_eq!(sb.git(&["rev-parse", "feature"]), before);
+    assert!(t.app().error().is_none());
+}
+
+#[test]
+fn fast_forward_refuses_a_branch_another_worktree_has_checked_out() {
+    let sb = repo_for_fast_forward();
+    let wt = sb.root().join("feature-wt");
+    sb.git(&["worktree", "add", "-q", wt.to_str().unwrap(), "feature"]);
+    let mut t = TestDriver::new(&sb);
+    select_branch(&mut t, "feature");
+    t.press("F");
+    let err = t.app().error().unwrap_or_default().to_string();
+    assert!(err.contains("feature is checked out in the worktree at"), "{err}");
+}

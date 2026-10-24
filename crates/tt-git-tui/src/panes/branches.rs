@@ -872,12 +872,51 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
                 let start = Self::start_ref(entry);
                 ctx.emit(Action::OpenModal(Modal::new_tag(&start, start.clone())))
             }
+            Command::FastForward => match Self::fast_forward(entry) {
+                Ok(op) => ctx.emit(Action::Run(op)),
+                Err(why) => ctx.emit(Action::Notify(why)),
+            },
             // `P` pushes the selected tag on the Tags tab, the current branch here.
             Command::PushTag => ctx.emit(Action::Run(GitOp::Push)),
             Command::Copy => ctx.emit(Action::Copy(entry.name.clone())),
             _ => return EventState::NotConsumed,
         }
         EventState::Consumed
+    }
+
+    /// The fast-forward of `entry` to its upstream, or why there's none.
+    /// Ahead/behind are from the last fetch, so only a branch that's ahead
+    /// is refused here; the fetch itself refuses one that has diverged.
+    fn fast_forward(entry: &BranchEntry) -> Result<GitOp, String> {
+        let Some(local) = &entry.local else {
+            return Err("only local branches can be fast-forwarded".into());
+        };
+        let name = &local.short_name;
+        if entry.is_head {
+            return Err(format!("{name} is checked out; pull it instead"));
+        }
+        let Some(upstream) = &local.upstream else {
+            return Err(format!("{name} has no upstream to fast-forward to"));
+        };
+        let upstream = upstream
+            .strip_prefix("refs/remotes/")
+            .or_else(|| upstream.strip_prefix("refs/heads/"))
+            .unwrap_or(upstream);
+        if local.upstream_gone {
+            return Err(format!("{name}'s upstream {upstream} is gone"));
+        }
+        match (local.ahead, local.behind) {
+            (0, _) => Ok(GitOp::FastForward {
+                name: name.clone(),
+                upstream: upstream.to_string(),
+            }),
+            (ahead, 0) => Err(format!(
+                "{name} is {ahead} ahead of {upstream}; there's nothing to fast-forward"
+            )),
+            (ahead, behind) => Err(format!(
+                "{name} has diverged from {upstream} (↑{ahead} ↓{behind}); merge or rebase it instead"
+            )),
+        }
     }
 
     fn name_style(entry: &BranchEntry, theme: &Theme) -> Style {
@@ -1273,6 +1312,7 @@ impl Component for BranchesPane {
             Command::DeleteBranch,
             Command::RenameBranch,
             Command::Fetch,
+            Command::FastForward,
             Command::Filter,
             Command::Merge,
             Command::Rebase,

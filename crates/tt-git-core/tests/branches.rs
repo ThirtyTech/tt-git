@@ -130,3 +130,99 @@ fn fetch_and_delete_remote_branch() {
     repo.fetch_all().unwrap();
     assert!(entries(&repo).iter().all(|e| e.name != "their-feature"));
 }
+
+/// A repo with a `feature` branch tracking `origin/feature`, not checked
+/// out, and a clone `other` to push from.
+fn with_feature_branch() -> (Sandbox, std::path::PathBuf) {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let remote = sb.add_remote("origin");
+    sb.git(&["push", "-q", "-u", "origin", "main"]);
+    sb.git(&["push", "-q", "origin", "main:feature"]);
+    sb.git(&["fetch", "-q", "origin"]);
+    sb.git(&["branch", "-q", "--track", "feature", "origin/feature"]);
+    let other = sb.clone_to(&remote, "other");
+    sb.git_in(&other, &["switch", "-q", "feature"]);
+    (sb, other)
+}
+
+fn push_feature_commit(sb: &Sandbox, other: &std::path::Path, msg: &str) {
+    sb.git_in(other, &["commit", "-q", "--allow-empty", "-m", msg]);
+    sb.git_in(other, &["push", "-q", "origin", "feature"]);
+}
+
+#[test]
+fn fast_forward_moves_a_branch_that_is_not_checked_out() {
+    let (sb, other) = with_feature_branch();
+    push_feature_commit(&sb, &other, "their work");
+    let repo = open(&sb);
+
+    repo.fast_forward_branch("feature").unwrap();
+
+    assert_eq!(sb.git(&["log", "-1", "--format=%s", "feature"]), "their work");
+    assert_eq!(sb.current_branch(), "main");
+    assert_eq!(
+        sb.git(&["rev-parse", "origin/feature"]),
+        sb.git(&["rev-parse", "feature"])
+    );
+}
+
+#[test]
+fn fast_forward_says_when_already_up_to_date() {
+    let (sb, _other) = with_feature_branch();
+    let repo = open(&sb);
+    assert_eq!(
+        repo.fast_forward_branch("feature").unwrap(),
+        tt_git_core::FAST_FORWARD_UP_TO_DATE
+    );
+}
+
+#[test]
+fn fast_forward_refuses_a_diverged_branch() {
+    let (sb, other) = with_feature_branch();
+    push_feature_commit(&sb, &other, "their work");
+    sb.git(&["switch", "-q", "feature"]);
+    sb.git(&["commit", "-q", "--allow-empty", "-m", "my work"]);
+    sb.git(&["switch", "-q", "main"]);
+    let repo = open(&sb);
+    let before = sb.git(&["rev-parse", "feature"]);
+
+    let err = repo.fast_forward_branch("feature").unwrap_err();
+
+    assert!(err.to_string().contains("diverged"), "{err}");
+    assert_eq!(sb.git(&["rev-parse", "feature"]), before);
+}
+
+#[test]
+fn fast_forward_refuses_a_branch_checked_out_elsewhere() {
+    let (sb, other) = with_feature_branch();
+    push_feature_commit(&sb, &other, "their work");
+    let wt = sb.root().join("feature-wt");
+    sb.git(&["worktree", "add", "-q", wt.to_str().unwrap(), "feature"]);
+    let repo = open(&sb);
+
+    let err = repo.fast_forward_branch("feature").unwrap_err();
+    assert!(err.to_string().contains("checked out in the worktree at"), "{err}");
+
+    let err = repo.fast_forward_branch("main").unwrap_err();
+    assert!(err.to_string().contains("checked out here"), "{err}");
+}
+
+#[test]
+fn fast_forward_refuses_a_branch_without_upstream() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.git(&["branch", "-q", "lonely"]);
+    let err = open(&sb).fast_forward_branch("lonely").unwrap_err();
+    assert!(err.to_string().contains("no upstream"), "{err}");
+}
+
+#[test]
+fn fast_forward_follows_a_local_upstream() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.git(&["branch", "-q", "--track", "follower", "main"]);
+    sb.commit("more");
+    open(&sb).fast_forward_branch("follower").unwrap();
+    assert_eq!(sb.git(&["rev-parse", "follower"]), sb.git(&["rev-parse", "main"]));
+}
