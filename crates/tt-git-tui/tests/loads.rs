@@ -155,7 +155,7 @@ fn a_skipped_reload_leaves_the_graph_as_a_reload_would() {
     let skipped = t.screen();
 
     // An explicit refresh always reloads; it must end up the same.
-    t.press("R");
+    t.press("ctrl+r");
     assert_eq!(t.app().graph().selected().unwrap().oid, selected);
     assert_eq!(skipped, t.screen());
     assert_ne!(screen, skipped, "recentred on the selection");
@@ -422,7 +422,7 @@ fn loading_more_streams_only_the_rest_and_ends_as_a_full_load() {
 
     // A refresh lists all 20 from the start; it must end up the same.
     let start = commands(&t).len();
-    t.press("R");
+    t.press("ctrl+r");
     let logs = since(&t, start, GRAPH_LOG);
     assert!(logs.iter().all(|c| !c.args.contains("--skip")), "{logs:#?}");
     assert_eq!(graph_state(&t), more);
@@ -432,7 +432,7 @@ fn loading_more_streams_only_the_rest_and_ends_as_a_full_load() {
     let more = graph_state(&t);
     assert_eq!(more.0.len(), messages(&t).len());
     assert!(more.0.len() > 20 && more.0.len() < 30, "{}", more.0.len());
-    t.press("R");
+    t.press("ctrl+r");
     assert_eq!(graph_state(&t), more);
 }
 
@@ -454,6 +454,9 @@ fn loading_more_after_the_refs_changed_lists_everything_again() {
     assert_eq!(t.app().graph().commits().len(), 20);
     let more = graph_state(&t);
 
-    t.press("R");
-    assert_eq!(graph_state(&t), more);
+    // The refresh also shows the checkout in the other panes; the graph
+    // must end up the same.
+    t.press("ctrl+r");
+    let (oids, rows, selected, _) = graph_state(&t);
+    assert_eq!((oids, rows, selected), (more.0, more.1, more.2));
 }

@@ -102,12 +102,13 @@ Leave out `events` to get every event.
 | `merge.completed` | A merge finished. | `{target, head}` |
 | `rebase.completed` | A rebase finished. | `{onto, head}` |
 | `cherry_pick.completed` | A cherry-pick finished. | `{picked, summary, head}` |
+| `revert.completed` | A revert finished. | `{reverted, summary, mainline, head}`. `mainline` is the parent kept for a merge commit (from 1), else `null`. |
 | `stash.created` | A stash was made. | `{message}` (`null` when you left it empty) |
 | `stash.applied` | A stash was applied or popped. | `{stash, pop}`, where `stash` is like `stash@{0}` |
 | `stash.dropped` | A stash was dropped. | `{stash}` |
 | `worktree.removed` | A worktree was removed from the [Worktrees tab](/git/worktrees/#removing-a-worktree). | `{path, branch, force}`. `branch` is what it had checked out (`null` if detached); `force` is `true` when it was removed with its changes. |
 
-When you finish a merge, rebase or cherry-pick that stopped on conflicts
+When you finish a merge, rebase, cherry-pick or revert that stopped on conflicts
 (<kbd>C</kbd> in the status pane), the matching `*.completed` event fires with
 `{head, continued: true}`.
 

@@ -617,6 +617,18 @@ impl Repo {
         self.git().run(&["cherry-pick", oid]).map(text)
     }
 
+    /// `git revert --no-edit <oid>`: a new commit that undoes `oid`. A merge
+    /// commit needs `mainline`, the parent (from 1) whose side is kept.
+    pub fn revert(&self, oid: &str, mainline: Option<usize>) -> Result<String> {
+        let parent = mainline.map(|n| n.to_string());
+        let mut args = vec!["revert", "--no-edit"];
+        if let Some(n) = &parent {
+            args.extend(["-m", n.as_str()]);
+        }
+        args.push(oid);
+        self.git().run(&args).map(text)
+    }
+
     /// Continues the operation in progress after conflicts were resolved
     /// and staged, keeping git's prepared commit messages.
     pub fn continue_operation(&self, op: crate::model::InProgress) -> Result<String> {

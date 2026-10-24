@@ -49,6 +49,7 @@ pub const HOOK_EVENTS: &[&str] = &[
     "merge.completed",
     "rebase.completed",
     "cherry_pick.completed",
+    "revert.completed",
     "worktree.removed",
 ];
 

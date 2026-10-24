@@ -1585,6 +1585,7 @@ impl App {
                     | GitOp::Merge { .. }
                     | GitOp::Rebase { .. }
                     | GitOp::CherryPick { .. }
+                    | GitOp::Revert { .. }
                     | GitOp::Continue(_)
                     | GitOp::Abort(_)
                     | GitOp::StashBranch { .. }

@@ -115,7 +115,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `o` | check out the selected commit: the local branch on it if there is one, else the commit with HEAD detached (with uncommitted changes, asks to stash them first) |
 | | `n` | new branch at the selected commit (`tab` in the dialog: create it in a worktree) |
 | | `T` | new tag at the selected commit (`tab` in the dialog: annotated, with a message) |
-| | `M` / `r` / `C` | merge into current / rebase current onto / cherry-pick |
+| | `M` / `r` / `C` / `R` | merge into current / rebase current onto / cherry-pick / revert |
 | | `c` | copy the commit hash |
 | | `A` | ask an AI agent about the commit, or start a ready-made action (explain branch, resolve conflicts…); opens in a herdr tab inside herdr, else in place of details |
 | | `]` `[` (or `}` `{`) | next / previous tab in the branches pane, without leaving the graph |
@@ -141,7 +141,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `s` | stash: everything, only what's staged, only what isn't staged, everything but leave staged changes in place, or just the selected file (`tab` in the dialog picks; the message is optional) |
 | | `e` | open the file in your editor at its first change (a conflicted file: at its first conflict marker) |
 | | `b` | blame the file in the working tree: who last changed each line, when and in which commit |
-| | `C` / `X` | continue / abort a merge, rebase or cherry-pick |
+| | `C` / `X` | continue / abort a merge, rebase, cherry-pick or revert |
 | stash tab | `space` / `a` | pop / apply the selected stash (pop drops it once applied) |
 | | `d` | drop it (asks first) |
 | | `n` | new branch from it at the commit it was made on (`git stash branch`) |

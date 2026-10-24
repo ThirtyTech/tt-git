@@ -501,6 +501,58 @@ fn clean_rebase_and_cherry_pick() {
 }
 
 #[test]
+fn revert_makes_a_commit_that_undoes_one() {
+    let sb = Sandbox::new();
+    sb.commit_file("f.txt", "one\n", "base");
+    let bad = sb.commit_file("f.txt", "two\n", "change it");
+    sb.commit("later");
+    let repo = open(&sb);
+    repo.revert(&bad, None).unwrap();
+    assert_eq!(sb.git(&["log", "-1", "--format=%s"]), "Revert \"change it\"");
+    assert_eq!(std::fs::read_to_string(sb.path().join("f.txt")).unwrap(), "one\n");
+    assert!(sb.path().join("later.txt").is_file(), "later commits stay");
+    assert_eq!(repo.status().unwrap().in_progress, None);
+}
+
+#[test]
+fn revert_a_merge_keeps_the_chosen_parent() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.checkout_new("topic");
+    sb.commit("topic work");
+    sb.checkout("main");
+    sb.commit("main work");
+    let merge = sb.merge("topic");
+    let repo = open(&sb);
+
+    // Without a parent git refuses, and nothing is left in progress.
+    assert!(repo.revert(&merge, None).is_err());
+    assert_eq!(repo.status().unwrap().in_progress, None);
+
+    repo.revert(&merge, Some(1)).unwrap();
+    assert!(!sb.path().join("topic-work.txt").exists(), "topic's side undone");
+    assert!(sb.path().join("main-work.txt").is_file(), "main's side kept");
+}
+
+#[test]
+fn revert_conflict_stops_in_progress() {
+    let sb = Sandbox::new();
+    sb.commit_file("f.txt", "one\n", "base");
+    let bad = sb.commit_file("f.txt", "two\n", "change it");
+    sb.commit_file("f.txt", "three\n", "change it again");
+    let before = sb.rev_parse("HEAD");
+    let repo = open(&sb);
+    assert!(repo.revert(&bad, None).is_err());
+    assert_eq!(
+        repo.status().unwrap().in_progress,
+        Some(tt_git_core::InProgress::Revert)
+    );
+    repo.abort_operation(tt_git_core::InProgress::Revert).unwrap();
+    assert_eq!(repo.status().unwrap().in_progress, None);
+    assert_eq!(sb.rev_parse("HEAD"), before);
+}
+
+#[test]
 fn create_branch_in_a_worktree() {
     let sb = Sandbox::new();
     let base = sb.commit("base");

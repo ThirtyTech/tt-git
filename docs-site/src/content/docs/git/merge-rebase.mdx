@@ -1,6 +1,6 @@
 ---
-title: Merge, rebase and cherry-pick
-description: "Bring commits from one branch into another, and resolve conflicts."
+title: Merge, rebase, cherry-pick and revert
+description: "Bring commits from one branch into another, undo a commit, and resolve conflicts."
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -43,9 +43,28 @@ terminal.
 branch with `git cherry-pick <commit>`. The confirm box shows the commit's
 hash and subject.
 
+## Revert
+
+<kbd>R</kbd> in the graph undoes the selected commit with a new commit on the
+current branch, running `git revert --no-edit <commit>`. The commit itself
+stays in the history; the new one, `Revert "<subject>"`, takes its changes
+back out. tt-git asks first: `Revert 1a2b3c4 "Fix the parser"? This makes a
+new commit that undoes it.`
+
+A merge commit has more than one parent, so git needs to know which side to
+keep. For a merge, <kbd>R</kbd> opens a list with one entry per parent
+instead, such as `Keep parent 1: 5d6e7f8 "Main work"`. Parent 1 is the branch
+the merge was made on, and is usually the one you want: it undoes what the
+merged branch brought in. Pick one with <kbd>enter</kbd> to run
+`git revert --no-edit -m <n> <commit>`, or press <kbd>esc</kbd> to cancel.
+
+If later commits changed the same lines, the revert stops on a conflict.
+Resolve it as below; the status pane shows `REVERTING`.
+[Undo](/git/undo/) with <kbd>z</kbd> takes back a finished revert.
+
 ## Resolving conflicts
 
-When a merge, rebase or cherry-pick stops on a conflict, the status pane
+When a merge, rebase, cherry-pick or revert stops on a conflict, the status pane
 shows what's going on:
 
 - The title adds `MERGING`, `REBASING`, `CHERRY-PICKING` or `REVERTING`.
@@ -75,15 +94,16 @@ it's fixed.
 
 Press <kbd>C</kbd> or <kbd>X</kbd> in the status pane. From any other pane,
 open the [command palette](/git/palette/) and pick *Continue merge/rebase* or
-*Abort merge/rebase*. (In the graph, <kbd>C</kbd> is cherry-pick.)
+*Abort merge/rebase*. (In the graph, <kbd>C</kbd> is cherry-pick.) They work the same for a cherry-pick or revert.
 
 - **<kbd>C</kbd> continue.** tt-git refuses while a file is still conflicted.
-  A merge is finished with `git commit --no-edit`; a rebase or cherry-pick
-  with `git rebase --continue` or `git cherry-pick --continue`. Git's prepared
+  A merge is finished with `git commit --no-edit`; a rebase, cherry-pick or
+  revert with `git rebase --continue`, `git cherry-pick --continue` or
+  `git revert --continue`. Git's prepared
   message is kept and no editor opens. A rebase may stop again on a later
   commit; resolve and continue the same way.
 - **<kbd>X</kbd> abort.** tt-git asks first, then runs `git merge --abort`
-  (or `rebase`, `cherry-pick`) and puts everything back as it was before you
+  (or `rebase`, `cherry-pick`, `revert`) and puts everything back as it was before you
   started.
 
 <Aside>
