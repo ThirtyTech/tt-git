@@ -180,6 +180,7 @@ switch. If the switch fails, it runs `git stash pop` to put the changes back
 | Pull | `git pull --no-edit` |
 | Push | `git push`, or `git push -u <remote> HEAD` the first time, to set the upstream |
 | Cherry-pick | `git cherry-pick <commit>` |
+| Revert | `git revert --no-edit <commit>`, with `-m <parent>` for a merge commit |
 | Rebase | `git -c core.editor=: rebase <onto>`, non-interactive |
 | Copy | OSC 52 escape sequence to the terminal, which also works over SSH |
 

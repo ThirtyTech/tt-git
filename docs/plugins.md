@@ -145,7 +145,7 @@ Event hooks are low-volume events, each run as a fresh process:
 | `commit.created` | `{oid, amend, summary}` |
 | `fetch.completed` / `pull.completed` / `push.completed` | `{}` / `{branch, head}` / `{branch}` |
 | `files.staged` / `files.unstaged` / `files.discarded` | `{paths}` (`"all"` for stage-all) / `{paths}` / `{path}`, plus `partial: true` when only some hunks or lines changed; discard all sends `{path: "all", scope}` with `scope` one of `everything`, `unstaged`, `unstaged_and_untracked`, `untracked` |
-| `merge.completed` / `rebase.completed` / `cherry_pick.completed` | `{target/onto/picked, head}` |
+| `merge.completed` / `rebase.completed` / `cherry_pick.completed` / `revert.completed` | `{target/onto/picked/reverted, head}` |
 | `stash.created` / `stash.applied` / `stash.dropped` | `{message}` / `{stash, pop}` / `{stash}` |
 | `worktree.removed` | `{path, branch, force}` (`branch` null if it was detached; `force` true if removed with its changes) |
 
