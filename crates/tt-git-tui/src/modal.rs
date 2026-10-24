@@ -769,6 +769,13 @@ impl Modal {
                     input.clear();
                     ModalOutcome::Open
                 }
+                // The word before the cursor, as in a shell: spaces, then
+                // everything up to the space before it.
+                KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    let kept = input.trim_end().trim_end_matches(|c: char| !c.is_whitespace()).len();
+                    input.truncate(kept);
+                    ModalOutcome::Open
+                }
                 KeyCode::Tab | KeyCode::BackTab => {
                     match action {
                         PromptAction::CreateBranch { worktree, .. } => *worktree = !*worktree,
@@ -1309,12 +1316,29 @@ mod tests {
             }),
             "keeps the author"
         );
-        m.handle_key(k("ctrl+u"));
+        m.handle_key(k("ctrl+w"));
+        assert_eq!(input(&m), "", "ctrl+w deletes the word, here all of it");
         assert_eq!(
             m.handle_key(k("enter")),
             ModalOutcome::Filter(author),
             "empty clears only the message"
         );
+    }
+
+    #[test]
+    fn ctrl_w_deletes_the_word_before_the_cursor() {
+        let mut m = Modal::prompt("Commit", "fix the  bell ", PromptAction::Commit);
+        let input = |m: &Modal| match m {
+            Modal::Prompt { input, .. } => input.clone(),
+            _ => unreachable!(),
+        };
+        m.handle_key(k("ctrl+w"));
+        assert_eq!(input(&m), "fix the  ");
+        m.handle_key(k("ctrl+w"));
+        assert_eq!(input(&m), "fix ");
+        m.handle_key(k("ctrl+w"));
+        m.handle_key(k("ctrl+w"));
+        assert_eq!(input(&m), "", "nothing left to delete");
     }
 
     #[test]
