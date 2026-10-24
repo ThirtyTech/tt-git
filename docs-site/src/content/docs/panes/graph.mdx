@@ -233,7 +233,8 @@ features, `^(fix|perf)` the fixes and speedups, `^docs\(graph\)` the graph's doc
 
 - **Presets** are the 8 subject prefixes the repository uses most, in its newest 1000 loaded
   commits, most used first. A prefix is the first word of a subject followed by `:`, with an optional
-  `(scope)` and `!` in between, so `feat(blame)!: Step through commits` counts for `^feat`. Case
+  `(scope)` and `!` in between, so `feat(blame)!: Step through commits` counts for `^feat`. Emoji
+  or `:shortcode:`s before it stay in the preset: `🤖 feat: Add it` counts for `^🤖 feat`. Case
   doesn't matter: `Fix:` and `fix:` both count for `^fix`. They're worked out from the whole graph
   and stay the same while it's filtered. A repository with no such prefixes has no presets. Set a
   fixed list with [`message_presets`](/configuration/#graph) under `[graph]`.
