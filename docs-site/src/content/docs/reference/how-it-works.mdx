@@ -195,6 +195,27 @@ else the first of `main`, `master`, `development`, `develop` or `trunk` on a
 remote, then locally. A base you pick is stored as `tt-git.baseBranch` in
 the repository's own git config.
 
+### Conflicts with the base
+
+Whether a branch would merge cleanly into the base comes from `git
+merge-tree --write-tree --stdin --name-only -z --no-messages`, fed one
+`<base commit> <tip commit>` line per branch. It works the merge out
+without a working tree or index, says for each line whether it's clean, and
+lists the conflicted files. One process checks up to 50 branches: worktrees'
+HEADs first, then the Unmerged tab's tips, then the rest of the branch list.
+It runs in the background after the branches load, and each result is kept
+by tip commit until the base's tip moves, so a refresh only checks branches
+that moved.
+
+`merge-tree` writes the trees and blobs of each merge as loose objects.
+tt-git points `GIT_OBJECT_DIRECTORY` at a new folder in your temp directory
+and lists the repository's own objects in `GIT_ALTERNATE_OBJECT_DIRECTORIES`
+for it to read, then deletes the folder, so the repository is left exactly as
+it was. Each merge takes a few milliseconds to a few tens of milliseconds, so
+a repository with hundreds of branches fills its marks in over a few
+seconds the first time. `--stdin` needs git 2.40; with older git the check is
+skipped. `check_merges = false` turns it off.
+
 ### The branch history in the graph
 
 On the Unmerged and Merged tabs, the graph shows only the selected branch:

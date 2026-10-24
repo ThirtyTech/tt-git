@@ -386,6 +386,35 @@ pub fn parse_stashes(out: &[u8]) -> Vec<Stash> {
         .collect()
 }
 
+/// Parses `git merge-tree --write-tree --stdin --name-only -z --no-messages`:
+/// for each merge in input order, `1` (clean) or `0` (conflicts), the tree,
+/// the conflicted paths, then an empty field. Each merge's conflicted
+/// paths, empty when it's clean; `None` if the output doesn't read that way.
+pub fn parse_merge_tree_stdin(out: &[u8]) -> Option<Vec<Vec<String>>> {
+    let mut fields = out.split(|&b| b == 0);
+    let mut merges = Vec::new();
+    loop {
+        let clean = match fields.next()? {
+            b"" => return Some(merges),
+            b"1" => true,
+            b"0" => false,
+            _ => return None,
+        };
+        fields.next().filter(|tree| !tree.is_empty())?;
+        let mut paths = Vec::new();
+        loop {
+            match fields.next()? {
+                b"" => break,
+                path => paths.push(String::from_utf8_lossy(path).into_owned()),
+            }
+        }
+        if clean != paths.is_empty() {
+            return None;
+        }
+        merges.push(paths);
+    }
+}
+
 /// Parses `git worktree list --porcelain`: one block of `key value` lines
 /// per working tree, blank-line separated, the main one first. `current`
 /// is left `false`.
@@ -523,6 +552,19 @@ mod tests {
 
     fn log_record(oid: &str, parents: &str, summary: &str) -> String {
         format!("{oid}{FS}{parents}{FS}Ann Author{FS}ann@example.com{FS}100{FS}200{FS}{summary}")
+    }
+
+    #[test]
+    fn parses_merge_tree_stdin() {
+        let out = format!("1\0{A}\0\x000\0{B}\0f.txt\0sub dir/n m.txt\0\x001\0{C}\0\0");
+        assert_eq!(
+            parse_merge_tree_stdin(out.as_bytes()),
+            Some(vec![vec![], vec!["f.txt".into(), "sub dir/n m.txt".into()], vec![]])
+        );
+        assert_eq!(parse_merge_tree_stdin(b""), Some(vec![]));
+        // Cut off mid-merge, or clean with paths.
+        assert_eq!(parse_merge_tree_stdin(format!("0\0{B}\0f.txt\0").as_bytes()), None);
+        assert_eq!(parse_merge_tree_stdin(format!("1\0{B}\0f.txt\0\0").as_bytes()), None);
     }
 
     #[test]

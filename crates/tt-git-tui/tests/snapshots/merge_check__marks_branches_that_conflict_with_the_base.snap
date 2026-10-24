@@ -1,0 +1,7 @@
+---
+source: crates/tt-git-tui/tests/merge_check.rs
+expression: "lines[..3].join(\"\\n\")"
+---
+  clash                                  ✗2 local      23h
+* main                                      local      23h
+  clean                                     local      23h

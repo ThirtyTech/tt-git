@@ -290,6 +290,8 @@ pub struct BaseBranches {
     pub base: String,
     /// Its full ref name.
     pub base_ref: String,
+    /// The commit it points at.
+    pub base_target: String,
     /// The base was picked by the user rather than detected.
     pub chosen: bool,
     /// What [`default_base`] picks, for going back to it.

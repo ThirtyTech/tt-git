@@ -823,3 +823,52 @@ fn blame_names_the_commit_behind_each_line() {
 
     assert!(repo.blame(None, "missing.txt").is_err());
 }
+
+#[test]
+fn merge_conflicts_without_touching_the_repo() {
+    let sb = Sandbox::new();
+    sb.commit_file("f.txt", "a\nb\nc\n", "base");
+    sb.branch("clean").branch("conflict");
+    let main = sb.commit_file("f.txt", "a\nmain\nc\n", "main");
+    sb.checkout("clean");
+    let clean = sb.commit_file("g.txt", "new\n", "clean");
+    sb.checkout("conflict");
+    sb.write("sub dir/n m.txt", "q\n");
+    sb.git(&["add", "."]);
+    let conflict = sb.commit_file("f.txt", "a\nconflict\nc\n", "conflict");
+    sb.checkout("main");
+    let repo = open(&sb);
+    let objects = sb.git(&["count-objects", "-v"]);
+    let got = repo
+        .merge_conflicts(&main, &[&clean, &conflict, &main])
+        .unwrap()
+        .expect("git 2.40 or newer");
+    assert_eq!(got[&clean], Vec::<String>::new());
+    assert_eq!(got[&conflict], vec!["f.txt".to_string()]);
+    assert_eq!(got[&main], Vec::<String>::new());
+    // The merged trees went to a scratch directory, not the repository.
+    assert_eq!(sb.git(&["count-objects", "-v"]), objects);
+    assert_eq!(sb.git(&["status", "--porcelain"]), "");
+    assert!(repo.merge_conflicts(&main, &[]).unwrap().unwrap().is_empty());
+}
+
+#[test]
+fn merge_conflicts_name_every_conflicted_file() {
+    let sb = Sandbox::new();
+    sb.write("one.txt", "1\n").write("sub dir/two words.txt", "2\n");
+    sb.git(&["add", "."]);
+    sb.commit_staged("base");
+    sb.checkout_new("topic");
+    sb.write("one.txt", "topic\n").write("sub dir/two words.txt", "topic\n");
+    sb.git(&["add", "."]);
+    let topic = sb.commit_staged("topic");
+    sb.checkout("main");
+    sb.write("one.txt", "main\n").write("sub dir/two words.txt", "main\n");
+    sb.git(&["add", "."]);
+    let main = sb.commit_staged("main");
+    let got = open(&sb).merge_conflicts(&main, &[&topic]).unwrap().unwrap();
+    assert_eq!(
+        got[&topic],
+        vec!["one.txt".to_string(), "sub dir/two words.txt".to_string()]
+    );
+}

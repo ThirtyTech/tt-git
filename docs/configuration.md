@@ -27,6 +27,7 @@ lanes = true                    # draw the lanes at startup; L in the graph togg
 [branches]
 unmerged_exclude = ["archive"]  # hide unmerged branches whose name contains any of these
 safe_branches = ["master", "main", "production", "prod"]  # never list these on the merged/unmerged tabs
+check_merges = true             # mark branches that would conflict with the base branch (git 2.40+)
 
 [plugins]
 pane_release_keys = ["ctrl+\\", "f12"]   # leave/close plugin panes
@@ -73,6 +74,10 @@ The branches pane has four tabs, five once you have stashes; `]` and `[`
 (or `}` and `{`) move between them:
 
 - **Branches**: every local and remote branch, most recently active first.
+  A branch whose merge into the base branch would conflict shows `✗2` (two
+  files in conflict) after its name, and the bottom border names the
+  selected one's files. The same mark shows on Unmerged and in a worktree's
+  state. Turn it off with `check_merges = false`.
 - **Tags**: every tag, newest first, with the tag message's subject (or the
   commit's, for a lightweight tag). The five newest also show how far they
   are from the base branch: `↓12` means the base has 12 commits since the

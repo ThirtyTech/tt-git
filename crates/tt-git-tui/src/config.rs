@@ -40,6 +40,9 @@ pub struct BranchesConfig {
     /// Long-lived branches, by exact name (on any remote), never listed on
     /// the merged and unmerged tabs.
     pub safe_branches: Vec<String>,
+    /// Check in the background whether each branch and worktree would merge
+    /// into the base branch cleanly.
+    pub check_merges: bool,
 }
 
 impl Default for BranchesConfig {
@@ -47,6 +50,7 @@ impl Default for BranchesConfig {
         Self {
             unmerged_exclude: vec!["archive".into()],
             safe_branches: ["master", "main", "production", "prod"].map(String::from).to_vec(),
+            check_merges: true,
         }
     }
 }

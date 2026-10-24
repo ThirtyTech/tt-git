@@ -123,6 +123,7 @@ fn load_base(
     Ok(Some(BaseBranches {
         base: base.short_name.clone(),
         base_ref: base.full_name.clone(),
+        base_target: base.target.clone(),
         chosen: setting.is_some_and(|s| s == base.short_name || s == base.full_name),
         detected,
         unmerged,
@@ -154,6 +155,17 @@ pub fn count_worktree_changes(repo: Repo, worktrees: Vec<(PathBuf, Option<String
         })
         .collect();
     Action::WorktreeChanges(counts)
+}
+
+/// Which files merging each of `tips` into `base` (commits) would leave in
+/// conflict.
+pub fn check_merges(repo: Repo, base: String, tips: Vec<String>) -> Action {
+    let refs: Vec<&str> = tips.iter().map(String::as_str).collect();
+    let result = repo.merge_conflicts(&base, &refs).map_err(|e| {
+        tracing::warn!("checking merges into {base} failed: {e}");
+        message(e)
+    });
+    Action::MergesChecked { base, tips, result }
 }
 
 /// How much disk space the worktree at `path` takes, leaving out the

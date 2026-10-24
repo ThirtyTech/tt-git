@@ -56,6 +56,7 @@ lanes = true                      # draw the lanes at startup; L in the graph to
 [branches]
 unmerged_exclude = ["archive"]    # hide unmerged branches whose name contains any of these
 safe_branches = ["master", "main", "production", "prod"]  # never listed on the merged/unmerged tabs
+check_merges = true               # mark branches that would conflict with the base branch
 
 [plugins]
 pane_release_keys = ["ctrl+\\", "f12"]   # leave or close plugin panes
@@ -102,6 +103,7 @@ See [Graph](/panes/graph/).
 |---|---|---|
 | `unmerged_exclude` | `["archive"]` | The Unmerged tab hides branches whose name contains any of these strings. |
 | `safe_branches` | `["master", "main", "production", "prod"]` | Long-lived branches that are never listed on the Merged and Unmerged tabs, matched by exact name on any remote. Set it to `[]` to list them too. |
+| `check_merges` | `true` | Check in the background whether each branch and worktree would merge cleanly into the base branch, and mark the ones that conflict with `✗`. Set it to `false` in a repository with so many branches that the check gets in the way. See [Conflicts with the base branch](/panes/branches/#conflicts-with-the-base-branch). |
 
 See [Merged and unmerged](/panes/merged-unmerged/).
 

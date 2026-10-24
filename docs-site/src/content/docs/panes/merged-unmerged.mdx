@@ -30,6 +30,11 @@ the branch name, its tip commit's subject, the author (through `.mailmap`,
 so one person is one name) and the commit date. Both tabs are sorted by
 commit date, newest first.
 
+On Unmerged, a branch that would conflict with the base when merged gets a
+red `✗2` (two files in conflict) after its name, and the bottom border names
+the selected branch's files. See [Conflicts with the base
+branch](/panes/branches/#conflicts-with-the-base-branch).
+
 - **Merged** means reachable: a branch is merged when its tip is the base
   branch or one of the base's ancestors.
 - **Unmerged** is everything else. A branch that was squash-merged or

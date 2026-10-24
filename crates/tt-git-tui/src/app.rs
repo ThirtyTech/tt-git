@@ -93,6 +93,11 @@ const NOTICE_HOLD: u64 = 3 * TICKS_PER_SEC;
 /// How long a `✓` notice stays green before it fades to muted.
 const SUCCESS_FADE: u64 = 5 * TICKS_PER_SEC;
 
+/// Branches checked for conflicts per git command. Each merge takes some
+/// milliseconds, so in a repo with hundreds of branches the marks fill in a
+/// batch at a time instead of all at once after a long wait.
+const MERGE_CHECK_BATCH: usize = 50;
+
 /// A git write in flight, shown in the help bar until it's done.
 #[derive(Debug)]
 struct Busy {
@@ -226,6 +231,8 @@ pub struct App {
     worktree_count: (bool, bool),
     /// Worktree sizes being measured right now.
     worktree_sizing: usize,
+    /// Branches are being checked for conflicts with the base.
+    merge_checking: bool,
     /// Worktrees waiting for a measuring job, last first, each with the
     /// worktrees nested in it to leave out.
     worktree_size_queue: Vec<(std::path::PathBuf, Vec<std::path::PathBuf>)>,
@@ -326,6 +333,7 @@ impl App {
             update_checking: false,
             worktree_count: (false, false),
             worktree_sizing: 0,
+            merge_checking: false,
             worktree_size_queue: Vec::new(),
             worktree_sized: Vec::new(),
             reopen: None,
@@ -874,6 +882,7 @@ impl App {
                     ..
                 } = *snapshot;
                 self.branches.set_entries(branches, base, &refs, stashes, worktrees);
+                self.check_merges();
                 if self.branches.tab() == BranchTab::Worktrees {
                     self.count_worktree_changes();
                     self.measure_worktree_sizes(false);
@@ -904,6 +913,11 @@ impl App {
                 if again {
                     self.count_worktree_changes();
                 }
+            }
+            Action::MergesChecked { base, tips, result } => {
+                self.merge_checking = false;
+                self.branches.set_merge_conflicts(&base, tips, result);
+                self.check_merges();
             }
             Action::OpenWorktree(path) => self.open_worktree(path),
             Action::StashSelected(stash) => {
@@ -1346,6 +1360,21 @@ impl App {
             ),
             GitOp::Checkout { plan, stash: true },
         ));
+    }
+
+    /// Checks the next batch of branches and worktrees not yet checked for
+    /// conflicts with the base branch, unless a check is running (it looks
+    /// for more when it's done).
+    fn check_merges(&mut self) {
+        if self.merge_checking || !self.config.branches.check_merges {
+            return;
+        }
+        let Some((base, tips)) = self.branches.unchecked_merges(MERGE_CHECK_BATCH) else {
+            return;
+        };
+        self.merge_checking = true;
+        let repo = self.repo.clone();
+        self.ctx.spawn(move || loaders::check_merges(repo, base, tips));
     }
 
     /// Counts each worktree's changed files in the background, after the
