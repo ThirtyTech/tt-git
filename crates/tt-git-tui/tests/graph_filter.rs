@@ -139,3 +139,136 @@ fn filter_panel_takes_clicks() {
     t.press("enter");
     assert_eq!(summaries(&t), ["alice guide", "alice lib"]);
 }
+
+/// Commits in `app/` and `lib/`, then uncommitted changes in both.
+fn two_folders() -> Sandbox {
+    let sb = Sandbox::new();
+    sb.commit_file("app/main.rs", "1\n", "app one");
+    sb.commit_file("lib/lib.rs", "1\n", "lib one");
+    sb.commit_file("app/main.rs", "2\n", "app two");
+    sb.write("app/main.rs", "3\n").write("lib/lib.rs", "2\n");
+    sb.write("app/new.rs", "n\n");
+    sb.git(&["add", "lib/lib.rs"]);
+    sb
+}
+
+fn status_paths(t: &TestDriver) -> Vec<String> {
+    t.app().status().entries().iter().map(|e| e.path.clone()).collect()
+}
+
+#[test]
+fn dot_narrows_graph_and_status_to_the_start_folder() {
+    let sb = two_folders();
+    let mut t = TestDriver::at(Config::default(), &sb, &sb.path().join("app"), 140, 24);
+    assert_eq!(t.app().graph().commits().len(), 3, "starts unfiltered by default");
+    assert_eq!(status_paths(&t).len(), 3);
+
+    t.press(".");
+    assert_eq!(summaries(&t), ["app two", "app one"]);
+    let commits = t.app().graph().commits();
+    assert_eq!(*commits[0].parents, [commits[1].oid], "history stays connected");
+    assert!(t.pane_title(PaneId::Graph).contains("Graph [all · folder app/]"));
+    assert_eq!(status_paths(&t), ["app/main.rs", "app/new.rs"]);
+    assert!(
+        t.pane_title(PaneId::Status)
+            .contains("· in app/ · +1 outside (1 staged)"),
+        "{}",
+        t.pane_title(PaneId::Status)
+    );
+    insta::assert_snapshot!("folder_filter", t.screen());
+
+    // From Status too, and back again.
+    t.press("2").press(".");
+    assert_eq!(t.app().graph().commits().len(), 3);
+    assert_eq!(status_paths(&t).len(), 3);
+    assert!(!t.pane_title(PaneId::Status).contains("in app/"));
+
+    // esc in the graph clears it, Status included.
+    t.press("1").press(".").press("esc");
+    assert_eq!(t.app().graph().commits().len(), 3);
+    assert_eq!(status_paths(&t).len(), 3);
+}
+
+#[test]
+fn filter_to_cwd_starts_narrowed() {
+    let sb = two_folders();
+    let mut config = Config::default();
+    config.graph.filter_to_cwd = true;
+    let t = TestDriver::at(config.clone(), &sb, &sb.path().join("app"), 100, 30);
+    assert_eq!(summaries(&t), ["app two", "app one"]);
+    assert_eq!(status_paths(&t), ["app/main.rs", "app/new.rs"]);
+
+    // At the root there's no folder, so nothing is narrowed and . says why.
+    let mut t = TestDriver::with_size(config, &sb, 160, 24);
+    assert_eq!(t.app().graph().commits().len(), 3);
+    t.press(".");
+    assert_eq!(t.app().graph().commits().len(), 3);
+    assert!(t.screen().contains("no folder to narrow to"), "{}", t.screen());
+}
+
+#[test]
+fn author_filter_survives_the_folder_toggle() {
+    let sb = two_folders();
+    commit_as(&sb, ALICE, "app/alice.rs", "alice app");
+    let mut t = TestDriver::at(Config::default(), &sb, &sb.path().join("app"), 100, 30);
+    t.press("f").type_text("alice").press("enter");
+    t.press(".");
+    assert_eq!(summaries(&t), ["alice app"]);
+    assert!(
+        t.pane_title(PaneId::Graph)
+            .contains("Graph [all · author Alice · folder app/]")
+    );
+    t.press(".");
+    assert!(t.pane_title(PaneId::Graph).contains("Graph [all · author Alice]"));
+}
+
+#[test]
+fn filter_panel_offers_the_start_folder() {
+    let sb = two_folders();
+    let mut t = TestDriver::at(Config::default(), &sb, &sb.path().join("app"), 100, 30);
+    t.press("f").press("tab");
+    t.wait_idle();
+    assert!(t.screen().contains("current folder"), "{}", t.screen());
+    t.press("enter");
+    assert_eq!(summaries(&t), ["app two", "app one"]);
+    assert_eq!(status_paths(&t), ["app/main.rs", "app/new.rs"], "Status follows");
+}
+
+#[test]
+fn status_bulk_actions_stay_in_the_folder() {
+    let sb = two_folders();
+    let mut t = TestDriver::at(Config::default(), &sb, &sb.path().join("app"), 100, 30);
+    t.press(".").press("2");
+
+    // a stages only app/; lib/lib.rs was already staged and stays so.
+    t.press("a").wait_idle();
+    let st = t.app().status();
+    assert!(st.all_entries().iter().all(|e| e.has_staged() && !e.has_unstaged()));
+    t.press("a").wait_idle();
+    let st = t.app().status();
+    assert!(st.entries().iter().all(|e| !e.has_staged()), "unstaged app/");
+    let lib = st.all_entries().iter().find(|e| e.path == "lib/lib.rs").unwrap();
+    assert!(lib.has_staged(), "outside left staged");
+
+    // D discards only app/.
+    t.press("D");
+    assert!(t.screen().contains("Discard all in app/"), "{}", t.screen());
+    assert!(t.screen().contains("everything outside app/"));
+    t.press("y").wait_idle();
+    assert!(t.app().status().entries().is_empty());
+    assert_eq!(t.app().status().all_entries().len(), 1);
+    t.assert_pane_contains(PaneId::Status, "no changes in app/");
+    assert_eq!(std::fs::read_to_string(sb.path().join("lib/lib.rs")).unwrap(), "2\n");
+}
+
+#[test]
+fn status_stash_starts_on_the_folder() {
+    let sb = two_folders();
+    let mut t = TestDriver::at(Config::default(), &sb, &sb.path().join("app"), 100, 30);
+    t.press(".").press("2").press("s");
+    assert!(t.screen().contains("only app/"), "{}", t.screen());
+    t.press("enter").wait_idle();
+    assert!(t.app().status().entries().is_empty());
+    let left: Vec<&str> = t.app().status().all_entries().iter().map(|e| e.path.as_str()).collect();
+    assert_eq!(left, ["lib/lib.rs"]);
+}

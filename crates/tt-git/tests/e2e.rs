@@ -20,11 +20,16 @@ const PASSTHROUGH_ENV: &[&str] = &[
 ];
 
 fn spawn(sb: &Sandbox, args: &[&str]) -> Terminal {
+    spawn_in(sb, sb.path(), args)
+}
+
+/// Like [`spawn`], started in `dir` (a subfolder of the sandbox, say).
+fn spawn_in(sb: &Sandbox, dir: &std::path::Path, args: &[&str]) -> Terminal {
     let mut builder = termlens::Terminal::builder()
         .size(120, 32)
         .env_clear()
         .timeout(Duration::from_secs(20))
-        .current_dir(sb.path())
+        .current_dir(dir)
         .envs(sb.env())
         .args(args);
     for var in PASSTHROUGH_ENV {
@@ -48,6 +53,45 @@ fn starts_toggles_and_quits() {
     t.send_str("q").unwrap();
     let status = t.wait_exit().expect("exits");
     assert!(status.success(), "exit status {status:?}");
+}
+
+#[test]
+fn filter_to_cwd_flag_narrows_to_the_start_folder() {
+    let sb = Sandbox::new();
+    sb.commit_file(
+        "app/main.rs",
+        "1
+",
+        "app commit",
+    );
+    sb.commit_file(
+        "lib/lib.rs",
+        "1
+",
+        "lib commit",
+    );
+    sb.write(
+        "lib/lib.rs",
+        "2
+",
+    )
+    .write(
+        "app/main.rs",
+        "2
+",
+    );
+    let mut t = spawn_in(&sb, &sb.path().join("app"), &["--filter-to-cwd"]);
+    t.wait_until(|s| s.contains("Graph [all · folder app/]") && s.contains("app commit"))
+        .expect("graph narrowed");
+    t.wait_until(|s| s.contains("in app/ · +1 outside") && s.contains("app/main.rs"))
+        .expect("status narrowed");
+    assert!(!t.screen().contains("lib commit"));
+
+    t.send_str(".").unwrap();
+    t.wait_until(|s| s.contains("Graph [all]") && s.contains("lib commit"))
+        .expect("widened again");
+    t.send_str("q").unwrap();
+    assert!(t.wait_exit().unwrap().success());
 }
 
 #[test]

@@ -486,10 +486,10 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::SetBaseBranch(base) => repo.set_base_branch(base.as_deref()),
         GitOp::Stage(paths) => repo.stage(paths),
         GitOp::Unstage(paths) => repo.unstage(paths),
-        GitOp::StageAll => repo.stage_all(),
-        GitOp::UnstageAll => repo.unstage_all(),
+        GitOp::StageAll { folder } => repo.stage_all(folder.as_deref()),
+        GitOp::UnstageAll { folder } => repo.unstage_all(folder.as_deref()),
         GitOp::Discard { path, kind } => repo.discard(path, kind),
-        GitOp::DiscardAll(scope) => repo.discard_all(*scope),
+        GitOp::DiscardAll { scope, folder } => repo.discard_all(*scope, folder.as_deref()),
         GitOp::Ignore { path, target, untrack } => repo.ignore(path, *target, *untrack),
         GitOp::ApplyPatch {
             path,

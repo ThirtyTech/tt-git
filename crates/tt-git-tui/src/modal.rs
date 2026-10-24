@@ -69,14 +69,23 @@ pub enum GitOp {
     SetBaseBranch(Option<String>),
     Stage(Vec<String>),
     Unstage(Vec<String>),
-    StageAll,
-    UnstageAll,
+    /// Every change, or with `folder` the ones under it.
+    StageAll {
+        folder: Option<String>,
+    },
+    UnstageAll {
+        folder: Option<String>,
+    },
     Discard {
         path: String,
         kind: DiscardKind,
     },
-    /// Every change `scope` covers, in every file.
-    DiscardAll(DiscardScope),
+    /// Every change `scope` covers, in every file or with `folder` every
+    /// file under it.
+    DiscardAll {
+        scope: DiscardScope,
+        folder: Option<String>,
+    },
     /// Adds `path` (a directory ends in `/`) to `target`. A tracked path
     /// is refused unless `untrack`, which also removes it from the index.
     Ignore {
@@ -197,15 +206,23 @@ impl GitOp {
             GitOp::SetBaseBranch(None) => "base branch auto".into(),
             GitOp::Stage(paths) => format!("stage {}", paths.join(" ")),
             GitOp::Unstage(paths) => format!("unstage {}", paths.join(" ")),
-            GitOp::StageAll => "stage all".into(),
-            GitOp::UnstageAll => "unstage all".into(),
+            GitOp::StageAll { folder: None } => "stage all".into(),
+            GitOp::StageAll { folder: Some(f) } => format!("stage all in {f}"),
+            GitOp::UnstageAll { folder: None } => "unstage all".into(),
+            GitOp::UnstageAll { folder: Some(f) } => format!("unstage all in {f}"),
             GitOp::Discard { path, .. } => format!("discard {path}"),
-            GitOp::DiscardAll(scope) => match scope {
-                DiscardScope::Everything => "discard everything".into(),
-                DiscardScope::Unstaged => "discard unstaged changes".into(),
-                DiscardScope::UnstagedAndUntracked => "discard unstaged changes and untracked files".into(),
-                DiscardScope::Untracked => "delete untracked files".into(),
-            },
+            GitOp::DiscardAll { scope, folder } => {
+                let what = match scope {
+                    DiscardScope::Everything => "discard everything",
+                    DiscardScope::Unstaged => "discard unstaged changes",
+                    DiscardScope::UnstagedAndUntracked => "discard unstaged changes and untracked files",
+                    DiscardScope::Untracked => "delete untracked files",
+                };
+                match folder {
+                    Some(f) => format!("{what} in {f}"),
+                    None => what.into(),
+                }
+            }
             GitOp::Ignore {
                 path,
                 target,
@@ -293,10 +310,12 @@ pub enum PromptAction {
     },
     Commit,
     /// A stash message, which may be left empty. `tab` cycles through what
-    /// to stash; `file` (the selected file's paths) adds it as a choice.
+    /// to stash; `file` (the selected file's paths) and `folder` (the one
+    /// Status is narrowed to) add themselves as choices.
     Stash {
         scope: StashScope,
         file: Option<Vec<String>>,
+        folder: Option<String>,
     },
     StashBranch {
         index: usize,
@@ -311,13 +330,14 @@ pub enum PromptAction {
 
 impl PromptAction {
     /// The next choice of what to stash after `scope`.
-    fn next_scope(scope: &StashScope, file: Option<&Vec<String>>, back: bool) -> StashScope {
-        let mut choices = vec![
+    fn next_scope(scope: &StashScope, file: Option<&Vec<String>>, folder: Option<&String>, back: bool) -> StashScope {
+        let mut choices: Vec<StashScope> = folder.map(|f| StashScope::Paths(vec![f.clone()])).into_iter().collect();
+        choices.extend([
             StashScope::All,
             StashScope::Staged,
             StashScope::Unstaged,
             StashScope::KeepStaged,
-        ];
+        ]);
         if let Some(paths) = file {
             choices.push(StashScope::Paths(paths.clone()));
         }
@@ -486,9 +506,13 @@ pub enum Modal {
     },
     /// Pick an author or file to narrow the graph to.
     Filter(Box<FilterPanel>),
-    /// Discard every change: `tab` cycles through what to discard, `y`
-    /// does it.
-    DiscardAll { scope: DiscardScope, counts: DiscardCounts },
+    /// Discard every change (under `folder`, when set): `tab` cycles
+    /// through what to discard, `y` does it.
+    DiscardAll {
+        scope: DiscardScope,
+        counts: DiscardCounts,
+        folder: Option<String>,
+    },
 }
 
 /// Result of feeding a key to a modal.
@@ -555,11 +579,13 @@ impl Modal {
         }
     }
 
-    /// The discard-all dialog, starting on discarding everything.
-    pub fn discard_all(counts: DiscardCounts) -> Self {
+    /// The discard-all dialog, starting on discarding everything. `counts`
+    /// are of the files under `folder`, when set.
+    pub fn discard_all(counts: DiscardCounts, folder: Option<String>) -> Self {
         Modal::DiscardAll {
             scope: DiscardScope::Everything,
             counts,
+            folder,
         }
     }
 
@@ -718,8 +744,13 @@ impl Modal {
                     match action {
                         PromptAction::CreateBranch { worktree, .. } => *worktree = !*worktree,
                         PromptAction::CreateTag { annotated, .. } => *annotated = !*annotated,
-                        PromptAction::Stash { scope, file } => {
-                            *scope = PromptAction::next_scope(scope, file.as_ref(), key.code == KeyCode::BackTab);
+                        PromptAction::Stash { scope, file, folder } => {
+                            *scope = PromptAction::next_scope(
+                                scope,
+                                file.as_ref(),
+                                folder.as_ref(),
+                                key.code == KeyCode::BackTab,
+                            );
                         }
                         PromptAction::Agent { actions, selected } => {
                             // None (custom message), then each action, round again.
@@ -751,7 +782,7 @@ impl Modal {
                 _ => ModalOutcome::Open,
             },
             Modal::Filter(panel) => panel.handle_key(key),
-            Modal::DiscardAll { scope, counts } => match key.code {
+            Modal::DiscardAll { scope, counts, folder } => match key.code {
                 KeyCode::Tab | KeyCode::BackTab => {
                     let all = DiscardScope::ALL;
                     let at = all.iter().position(|s| s == scope).unwrap_or(0);
@@ -764,7 +795,10 @@ impl Modal {
                     ModalOutcome::Open
                 }
                 KeyCode::Char('y') | KeyCode::Char('Y') | KeyCode::Enter if !counts.lost(*scope).is_empty() => {
-                    ModalOutcome::Run(GitOp::DiscardAll(*scope))
+                    ModalOutcome::Run(GitOp::DiscardAll {
+                        scope: *scope,
+                        folder: folder.clone(),
+                    })
                 }
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => ModalOutcome::Cancelled,
                 _ => ModalOutcome::Open,
@@ -786,6 +820,10 @@ impl Modal {
         if let Modal::Filter(panel) = self {
             return panel.draw(frame, area, theme);
         }
+        let discard_title = match self {
+            Modal::DiscardAll { folder: Some(f), .. } => format!("Discard all in {f}"),
+            _ => "Discard all".into(),
+        };
         let (title, body, hint): (&str, Vec<Line>, String) = match self {
             Modal::Palette { .. } | Modal::Filter(_) => unreachable!("handled above"),
             Modal::Prompt { title, input, action } => {
@@ -798,8 +836,13 @@ impl Modal {
                     }
                 };
                 match action {
-                    PromptAction::Stash { scope, file } => {
-                        let mut tabs = vec![
+                    PromptAction::Stash { scope, file, folder } => {
+                        let mut tabs = Vec::new();
+                        if let Some(f) = folder {
+                            let picked = matches!(scope, StashScope::Paths(p) if p.len() == 1 && p[0] == *f);
+                            tabs.extend([tab(f.clone(), picked), Span::styled(" · ", theme.muted)]);
+                        }
+                        tabs.extend([
                             tab("Everything".into(), *scope == StashScope::All),
                             Span::styled(" · ", theme.muted),
                             tab("Staged".into(), *scope == StashScope::Staged),
@@ -807,11 +850,11 @@ impl Modal {
                             tab("Unstaged".into(), *scope == StashScope::Unstaged),
                             Span::styled(" · ", theme.muted),
                             tab("Keep staged".into(), *scope == StashScope::KeepStaged),
-                        ];
+                        ]);
                         if let Some(paths) = file {
                             let name = paths[0].rsplit('/').next().unwrap_or(&paths[0]).to_string();
                             tabs.push(Span::styled(" · ", theme.muted));
-                            tabs.push(tab(name, matches!(scope, StashScope::Paths(_))));
+                            tabs.push(tab(name, matches!(scope, StashScope::Paths(p) if p == paths)));
                         }
                         let note = match scope {
                             StashScope::All => "staged, unstaged and untracked changes".to_string(),
@@ -898,7 +941,7 @@ impl Modal {
                     None => "y confirm · n/esc cancel".into(),
                 },
             ),
-            Modal::DiscardAll { scope, counts } => {
+            Modal::DiscardAll { scope, counts, folder } => {
                 let tab = |label: &'static str, s: DiscardScope| {
                     if s == *scope {
                         Span::styled(label, theme.help_key.add_modifier(Modifier::UNDERLINED))
@@ -934,14 +977,18 @@ impl Modal {
                 } else {
                     body.push(Line::raw(format!("Lost: {}.", lost.join(", "))));
                 }
-                body.push(Line::raw(format!("Kept: {}.", counts.kept(*scope).join(", "))));
+                let mut kept = counts.kept(*scope);
+                if let Some(f) = folder {
+                    kept.push(format!("everything outside {f}"));
+                }
+                body.push(Line::raw(format!("Kept: {}.", kept.join(", "))));
                 let hint = if lost.is_empty() {
                     "tab what to discard · n/esc cancel"
                 } else {
                     body.push(Line::styled("This cannot be undone.", theme.error));
                     "y discard · tab what to discard · n/esc cancel"
                 };
-                ("Discard all", body, hint.into())
+                (&discard_title, body, hint.into())
             }
         };
         // The stash dialog's row of choices ends in a file name.
@@ -1202,10 +1249,13 @@ mod tests {
             untracked: 2,
             nested: 0,
         };
-        let mut m = Modal::discard_all(counts);
+        let mut m = Modal::discard_all(counts, None);
         assert_eq!(
             m.handle_key(k("y")),
-            ModalOutcome::Run(GitOp::DiscardAll(DiscardScope::Everything))
+            ModalOutcome::Run(GitOp::DiscardAll {
+                scope: DiscardScope::Everything,
+                folder: None
+            })
         );
         m.handle_key(k("tab"));
         assert_eq!(
@@ -1216,14 +1266,20 @@ mod tests {
         m.handle_key(k("tab"));
         assert_eq!(
             m.handle_key(k("y")),
-            ModalOutcome::Run(GitOp::DiscardAll(DiscardScope::UnstagedAndUntracked))
+            ModalOutcome::Run(GitOp::DiscardAll {
+                scope: DiscardScope::UnstagedAndUntracked,
+                folder: None
+            })
         );
         for _ in 0..3 {
             m.handle_key(k("shift+tab"));
         }
         assert_eq!(
             m.handle_key(k("y")),
-            ModalOutcome::Run(GitOp::DiscardAll(DiscardScope::Untracked)),
+            ModalOutcome::Run(GitOp::DiscardAll {
+                scope: DiscardScope::Untracked,
+                folder: None
+            }),
             "shift+tab goes round"
         );
         assert_eq!(m.handle_key(k("esc")), ModalOutcome::Cancelled);

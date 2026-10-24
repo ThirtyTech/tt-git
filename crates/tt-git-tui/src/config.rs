@@ -102,6 +102,9 @@ pub struct GraphConfig {
     pub dates: DateStyle,
     /// Draw the branch lanes at startup (`L` toggles them).
     pub lanes: bool,
+    /// Started in a subfolder of the repository, narrow the graph and
+    /// Status to it at startup (`.` toggles it).
+    pub filter_to_cwd: bool,
 }
 
 impl Default for GraphConfig {
@@ -112,6 +115,7 @@ impl Default for GraphConfig {
             current_includes_upstream: true,
             dates: DateStyle::Relative,
             lanes: true,
+            filter_to_cwd: false,
         }
     }
 }

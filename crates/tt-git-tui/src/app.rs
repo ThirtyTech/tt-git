@@ -304,6 +304,13 @@ impl App {
         graph.max_lanes = config.graph.max_lanes;
         graph.dates = config.graph.dates;
         graph.lanes = config.graph.lanes;
+        let mut status = StatusPane::new(repo.name());
+        if config.graph.filter_to_cwd
+            && let Some(folder) = repo.start_prefix()
+        {
+            graph.filter.path = Some(folder.to_string());
+            status.set_folder(Some(folder.to_string()));
+        }
         let app = Self {
             ctx: Ctx::new(tx),
             graph_limit: config.graph.max_commits.max(1),
@@ -314,7 +321,7 @@ impl App {
             theme_name: crate::themes::DEFAULT.into(),
             theme_file: None,
             theme_before_picker: None,
-            status: StatusPane::new(repo.name()),
+            status,
             repo,
             focus: PaneId::Graph,
             zoom: Zoom::Off,
@@ -1186,7 +1193,11 @@ impl App {
 
     /// Opens the graph's filter panel and loads the authors and files it lists.
     fn open_graph_filter(&mut self) {
-        self.modal = Some(Modal::Filter(Box::new(FilterPanel::new(self.graph.filter.clone()))));
+        let folder = self.repo.start_prefix().map(str::to_string);
+        self.modal = Some(Modal::Filter(Box::new(FilterPanel::new(
+            self.graph.filter.clone(),
+            folder,
+        ))));
         let repo = self.repo.clone();
         self.ctx.spawn(move || loaders::load_filter_authors(repo));
         let repo = self.repo.clone();
@@ -1201,7 +1212,40 @@ impl App {
         }
         self.graph.filter = filter;
         self.graph.focus = None;
+        self.sync_status_folder();
         self.load_graph();
+    }
+
+    /// Status narrows to the folder tt-git was started in exactly when the
+    /// graph is filtered to it.
+    fn sync_status_folder(&mut self) {
+        let folder = self
+            .repo
+            .start_prefix()
+            .filter(|f| self.graph.filter.path.as_deref() == Some(*f))
+            .map(str::to_string);
+        self.status.set_folder(folder);
+        if self.focus == PaneId::Status {
+            self.status.announce(&self.ctx);
+        }
+    }
+
+    /// Narrows the graph (keeping any author filter) and Status to the
+    /// folder tt-git was started in, or widens them again.
+    fn toggle_folder_filter(&mut self) {
+        let Some(folder) = self.repo.start_prefix().map(str::to_string) else {
+            self.notice = Some(
+                "no folder to narrow to: tt-git was started at the repository root (f filters by any folder)".into(),
+            );
+            return;
+        };
+        let mut filter = self.graph.filter.clone();
+        filter.path = if filter.path.as_deref() == Some(folder.as_str()) && self.graph.focus.is_none() {
+            None
+        } else {
+            Some(folder)
+        };
+        self.set_graph_filter(filter);
     }
 
     /// Shows only `focus`'s history in the graph (with its tip selected), or
@@ -1338,7 +1382,7 @@ impl App {
 
     /// Checks out `plan`, or with uncommitted changes asks to stash them first.
     fn checkout(&mut self, plan: CheckoutPlan) {
-        let changed = self.status.entries().len();
+        let changed = self.status.all_entries().len();
         if changed == 0 {
             self.run_op(GitOp::Checkout { plan, stash: false });
             return;
@@ -1478,7 +1522,7 @@ impl App {
                 return;
             }
         };
-        let changed = self.status.entries().len();
+        let changed = self.status.all_entries().len();
         // Undoing a commit only moves the branch, so there's
         // nothing to ask about.
         if changed == 0 || !step.target.touches_worktree() {
@@ -1791,7 +1835,7 @@ impl App {
         let Some(path) = self.details.stage().map(|v| v.path().to_string()) else {
             return;
         };
-        match self.status.entries().iter().find(|e| e.path == path).cloned() {
+        match self.status.all_entries().iter().find(|e| e.path == path).cloned() {
             Some(entry) => self.want_details(DetailsLoad::Stage(entry), true),
             None => self.close_staging(),
         }
@@ -2161,6 +2205,9 @@ impl App {
             }
             Command::CloseDetails if matches!(self.focus, PaneId::Graph | PaneId::Details) => self.close_details(),
             Command::Filter if self.focus == PaneId::Graph => self.open_graph_filter(),
+            Command::FilterFolder if matches!(self.focus, PaneId::Graph | PaneId::Status) => {
+                self.toggle_folder_filter()
+            }
             // The graph has no tabs of its own; step the branches pane's.
             Command::NextTab | Command::PrevTab if self.focus == PaneId::Graph => {
                 let ctx = self.ctx.clone();

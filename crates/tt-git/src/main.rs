@@ -26,6 +26,16 @@ struct Cli {
     #[arg(long)]
     no_plugins: bool,
 
+    /// Started in a subfolder, narrow the graph and Status to it
+    /// (overrides `graph.filter_to_cwd`).
+    #[arg(long, overrides_with = "no_filter_to_cwd")]
+    filter_to_cwd: bool,
+
+    /// Start with the whole repository shown, even if `graph.filter_to_cwd`
+    /// is set.
+    #[arg(long, overrides_with = "filter_to_cwd")]
+    no_filter_to_cwd: bool,
+
     #[command(subcommand)]
     command: Option<cli::Cmd>,
 }
@@ -39,7 +49,12 @@ fn main() -> Result<()> {
     let _log_guard = init_tracing();
 
     let config_path = args.config.unwrap_or_else(tt_git_core::paths::config_file);
-    let config = Config::load(&config_path)?;
+    let mut config = Config::load(&config_path)?;
+    if args.filter_to_cwd {
+        config.graph.filter_to_cwd = true;
+    } else if args.no_filter_to_cwd {
+        config.graph.filter_to_cwd = false;
+    }
     let repo_path = match args.path {
         Some(p) => p,
         None => std::env::current_dir().wrap_err("reading current directory")?,
