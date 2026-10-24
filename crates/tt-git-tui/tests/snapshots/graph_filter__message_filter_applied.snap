@@ -1,0 +1,34 @@
+---
+source: crates/tt-git-tui/tests/graph_filter.rs
+expression: t.screen()
+---
+╭[1] Graph [all · message /^feat] 1/2──────────────────────────────────────────────────────────────╮
+│●  feat: Alice's feature                                             Alice             23h 3628208│
+│●  feat(graph): Add a thing                                          Test User         23h 4d302f6│
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+╭[2] Status: repo · main─────────────────────────╮╭[3] Branches 1 · Tags 0 · Unmerged 0 · Merged 0─╮
+│working tree clean                              ││* main                            local      23h│
+│                                                ││                                                │
+│                                                ││                                                │
+│                                                ││                                                │
+│                                                ││                                                │
+│                                                ││                                                │
+│                                                ││                                                │
+╰────────────────────────────────────────────────╯╰────────────────────────────────────────────────╯
+enter files + diff  space show/hide details  a all/current  c copy  tab next pane  ? help  q quit

@@ -5,6 +5,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+use regex::{Regex, RegexBuilder};
+
 use crate::branches::AheadBehind;
 use crate::git::{GitCli, GitError, Result};
 use crate::model::{BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, Oid, Stash, Status, Worktree};
@@ -33,12 +35,21 @@ pub struct LogFilter {
     pub author: Option<String>,
     /// A path or pathspec; commits that didn't change it are left out.
     pub path: Option<String>,
+    /// A regex the subject must match; see [`message_regex`].
+    pub message: Option<String>,
 }
 
 impl LogFilter {
     pub fn is_empty(&self) -> bool {
-        self.author.is_none() && self.path.is_none()
+        self.author.is_none() && self.path.is_none() && self.message.is_none()
     }
+}
+
+/// Compiles a [`LogFilter::message`] pattern: ignoring case unless it has
+/// a capital letter.
+pub fn message_regex(pattern: &str) -> Result<Regex, regex::Error> {
+    let ignore_case = !pattern.chars().any(char::is_uppercase);
+    RegexBuilder::new(pattern).case_insensitive(ignore_case).build()
 }
 
 #[derive(Debug, Clone)]
@@ -651,9 +662,18 @@ impl Repo {
     /// Up to `limit` commits of `scope` that match `filter`, in topological
     /// order. Parents name only commits in the result: a path filter
     /// rewrites them to the nearest commit that changed the path, and
-    /// parents an author filter leaves out are dropped.
+    /// parents an author or message filter leaves out are dropped.
     pub fn filtered_commits(&self, scope: &LogScope, filter: &LogFilter, limit: usize) -> Result<Vec<Commit>> {
+        let message = match filter.message.as_deref().map(message_regex).transpose() {
+            Ok(message) => message,
+            Err(e) => return Err(GitError::Refused(format!("invalid regex: {e}"))),
+        };
         let mut args = topo_log_args(limit);
+        if message.is_some() {
+            // The subject is matched here, so git lists everything and the
+            // limit counts only the commits that match.
+            args.retain(|a| !a.starts_with("--max-count="));
+        }
         if let Some(author) = &filter.author {
             // --use-mailmap so the match is against the mapped identity
             // that %aN/%aE (and `authors`) show.
@@ -674,8 +694,10 @@ impl Repo {
         args.extend(filter.path.clone());
         let mut commits = Vec::new();
         self.stream_log(&args, |c| {
-            commits.push(c);
-            true
+            if message.as_ref().is_none_or(|re| re.is_match(&c.summary)) {
+                commits.push(c);
+            }
+            commits.len() < limit
         })?;
         let shown: HashSet<Oid> = commits.iter().map(|c| c.oid).collect();
         for c in &mut commits {

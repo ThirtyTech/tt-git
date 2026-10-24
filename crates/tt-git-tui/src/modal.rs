@@ -9,7 +9,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tt_git_core::{
     CheckoutPlan, DiscardKind, DiscardScope, IgnoreTarget, InProgress, LogFilter, PatchOp, StashScope, StatusEntry,
-    UndoStep,
+    UndoStep, message_regex,
 };
 
 use crate::agent::{AgentAction, AgentRequest};
@@ -326,9 +326,27 @@ pub enum PromptAction {
         actions: Vec<AgentAction>,
         selected: Option<usize>,
     },
+    /// A regex for the graph's commit subjects, added to `filter` (the
+    /// graph's filter now). `tab` puts the next of `presets` in the input.
+    FilterMessage {
+        filter: LogFilter,
+        presets: Vec<String>,
+    },
 }
 
 impl PromptAction {
+    /// The preset after the one typed (or the first), or before it with `back`.
+    fn next_preset<'a>(presets: &'a [String], input: &str, back: bool) -> Option<&'a String> {
+        let n = presets.len();
+        let next = match presets.iter().position(|p| p == input) {
+            Some(at) if back => (at + n - 1) % n,
+            Some(at) => (at + 1) % n,
+            None if back => n.checked_sub(1)?,
+            None => 0,
+        };
+        presets.get(next)
+    }
+
     /// The next choice of what to stash after `scope`.
     fn next_scope(scope: &StashScope, file: Option<&Vec<String>>, folder: Option<&String>, back: bool) -> StashScope {
         let mut choices: Vec<StashScope> = folder.map(|f| StashScope::Paths(vec![f.clone()])).into_iter().collect();
@@ -380,6 +398,7 @@ impl PromptAction {
                 amend: false,
             },
             PromptAction::Agent { .. } => unreachable!("an agent request isn't a git op"),
+            PromptAction::FilterMessage { .. } => unreachable!("a filter isn't a git op"),
         }
     }
 }
@@ -712,6 +731,16 @@ impl Modal {
                             })
                         };
                     }
+                    if let PromptAction::FilterMessage { filter, .. } = action {
+                        // Empty clears the message part; an invalid regex stays open.
+                        if !value.is_empty() && message_regex(value).is_err() {
+                            return ModalOutcome::Open;
+                        }
+                        return ModalOutcome::Filter(LogFilter {
+                            message: (!value.is_empty()).then(|| value.to_string()),
+                            ..filter.clone()
+                        });
+                    }
                     if value.is_empty() && !matches!(action, PromptAction::Stash { .. }) {
                         ModalOutcome::Open
                     } else if let PromptAction::CreateTag {
@@ -762,6 +791,13 @@ impl Modal {
                                 (at + 1) % n
                             };
                             *selected = next.checked_sub(1);
+                        }
+                        PromptAction::FilterMessage { presets, .. } => {
+                            if let Some(preset) =
+                                PromptAction::next_preset(presets, input.trim(), key.code == KeyCode::BackTab)
+                            {
+                                *input = preset.clone();
+                            }
                         }
                         _ => {}
                     }
@@ -928,6 +964,42 @@ impl Modal {
                         let body = vec![Line::from(tabs), input_line, Line::styled(note, theme.muted)];
                         (title, body, "enter start · tab ready-made actions · esc cancel".into())
                     }
+                    PromptAction::FilterMessage { presets, .. } => {
+                        let typed = input.trim();
+                        let mut tabs = Vec::new();
+                        for p in presets {
+                            if !tabs.is_empty() {
+                                tabs.push(Span::styled(" · ", theme.muted));
+                            }
+                            tabs.push(tab(p.clone(), p == typed));
+                        }
+                        let note = match message_regex(typed) {
+                            _ if typed.is_empty() => Line::styled("empty shows every subject again", theme.muted),
+                            Ok(_) if typed.chars().any(char::is_uppercase) => {
+                                Line::styled("regex on the subject · matches case", theme.muted)
+                            }
+                            Ok(_) => Line::styled("regex on the subject · ignores case", theme.muted),
+                            Err(e) => {
+                                let why = e.to_string();
+                                // The last line of the error says what's wrong, after a
+                                // drawing of where.
+                                let last = why.lines().last().unwrap_or_default().trim();
+                                let last = last.strip_prefix("error: ").unwrap_or(last);
+                                Line::styled(format!("invalid regex: {last}"), theme.error)
+                            }
+                        };
+                        let mut body = Vec::new();
+                        if !tabs.is_empty() {
+                            body.push(Line::from(tabs));
+                        }
+                        body.extend([input_line, note]);
+                        let hint = if presets.is_empty() {
+                            "enter filter · esc cancel"
+                        } else {
+                            "enter filter · tab presets · esc cancel"
+                        };
+                        (title, body, hint.into())
+                    }
                     _ => (title, vec![input_line], "enter confirm · esc cancel".into()),
                 }
             }
@@ -995,7 +1067,7 @@ impl Modal {
         let wide = matches!(
             self,
             Modal::Prompt {
-                action: PromptAction::Stash { .. } | PromptAction::Agent { .. },
+                action: PromptAction::Stash { .. } | PromptAction::Agent { .. } | PromptAction::FilterMessage { .. },
                 ..
             } | Modal::DiscardAll { .. }
         );
@@ -1192,6 +1264,57 @@ mod tests {
         m.handle_key(k("down"));
         assert_eq!(m.handle_key(k("enter")), ModalOutcome::Command(Command::Push));
         assert_eq!(m.handle_key(k("esc")), ModalOutcome::Cancelled);
+    }
+
+    #[test]
+    fn message_filter_prompt_steps_through_presets() {
+        let author = LogFilter {
+            author: Some("Alice <alice@example.com>".into()),
+            ..LogFilter::default()
+        };
+        let mut m = Modal::prompt(
+            "Filter commits by message",
+            "",
+            PromptAction::FilterMessage {
+                filter: author.clone(),
+                presets: vec!["^feat".into(), "^fix".into(), "^docs".into()],
+            },
+        );
+        let input = |m: &Modal| match m {
+            Modal::Prompt { input, .. } => input.clone(),
+            _ => unreachable!(),
+        };
+        m.handle_key(k("tab"));
+        assert_eq!(input(&m), "^feat");
+        m.handle_key(k("tab"));
+        assert_eq!(input(&m), "^fix");
+        m.handle_key(k("shift+tab"));
+        m.handle_key(k("shift+tab"));
+        assert_eq!(input(&m), "^docs", "shift+tab goes round to the last");
+        m.handle_key(k("tab"));
+        assert_eq!(input(&m), "^feat", "tab goes round to the first");
+        // A preset can be edited before enter.
+        m.handle_key(KeyCombo::char('('));
+        assert_eq!(
+            m.handle_key(k("enter")),
+            ModalOutcome::Open,
+            "an invalid regex stays open"
+        );
+        m.handle_key(k("backspace"));
+        assert_eq!(
+            m.handle_key(k("enter")),
+            ModalOutcome::Filter(LogFilter {
+                message: Some("^feat".into()),
+                ..author.clone()
+            }),
+            "keeps the author"
+        );
+        m.handle_key(k("ctrl+u"));
+        assert_eq!(
+            m.handle_key(k("enter")),
+            ModalOutcome::Filter(author),
+            "empty clears only the message"
+        );
     }
 
     #[test]

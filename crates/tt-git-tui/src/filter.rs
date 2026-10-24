@@ -477,6 +477,7 @@ mod tests {
         let current = LogFilter {
             author: None,
             path: Some("src/".into()),
+            message: None,
         };
         let mut p = FilterPanel::new(current, None);
         assert_eq!(p.tab(), FilterTab::File, "opens on the part that's set");
@@ -495,6 +496,7 @@ mod tests {
             ModalOutcome::Filter(LogFilter {
                 author: Some("Alice <alice@x.io>".into()),
                 path: Some("src/".into()),
+                message: None,
             })
         );
     }
@@ -531,6 +533,7 @@ mod tests {
             ModalOutcome::Filter(LogFilter {
                 author: None,
                 path: Some("gone/old.rs".into()),
+                message: None,
             })
         );
     }
@@ -564,6 +567,7 @@ mod tests {
             ModalOutcome::Filter(LogFilter {
                 author: None,
                 path: Some("src/app/".into()),
+                message: None,
             })
         );
     }
@@ -573,6 +577,7 @@ mod tests {
         let current = LogFilter {
             author: Some("Bob <bob@x.io>".into()),
             path: Some("a.txt".into()),
+            message: None,
         };
         let mut p = FilterPanel::new(current, None);
         p.set_choices(
@@ -585,6 +590,7 @@ mod tests {
             ModalOutcome::Filter(LogFilter {
                 author: None,
                 path: Some("a.txt".into()),
+                message: None,
             })
         );
         assert_eq!(p.handle_key(k("esc")), ModalOutcome::Cancelled);

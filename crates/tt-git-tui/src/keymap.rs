@@ -241,6 +241,8 @@ pub enum Command {
     Fetch,
     FastForward,
     Filter,
+    /// Narrows the graph to commits whose subject matches a regex.
+    FilterMessage,
     /// Narrows the graph and Status to the folder tt-git was started in.
     FilterFolder,
     PrevTab,
@@ -336,6 +338,7 @@ impl Command {
             Command::Fetch => "fetch",
             Command::FastForward => "fast-forward",
             Command::Filter => "filter",
+            Command::FilterMessage => "filter message",
             Command::FilterFolder => "this folder",
             Command::PrevTab => "prev tab",
             Command::NextTab => "next tab",
@@ -545,6 +548,7 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Graph, Command::Revert, &["R"]),
     (Context::Graph, Command::SelectRange, &["v"]),
     (Context::Graph, Command::Filter, &["f"]),
+    (Context::Graph, Command::FilterMessage, &["/"]),
     (Context::Graph, Command::FilterFolder, &["."]),
     (Context::Graph, Command::Copy, &["c"]),
     (Context::Graph, Command::Agent, &["A"]),

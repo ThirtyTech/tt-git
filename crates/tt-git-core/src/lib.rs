@@ -29,5 +29,5 @@ pub use ops::{
     DiscardKind, DiscardScope, FAST_FORWARD_UP_TO_DATE, IGNORE_TRACKED, IgnoreTarget, PatchOp, STAGED_ASIDE, StageSide,
     StashScope, UNDO_CHANGES_KEPT, ignore_pattern,
 };
-pub use repo::{LogFilter, LogScope, RemoteConfig, Repo};
+pub use repo::{LogFilter, LogScope, RemoteConfig, Repo, message_regex};
 pub use undo::{NoStep, UndoStep, UndoTarget};

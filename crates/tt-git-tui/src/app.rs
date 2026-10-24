@@ -25,7 +25,7 @@ use crate::jobs::{Ctx, JobTracker, LatestJob, Reload};
 use crate::keymap::{Command, Context, KeyCombo, Keymap, KeymapError};
 use crate::layout::View;
 use crate::loaders;
-use crate::modal::{GitOp, Modal, ModalOutcome};
+use crate::modal::{GitOp, Modal, ModalOutcome, PromptAction};
 use crate::panes::{
     BlameView, BranchFocus, BranchTab, BranchesPane, DetailsPane, DetailsSubject, GraphPane, LoadToken, PaneId,
     SavedDetails, StatusPane,
@@ -2260,6 +2260,16 @@ impl App {
             }
             Command::CloseDetails if matches!(self.focus, PaneId::Graph | PaneId::Details) => self.close_details(),
             Command::Filter if self.focus == PaneId::Graph => self.open_graph_filter(),
+            Command::FilterMessage if self.focus == PaneId::Graph => {
+                self.modal = Some(Modal::prompt(
+                    "Filter commits by message",
+                    self.graph.filter.message.clone().unwrap_or_default(),
+                    PromptAction::FilterMessage {
+                        filter: self.graph.filter.clone(),
+                        presets: self.config.graph.message_presets.clone(),
+                    },
+                ));
+            }
             Command::FilterFolder if matches!(self.focus, PaneId::Graph | PaneId::Status) => {
                 self.toggle_folder_filter()
             }
