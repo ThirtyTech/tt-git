@@ -881,6 +881,16 @@ impl Modal {
             Modal::DiscardAll { folder: Some(f), .. } => format!("Discard all in {f}"),
             _ => "Discard all".into(),
         };
+        // The stash dialog's row of choices ends in a file name.
+        let wide = matches!(
+            self,
+            Modal::Prompt {
+                action: PromptAction::Stash { .. } | PromptAction::Agent { .. } | PromptAction::FilterMessage { .. },
+                ..
+            } | Modal::DiscardAll { .. }
+        );
+        let width = if wide { 72 } else { 60 }.min(area.width);
+        let inner_width = width.saturating_sub(2).max(1) as usize;
         let (title, body, hint): (&str, Vec<Line>, String) = match self {
             Modal::Palette { .. } | Modal::Filter(_) => unreachable!("handled above"),
             Modal::Prompt { title, input, action } => {
@@ -1011,8 +1021,9 @@ impl Modal {
                         };
                         let mut body = Vec::new();
                         if !tabs.is_empty() {
-                            // A blank line, so the presets don't read as part of the input.
-                            body.extend([Line::from(tabs), Line::default()]);
+                            // A dotted rule, so presets wrapped onto a second line
+                            // don't read as part of the input.
+                            body.extend([Line::from(tabs), Line::styled("┄".repeat(inner_width), theme.border)]);
                         }
                         body.extend([input_line, note]);
                         let hint = if presets.is_empty() {
@@ -1085,16 +1096,6 @@ impl Modal {
                 (&discard_title, body, hint.into())
             }
         };
-        // The stash dialog's row of choices ends in a file name.
-        let wide = matches!(
-            self,
-            Modal::Prompt {
-                action: PromptAction::Stash { .. } | PromptAction::Agent { .. } | PromptAction::FilterMessage { .. },
-                ..
-            } | Modal::DiscardAll { .. }
-        );
-        let width = if wide { 72 } else { 60 }.min(area.width);
-        let inner_width = width.saturating_sub(2).max(1) as usize;
         let body_rows: usize = body.iter().map(|l| l.width().div_ceil(inner_width).max(1)).sum();
         let height = (body_rows as u16 + 4).min(area.height);
         let popup = crate::app::centered(area, width, height);

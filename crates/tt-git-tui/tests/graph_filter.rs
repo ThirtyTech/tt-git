@@ -358,3 +358,14 @@ fn no_presets_without_subject_prefixes() {
     };
     assert_eq!(input, "", "tab has nothing to fill in");
 }
+
+#[test]
+fn a_rule_separates_wrapped_presets_from_the_input() {
+    let sb = conventional();
+    let mut config = Config::default();
+    let presets = ["fix", "feat", "chore", "refactor", "test", "build", "docs", "perf"];
+    config.graph.message_presets = Some(presets.map(|p| format!("^🤖 {p}")).to_vec());
+    let mut t = TestDriver::with_size(config, &sb, 100, 30);
+    t.press("/");
+    insta::assert_snapshot!("message_filter_wrapped_presets", t.screen());
+}

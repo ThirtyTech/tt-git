@@ -14,7 +14,7 @@ expression: t.screen()
 │                                                                                                  │
 │             ╭ Filter commits by message ───────────────────────────────────────────╮             │
 │             │^feat · ^docs · ^fix                                                  │             │
-│             │                                                                      │             │
+│             │┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄│             │
 │             │█                                                                     │             │
 │             │empty shows every subject again                                       │             │
 │             │                                                                      │             │
