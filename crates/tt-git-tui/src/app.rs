@@ -946,7 +946,10 @@ impl App {
                     self.refresh_details(true);
                 }
             }
-            Action::FileSelected(entry) => self.show_file(entry, false),
+            // The staging view steps files itself (`[` `]`) and reloads on
+            // status changes; an announced file doesn't replace it.
+            Action::FileSelected(entry) if self.details.stage().is_none() => self.show_file(entry, false),
+            Action::FileSelected(_) => {}
             Action::RepoChanged { refs, status } => {
                 if refs {
                     self.load_refs();
@@ -2091,10 +2094,11 @@ impl App {
     }
 
     /// `[` `]` in details: shows the commit a row above or below the one
-    /// shown in the graph, or the stash in the Stash tab, moving that
-    /// pane's selection with it.
+    /// shown in the graph, the stash in the Stash tab, or the file in the
+    /// status pane (as a diff or in the staging view), moving that pane's
+    /// selection with it.
     fn step_details(&mut self, cmd: Command) {
-        let step = if cmd == Command::NewerCommit {
+        let step = if matches!(cmd, Command::NewerCommit | Command::PrevFile) {
             Command::MoveUp
         } else {
             Command::MoveDown
@@ -2118,6 +2122,23 @@ impl App {
                 self.branches.on_command(step, &ctx);
                 if let Some(next) = self.branches.selected_stash().cloned() {
                     self.show_stash(next);
+                }
+            }
+            Some(DetailsSubject::File(path) | DetailsSubject::Stage(path)) => {
+                if self.status.selected().is_none_or(|e| e.path != path) {
+                    return;
+                }
+                self.status.on_command(step, &ctx);
+                let Some(next) = self.status.selected().cloned() else {
+                    return;
+                };
+                if self.details.stage().is_some() {
+                    if next.path != path {
+                        self.details.request_stage(next.clone());
+                        self.want_details(DetailsLoad::Stage(next), true);
+                    }
+                } else {
+                    self.show_file(next, false);
                 }
             }
             _ => {}
@@ -2262,7 +2283,11 @@ impl App {
             Command::SelfUpdate => self.check_update(),
             Command::OpenLink if self.focus == PaneId::Details => self.open_link(),
             Command::ToggleFiles if self.focus == PaneId::Details => self.toggle_files(),
-            Command::NewerCommit | Command::OlderCommit if self.focus == PaneId::Details => self.step_details(cmd),
+            Command::NewerCommit | Command::OlderCommit | Command::PrevFile | Command::NextFile
+                if self.focus == PaneId::Details =>
+            {
+                self.step_details(cmd)
+            }
             Command::Continue | Command::Abort if self.focus != PaneId::Status => {
                 let ctx = self.ctx.clone();
                 self.status.on_command(cmd, &ctx);
@@ -2444,7 +2469,7 @@ impl App {
         let hint = |cmd: &Command| {
             self.keymap
                 .display_key_text(context, *cmd)
-                .map(|key| (key, cmd.label()))
+                .map(|key| (key, self.focused().label(*cmd)))
         };
         // A global whose key the pane uses for something else isn't shown.
         let globals: Vec<_> = GLOBAL_HELP

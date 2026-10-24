@@ -30,6 +30,12 @@ pub trait Component {
         &[]
     }
 
+    /// What the help bar calls `cmd` here, when what it does depends on
+    /// what the pane shows.
+    fn label(&self, cmd: Command) -> &'static str {
+        cmd.label()
+    }
+
     /// While true, raw key presses go to [`on_text_key`](Self::on_text_key)
     /// instead of being resolved through the keymap (e.g. a filter being typed).
     fn wants_text_input(&self) -> bool {

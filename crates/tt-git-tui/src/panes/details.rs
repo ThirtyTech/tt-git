@@ -798,6 +798,8 @@ impl Component for DetailsPane {
                 Command::Discard,
                 Command::Commit,
                 Command::OpenInEditor,
+                Command::PrevFile,
+                Command::NextFile,
                 Command::CloseDetails,
             ];
         }
@@ -830,6 +832,16 @@ impl Component for DetailsPane {
             Command::OlderCommit,
             Command::CloseDetails,
         ]
+    }
+
+    /// On a working-tree file's diff, `[` `]` step through the status
+    /// pane's files rather than commits.
+    fn label(&self, cmd: Command) -> &'static str {
+        match (cmd, &self.subject) {
+            (Command::NewerCommit, Some(DetailsSubject::File(_))) => Command::PrevFile.label(),
+            (Command::OlderCommit, Some(DetailsSubject::File(_))) => Command::NextFile.label(),
+            _ => cmd.label(),
+        }
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {

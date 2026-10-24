@@ -218,6 +218,10 @@ pub enum Command {
     NewerCommit,
     /// In details, the commit (or stash) a row below the one shown.
     OlderCommit,
+    /// In the staging view, the status pane's file above this one.
+    PrevFile,
+    /// In the staging view, the status pane's file below this one.
+    NextFile,
     MoveUp,
     MoveDown,
     PageUp,
@@ -311,6 +315,8 @@ impl Command {
             Command::ToggleFiles => "show/hide files",
             Command::NewerCommit => "newer commit",
             Command::OlderCommit => "older commit",
+            Command::PrevFile => "prev file",
+            Command::NextFile => "next file",
             Command::MoveUp => "up",
             Command::MoveDown => "down",
             Command::PageUp => "page up",
@@ -578,6 +584,8 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Stage, Command::CloseDetails, &["esc"]),
     (Context::Stage, Command::Commit, &["c"]),
     (Context::Stage, Command::OpenInEditor, &["e"]),
+    (Context::Stage, Command::PrevFile, &["["]),
+    (Context::Stage, Command::NextFile, &["]"]),
     (Context::Branches, Command::Checkout, &["enter", "space"]),
     (Context::Branches, Command::NewBranch, &["n"]),
     (Context::Branches, Command::DeleteBranch, &["d"]),

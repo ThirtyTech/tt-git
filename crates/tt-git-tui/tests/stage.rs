@@ -169,3 +169,50 @@ fn sides_sit_side_by_side_when_wide() {
     open(&mut t, "f.txt");
     insta::assert_snapshot!(t.pane_lines(PaneId::Details).join("\n"));
 }
+
+#[test]
+fn brackets_step_to_the_next_and_previous_file() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "a\n", "base");
+    sb.commit_file("b.txt", "b\n", "more");
+    sb.write("a.txt", "A\n").write("b.txt", "B\n");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 160, 30);
+    open(&mut t, "a.txt");
+    let staging = |t: &TestDriver| t.app().details().stage().map(|v| v.path().to_string());
+    assert_eq!(staging(&t).as_deref(), Some("a.txt"));
+    let help = t.screen().lines().last().unwrap().to_string();
+    assert!(help.contains("[ prev file") && help.contains("] next file"), "{help}");
+
+    t.press("]").wait_idle();
+    assert_eq!(staging(&t).as_deref(), Some("b.txt"));
+    assert_eq!(t.app().status().selected().unwrap().path, "b.txt");
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    t.assert_pane_contains(PaneId::Details, "+B");
+    // At the last file, ] stays put.
+    t.press("]").wait_idle();
+    assert_eq!(staging(&t).as_deref(), Some("b.txt"));
+    t.press("[").wait_idle();
+    assert_eq!(staging(&t).as_deref(), Some("a.txt"));
+    t.assert_pane_contains(PaneId::Details, "+A");
+}
+
+#[test]
+fn brackets_step_through_files_in_a_file_diff() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "a\n", "base");
+    sb.commit_file("b.txt", "b\n", "more");
+    sb.write("a.txt", "A\n").write("b.txt", "B\n");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 160, 30);
+    t.press("2").press("g").press("4").wait_idle();
+    assert_eq!(t.app().details().subject(), Some(&DetailsSubject::File("a.txt".into())));
+    let help = t.screen().lines().last().unwrap().to_string();
+    assert!(help.contains("[ prev file") && help.contains("] next file"), "{help}");
+
+    t.press("]").wait_idle();
+    assert_eq!(t.app().details().subject(), Some(&DetailsSubject::File("b.txt".into())));
+    assert_eq!(t.app().status().selected().unwrap().path, "b.txt");
+    assert_eq!(t.app().focus(), PaneId::Details);
+    assert!(t.app().details().lines().iter().any(|l| l == "+B"));
+    t.press("[").wait_idle();
+    assert_eq!(t.app().details().subject(), Some(&DetailsSubject::File("a.txt".into())));
+}
