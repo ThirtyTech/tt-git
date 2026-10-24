@@ -272,3 +272,74 @@ fn status_stash_starts_on_the_folder() {
     let left: Vec<&str> = t.app().status().all_entries().iter().map(|e| e.path.as_str()).collect();
     assert_eq!(left, ["lib/lib.rs"]);
 }
+
+/// Conventional commit subjects, one by Alice.
+fn conventional() -> Sandbox {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "a\n", "feat(graph): Add a thing");
+    sb.commit_file("b.txt", "b\n", "fix: Mend it");
+    commit_as(&sb, ALICE, "c.txt", "feat: Alice's feature");
+    sb.commit_file("d.txt", "d\n", "docs: Describe it");
+    sb
+}
+
+#[test]
+fn slash_filters_commits_by_message() {
+    let sb = conventional();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
+    t.press("/");
+    insta::assert_snapshot!("message_filter_prompt", t.screen());
+
+    // tab fills in the first preset; enter applies it.
+    t.press("tab").press("enter");
+    assert_eq!(summaries(&t), ["feat: Alice's feature", "feat(graph): Add a thing"]);
+    assert!(t.pane_title(PaneId::Graph).contains("Graph [all · message /^feat]"));
+    insta::assert_snapshot!("message_filter_applied", t.screen());
+
+    // / again starts from the pattern; tab steps on to the next preset.
+    t.press("/").press("tab").press("enter");
+    assert_eq!(summaries(&t), ["fix: Mend it"]);
+
+    // An author narrows it further, and the message stays.
+    t.press("/").press("ctrl+u").type_text("^feat").press("enter");
+    t.press("f").type_text("alice").press("enter");
+    assert_eq!(summaries(&t), ["feat: Alice's feature"]);
+    assert!(
+        t.pane_title(PaneId::Graph)
+            .contains("Graph [all · author Alice · message /^feat]")
+    );
+
+    // esc clears every part.
+    t.press("esc");
+    assert_eq!(t.app().graph().commits().len(), 4);
+}
+
+#[test]
+fn message_filter_refuses_an_invalid_regex() {
+    let sb = conventional();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
+    t.press("/").type_text("feat(").press("enter");
+    assert!(matches!(t.app().modal(), Some(Modal::Prompt { .. })), "stays open");
+    assert!(t.screen().contains("invalid regex: unclosed group"), "{}", t.screen());
+    t.press("esc");
+    assert!(!t.app().graph().is_filtered());
+
+    // Typed with a capital, it matches case.
+    t.press("/").type_text("Mend").press("enter");
+    assert_eq!(summaries(&t), ["fix: Mend it"]);
+    t.press("/").press("ctrl+u").type_text("mend").press("enter");
+    assert_eq!(summaries(&t), ["fix: Mend it"]);
+    t.press("/").press("ctrl+u").type_text("MEND").press("enter");
+    assert!(t.app().graph().commits().is_empty());
+    t.assert_pane_contains(PaneId::Graph, "no commits match the filter");
+}
+
+#[test]
+fn message_presets_come_from_config() {
+    let sb = conventional();
+    let mut config = Config::default();
+    config.graph.message_presets = vec!["^docs".into()];
+    let mut t = TestDriver::with_size(config, &sb, 100, 30);
+    t.press("/").press("tab").press("enter");
+    assert_eq!(summaries(&t), ["docs: Describe it"]);
+}

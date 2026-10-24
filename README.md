@@ -112,6 +112,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `t` | dates as age (`3h`) ↔ local date and time (`2026-10-17 01:30 PM`) |
 | | `L` | hide / show the lanes, so each row starts with its badges and subject |
 | | `f` | filter: only one author's commits, or the commits that changed a file or folder (`tab` in the panel switches between the two; both can be set) |
+| | `/` | filter by a regex on the commit subject, such as `^feat` (`tab` in the prompt fills in the next preset) |
 | | `.` | only the commits that changed the folder tt-git was started in (Status narrows too); again for everything |
 | | `o` | check out the selected commit: the local branch on it if there is one, else the commit with HEAD detached (with uncommitted changes, asks to stash them first) |
 | | `n` | new branch at the selected commit (`tab` in the dialog: create it in a worktree) |

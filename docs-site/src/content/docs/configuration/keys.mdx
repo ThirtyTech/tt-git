@@ -133,6 +133,7 @@ Every command you can bind, with its default keys:
 | `toggle_dates` | <kbd>t</kbd> | graph, blame |
 | `toggle_lanes` | <kbd>L</kbd> | graph |
 | `filter` | <kbd>f</kbd> (graph); <kbd>/</kbd> (branches, stash, worktrees) | graph, branches, stash, worktrees |
+| `filter_message` | <kbd>/</kbd> | graph |
 | `filter_folder` | <kbd>.</kbd> | graph, status |
 | `new_branch` | <kbd>n</kbd> | graph, branches, stash, worktrees |
 | `merge`, `rebase` | <kbd>M</kbd>, <kbd>r</kbd> | graph, branches |
@@ -184,8 +185,9 @@ A command does nothing in a context it isn't meant for, so binding, say,
 A few keys belong to dialogs and lists rather than to a pane, and are fixed:
 
 - In dialogs and prompts: <kbd>enter</kbd> confirms, <kbd>esc</kbd> cancels,
-  <kbd>tab</kbd> switches options (worktree, what to stash), <kbd>ctrl+u</kbd>
-  clears the text, and <kbd>y</kbd>/<kbd>n</kbd> answer a yes/no question.
+  <kbd>tab</kbd> switches options (worktree, what to stash), <kbd>ctrl+w</kbd>
+  deletes the word before the cursor, <kbd>ctrl+u</kbd> clears the text, and
+  <kbd>y</kbd>/<kbd>n</kbd> answer a yes/no question.
 - In the palette and pickers: <kbd>up</kbd>/<kbd>down</kbd> or
   <kbd>ctrl+p</kbd>/<kbd>ctrl+n</kbd> move.
 - In the help popup: type to search, <kbd>backspace</kbd> and

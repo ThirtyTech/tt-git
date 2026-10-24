@@ -628,6 +628,9 @@ impl GraphPane {
                 let what = if path.ends_with('/') { "folder" } else { "file" };
                 t.push_str(&format!(" · {what} {path}"));
             }
+            if let Some(message) = &self.filter.message {
+                t.push_str(&format!(" · message /{message}"));
+            }
         }
         t.push(']');
         if !self.commits.is_empty() {
@@ -936,6 +939,7 @@ impl Component for GraphPane {
             Command::Revert,
             Command::SelectRange,
             Command::Filter,
+            Command::FilterMessage,
             Command::FilterFolder,
             Command::Copy,
             Command::Agent,
@@ -954,7 +958,7 @@ impl Component for GraphPane {
         if self.commits.is_empty() {
             let msg = match () {
                 _ if self.loading => "loading…",
-                _ if self.is_filtered() => "no commits match the filter (f to change it, esc to clear it)",
+                _ if self.is_filtered() => "no commits match the filter (f or / to change it, esc to clear it)",
                 _ => "no commits",
             };
             frame.render_widget(Paragraph::new(msg).style(theme.muted), inner);

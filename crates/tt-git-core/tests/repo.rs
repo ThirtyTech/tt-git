@@ -483,6 +483,7 @@ fn filters_commits_by_author_and_path() {
     let by_alice = LogFilter {
         author: Some(alice.into()),
         path: None,
+        message: None,
     };
     let commits = repo.filtered_commits(&LogScope::All, &by_alice, 100).unwrap();
     let mut got = oids(&commits);
@@ -497,6 +498,7 @@ fn filters_commits_by_author_and_path() {
     let in_src = LogFilter {
         author: None,
         path: Some("src".into()),
+        message: None,
     };
     let commits = repo.filtered_commits(&LogScope::All, &in_src, 100).unwrap();
     assert_eq!(oids(&commits), vec![a2.clone(), a1.clone()]);
@@ -505,6 +507,7 @@ fn filters_commits_by_author_and_path() {
     let both = LogFilter {
         author: Some(alice.into()),
         path: Some("c.txt".into()),
+        message: None,
     };
     assert_eq!(
         oids(&repo.filtered_commits(&LogScope::All, &both, 100).unwrap()),
@@ -515,6 +518,7 @@ fn filters_commits_by_author_and_path() {
     let nobody = LogFilter {
         author: Some("Bob <bob@example.com>".into()),
         path: None,
+        message: None,
     };
     assert!(repo.filtered_commits(&LogScope::All, &nobody, 100).unwrap().is_empty());
 
@@ -523,6 +527,70 @@ fn filters_commits_by_author_and_path() {
         vec![(alice.to_string(), 3), ("Test User <test@example.com>".to_string(), 2)]
     );
     assert_eq!(repo.tracked_files().unwrap(), vec!["b.txt", "c.txt", "src/a.txt"]);
+}
+
+#[test]
+fn filters_commits_by_message_regex() {
+    let sb = Sandbox::new();
+    let alice = "Alice <alice@example.com>";
+    let feat = commit_as(&sb, alice, "a.txt", "feat(graph): Filter by message");
+    sb.commit_file(
+        "b.txt",
+        "b
+",
+        "fix: Not a feature
+
+feat in the body doesn't count",
+    );
+    sb.checkout_new("side");
+    let side = sb.commit_file(
+        "c.txt",
+        "c
+",
+        "Feat: capital, on a branch",
+    );
+    sb.checkout("main");
+    let docs = commit_as(&sb, "Bob <bob@example.com>", "d.txt", "docs: Describe it");
+    let repo = open(&sb);
+    let matching = |author: Option<&str>, message: &str, limit: usize| {
+        let filter = LogFilter {
+            author: author.map(Into::into),
+            path: None,
+            message: Some(message.into()),
+        };
+        let mut got: Vec<String> = repo
+            .filtered_commits(&LogScope::All, &filter, limit)
+            .unwrap()
+            .into_iter()
+            .map(|c| c.oid.to_string())
+            .collect();
+        got.sort();
+        got
+    };
+    let sorted = |mut v: Vec<String>| {
+        v.sort();
+        v
+    };
+
+    // Lowercase ignores case and matches the subject only.
+    assert_eq!(matching(None, "^feat", 100), sorted(vec![feat.clone(), side.clone()]));
+    // A capital makes it match case.
+    assert_eq!(matching(None, "^Feat", 100), vec![side.clone()]);
+    assert_eq!(
+        matching(None, "^(feat|docs)", 100),
+        sorted(vec![feat.clone(), side, docs])
+    );
+    // With an author, both must match.
+    assert_eq!(matching(Some(alice), "^feat", 100), vec![feat]);
+    // The limit counts matching commits.
+    assert_eq!(matching(None, "^feat", 1).len(), 1);
+
+    let bad = LogFilter {
+        message: Some("(".into()),
+        ..LogFilter::default()
+    };
+    let err = repo.filtered_commits(&LogScope::All, &bad, 100).unwrap_err();
+    assert!(err.to_string().starts_with("invalid regex"), "{err}");
 }
 
 #[test]
@@ -555,6 +623,7 @@ fn author_filter_includes_every_mailmapped_account() {
     let filter = LogFilter {
         author: Some("Jon Sheely <jon@work.com>".into()),
         path: None,
+        message: None,
     };
     let mut got: Vec<String> = repo
         .filtered_commits(&LogScope::All, &filter, 100)
