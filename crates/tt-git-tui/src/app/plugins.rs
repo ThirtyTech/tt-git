@@ -345,9 +345,9 @@ impl App {
             },
             GitOp::Merge { target } => ("merge.completed", json!({ "target": target, "head": head })),
             GitOp::Rebase { onto } => ("rebase.completed", json!({ "onto": onto, "head": head })),
-            GitOp::CherryPick { oid, summary } => (
+            GitOp::CherryPick { oids, summary } => (
                 "cherry_pick.completed",
-                json!({ "picked": oid, "summary": summary, "head": head }),
+                json!({ "picked": oids.last(), "summary": summary, "commits": oids, "head": head }),
             ),
             GitOp::Continue(op) => (
                 match op {

@@ -184,6 +184,9 @@ pub struct GraphPane {
     reselect: Option<String>,
     /// Last commit announced through `CommitSelected`.
     announced: Option<Oid>,
+    /// The commit a range selection started at, and where it is in the
+    /// list (`None` while a reload hasn't reached it yet).
+    range: Option<(Oid, Option<usize>)>,
     drawn_dates: DrawnDates,
 }
 
@@ -212,6 +215,7 @@ impl GraphPane {
             stale: false,
             reselect: None,
             announced: None,
+            range: None,
             drawn_dates: DrawnDates::default(),
         }
     }
@@ -384,11 +388,18 @@ impl GraphPane {
             self.rows.push(&self.builder.push(id, &parents));
             self.commits.push(commit);
         }
+        if let Some((oid, at)) = &mut self.range {
+            *at = self.commits.iter().position(|c| c.oid == *oid);
+        }
         if done {
             self.loading = false;
             self.ids = HashMap::new();
             self.cursor.selected = self.reselect.take().and_then(|oid| self.position(&oid)).unwrap_or(0);
             self.cursor.offset = self.cursor.selected.saturating_sub(self.cursor.height / 2);
+            // The commit the range started at is gone.
+            if matches!(self.range, Some((_, None))) {
+                self.range = None;
+            }
         }
         self.cursor.clamp(self.commits.len());
         // Only announce once the selection is final, so details don't churn
@@ -496,6 +507,69 @@ impl GraphPane {
         }
     }
 
+    /// The first and last index of the range selection, if one is open.
+    pub fn selected_range(&self) -> Option<(usize, usize)> {
+        let (_, Some(anchor)) = self.range? else {
+            return None;
+        };
+        let at = self.cursor.selected;
+        Some((anchor.min(at), anchor.max(at)))
+    }
+
+    /// Whether a range selection is open (`v`).
+    pub fn has_range(&self) -> bool {
+        self.range.is_some()
+    }
+
+    /// Ends the range selection.
+    pub fn clear_range(&mut self) {
+        self.range = None;
+    }
+
+    /// Asks to cherry-pick the selected commit, or the range's, oldest first.
+    fn cherry_pick(&self, ctx: &Ctx) {
+        let picked: Vec<&Commit> = match self.selected_range() {
+            Some((first, last)) => self.commits[first..=last].iter().rev().collect(),
+            None => self.selected().into_iter().collect(),
+        };
+        let (title, msg) = match &picked[..] {
+            [] => return,
+            [c] => (
+                "Cherry-pick",
+                format!("Apply {} \"{}\" onto the current branch?", c.short_oid(), c.summary),
+            ),
+            [oldest, .., newest] => {
+                if let Some(merge) = picked.iter().find(|c| c.parents.len() > 1) {
+                    ctx.emit(Action::Notify(format!(
+                        "the range includes merge commit {}; cherry-pick can't apply merges",
+                        merge.short_oid()
+                    )));
+                    return;
+                }
+                (
+                    "Cherry-pick range",
+                    format!(
+                        "Apply {} commits, {} \"{}\" through {} \"{}\", onto the current branch?",
+                        picked.len(),
+                        oldest.short_oid(),
+                        oldest.summary,
+                        newest.short_oid(),
+                        newest.summary
+                    ),
+                )
+            }
+        };
+        let summary = picked.last().map(|c| c.summary.to_string()).unwrap_or_default();
+        ctx.emit(Action::OpenModal(Modal::confirm(
+            title,
+            msg,
+            GitOp::CherryPick {
+                oids: picked.iter().map(|c| c.oid.to_string()).collect(),
+                summary,
+            },
+        )));
+    }
+
     /// Whether the graph is narrowed by its filter.
     pub fn is_filtered(&self) -> bool {
         self.focus.is_none() && !self.filter.is_empty()
@@ -514,6 +588,9 @@ impl GraphPane {
         t.push(']');
         if !self.commits.is_empty() {
             t.push_str(&format!(" {}/{}", self.cursor.selected + 1, self.commits.len()));
+        }
+        if let Some((first, last)) = self.selected_range() {
+            t.push_str(&format!(" · {} selected", last + 1 - first));
         }
         if self.loading {
             t.push_str(" loading…");
@@ -748,16 +825,14 @@ impl Component for GraphPane {
                 EventState::Consumed
             }
             Command::CherryPick => {
-                if let Some(c) = self.selected() {
-                    ctx.emit(Action::OpenModal(Modal::confirm(
-                        "Cherry-pick",
-                        format!("Apply {} \"{}\" onto the current branch?", c.short_oid(), c.summary),
-                        GitOp::CherryPick {
-                            oid: c.oid.to_string(),
-                            summary: c.summary.to_string(),
-                        },
-                    )));
-                }
+                self.cherry_pick(ctx);
+                EventState::Consumed
+            }
+            Command::SelectRange => {
+                self.range = match (&self.range, self.selected()) {
+                    (None, Some(c)) => Some((c.oid, Some(self.cursor.selected))),
+                    _ => None,
+                };
                 EventState::Consumed
             }
             Command::NewBranch => {
@@ -808,6 +883,7 @@ impl Component for GraphPane {
             Command::Merge,
             Command::Rebase,
             Command::CherryPick,
+            Command::SelectRange,
             Command::Filter,
             Command::Copy,
             Command::Agent,
@@ -850,10 +926,15 @@ impl Component for GraphPane {
         };
         let width = inner.width as usize;
 
+        let range = self.selected_range();
         let lines: Vec<Line> = (start..end)
             .map(|i| {
                 let line = self.render_row(i, lanes, width, now, theme);
-                if i == self.cursor.selected {
+                let picked = match range {
+                    Some((first, last)) => (first..=last).contains(&i),
+                    None => i == self.cursor.selected,
+                };
+                if picked {
                     line.patch_style(if focused {
                         theme.selected
                     } else {

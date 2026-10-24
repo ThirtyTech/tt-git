@@ -490,7 +490,7 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::Pull => repo.pull(),
         GitOp::Merge { target } => repo.merge(target),
         GitOp::Rebase { onto } => repo.rebase(onto),
-        GitOp::CherryPick { oid, .. } => repo.cherry_pick(oid),
+        GitOp::CherryPick { oids, .. } => repo.cherry_pick(oids),
         GitOp::Continue(op) => repo.continue_operation(*op),
         GitOp::Abort(op) => repo.abort_operation(*op),
         GitOp::StashPush { message, scope } => repo.stash_push(message.as_deref(), scope),

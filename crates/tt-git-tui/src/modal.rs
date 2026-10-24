@@ -101,8 +101,9 @@ pub enum GitOp {
     Rebase {
         onto: String,
     },
+    /// Applies `oids`, oldest first; `summary` is the last one's.
     CherryPick {
-        oid: String,
+        oids: Vec<String>,
         summary: String,
     },
     Continue(InProgress),
@@ -217,7 +218,10 @@ impl GitOp {
             GitOp::Pull => "pull".into(),
             GitOp::Merge { target } => format!("merge {target}"),
             GitOp::Rebase { onto } => format!("rebase onto {onto}"),
-            GitOp::CherryPick { oid, .. } => format!("cherry-pick {}", &oid[..oid.len().min(7)]),
+            GitOp::CherryPick { oids, .. } => match &oids[..] {
+                [oid] => format!("cherry-pick {}", &oid[..oid.len().min(7)]),
+                _ => format!("cherry-pick {} commits", oids.len()),
+            },
             GitOp::Continue(op) => format!("{} --continue", op.command()),
             GitOp::Abort(op) => format!("{} --abort", op.command()),
             GitOp::StashPush { scope, .. } => match scope {
