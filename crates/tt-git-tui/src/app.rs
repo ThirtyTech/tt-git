@@ -2090,6 +2090,40 @@ impl App {
         }
     }
 
+    /// `[` `]` in details: shows the commit a row above or below the one
+    /// shown in the graph, or the stash in the Stash tab, moving that
+    /// pane's selection with it.
+    fn step_details(&mut self, cmd: Command) {
+        let step = if cmd == Command::NewerCommit {
+            Command::MoveUp
+        } else {
+            Command::MoveDown
+        };
+        let ctx = self.ctx.clone();
+        match self.details.subject().cloned() {
+            Some(DetailsSubject::Commit(oid) | DetailsSubject::CommitFiles(oid)) => {
+                if self.graph.selected().is_none_or(|c| c.oid != oid) {
+                    self.notice = Some("this commit isn't selected in the graph: nothing to step from".into());
+                    return;
+                }
+                self.graph.on_command(step, &ctx);
+                if let Some(next) = self.graph.selected().map(|c| c.oid.to_string()) {
+                    self.show_commit(next);
+                }
+            }
+            Some(DetailsSubject::Stash(oid)) => {
+                if self.branches.selected_stash().is_none_or(|s| s.oid != oid) {
+                    return;
+                }
+                self.branches.on_command(step, &ctx);
+                if let Some(next) = self.branches.selected_stash().cloned() {
+                    self.show_stash(next);
+                }
+            }
+            _ => {}
+        }
+    }
+
     fn run_command(&mut self, cmd: Command) {
         let before = self.focus;
         self.dispatch(cmd);
@@ -2228,6 +2262,7 @@ impl App {
             Command::SelfUpdate => self.check_update(),
             Command::OpenLink if self.focus == PaneId::Details => self.open_link(),
             Command::ToggleFiles if self.focus == PaneId::Details => self.toggle_files(),
+            Command::NewerCommit | Command::OlderCommit if self.focus == PaneId::Details => self.step_details(cmd),
             Command::Continue | Command::Abort if self.focus != PaneId::Status => {
                 let ctx = self.ctx.clone();
                 self.status.on_command(cmd, &ctx);

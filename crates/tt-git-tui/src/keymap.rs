@@ -214,6 +214,10 @@ pub enum Command {
     ExpandDetails,
     CloseDetails,
     ToggleFiles,
+    /// In details, the commit (or stash) a row above the one shown.
+    NewerCommit,
+    /// In details, the commit (or stash) a row below the one shown.
+    OlderCommit,
     MoveUp,
     MoveDown,
     PageUp,
@@ -305,6 +309,8 @@ impl Command {
             Command::ExpandDetails => "files + diff",
             Command::CloseDetails => "close",
             Command::ToggleFiles => "show/hide files",
+            Command::NewerCommit => "newer commit",
+            Command::OlderCommit => "older commit",
             Command::MoveUp => "up",
             Command::MoveDown => "down",
             Command::PageUp => "page up",
@@ -546,6 +552,8 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Details, Command::OpenLink, &["o"]),
     (Context::Details, Command::CloseDetails, &["esc", "space"]),
     (Context::Details, Command::ToggleFiles, &["}"]),
+    (Context::Details, Command::NewerCommit, &["["]),
+    (Context::Details, Command::OlderCommit, &["]"]),
     (Context::Details, Command::OpenInEditor, &["e"]),
     (Context::Details, Command::Blame, &["b"]),
     (Context::Blame, Command::GoToLine, &["ctrl+g"]),

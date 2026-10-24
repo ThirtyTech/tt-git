@@ -548,6 +548,64 @@ fn enter_opens_files_beside_a_diff() {
 }
 
 #[test]
+fn brackets_in_details_step_through_the_graph() {
+    let sb = Sandbox::new();
+    let first = sb.commit_file("a.txt", "a\n", "first");
+    let second = sb.commit_file("a.txt", "a\nb\n", "second");
+    let third = sb.commit_file("a.txt", "a\nb\nc\n", "third");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
+    let subject = |t: &TestDriver| t.app().details().subject().cloned();
+    let selected = |t: &TestDriver| t.app().graph().selected().map(|c| c.oid.to_string());
+
+    // In the plain commit view, ] is the row below and the graph follows.
+    t.press("4").wait_idle();
+    assert_eq!(subject(&t), Some(DetailsSubject::Commit(third.clone())));
+    t.press("]").wait_idle();
+    assert_eq!(subject(&t), Some(DetailsSubject::Commit(second.clone())));
+    assert_eq!(selected(&t), Some(second.clone()));
+    assert_eq!(t.app().focus(), PaneId::Details);
+    t.assert_pane_contains(PaneId::Details, "second");
+    t.press("[").wait_idle();
+    assert_eq!(subject(&t), Some(DetailsSubject::Commit(third.clone())));
+    // At the top, [ stays put.
+    t.press("[").wait_idle();
+    assert_eq!(subject(&t), Some(DetailsSubject::Commit(third.clone())));
+
+    // Fullscreen files view stays open and fullscreen as it steps.
+    t.press("1").press("enter").wait_idle();
+    t.press("]").press("]").wait_idle();
+    assert_eq!(subject(&t), Some(DetailsSubject::CommitFiles(first.clone())));
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    t.assert_pane_contains(PaneId::Details, "first");
+    // At the bottom, ] stays put.
+    t.press("]").wait_idle();
+    assert_eq!(subject(&t), Some(DetailsSubject::CommitFiles(first.clone())));
+    assert_eq!(selected(&t), Some(first));
+}
+
+#[test]
+fn brackets_refuse_a_commit_opened_from_blame() {
+    let sb = Sandbox::new();
+    let first = sb.commit_file("a.txt", "a\n", "first");
+    sb.commit_file("a.txt", "a\nb\n", "second");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
+    // Blame the newest commit's file, then open line 1's commit.
+    t.press("enter").wait_idle();
+    t.press("b").wait_idle();
+    t.press("g").press("enter").wait_idle();
+    assert_eq!(
+        t.app().details().subject(),
+        Some(&DetailsSubject::CommitFiles(first.clone()))
+    );
+    t.press("]").wait_idle();
+    assert_eq!(t.app().details().subject(), Some(&DetailsSubject::CommitFiles(first)));
+    assert_eq!(
+        t.app().notice(),
+        Some("this commit isn't selected in the graph: nothing to step from")
+    );
+}
+
+#[test]
 fn files_view_shows_its_list_from_the_first_frame() {
     let sb = Sandbox::new();
     sb.commit_file("a.txt", "one\n", "base");

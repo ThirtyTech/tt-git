@@ -233,3 +233,31 @@ fn enter_shows_a_stash_fullscreen() {
     assert_eq!(t.app().focus(), PaneId::Branches);
     assert_eq!(t.app().zoom(), Zoom::Off);
 }
+
+#[test]
+fn brackets_step_through_stashes_in_details() {
+    let sb = two_stashes();
+    let mut t = TestDriver::new(&sb);
+    stash_tab(&mut t);
+    t.press("enter").wait_idle();
+    let oids: Vec<_> = t.app().branches().visible_stashes().map(|s| s.oid.clone()).collect();
+
+    t.press("]").wait_idle();
+    assert_eq!(
+        t.app().details().subject(),
+        Some(&DetailsSubject::Stash(oids[1].clone()))
+    );
+    assert_eq!(t.app().branches().selected_stash().unwrap().oid, oids[1]);
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    t.assert_pane_contains(PaneId::Details, "stash@{1}  On ");
+    t.press("]").wait_idle();
+    assert_eq!(
+        t.app().details().subject(),
+        Some(&DetailsSubject::Stash(oids[1].clone()))
+    );
+    t.press("[").wait_idle();
+    assert_eq!(
+        t.app().details().subject(),
+        Some(&DetailsSubject::Stash(oids[0].clone()))
+    );
+}

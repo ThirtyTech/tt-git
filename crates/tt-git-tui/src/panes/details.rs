@@ -824,6 +824,8 @@ impl Component for DetailsPane {
             Command::OpenInEditor,
             Command::Blame,
             Command::ToggleFiles,
+            Command::NewerCommit,
+            Command::OlderCommit,
             Command::CloseDetails,
         ]
     }
