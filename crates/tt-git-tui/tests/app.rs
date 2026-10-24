@@ -584,6 +584,26 @@ fn brackets_in_details_step_through_the_graph() {
 }
 
 #[test]
+fn details_help_bar_lists_paging() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "a\n", "first");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 160, 30);
+    t.press("4").wait_idle();
+    let help = t.screen().lines().last().unwrap().to_string();
+    assert!(
+        help.contains("pgdn page down") && help.contains("pgup page up"),
+        "{help}"
+    );
+    // The fullscreen files view too.
+    t.press("1").press("enter").wait_idle();
+    let help = t.screen().lines().last().unwrap().to_string();
+    assert!(
+        help.contains("pgdn page down") && help.contains("pgup page up"),
+        "{help}"
+    );
+}
+
+#[test]
 fn brackets_refuse_a_commit_opened_from_blame() {
     let sb = Sandbox::new();
     let first = sb.commit_file("a.txt", "a\n", "first");

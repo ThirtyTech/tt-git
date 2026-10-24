@@ -820,6 +820,8 @@ impl Component for DetailsPane {
             ];
         }
         &[
+            Command::PageDown,
+            Command::PageUp,
             Command::OpenLink,
             Command::OpenInEditor,
             Command::Blame,
