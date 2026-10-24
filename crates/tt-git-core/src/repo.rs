@@ -57,6 +57,8 @@ pub struct Repo {
 struct OldGit {
     /// `for-each-ref`'s `%(ahead-behind:…)` (git 2.41).
     ahead_behind: AtomicBool,
+    /// `merge-tree --write-tree --stdin` (git 2.40).
+    merge_tree: AtomicBool,
 }
 
 impl Repo {
@@ -315,6 +317,53 @@ impl Repo {
             }
         }
         Some(found)
+    }
+
+    /// The files merging each of `tips` into `base` (all commit ids) would
+    /// leave in conflict, keyed by tip, empty for a tip that merges cleanly.
+    /// Nothing is checked out: it's one `git merge-tree --write-tree --stdin`,
+    /// and the objects that writes go to a scratch directory that's deleted
+    /// afterwards, so the repository is left as it was. `None` when git is
+    /// too old (before 2.40).
+    pub fn merge_conflicts(&self, base: &str, tips: &[&str]) -> Result<Option<HashMap<String, Vec<String>>>> {
+        if self.old_git.merge_tree.load(Ordering::Relaxed) {
+            return Ok(None);
+        }
+        if tips.is_empty() {
+            return Ok(Some(HashMap::new()));
+        }
+        let scratch = ScratchDir::new()?;
+        let objects = self.common_dir.join("objects");
+        let git = self.git.clone().with_env([
+            ("GIT_OBJECT_DIRECTORY", scratch.0.as_os_str()),
+            ("GIT_ALTERNATE_OBJECT_DIRECTORIES", objects.as_os_str()),
+        ]);
+        let input: String = tips.iter().map(|tip| format!("{base} {tip}\n")).collect();
+        let args = [
+            "merge-tree",
+            "--write-tree",
+            "--stdin",
+            "--name-only",
+            "-z",
+            "--no-messages",
+        ];
+        let out = match git.run_with_stdin(&args, Some(input.as_bytes())) {
+            Ok(out) => out,
+            Err(e) => {
+                // 2.38–2.39 know --write-tree but not --stdin; older ones neither.
+                if e.stderr()
+                    .is_some_and(|s| s.contains("unknown option") || s.contains("usage:"))
+                {
+                    self.old_git.merge_tree.store(true, Ordering::Relaxed);
+                    return Ok(None);
+                }
+                return Err(e);
+            }
+        };
+        let merges = parse::parse_merge_tree_stdin(&out.stdout)
+            .filter(|merges| merges.len() == tips.len())
+            .ok_or_else(|| GitError::Parse("merge-tree gave a result per line it wasn't given".into()))?;
+        Ok(Some(tips.iter().map(|t| t.to_string()).zip(merges).collect()))
     }
 
     /// Author of each tip under `prefix`, keyed by full ref name, with names
@@ -1082,6 +1131,31 @@ pub struct RemoteConfig {
     pub remotes: Vec<String>,
     /// As [`Repo::base_branch_setting`] gives it.
     pub base_branch: Option<String>,
+}
+
+/// A new empty directory under the system's temp directory, deleted with
+/// everything in it when dropped.
+struct ScratchDir(PathBuf);
+
+impl ScratchDir {
+    fn new() -> Result<Self> {
+        static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!("tt-git-{}-{n}", std::process::id()));
+        // One left by an earlier process with the same id.
+        let _ = std::fs::remove_dir_all(&path);
+        std::fs::create_dir_all(&path)
+            .map_err(|e| GitError::Refused(format!("can't make a scratch folder in {}: {e}", path.display())))?;
+        Ok(Self(path))
+    }
+}
+
+impl Drop for ScratchDir {
+    fn drop(&mut self) {
+        if let Err(e) = std::fs::remove_dir_all(&self.0) {
+            tracing::warn!("removing {} failed: {e}", self.0.display());
+        }
+    }
 }
 
 /// Whether for-each-ref's `pattern` (with no glob characters) selects

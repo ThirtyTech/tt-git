@@ -4,7 +4,7 @@ use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use tt_git_core::branches::{matches_filter, tags_newest_first};
 use tt_git_core::time::{SharedClock, relative};
@@ -19,7 +19,7 @@ use crate::jobs::Ctx;
 use crate::keymap::{Command, Context, KeyCombo};
 use crate::modal::{GitOp, Modal, PaletteItem, PaletteTarget, PromptAction};
 use crate::theme::Theme;
-use crate::widgets::{Cursor, fit, fit_right};
+use crate::widgets::{Cursor, fit, fit_right, truncate};
 
 const STATE_WIDTH: usize = 9;
 const DATE_WIDTH: usize = 4;
@@ -117,6 +117,15 @@ pub struct BranchesPane {
     /// Short text plugins put next to branches: by plugin id, then by
     /// branch name. Each plugin gets a column in the full list.
     decorations: BTreeMap<String, HashMap<String, String>>,
+    /// The base branch's commit that `conflicts` were checked against.
+    merge_base: Option<String>,
+    /// The files merging each tip (by commit) into the base would leave in
+    /// conflict, once checked: none when it merges cleanly.
+    conflicts: HashMap<String, Vec<String>>,
+    /// Tips git couldn't check, not tried again until the base moves.
+    merge_failed: HashSet<String>,
+    /// git is too old to check merges.
+    merge_unsupported: bool,
 }
 
 impl BranchesPane {
@@ -140,6 +149,10 @@ impl BranchesPane {
             dates: DrawnDates::default(),
             tab_cells: Vec::new(),
             decorations: BTreeMap::new(),
+            merge_base: None,
+            conflicts: HashMap::new(),
+            merge_failed: HashSet::new(),
+            merge_unsupported: false,
         }
     }
 
@@ -199,6 +212,12 @@ impl BranchesPane {
         worktrees: Vec<Worktree>,
     ) {
         let keep = self.selected_name().map(str::to_string);
+        let base_target = base.as_ref().map(|b| b.base_target.clone());
+        if base_target != self.merge_base {
+            self.conflicts.clear();
+            self.merge_failed.clear();
+            self.merge_base = base_target;
+        }
         self.entries = entries;
         self.base = base;
         self.tags = tags_newest_first(refs);
@@ -310,6 +329,117 @@ impl BranchesPane {
             .filter_map(|(path, _, ahead)| Some((path.clone(), (*ahead)?)))
             .collect();
         self.worktree_changes = counts.into_iter().map(|(path, changes, _)| (path, changes)).collect();
+    }
+
+    /// The base's commit and up to `limit` tips not yet checked for
+    /// conflicts with it: worktrees' first, then the unmerged branches',
+    /// then the rest of the full list's, in list order.
+    pub fn unchecked_merges(&self, limit: usize) -> Option<(String, Vec<String>)> {
+        if self.merge_unsupported {
+            return None;
+        }
+        let base = self.merge_base.clone()?;
+        let worktrees = self
+            .worktrees
+            .iter()
+            .filter(|w| !w.bare)
+            .filter_map(|w| w.head.as_deref());
+        let unmerged = self
+            .base
+            .iter()
+            .flat_map(|b| &b.unmerged)
+            .filter_map(|e| Some(BaseBranches::tip(e)?.target.as_str()));
+        let all = self.entries.iter().filter_map(BranchEntry::target);
+        let mut seen = HashSet::new();
+        let tips: Vec<String> = worktrees
+            .chain(unmerged)
+            .chain(all)
+            .filter(|tip| {
+                *tip != base
+                    && !self.conflicts.contains_key(*tip)
+                    && !self.merge_failed.contains(*tip)
+                    && seen.insert(*tip)
+            })
+            .take(limit)
+            .map(str::to_string)
+            .collect();
+        (!tips.is_empty()).then_some((base, tips))
+    }
+
+    /// Takes what checking `tips` against the base's commit `base` found.
+    pub fn set_merge_conflicts(
+        &mut self,
+        base: &str,
+        tips: Vec<String>,
+        result: Result<Option<HashMap<String, Vec<String>>>, String>,
+    ) {
+        if self.merge_base.as_deref() != Some(base) {
+            return;
+        }
+        match result {
+            Ok(Some(mut found)) => {
+                for tip in tips {
+                    match found.remove(&tip) {
+                        Some(files) => {
+                            self.conflicts.insert(tip, files);
+                        }
+                        None => {
+                            self.merge_failed.insert(tip);
+                        }
+                    }
+                }
+            }
+            Ok(None) => self.merge_unsupported = true,
+            Err(_) => self.merge_failed.extend(tips),
+        }
+    }
+
+    /// The files merging `tip` into the base would leave in conflict, if
+    /// it's been checked and there are any.
+    fn conflicts_of(&self, tip: Option<&str>) -> Option<&[String]> {
+        self.conflicts
+            .get(tip?)
+            .map(Vec::as_slice)
+            .filter(|files| !files.is_empty())
+    }
+
+    /// `✗3` for a tip whose merge leaves 3 files in conflict.
+    fn conflict_mark(&self, tip: Option<&str>) -> String {
+        self.conflicts_of(tip)
+            .map_or_else(String::new, |files| format!("✗{}", files.len()))
+    }
+
+    /// The commit a row of the current tab is checked by: a branch's tip
+    /// (the compared one on the unmerged tab) or a worktree's HEAD.
+    fn row_tip(&self, i: usize) -> Option<&str> {
+        match self.tab {
+            BranchTab::All => self.entries.get(i)?.target(),
+            BranchTab::Unmerged => Some(BaseBranches::tip(self.list(self.tab).get(i)?)?.target.as_str()),
+            BranchTab::Worktrees => self.worktrees.get(i)?.head.as_deref(),
+            _ => None,
+        }
+    }
+
+    /// Width of the conflict column on the current tab: the widest mark in
+    /// its list, 0 (no column) while nothing conflicts.
+    fn conflict_width(&self) -> usize {
+        if !matches!(self.tab, BranchTab::All | BranchTab::Unmerged) {
+            return 0;
+        }
+        (0..self.len(self.tab))
+            .map(|i| self.conflict_mark(self.row_tip(i)).width())
+            .max()
+            .unwrap_or(0)
+    }
+
+    /// For the bottom border: the files the selected row's merge into the
+    /// base would leave in conflict, as `✗ 2 conflicts with main: a, b`.
+    fn conflict_summary(&self) -> Option<String> {
+        let i = *self.visible.get(self.cursor().selected)?;
+        let files = self.conflicts_of(self.row_tip(i))?;
+        let base = &self.base.as_ref()?.base;
+        let noun = if files.len() == 1 { "conflict" } else { "conflicts" };
+        Some(format!("✗ {} {noun} with {base}: {}", files.len(), files.join(", ")))
     }
 
     /// Takes the disk space the folder of the worktree at `path` takes.
@@ -736,7 +866,8 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
     }
 
     /// What a worktree row says about its state: main, locked, missing,
-    /// `↑n` for commits the base doesn't have, and how many files have
+    /// `↑n` for commits the base doesn't have, `✗n` for files merging it
+    /// into the base would leave in conflict, and how many files have
     /// changes once that's counted.
     fn worktree_state(&self, wt: &Worktree) -> String {
         let mut parts = Vec::new();
@@ -753,6 +884,10 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
                 && ahead > 0
             {
                 parts.push(format!("↑{ahead}"));
+            }
+            let conflicts = self.conflict_mark(wt.head.as_deref());
+            if !conflicts.is_empty() {
+                parts.push(conflicts);
             }
             parts.push(match self.worktree_changes.get(&wt.path) {
                 Some(Ok(0)) => "clean".into(),
@@ -792,7 +927,7 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
             theme.sha
         };
         let state = self.worktree_state(wt);
-        let state_style = if wt.prunable.is_some() {
+        let state_style = if wt.prunable.is_some() || state.contains('✗') {
             theme.error
         } else if wt.locked.is_some() || state.ends_with("changed") || state.contains('↑') {
             theme.label_tag
@@ -902,16 +1037,25 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
         &self,
         entry: &'a BranchEntry,
         columns: &[(&str, usize)],
+        conflict_width: usize,
         width: usize,
         theme: &Theme,
     ) -> Line<'a> {
         let (state, state_style) = state_text(&entry.state(), theme);
         let decorations: usize = columns.iter().map(|(_, w)| w + 1).sum();
-        let name_width = width.saturating_sub(2 + 1 + STATE_WIDTH + 1 + DATE_WIDTH + decorations);
+        let conflicts = if conflict_width > 0 { conflict_width + 1 } else { 0 };
+        let name_width = width.saturating_sub(2 + 1 + STATE_WIDTH + 1 + DATE_WIDTH + decorations + conflicts);
         let mut spans = vec![
             Self::marker(entry, theme),
             Span::styled(fit(&entry.name, name_width), Self::name_style(entry, theme)),
         ];
+        if conflict_width > 0 {
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(
+                fit(&self.conflict_mark(entry.target()), conflict_width),
+                theme.error,
+            ));
+        }
         for (plugin, w) in columns {
             let text = self.decorations[*plugin].get(&entry.name).map_or("", String::as_str);
             spans.push(Span::raw(" "));
@@ -935,6 +1079,7 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
         &'a self,
         entry: &'a BranchEntry,
         name_width: usize,
+        conflict_width: usize,
         width: usize,
         theme: &Theme,
     ) -> Line<'a> {
@@ -946,7 +1091,16 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
             Self::marker(entry, theme),
             Span::styled(fit(&entry.name, name_width), Self::name_style(entry, theme)),
         ];
-        let rest = width.saturating_sub(2 + name_width + 1 + DATE_WIDTH);
+        let mut used = 2 + name_width;
+        if conflict_width > 0 {
+            spans.push(Span::raw(" "));
+            spans.push(Span::styled(
+                fit(&self.conflict_mark(tip.map(|t| t.target.as_str())), conflict_width),
+                theme.error,
+            ));
+            used += 1 + conflict_width;
+        }
+        let rest = width.saturating_sub(used + 1 + DATE_WIDTH);
         let mut author_width = AUTHOR_WIDTH.min(rest.saturating_sub(1));
         let subject_width = rest.saturating_sub(author_width + 2);
         if subject_width < SUBJECT_MIN_WIDTH {
@@ -1350,9 +1504,17 @@ impl Component for BranchesPane {
             .filter(|(_, _, xs)| !xs.is_empty())
             .collect();
         let mut block = pane_block(PaneId::Branches, title, focused, theme);
+        let mut room = area.width.saturating_sub(2) as usize;
         if self.tab == BranchTab::Worktrees {
             let total = format!(" total {} ", self.worktrees_total());
+            room = room.saturating_sub(total.width() + 1);
             block = block.title_bottom(Line::from(Span::styled(total, theme.muted)).right_aligned());
+        }
+        if let Some(summary) = self.conflict_summary()
+            && room > 4
+        {
+            let text = format!(" {} ", truncate(&summary, room - 2));
+            block = block.title_bottom(Line::from(Span::styled(text, theme.error)));
         }
         let inner = block.inner(area);
         frame.render_widget(block, area);
@@ -1368,7 +1530,11 @@ impl Component for BranchesPane {
         let end = (start + height).min(self.visible.len());
         let width = inner.width as usize;
         let list = self.list(self.tab);
-        let name_width = self.compared_name_width(&self.visible[start..end], width);
+        let conflict_width = self.conflict_width();
+        let name_width = self.compared_name_width(
+            &self.visible[start..end],
+            width.saturating_sub(if conflict_width > 0 { conflict_width + 1 } else { 0 }),
+        );
         // Only the tags tab draws distances (and it can list hundreds).
         let distance_width = if matches!(self.tab, BranchTab::Tags) {
             self.tag_distance_width(theme)
@@ -1391,11 +1557,11 @@ impl Component for BranchesPane {
             .map(|pos| {
                 let i = self.visible[pos];
                 let line = match self.tab {
-                    BranchTab::All => self.render_entry(&list[i], &columns, width, theme),
+                    BranchTab::All => self.render_entry(&list[i], &columns, conflict_width, width, theme),
                     BranchTab::Tags => self.render_tag(&self.tags[i], name_width, distance_width, width, theme),
                     BranchTab::Stash => self.render_stash(&self.stashes[i], width, theme),
                     BranchTab::Worktrees => self.render_worktree(i, name_width, state_width, size_width, width, theme),
-                    _ => self.render_compared(&list[i], name_width, width, theme),
+                    _ => self.render_compared(&list[i], name_width, conflict_width, width, theme),
                 };
                 if pos == cursor.selected {
                     line.patch_style(if focused {

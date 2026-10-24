@@ -112,6 +112,14 @@ pub enum Action {
     /// The bytes the folder of the worktree at this path takes, or why it
     /// couldn't be read.
     WorktreeSize(std::path::PathBuf, Result<u64, String>),
+    /// What merging each of `tips` (commits) into the base branch's commit
+    /// `base` would leave in conflict: by tip, the conflicted files, none
+    /// when it merges cleanly. `None` when git is too old to tell.
+    MergesChecked {
+        base: String,
+        tips: Vec<String>,
+        result: Result<Option<std::collections::HashMap<String, Vec<String>>>, String>,
+    },
     /// Close this repository and open the worktree at this path instead.
     OpenWorktree(std::path::PathBuf),
     /// The branch the graph should show on its own, or `None` for the
