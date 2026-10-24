@@ -1,4 +1,6 @@
-use tt_git_core::{BranchHistory, FileState, GitCli, GitError, Head, LogFilter, LogScope, Recency, RefKind, Repo};
+use tt_git_core::{
+    BranchHistory, FileState, GitCli, GitError, Head, LogFilter, LogScope, Recency, RefKind, Repo, message_prefixes,
+};
 use tt_git_testkit::{BASE_TIME, Sandbox};
 
 fn open(sb: &Sandbox) -> Repo {
@@ -594,6 +596,28 @@ feat in the body doesn't count",
     };
     let err = repo.filtered_commits(&LogScope::All, &bad, 100).unwrap_err();
     assert!(err.to_string().starts_with("invalid regex"), "{err}");
+}
+
+#[test]
+fn message_prefixes_ranks_subject_prefixes_by_use() {
+    let summaries = [
+        "docs(graph): Describe it",
+        "feat(blame)!: Break it",
+        "Fix: capital",
+        "fix: Mend it",
+        "feat: Add it",
+        "Merge branch 'side'",
+        "c++: Not a word",
+        "123: Starts with a digit",
+        "wip(unclosed: no",
+        "ci : space before the colon",
+        "fix: Again",
+    ];
+    // Counts ignore case; ties keep the order first seen.
+    assert_eq!(message_prefixes(summaries, 8), ["^fix", "^feat", "^docs"]);
+    assert_eq!(message_prefixes(summaries, 2), ["^fix", "^feat"]);
+    assert_eq!(message_prefixes(["a.b: dotted"], 8), Vec::<String>::new());
+    assert_eq!(message_prefixes(["build-sys: x"], 8), ["^build-sys"]);
 }
 
 #[test]

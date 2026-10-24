@@ -290,15 +290,17 @@ fn slash_filters_commits_by_message() {
     t.press("/");
     insta::assert_snapshot!("message_filter_prompt", t.screen());
 
-    // tab fills in the first preset; enter applies it.
+    // The presets are the repo's prefixes, most used first, then newest
+    // first: ^feat, ^docs, ^fix. tab fills in the first; enter applies it.
     t.press("tab").press("enter");
     assert_eq!(summaries(&t), ["feat: Alice's feature", "feat(graph): Add a thing"]);
     assert!(t.pane_title(PaneId::Graph).contains("Graph [all · message /^feat]"));
     insta::assert_snapshot!("message_filter_applied", t.screen());
 
     // / again starts from the pattern; tab steps on to the next preset.
+    // The graph only shows feat commits now, but the presets are the same.
     t.press("/").press("tab").press("enter");
-    assert_eq!(summaries(&t), ["fix: Mend it"]);
+    assert_eq!(summaries(&t), ["docs: Describe it"]);
 
     // An author narrows it further, and the message stays.
     t.press("/").press("ctrl+u").type_text("^feat").press("enter");
@@ -338,8 +340,21 @@ fn message_filter_refuses_an_invalid_regex() {
 fn message_presets_come_from_config() {
     let sb = conventional();
     let mut config = Config::default();
-    config.graph.message_presets = vec!["^docs".into()];
+    config.graph.message_presets = Some(vec!["^fix".into()]);
     let mut t = TestDriver::with_size(config, &sb, 100, 30);
     t.press("/").press("tab").press("enter");
-    assert_eq!(summaries(&t), ["docs: Describe it"]);
+    assert_eq!(summaries(&t), ["fix: Mend it"]);
+}
+
+#[test]
+fn no_presets_without_subject_prefixes() {
+    let sb = two_authors();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
+    t.press("/");
+    assert!(t.screen().contains("enter filter · esc cancel"), "{}", t.screen());
+    t.press("tab");
+    let Some(Modal::Prompt { input, .. }) = t.app().modal() else {
+        panic!("prompt closed")
+    };
+    assert_eq!(input, "", "tab has nothing to fill in");
 }

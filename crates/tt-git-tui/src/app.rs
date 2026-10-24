@@ -13,7 +13,7 @@ use tt_git_core::branches::matches_filter;
 use tt_git_core::time::SharedClock;
 use tt_git_core::{
     BranchDeletes, CheckoutPlan, CommitFile, FAST_FORWARD_UP_TO_DATE, FileState, GoneBranches, Head, IGNORE_TRACKED,
-    LogFilter, NoStep, Repo, Stash, StatusEntry, UNDO_CHANGES_KEPT, UndoStep,
+    LogFilter, NoStep, Repo, Stash, StatusEntry, UNDO_CHANGES_KEPT, UndoStep, message_prefixes,
 };
 
 use crate::action::{Action, RefsSnapshot};
@@ -97,6 +97,11 @@ const SUCCESS_FADE: u64 = 5 * TICKS_PER_SEC;
 /// milliseconds, so in a repo with hundreds of branches the marks fill in a
 /// batch at a time instead of all at once after a long wait.
 const MERGE_CHECK_BATCH: usize = 50;
+
+/// The `/` prompt's presets are the most used of the subject prefixes in
+/// this many of the newest commits, so they follow the repo's current habits.
+const PRESET_COMMITS: usize = 1000;
+const PRESET_COUNT: usize = 8;
 
 /// A git write in flight, shown in the help bar until it's done.
 #[derive(Debug)]
@@ -282,6 +287,9 @@ pub struct App {
     back: Vec<Back>,
     refs_reload: Reload,
     status_reload: Reload,
+    /// The `/` presets worked out from the unfiltered graph, for while it's
+    /// filtered. Unused when config.toml sets them.
+    message_presets: Option<Vec<String>>,
 }
 
 impl App {
@@ -368,6 +376,7 @@ impl App {
             back: Vec::new(),
             refs_reload: Reload::default(),
             status_reload: Reload::default(),
+            message_presets: None,
         };
         Ok((app, rx))
     }
@@ -1207,6 +1216,21 @@ impl App {
         self.ctx.spawn(move || loaders::load_filter_authors(repo));
         let repo = self.repo.clone();
         self.ctx.spawn(move || loaders::load_filter_files(repo));
+    }
+
+    /// What `tab` steps through in the `/` prompt: config.toml's list, or
+    /// the subject prefixes used most in the newest commits the unfiltered
+    /// graph has loaded.
+    fn message_presets(&mut self) -> Vec<String> {
+        if let Some(presets) = &self.config.graph.message_presets {
+            return presets.clone();
+        }
+        let unfiltered = self.graph.filter.is_empty() && self.graph.focus.is_none();
+        if unfiltered || self.message_presets.is_none() {
+            let summaries = self.graph.commits().iter().take(PRESET_COMMITS).map(|c| &*c.summary);
+            self.message_presets = Some(message_prefixes(summaries, PRESET_COUNT));
+        }
+        self.message_presets.clone().unwrap_or_default()
     }
 
     /// Narrows the graph to `filter`'s commits (leaving a focused branch,
@@ -2388,7 +2412,7 @@ impl App {
                     self.graph.filter.message.clone().unwrap_or_default(),
                     PromptAction::FilterMessage {
                         filter: self.graph.filter.clone(),
-                        presets: self.config.graph.message_presets.clone(),
+                        presets: self.message_presets(),
                     },
                 ));
             }

@@ -14,7 +14,7 @@ expression: t.screen()
 │                                                                                                  │
 │                                                                                                  │
 │             ╭ Filter commits by message ───────────────────────────────────────────╮             │
-│             │^feat · ^fix · ^docs · ^test · ^refactor · ^perf · ^chore · ^ci       │             │
+│             │^feat · ^docs · ^fix                                                  │             │
 │             │█                                                                     │             │
 │             │empty shows every subject again                                       │             │
 │             │                                                                      │             │

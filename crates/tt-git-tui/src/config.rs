@@ -105,8 +105,9 @@ pub struct GraphConfig {
     /// Started in a subfolder of the repository, narrow the graph and
     /// Status to it at startup (`.` toggles it).
     pub filter_to_cwd: bool,
-    /// Regexes `tab` steps through in the `/` message filter.
-    pub message_presets: Vec<String>,
+    /// Regexes `tab` steps through in the `/` message filter. Unset, they're
+    /// the subject prefixes the repo uses most, such as `^feat`.
+    pub message_presets: Option<Vec<String>>,
 }
 
 impl Default for GraphConfig {
@@ -118,9 +119,7 @@ impl Default for GraphConfig {
             dates: DateStyle::Relative,
             lanes: true,
             filter_to_cwd: false,
-            message_presets: ["^feat", "^fix", "^docs", "^test", "^refactor", "^perf", "^chore", "^ci"]
-                .map(String::from)
-                .to_vec(),
+            message_presets: None,
         }
     }
 }

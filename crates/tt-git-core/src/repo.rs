@@ -52,6 +52,44 @@ pub fn message_regex(pattern: &str) -> Result<Regex, regex::Error> {
     RegexBuilder::new(pattern).case_insensitive(ignore_case).build()
 }
 
+/// The `limit` subject prefixes used most in `summaries`, as message filter
+/// patterns such as `^feat`. A prefix is the subject's first word when a `:`
+/// follows it, after an optional `(scope)` and `!`: `feat(blame)!: x` counts
+/// for `feat`. Ties go to the prefix seen first, so pass the newest first.
+/// A prefix is only letters, digits, `-` and `_`, so needs no escaping.
+pub fn message_prefixes<'a>(summaries: impl IntoIterator<Item = &'a str>, limit: usize) -> Vec<String> {
+    let mut counts: Vec<(String, usize)> = Vec::new();
+    for summary in summaries {
+        let Some(prefix) = subject_prefix(summary) else {
+            continue;
+        };
+        let prefix = prefix.to_lowercase();
+        match counts.iter_mut().find(|(p, _)| *p == prefix) {
+            Some((_, n)) => *n += 1,
+            None => counts.push((prefix, 1)),
+        }
+    }
+    // Stable, so equal counts keep the order they were first seen in.
+    counts.sort_by_key(|&(_, n)| std::cmp::Reverse(n));
+    counts.into_iter().take(limit).map(|(p, _)| format!("^{p}")).collect()
+}
+
+/// `feat` in `feat(scope)!: subject`, or `None` when there's no such prefix.
+fn subject_prefix(summary: &str) -> Option<&str> {
+    let end = summary
+        .find(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_'))
+        .unwrap_or(summary.len());
+    let (word, mut rest) = summary.split_at(end);
+    if !word.starts_with(|c: char| c.is_alphabetic()) {
+        return None;
+    }
+    if let Some(scope) = rest.strip_prefix('(') {
+        rest = &scope[scope.find(')')? + 1..];
+    }
+    rest = rest.strip_prefix('!').unwrap_or(rest);
+    rest.starts_with(':').then_some(word)
+}
+
 #[derive(Debug, Clone)]
 pub struct Repo {
     git: GitCli,
