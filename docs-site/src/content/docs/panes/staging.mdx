@@ -109,6 +109,12 @@ the file as it is now.
 
 Which editor runs is set in [`[editor]`](/configuration/#editor).
 
+## Moving to another file
+
+Press <kbd>]</kbd> to stage the next file in the status pane without going back to it, and
+<kbd>[</kbd> for the previous one. The staging view stays open on the new file, and the status
+pane's selection moves with it. At the first or last file, nothing happens.
+
 ## Files that can't be split
 
 Some files can only be staged whole. The side says why instead of showing hunks:
@@ -144,4 +150,5 @@ For how tt-git turns your selection into a patch git can apply, see
 | <kbd>d</kbd> | Discard the selection from the working tree (asks first) |
 | <kbd>c</kbd> | Commit what's staged |
 | <kbd>e</kbd> | Open the file in your editor at the selection |
+| <kbd>]</kbd> <kbd>[</kbd> | Next / previous file in the status pane |
 | <kbd>esc</kbd> | Back to the status pane |

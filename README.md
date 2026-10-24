@@ -153,7 +153,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `d` | remove it (asks first; asks again before `--force` if it has changes; never the main worktree or the one tt-git is in) |
 | | `n` / `c` | new branch in a new worktree from it / copy its absolute path |
 | details | `}` | show / hide the commit's changed files below the diff (`j`/`k` pick a file); fullscreen puts them on the left |
-| | `]` / `[` | next (older) / previous (newer) commit in the graph, or stash in the Stash tab |
+| | `]` / `[` | next (older) / previous (newer) commit in the graph, or stash in the Stash tab; on a file's diff, the next / previous file |
 | | `o` | open the link in view with a plugin link handler |
 | | `e` | open the file in view in your editor, at the line at the top of the diff |
 | | `b` | blame the file in view as of that commit, at the line at the top of the diff |
@@ -166,6 +166,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `d` | discard the selection from the working tree (asks first) |
 | | `c` | commit what's staged |
 | | `e` | open the file in your editor at the selected hunk or line |
+| | `]` / `[` | stage the next / previous file in the status pane |
 | | `esc` | back to the status pane |
 | blame | `ctrl+g` | go to a line by number (vim style works too: `42G`, `5j`, `:42` `enter`) |
 | | `enter` | open the line's commit fullscreen, scrolled to the line (`b` there blames another of its files; `esc` back) |
