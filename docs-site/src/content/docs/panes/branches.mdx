@@ -130,6 +130,43 @@ The columns show on the Branches tab only. A plugin's column goes away when
 you disable or remove the plugin. See [Branch
 columns](/plugins/api/#branch-columns) for writing one.
 
+## Conflicts with the base branch
+
+tt-git checks in the background whether each branch would merge cleanly into
+the [base branch](/panes/merged-unmerged/#the-base-branch), the one the
+Unmerged and Merged tabs compare against. A branch whose merge would
+conflict gets a red `✗` and the number of files in conflict, right after
+its name:
+
+```
+* main                    ✓          2h
+  feature/login   ✗2      ↑2         3h
+  feature/search          ✓          1d
+```
+
+No mark means the branch merges cleanly (or is already merged). The column
+only appears once some branch conflicts, so the list looks the same as
+before while nothing does.
+
+With a conflicting branch selected, the pane's bottom border names the files:
+
+```
+╰ ✗ 2 conflicts with origin/main: src/login.rs, src/session.rs ────╯
+```
+
+If there are more files than fit, the line is cut off with `…`.
+
+The same mark shows on the [Unmerged](/panes/merged-unmerged/) tab and in
+the state of each [worktree](/git/worktrees/#the-worktrees-tab). It's
+checked against the base branch's tip, so a branch that conflicts with
+`origin/main` may still merge into your local `main` if that's behind.
+Nothing is checked out and nothing in the repository changes; see [How
+tt-git uses git](/reference/how-it-works/#conflicts-with-the-base).
+
+The check needs git 2.40 or newer. With an older git, or with
+`check_merges = false` in the [configuration](/configuration/#branches),
+no marks are shown.
+
 ## Checking out
 
 <kbd>enter</kbd> or <kbd>space</kbd> checks out the selected branch.

@@ -68,9 +68,9 @@ worktree besides the main one. It's the last tab: press <kbd>3</kbd>, then
 click its name in the title.
 
 ```
-* .                    main                  main · clean  1.2 GB
-  .worktrees/fix-login fix-login           ↑2 · 3 changed 48.3 MB
-  .worktrees/review    (detached 1a2b3c4)  locked · clean 47.9 MB
+* .                    main                       main · clean  1.2 GB
+  .worktrees/fix-login fix-login           ↑2 · ✗1 · 3 changed 48.3 MB
+  .worktrees/review    (detached 1a2b3c4)       locked · clean 47.9 MB
 ```
 
 <Screenshot name="worktrees-tab" alt="The Worktrees tab listing the main worktree and two linked ones, with their branches, how many files have changes and how much disk space each takes" />
@@ -88,8 +88,11 @@ Each row shows:
   `git worktree lock`, `missing` if its folder is gone, `↑2` for two
   commits it has checked out that the
   [base branch](/panes/merged-unmerged/#the-base-branch) doesn't have yet
-  (nothing when there are none), and how many files have uncommitted or
-  untracked changes (`clean` for none). The counts are
+  (nothing when there are none), `✗1` if merging its HEAD into the base
+  branch would leave one file in conflict (see [Conflicts with the base
+  branch](/panes/branches/#conflicts-with-the-base-branch)), and how many
+  files have uncommitted or untracked changes (`clean` for none). A
+  worktree with conflicts has its state in red. The counts are
   worked out in the background each time you open the tab and when the
   branches reload, so `…` shows until they're in.
 - How much disk space its folder takes, ignored files like build output
@@ -99,7 +102,8 @@ Each row shows:
   they're in.
 
 The pane's bottom border shows the total for every worktree, like
-`total 1.3 GB`.
+`total 1.3 GB`, and, for a selected worktree that would conflict with the
+base, the files in conflict.
 
 Moving the selection also selects the worktree's commit in the graph.
 <kbd>/</kbd> filters by path, and <kbd>c</kbd> copies the selected
