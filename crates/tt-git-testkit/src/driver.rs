@@ -80,6 +80,12 @@ impl TestDriver {
         Self::build_at(config, sb, path, width, height, None)
     }
 
+    /// Like [`at`](Self::at) but with the file watcher on.
+    pub fn with_watcher_at(mut config: Config, sb: &Sandbox, path: &std::path::Path) -> Self {
+        config.watch = true;
+        Self::build_at(config, sb, path, DEFAULT_WIDTH, DEFAULT_HEIGHT, None)
+    }
+
     fn build(config: Config, sb: &Sandbox, width: u16, height: u16) -> Self {
         Self::build_with(config, sb, width, height, None)
     }

@@ -35,7 +35,13 @@ watch = false
 | A file in the working tree (not ignored) | Status |
 | `.git/index` (something was staged or unstaged) | Status |
 | `HEAD`, `refs/`, `packed-refs`, `logs/` or `FETCH_HEAD` (a commit, checkout, fetch, branch change) | Branches and status, and the graph if the branches and tags it starts from actually moved |
+| A worktree added, removed, moved, locked, unlocked or pruned (`.git/worktrees/`), or a worktree's folder deleted | Branches, including the Worktrees tab |
+| Another worktree's index or logs (staging or committing there) | Nothing more than the branches it moves |
 | Lock files, `objects/`, hooks | Nothing |
+
+Opened in a linked worktree, tt-git watches the main repository's `.git`
+too, so a branch or worktree made from the main checkout shows up there
+as well.
 
 A fetch that brings nothing new leaves the graph alone. While the graph
 reloads, the old rows stay on screen until the new ones arrive, so it never
