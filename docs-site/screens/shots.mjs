@@ -145,6 +145,17 @@ export const shots = [
 		],
 	},
 	{
+		name: 'graph-filter-message',
+		capture: 'graph-filter-message',
+		view: { region: { box: 'Filter commits by message' } },
+		callouts: [
+			{ target: { find: '^feat · ^fix · ^docs' }, text: '**tab** fills in the next preset', markerSide: 'right' },
+			{ target: { find: '^fix█' }, text: 'A **regex** on the subject; edit it before enter', markerSide: 'left' },
+			{ target: { find: 'regex on the subject · ignores case' }, text: 'Whether it ignores case, or what is wrong', markerSide: 'left' },
+			{ target: { find: 'enter filter · tab presets' }, text: '**enter** filters, esc cancels', markerSide: 'left' },
+		],
+	},
+	{
 		name: 'graph-filter-folder',
 		capture: 'graph-filter-folder',
 		view: { region: { cells: [0, 0, 70, 12] } },

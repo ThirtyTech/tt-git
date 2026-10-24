@@ -208,7 +208,43 @@ that part. To clear the whole filter, close details and press <kbd>esc</kbd> in 
 A file filter keeps the lanes joined up: each commit links to the nearest earlier commit that also
 touched the path, so you still get a readable graph. An author filter can't do that, so each run of
 one person's commits is its own short line. Renames aren't followed. If no commits match, the graph
-says `no commits match the filter (f to change it, esc to clear it)`.
+says `no commits match the filter (f or / to change it, esc to clear it)`.
+
+## Filtering by message
+
+<Screenshot name="graph-filter-message" alt="The Filter commits by message prompt with its row of presets" />
+
+Press <kbd>/</kbd> to open **Filter commits by message**. Type a regex, press <kbd>enter</kbd>, and
+the graph shows only the commits whose subject (the first line of the message) matches it. It's
+built for [conventional commit](https://www.conventionalcommits.org/) prefixes: `^feat` shows the
+features, `^(fix|perf)` the fixes and speedups, `^docs\(graph\)` the graph's docs.
+
+<Steps>
+
+1. Press <kbd>/</kbd>.
+2. Type a regex, or press <kbd>tab</kbd> to fill in the first preset. <kbd>tab</kbd> again moves on
+   to the next one and <kbd>shift+tab</kbd> back, round from the last to the first. The preset in the
+   box is underlined in the row above it.
+3. Edit it if you like, then press <kbd>enter</kbd>.
+
+</Steps>
+
+- **Presets** are `^feat`, `^fix`, `^docs`, `^test`, `^refactor`, `^perf`, `^chore` and `^ci`. Set
+  your own with [`message_presets`](/configuration/#graph) under `[graph]`.
+- **Case** is ignored unless the regex has a capital letter, as in
+  [blame's search](/panes/blame/). `fix` finds `Fix typo`; `Fix` doesn't find `fix: typo`.
+- **Only the subject** is searched, so `^feat` means the subject starts with `feat`, not that some
+  line of the body does.
+- **Regex syntax** is Rust's [`regex`](https://docs.rs/regex/latest/regex/#syntax), close to what
+  most editors use. The line under the box says whether it ignores case, or what's wrong with it. An
+  invalid regex keeps the prompt open.
+- **With other filters**, a commit has to match all of them: the message, an author and a file from
+  <kbd>f</kbd>, and the [folder](#narrowing-to-the-folder-you-started-in).
+- **The title** shows it: `Graph [all · message /^feat]`. Press <kbd>/</kbd> again to change it; the
+  prompt starts with the regex set now. Clear the box and press <kbd>enter</kbd> to drop just the
+  message part, or close details and press <kbd>esc</kbd> in the graph to clear the whole filter.
+
+As with an author filter, the lanes don't join up across the commits left out.
 
 ## Acting on a commit
 
@@ -309,6 +345,7 @@ See [How tt-git uses git](/reference/how-it-works/#graph) for the details, and
 | <kbd>t</kbd> | Dates as age ↔ local date and time (also in [blame](/panes/blame/#dates)) |
 | <kbd>L</kbd> | Hide / show the lanes |
 | <kbd>f</kbd> | Filter by author or file |
+| <kbd>/</kbd> | Filter by a regex on the commit subject (<kbd>tab</kbd> in the prompt: next preset) |
 | <kbd>.</kbd> | Only the commits that changed the folder tt-git was started in, and back |
 | <kbd>o</kbd> | Check out the commit (its local branch if it has one) |
 | <kbd>n</kbd> | New branch at the commit (<kbd>tab</kbd> in the dialog: in a worktree) |

@@ -53,6 +53,7 @@ fn main() {
         ("graph-files", &["j", "enter"]),
         ("graph-filter", &["f"]),
         ("graph-filter-folder", &["f", "tab", "text:src/pages/", "enter"]),
+        ("graph-filter-message", &["/", "tab", "tab"]),
         ("graph-zoom-details", &["+", "space"]),
         ("graph-new-branch", &["j", "n", "text:fix/bell-a11y"]),
         ("graph-new-worktree", &["j", "n", "tab", "text:fix/bell-a11y"]),
