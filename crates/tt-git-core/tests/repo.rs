@@ -621,6 +621,32 @@ fn message_prefixes_ranks_subject_prefixes_by_use() {
 }
 
 #[test]
+fn message_prefixes_keep_emoji_before_the_prefix() {
+    let summaries = [
+        "🤖 chore(api/client): Regenerate",
+        "🤖 fix: Mend it",
+        "Merge pull request 1 from fix/x into development",
+        "🤖 chore: Again",
+        ":robot: feat: Shortcode",
+        "⚓ 🤖 docs: Two of them",
+        "fix: No emoji",
+        ":+1: test: Escaped",
+        "[JIRA-1] feat: Brackets aren't decoration",
+    ];
+    assert_eq!(
+        message_prefixes(summaries, 8),
+        [
+            "^🤖 chore",
+            "^🤖 fix",
+            "^:robot: feat",
+            "^⚓ 🤖 docs",
+            "^fix",
+            r"^:\+1: test"
+        ]
+    );
+}
+
+#[test]
 fn author_filter_includes_every_mailmapped_account() {
     let sb = Sandbox::new();
     // One person committing from three accounts, on two branches.

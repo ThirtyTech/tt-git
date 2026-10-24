@@ -55,31 +55,36 @@ pub fn message_regex(pattern: &str) -> Result<Regex, regex::Error> {
 /// The `limit` subject prefixes used most in `summaries`, as message filter
 /// patterns such as `^feat`. A prefix is the subject's first word when a `:`
 /// follows it, after an optional `(scope)` and `!`: `feat(blame)!: x` counts
-/// for `feat`. Ties go to the prefix seen first, so pass the newest first.
-/// A prefix is only letters, digits, `-` and `_`, so needs no escaping.
+/// for `feat`. Emoji or `:shortcode:`s before the word stay part of it, so
+/// `🤖 feat: x` counts for `^🤖 feat`. Ties go to the prefix seen first, so
+/// pass the newest first.
 pub fn message_prefixes<'a>(summaries: impl IntoIterator<Item = &'a str>, limit: usize) -> Vec<String> {
     let mut counts: Vec<(String, usize)> = Vec::new();
     for summary in summaries {
-        let Some(prefix) = subject_prefix(summary) else {
+        let Some((lead, word)) = subject_prefix(summary) else {
             continue;
         };
-        let prefix = prefix.to_lowercase();
-        match counts.iter_mut().find(|(p, _)| *p == prefix) {
+        // The word is only letters, digits, `-` and `_`, so needs no escaping.
+        let pattern = format!("^{}{}", regex::escape(lead), word.to_lowercase());
+        match counts.iter_mut().find(|(p, _)| *p == pattern) {
             Some((_, n)) => *n += 1,
-            None => counts.push((prefix, 1)),
+            None => counts.push((pattern, 1)),
         }
     }
     // Stable, so equal counts keep the order they were first seen in.
     counts.sort_by_key(|&(_, n)| std::cmp::Reverse(n));
-    counts.into_iter().take(limit).map(|(p, _)| format!("^{p}")).collect()
+    counts.into_iter().take(limit).map(|(p, _)| p).collect()
 }
 
-/// `feat` in `feat(scope)!: subject`, or `None` when there's no such prefix.
-fn subject_prefix(summary: &str) -> Option<&str> {
-    let end = summary
+/// The emoji before it and `feat` in `🤖 feat(scope)!: subject`, or `None`
+/// when there's no such prefix.
+fn subject_prefix(summary: &str) -> Option<(&str, &str)> {
+    let start = summary.len() - skip_decoration(summary).len();
+    let (lead, rest) = summary.split_at(start);
+    let end = rest
         .find(|c: char| !(c.is_alphanumeric() || c == '-' || c == '_'))
-        .unwrap_or(summary.len());
-    let (word, mut rest) = summary.split_at(end);
+        .unwrap_or(rest.len());
+    let (word, mut rest) = rest.split_at(end);
     if !word.starts_with(|c: char| c.is_alphabetic()) {
         return None;
     }
@@ -87,7 +92,24 @@ fn subject_prefix(summary: &str) -> Option<&str> {
         rest = &scope[scope.find(')')? + 1..];
     }
     rest = rest.strip_prefix('!').unwrap_or(rest);
-    rest.starts_with(':').then_some(word)
+    rest.starts_with(':').then_some((lead, word))
+}
+
+/// `text` after any leading emoji, `:shortcode:`s and spaces.
+fn skip_decoration(mut text: &str) -> &str {
+    loop {
+        let shortcode = text.strip_prefix(':').and_then(|t| {
+            let end = t.find(':')?;
+            let name = &t[..end];
+            let ok = !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || "_+-".contains(c));
+            ok.then(|| &t[end + 1..])
+        });
+        text = match (shortcode, text.chars().next()) {
+            (Some(rest), _) => rest,
+            (None, Some(c)) if c.is_whitespace() || (!c.is_ascii() && !c.is_alphanumeric()) => &text[c.len_utf8()..],
+            _ => return text,
+        };
+    }
 }
 
 #[derive(Debug, Clone)]
