@@ -1011,7 +1011,8 @@ impl Modal {
                         };
                         let mut body = Vec::new();
                         if !tabs.is_empty() {
-                            body.push(Line::from(tabs));
+                            // A blank line, so the presets don't read as part of the input.
+                            body.extend([Line::from(tabs), Line::default()]);
                         }
                         body.extend([input_line, note]);
                         let hint = if presets.is_empty() {
