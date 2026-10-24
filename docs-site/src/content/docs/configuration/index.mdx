@@ -225,16 +225,13 @@ for the repository tt-git started in.
 A mistake in either file is reported when tt-git starts, naming the file, the
 same way as one in `config.toml`.
 
+Either file can set anything `config.toml` can, including the programs tt-git
+runs: `[editor]`, `[agent]`, `[plugins]` and `[[keys.command]]` bindings. A
+team can commit its agent actions or plugin keys in `.tt-git.toml` along with
+the code.
+
 To see which files apply to a repository, run
 [`tt-git config path`](/reference/cli/#tt-git-config-path).
-
-<Aside type="caution" title="What a committed file can't set">
-A `.tt-git.toml` comes with the repository, so whoever wrote it chose what's
-in it. It can't set anything that runs a program: `[editor]`, `[agent]` and
-`[[keys.command]]` are ignored in it, and tt-git says so in the help bar when
-it starts (`.tt-git.toml: ignored editor (only your own config can set them)`).
-Put those in `config.toml` or `.git/tt-git.toml`.
-</Aside>
 
 ### The base branch
 

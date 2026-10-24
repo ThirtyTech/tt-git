@@ -281,9 +281,9 @@ They're read in that order after `config.toml` (or `--config FILE`), and a
 later file wins. Tables merge key by key; lists and `[layout]` are replaced
 whole. Opening another worktree reads that worktree's files.
 
-A committed `.tt-git.toml` can't set anything that runs a program: `[editor]`,
-`[agent]` and `[[keys.command]]` in it are ignored, with a notice in the help
-bar. `tt-git config path` prints the files that apply to a repository.
+Either file can set any setting, `[editor]`, `[agent]`, `[plugins]` and
+`[[keys.command]]` included. `tt-git config path` prints the files that apply
+to a repository.
 
 ## Logs
 
