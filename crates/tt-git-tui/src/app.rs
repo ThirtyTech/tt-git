@@ -1572,6 +1572,10 @@ impl App {
         if matches!(op, GitOp::Undo { .. }) {
             self.undo_pending = false;
         }
+        // The range was applied, or stopped on a conflict.
+        if matches!(op, GitOp::CherryPick { .. }) {
+            self.graph.clear_range();
+        }
         // The step was taken, but the stashed changes didn't go back.
         let kept =
             matches!(&result, Err(err) if matches!(op, GitOp::Undo { .. }) && err.starts_with(UNDO_CHANGES_KEPT));
@@ -2129,6 +2133,8 @@ impl App {
             Command::ToggleDetails if self.focus == PaneId::Graph => self.toggle_details(),
             Command::ExpandDetails if self.focus == PaneId::Graph => self.expand_details(),
             Command::ExpandDetails if self.focus == PaneId::Branches => self.expand_stash(),
+            // esc in the graph ends a range selection first.
+            Command::CloseDetails if self.focus == PaneId::Graph && self.graph.has_range() => self.graph.clear_range(),
             // With details already closed, esc in the graph drops its filter.
             Command::CloseDetails
                 if self.focus == PaneId::Graph && !self.shows(PaneId::Details) && self.graph.is_filtered() =>

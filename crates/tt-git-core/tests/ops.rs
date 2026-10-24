@@ -491,7 +491,7 @@ fn clean_rebase_and_cherry_pick() {
     sb.checkout("main");
     sb.commit("main work");
     let repo = open(&sb);
-    repo.cherry_pick(&pick).unwrap();
+    repo.cherry_pick(&[&pick]).unwrap();
     assert_eq!(sb.git(&["log", "-1", "--format=%s"]), "topic work");
 
     sb.checkout("topic");
@@ -550,6 +550,68 @@ fn revert_conflict_stops_in_progress() {
     repo.abort_operation(tt_git_core::InProgress::Revert).unwrap();
     assert_eq!(repo.status().unwrap().in_progress, None);
     assert_eq!(sb.rev_parse("HEAD"), before);
+}
+
+#[test]
+fn cherry_pick_several_commits_in_order() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.checkout_new("topic");
+    let one = sb.commit("one");
+    let two = sb.commit("two");
+    sb.checkout("main");
+    sb.commit("main work");
+    let repo = open(&sb);
+    repo.cherry_pick(&[&one, &two]).unwrap();
+    assert_eq!(
+        sb.git(&["log", "-3", "--format=%s"]),
+        "two
+one
+main work"
+    );
+}
+
+#[test]
+fn cherry_pick_range_continues_after_a_conflict() {
+    let sb = Sandbox::new();
+    sb.commit_file(
+        "f.txt", "base
+", "base",
+    );
+    sb.checkout_new("topic");
+    let one = sb.commit_file(
+        "f.txt", "theirs
+", "one",
+    );
+    let two = sb.commit("two");
+    sb.checkout("main");
+    sb.commit_file(
+        "f.txt", "ours
+", "ours",
+    );
+    let repo = open(&sb);
+    let err = repo.cherry_pick(&[&one, &two]).unwrap_err().to_string();
+    assert!(err.contains("could not apply"), "{err}");
+    assert_eq!(
+        repo.status().unwrap().in_progress,
+        Some(tt_git_core::InProgress::CherryPick)
+    );
+
+    sb.write(
+        "f.txt",
+        "resolved
+",
+    );
+    sb.git(&["add", "f.txt"]);
+    repo.continue_operation(tt_git_core::InProgress::CherryPick).unwrap();
+    assert_eq!(repo.status().unwrap().in_progress, None);
+    // The commit after the conflict was applied too.
+    assert_eq!(
+        sb.git(&["log", "-3", "--format=%s"]),
+        "two
+one
+ours"
+    );
 }
 
 #[test]

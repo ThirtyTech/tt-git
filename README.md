@@ -107,7 +107,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `q` | quit |
 | graph | `enter` | the commit fullscreen: changed files on the left, the selected file's diff on the right (`j`/`k` pick a file, `pgup`/`pgdn` scroll, `esc` or `space` back) |
 | | `space` | show / hide the commit's details (they replace the bottom row) |
-| | `esc` | hide details (with details hidden: clear the filter) |
+| | `esc` | end a range; else hide details (with details hidden: clear the filter) |
 | | `a` | all branches ↔ current branch |
 | | `t` | dates as age (`3h`) ↔ local date and time (`2026-10-17 01:30 PM`) |
 | | `L` | hide / show the lanes, so each row starts with its badges and subject |
@@ -115,7 +115,8 @@ command palette, which lists built-in commands and plugin actions.
 | | `o` | check out the selected commit: the local branch on it if there is one, else the commit with HEAD detached (with uncommitted changes, asks to stash them first) |
 | | `n` | new branch at the selected commit (`tab` in the dialog: create it in a worktree) |
 | | `T` | new tag at the selected commit (`tab` in the dialog: annotated, with a message) |
-| | `M` / `r` / `C` / `R` | merge into current / rebase current onto / cherry-pick / revert |
+| | `M` / `r` / `C` / `R` | merge into current / rebase current onto / cherry-pick (the whole range, if one is selected) / revert |
+| | `v` | start or end a range of commits to cherry-pick (`esc` also ends it) |
 | | `c` | copy the commit hash |
 | | `A` | ask an AI agent about the commit, or start a ready-made action (explain branch, resolve conflicts…); opens in a herdr tab inside herdr, else in place of details |
 | | `]` `[` (or `}` `{`) | next / previous tab in the branches pane, without leaving the graph |

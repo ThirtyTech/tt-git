@@ -171,8 +171,9 @@ These keys act on the selected commit:
 | <kbd>T</kbd> | Makes a tag at the commit. <kbd>tab</kbd> in the dialog makes it annotated, and asks for a message next. See [Tags](/panes/tags/#making-a-tag). |
 | <kbd>M</kbd> | Merges the commit into the current branch, after asking. |
 | <kbd>r</kbd> | Rebases the current branch onto the commit, after asking. |
-| <kbd>C</kbd> | Cherry-picks the commit onto the current branch, after asking. |
+| <kbd>C</kbd> | Cherry-picks the commit onto the current branch, after asking. With a [range selected](#cherry-picking-several-commits), cherry-picks every commit in it. |
 | <kbd>R</kbd> | Reverts the commit: a new commit that undoes it, after asking. For a merge commit it asks which parent's side to keep. See [Revert](/git/merge-rebase/#revert). |
+| <kbd>v</kbd> | Starts or ends a range of commits. See [Cherry-picking several commits](#cherry-picking-several-commits). |
 | <kbd>c</kbd> | Copies the full commit hash to the clipboard. |
 | <kbd>A</kbd> | Asks an AI agent about the commit, or starts a ready-made request such as *Explain branch*. See [Agent actions](/git/agents/). |
 
@@ -181,6 +182,26 @@ For <kbd>M</kbd> and <kbd>r</kbd>, if a branch points at the commit, tt-git uses
 cherry-pick or revert stops on a conflict, see [Merge, rebase, cherry-pick and revert](/git/merge-rebase/).
 
 Copying uses your terminal's clipboard support (OSC 52), so it also works over SSH.
+
+### Cherry-picking several commits
+
+<kbd>v</kbd> starts a range at the selected commit. Move with <kbd>j</kbd>
+<kbd>k</kbd> (or click a row) to extend it: every commit in the range is
+highlighted, and the title shows how many are selected (`· 3 selected`).
+<kbd>v</kbd> again or <kbd>esc</kbd> ends the range.
+
+<Screenshot name="graph-cherry-pick-range" alt="Three commits selected as a range in the graph, with the Cherry-pick range confirmation open" />
+
+<kbd>C</kbd> with a range asks **Cherry-pick range**, naming the oldest and
+newest commit, then applies them all onto the current branch, oldest first,
+in one `git cherry-pick`. If one stops on a conflict, resolve it and continue
+from the status pane: the rest of the range applies after it. Aborting puts
+the branch back as it was before the whole range. See
+[Merge, rebase and cherry-pick](/git/merge-rebase/#cherry-pick).
+
+A range that includes a merge commit is refused, since cherry-pick can't
+apply merges. The range stays through refreshes, and ends once the
+cherry-pick runs.
 
 ### Checking out a commit
 
@@ -229,7 +250,7 @@ See [How tt-git uses git](/reference/how-it-works/#graph) for the details, and
 | <kbd>g</kbd> <kbd>G</kbd> | First / last loaded commit |
 | <kbd>enter</kbd> | The commit fullscreen: changed files beside the diff |
 | <kbd>space</kbd> | Show / hide details |
-| <kbd>esc</kbd> | Hide details; with details hidden, clear the filter |
+| <kbd>esc</kbd> | End a range; else hide details; with details hidden, clear the filter |
 | <kbd>a</kbd> | All branches ↔ current branch |
 | <kbd>t</kbd> | Dates as age ↔ local date and time (also in [blame](/panes/blame/#dates)) |
 | <kbd>L</kbd> | Hide / show the lanes |
@@ -239,8 +260,9 @@ See [How tt-git uses git](/reference/how-it-works/#graph) for the details, and
 | <kbd>T</kbd> | New tag at the commit (<kbd>tab</kbd> in the dialog: annotated) |
 | <kbd>M</kbd> | Merge into the current branch |
 | <kbd>r</kbd> | Rebase the current branch onto it |
-| <kbd>C</kbd> | Cherry-pick |
+| <kbd>C</kbd> | Cherry-pick (every commit in the range, if one is selected) |
 | <kbd>R</kbd> | Revert the commit |
+| <kbd>v</kbd> | Start or end a range of commits |
 | <kbd>c</kbd> | Copy the commit hash |
 | <kbd>A</kbd> | Ask an AI agent about the commit |
 | <kbd>]</kbd> <kbd>[</kbd> (<kbd>&#125;</kbd> <kbd>&#123;</kbd>) | Next / previous tab in the branches pane |

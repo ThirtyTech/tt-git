@@ -613,8 +613,12 @@ impl Repo {
         self.git().run(&["-c", "core.editor=:", "rebase", onto]).map(text)
     }
 
-    pub fn cherry_pick(&self, oid: &str) -> Result<String> {
-        self.git().run(&["cherry-pick", oid]).map(text)
+    /// Applies `oids` onto HEAD in the order given, in one `git cherry-pick`
+    /// so a conflict part way leaves git's sequencer to continue the rest.
+    pub fn cherry_pick<S: AsRef<str>>(&self, oids: &[S]) -> Result<String> {
+        let mut args = vec!["cherry-pick"];
+        args.extend(oids.iter().map(AsRef::as_ref));
+        self.git().run(&args).map(text)
     }
 
     /// `git revert --no-edit <oid>`: a new commit that undoes `oid`. A merge

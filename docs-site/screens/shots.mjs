@@ -182,6 +182,16 @@ export const shots = [
 			{ target: { find: 'y confirm · n/esc cancel' }, text: '**y** merges; n or esc backs out', markerSide: 'left' },
 		],
 	},
+	{
+		name: 'graph-cherry-pick-range',
+		capture: 'graph-cherry-pick-range',
+		view: { region: { cells: [0, 0, 190, 28] } },
+		callouts: [
+			{ target: { find: '· 3 selected' }, text: 'How many commits the **range** covers', markerSide: 'right' },
+			{ target: { cells: [1, 6, 60, 3] }, text: '**v**, then j: every commit in the range is highlighted', markerSide: 'right' },
+			{ target: { box: 'Cherry-pick range' }, text: '**C** applies them oldest first; y confirms', markerSide: 'right' },
+		],
+	},
 
 	// ---- details -----------------------------------------------------------------
 	{

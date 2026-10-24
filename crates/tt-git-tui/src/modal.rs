@@ -106,8 +106,9 @@ pub enum GitOp {
     Rebase {
         onto: String,
     },
+    /// Applies `oids`, oldest first; `summary` is the last one's.
     CherryPick {
-        oid: String,
+        oids: Vec<String>,
         summary: String,
     },
     /// `git revert`. A merge commit needs `mainline`, the parent (from 1)
@@ -230,7 +231,10 @@ impl GitOp {
             GitOp::Pull => "pull".into(),
             GitOp::Merge { target } => format!("merge {target}"),
             GitOp::Rebase { onto } => format!("rebase onto {onto}"),
-            GitOp::CherryPick { oid, .. } => format!("cherry-pick {}", &oid[..oid.len().min(7)]),
+            GitOp::CherryPick { oids, .. } => match &oids[..] {
+                [oid] => format!("cherry-pick {}", &oid[..oid.len().min(7)]),
+                _ => format!("cherry-pick {} commits", oids.len()),
+            },
             GitOp::Revert {
                 oid, mainline: None, ..
             } => format!("revert {}", &oid[..oid.len().min(7)]),
