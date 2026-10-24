@@ -13,7 +13,7 @@ same information.
 ## tt-git
 
 ```sh
-tt-git [PATH] [--config FILE] [--no-plugins]
+tt-git [PATH] [--config FILE] [--no-plugins] [--filter-to-cwd | --no-filter-to-cwd]
 ```
 
 Opens the UI on a repository.
@@ -23,6 +23,8 @@ Opens the UI on a repository.
 | `PATH` | The repository to open, or any folder inside it. Default: the current directory. |
 | `--config FILE` | Read this config file instead of the [default one](/configuration/#where-it-lives). |
 | `--no-plugins` | Don't load plugins or open the API socket. |
+| `--filter-to-cwd` | Started in a subfolder of the repository (or with `PATH` one), start with the graph and Status [narrowed to it](/panes/graph/#narrowing-to-the-folder-you-started-in), whatever [`filter_to_cwd`](/configuration/#graph) says. |
+| `--no-filter-to-cwd` | Start with the whole repository shown, even with `filter_to_cwd = true`. |
 | `--version`, `-V` | Print the version. |
 | `--help`, `-h` | Print help. |
 
@@ -36,6 +38,7 @@ plugins can use it to tell tt-git is open in a pane.
 tt-git                       # the repository you're in
 tt-git ~/src/website         # another one
 tt-git --no-plugins          # without plugins, for example to rule one out
+cd apps/web && tt-git --filter-to-cwd   # just this project's commits and files
 ```
 
 ## Commands that need a running tt-git

@@ -18,7 +18,17 @@ use crate::widgets::{Cursor, truncate};
 pub struct StatusPane {
     pub repo_name: String,
     status: Option<Status>,
+    /// Shows only the files under this folder (ending in `/`), plus any
+    /// conflicted ones; bulk actions act on it alone.
+    folder: Option<String>,
+    /// The entries shown: all of them, or those `folder` keeps.
+    shown: Vec<StatusEntry>,
     cursor: Cursor,
+}
+
+/// Whether `e` is under `folder`, or is a rename from or to it.
+fn in_folder(e: &StatusEntry, folder: &str) -> bool {
+    e.path.starts_with(folder) || e.orig_path.as_deref().is_some_and(|p| p.starts_with(folder))
 }
 
 impl StatusPane {
@@ -35,12 +45,56 @@ impl StatusPane {
 
     pub fn set_status(&mut self, status: Status) {
         self.status = Some(status);
-        let len = self.entries().len();
+        self.reshow();
+    }
+
+    pub fn folder(&self) -> Option<&str> {
+        self.folder.as_deref()
+    }
+
+    /// Narrows the list to `folder`, or shows every file again.
+    pub fn set_folder(&mut self, folder: Option<String>) {
+        if self.folder != folder {
+            self.folder = folder;
+            self.cursor = Cursor::default();
+            self.reshow();
+        }
+    }
+
+    fn reshow(&mut self) {
+        let all = self.all_entries();
+        self.shown = match &self.folder {
+            Some(f) => all
+                .iter()
+                .filter(|e| e.is_conflicted() || in_folder(e, f))
+                .cloned()
+                .collect(),
+            None => all.to_vec(),
+        };
+        let len = self.shown.len();
         self.cursor.clamp(len);
     }
 
+    /// The entries listed: every one, or those in the folder.
     pub fn entries(&self) -> &[StatusEntry] {
+        &self.shown
+    }
+
+    /// Every changed file, including any hidden outside the folder.
+    pub fn all_entries(&self) -> &[StatusEntry] {
         self.status.as_ref().map_or(&[], |s| s.entries.as_slice())
+    }
+
+    /// How many changed files the folder hides, and how many of those
+    /// have staged changes (which a commit takes too).
+    fn hidden(&self) -> (usize, usize) {
+        if self.folder.is_none() {
+            return (0, 0);
+        }
+        let n = self.all_entries().len() - self.shown.len();
+        let staged = self.all_entries().iter().filter(|e| e.has_staged()).count()
+            - self.shown.iter().filter(|e| e.has_staged()).count();
+        (n, staged)
     }
 
     pub fn selected(&self) -> Option<&StatusEntry> {
@@ -81,8 +135,10 @@ impl StatusPane {
         Modal::picker(format!("Ignore {}", e.path), items, 0)
     }
 
+    /// Whether anything is staged, in or out of the folder: a commit takes
+    /// the whole index.
     fn has_staged(&self) -> bool {
-        self.entries().iter().any(StatusEntry::has_staged)
+        self.all_entries().iter().any(StatusEntry::has_staged)
     }
 
     /// `repo · branch → upstream ↑a ↓b`
@@ -108,6 +164,14 @@ impl StatusPane {
                 s.push_str(&format!(" ↓{}", b.behind));
             }
         }
+        if let Some(folder) = &self.folder {
+            s.push_str(&format!(" · in {folder}"));
+            match self.hidden() {
+                (0, _) => {}
+                (n, 0) => s.push_str(&format!(" · +{n} outside")),
+                (n, staged) => s.push_str(&format!(" · +{n} outside ({staged} staged)")),
+            }
+        }
         s
     }
 }
@@ -129,7 +193,7 @@ impl Component for StatusPane {
                     return EventState::Consumed;
                 };
                 if cmd == Command::Continue {
-                    if self.entries().iter().any(StatusEntry::is_conflicted) {
+                    if self.all_entries().iter().any(StatusEntry::is_conflicted) {
                         ctx.emit(Action::Notify("resolve and stage the conflicted files first".into()));
                     } else {
                         ctx.emit(Action::Run(GitOp::Continue(op)));
@@ -146,11 +210,11 @@ impl Component for StatusPane {
                 }
             }
             Command::StageAll => {
-                let any_unstaged = self.entries().iter().any(StatusEntry::has_unstaged);
-                if any_unstaged {
-                    ctx.emit(Action::Run(GitOp::StageAll));
-                } else if self.has_staged() {
-                    ctx.emit(Action::Run(GitOp::UnstageAll));
+                let folder = self.folder.clone();
+                if self.entries().iter().any(StatusEntry::has_unstaged) {
+                    ctx.emit(Action::Run(GitOp::StageAll { folder }));
+                } else if self.entries().iter().any(StatusEntry::has_staged) {
+                    ctx.emit(Action::Run(GitOp::UnstageAll { folder }));
                 }
             }
             Command::Commit => {
@@ -168,7 +232,10 @@ impl Component for StatusPane {
             }
             Command::Stash => {
                 if self.entries().is_empty() {
-                    ctx.emit(Action::Notify("nothing to stash".into()));
+                    ctx.emit(Action::Notify(match &self.folder {
+                        Some(f) => format!("nothing to stash in {f}"),
+                        None => "nothing to stash".into(),
+                    }));
                 } else {
                     let file = self.selected().map(|e| {
                         let mut paths = vec![e.path.clone()];
@@ -179,8 +246,12 @@ impl Component for StatusPane {
                         "Stash",
                         "",
                         PromptAction::Stash {
-                            scope: StashScope::All,
+                            scope: match &self.folder {
+                                Some(f) => StashScope::Paths(vec![f.clone()]),
+                                None => StashScope::All,
+                            },
                             file,
+                            folder: self.folder.clone(),
                         },
                     )));
                 }
@@ -195,14 +266,20 @@ impl Component for StatusPane {
             ))),
             Command::DiscardAll => {
                 if self.entries().is_empty() {
-                    ctx.emit(Action::Notify("nothing to discard".into()));
+                    ctx.emit(Action::Notify(match &self.folder {
+                        Some(f) => format!("nothing to discard in {f}"),
+                        None => "nothing to discard".into(),
+                    }));
                 } else if let Some(op) = self.status.as_ref().and_then(|s| s.in_progress) {
                     ctx.emit(Action::Notify(format!(
                         "a {} is in progress: X aborts it, d discards one file",
                         op.command()
                     )));
                 } else {
-                    ctx.emit(Action::OpenModal(Modal::discard_all(DiscardCounts::of(self.entries()))));
+                    ctx.emit(Action::OpenModal(Modal::discard_all(
+                        DiscardCounts::of(self.entries()),
+                        self.folder.clone(),
+                    )));
                 }
             }
             Command::Ignore => {
@@ -261,6 +338,7 @@ impl Component for StatusPane {
             Command::Stash,
             Command::OpenInEditor,
             Command::Blame,
+            Command::FilterFolder,
             Command::Continue,
             Command::Abort,
         ]
@@ -271,10 +349,10 @@ impl Component for StatusPane {
         let inner = block.inner(area);
         frame.render_widget(block, area);
         if self.entries().is_empty() {
-            let msg = if self.status.is_some() {
-                "working tree clean"
-            } else {
-                "loading…"
+            let msg = match (&self.status, &self.folder) {
+                (None, _) => "loading…".to_string(),
+                (Some(_), Some(f)) if !self.all_entries().is_empty() => format!("no changes in {f} (. shows all)"),
+                (Some(_), _) => "working tree clean".to_string(),
             };
             frame.render_widget(Paragraph::new(msg).style(theme.muted), inner);
             return;

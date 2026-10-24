@@ -353,15 +353,25 @@ impl Repo {
         self.git().run(&args).map(text)
     }
 
-    pub fn stage_all(&self) -> Result<String> {
-        self.git().run(&["add", "-A"]).map(text)
+    /// Stages every change, or with `folder` only those under it.
+    pub fn stage_all(&self, folder: Option<&str>) -> Result<String> {
+        match folder {
+            Some(folder) => self.git().run(&["add", "-A", "--", &literal(folder)]).map(text),
+            None => self.git().run(&["add", "-A"]).map(text),
+        }
     }
 
-    pub fn unstage_all(&self) -> Result<String> {
-        if self.head_is_unborn() {
-            self.git().run(&["rm", "--cached", "-r", "-q", "."]).map(text)
-        } else {
-            self.git().run(&["reset", "-q"]).map(text)
+    /// Unstages everything, or with `folder` only what's under it.
+    pub fn unstage_all(&self, folder: Option<&str>) -> Result<String> {
+        match (folder.map(literal), self.head_is_unborn()) {
+            (None, true) => self.git().run(&["rm", "--cached", "-r", "-q", "."]).map(text),
+            (None, false) => self.git().run(&["reset", "-q"]).map(text),
+            // --ignore-unmatch: a folder with nothing staged isn't an error.
+            (Some(spec), true) => self
+                .git()
+                .run(&["rm", "--cached", "-r", "-q", "--ignore-unmatch", "--", &spec])
+                .map(text),
+            (Some(spec), false) => self.git().run(&["reset", "-q", "--", &spec]).map(text),
         }
     }
 
@@ -397,23 +407,44 @@ impl Repo {
     /// untracked files. `clean` runs without `-x` (ignored files stay) and
     /// without `-ff` (nested repositories stay). Refused while a merge,
     /// rebase, cherry-pick or revert is in progress.
-    pub fn discard_all(&self, scope: DiscardScope) -> Result<String> {
+    ///
+    /// With `folder`, only changes under it go: `restore --staged
+    /// --worktree --source=HEAD` stands in for `reset --hard`, and the
+    /// `restore` and `clean` are limited to it.
+    pub fn discard_all(&self, scope: DiscardScope, folder: Option<&str>) -> Result<String> {
         if let Some(op) = self.in_progress() {
             return Err(GitError::Refused(format!(
                 "a {} is in progress; finish or abort it first",
                 op.command()
             )));
         }
+        let spec = literal(folder.unwrap_or("."));
         let mut out = Vec::new();
         if scope.drops_staged() {
-            out.push(self.git().run(&["reset", "--hard", "-q"]).map(text)?);
-        } else if scope.drops_unstaged() && self.git().run(&["diff", "--quiet"]).is_err() {
+            if folder.is_none() {
+                out.push(self.git().run(&["reset", "--hard", "-q"]).map(text)?);
+            } else if self.head_is_unborn() {
+                // Nothing to restore to: unstaged, the files are untracked
+                // and the clean below removes them.
+                self.git()
+                    .run(&["rm", "--cached", "-r", "-q", "--ignore-unmatch", "--", &spec])?;
+            } else if self.git().run(&["diff", "HEAD", "--quiet", "--", &spec]).is_err() {
+                out.push(
+                    self.git()
+                        .run(&["restore", "--source=HEAD", "--staged", "--worktree", "--", &spec])
+                        .map(text)?,
+                );
+            }
+        } else if scope.drops_unstaged() && self.git().run(&["diff", "--quiet", "--", &spec]).is_err() {
             // `restore` errors when nothing is tracked, so only run it when
             // there's something to restore.
-            out.push(self.git().run(&["restore", "--worktree", "--", "."]).map(text)?);
+            out.push(self.git().run(&["restore", "--worktree", "--", &spec]).map(text)?);
         }
         if scope.drops_untracked() {
-            out.push(self.git().run(&["clean", "-fd", "-q"]).map(text)?);
+            match folder {
+                Some(_) => out.push(self.git().run(&["clean", "-fd", "-q", "--", &spec]).map(text)?),
+                None => out.push(self.git().run(&["clean", "-fd", "-q"]).map(text)?),
+            }
         }
         out.retain(|s| !s.is_empty());
         Ok(out.join("\n"))

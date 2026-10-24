@@ -47,6 +47,9 @@ pub struct Repo {
     root: PathBuf,
     git_dir: PathBuf,
     common_dir: PathBuf,
+    /// Where `discover` was pointed, relative to `root`, with a trailing
+    /// `/`; `None` at the root.
+    start_prefix: Option<String>,
     /// git turned out too old for something tried in one command, so it's
     /// done the old way from then on.
     old_git: Arc<OldGit>,
@@ -67,7 +70,13 @@ impl Repo {
     pub fn discover(path: &Path, git: &GitCli) -> Result<Self> {
         let probe = git.in_dir(path);
         let out = probe
-            .run(&["rev-parse", "--show-toplevel", "--absolute-git-dir", "--git-common-dir"])
+            .run(&[
+                "rev-parse",
+                "--show-toplevel",
+                "--absolute-git-dir",
+                "--git-common-dir",
+                "--show-prefix",
+            ])
             .map_err(|e| match e {
                 GitError::Failed { ref stderr, .. } if stderr.contains("not a git repository") => {
                     GitError::NotARepo(path.to_path_buf())
@@ -80,6 +89,8 @@ impl Repo {
             // A bare repo prints no toplevel; we need a working tree.
             return Err(GitError::NotARepo(path.to_path_buf()));
         };
+        // An empty line at the root.
+        let start_prefix = lines.next().filter(|p| !p.is_empty()).map(str::to_string);
         let root = PathBuf::from(root);
         let git_dir = PathBuf::from(git_dir);
         let common = PathBuf::from(common);
@@ -93,6 +104,7 @@ impl Repo {
             root,
             git_dir,
             common_dir,
+            start_prefix,
             old_git: Arc::default(),
         })
     }
@@ -103,6 +115,12 @@ impl Repo {
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// The folder `discover` was given, relative to the root and ending in
+    /// `/` (`apps/web/`), when it was below the root.
+    pub fn start_prefix(&self) -> Option<&str> {
+        self.start_prefix.as_deref()
     }
 
     /// Directory name of the working tree.

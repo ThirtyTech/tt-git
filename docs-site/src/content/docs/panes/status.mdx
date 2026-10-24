@@ -49,6 +49,29 @@ Untracked files are listed one by one, even inside new folders. With nothing cha
 - `MERGING`, `REBASING`, `CHERRY-PICKING` or `REVERTING` while one is in progress,
 - the upstream branch, and how many commits you're ahead (`↑`) and behind (`↓`) it. Nothing is shown
   for a count of zero.
+- `in apps/web/` while the list is [narrowed to a folder](#narrowing-to-a-folder), with how many
+  changed files it hides: `+3 outside (1 staged)`.
+
+## Narrowing to a folder
+
+Started in a subfolder of the repository, such as `apps/web/`, press <kbd>.</kbd> to list only the
+files changed under it. Press it again to list everything. The
+[graph](/panes/graph/#narrowing-to-the-folder-you-started-in) narrows to the same folder at the same
+time, and the other way round: <kbd>.</kbd> in either pane, `current folder` in **Filter graph**, or
+[`filter_to_cwd`](/configuration/#graph) at startup narrows both. <kbd>esc</kbd> in the graph widens
+both again.
+
+While the list is narrowed:
+
+- Conflicted files are always listed, even outside the folder, so you can resolve them.
+- <kbd>a</kbd> stages (or unstages) only the files in the folder: `git add -A -- apps/web/`.
+- <kbd>D</kbd> discards only changes in the folder. The dialog is titled
+  **Discard all in apps/web/**, and keeps *everything outside apps/web/*.
+- <kbd>s</kbd> starts on stashing just the folder. <kbd>tab</kbd> still reaches **Everything** and
+  the other choices, which cover the whole repository.
+- <kbd>c</kbd> and <kbd>A</kbd> still commit everything that's staged, in the folder or not. The
+  title's `(1 staged)` warns you when something outside is staged.
+- With nothing changed in the folder, the pane says `no changes in apps/web/ (. shows all)`.
 
 ## Staging and unstaging files
 
@@ -181,6 +204,7 @@ Press <kbd>s</kbd> to stash. The **Stash** dialog asks what to stash; <kbd>tab</
 | **Unstaged** | Only the unstaged and untracked changes; the staged ones stay staged |
 | **Keep staged** | Everything, but leaves the staged changes in place too |
 | *the selected file* | Only that file, untracked or not (both paths of a rename) |
+| *the folder*, such as `apps/web/` | Only the changes under it, untracked ones included. Listed first, and picked to start with, while Status is [narrowed to a folder](#narrowing-to-a-folder) |
 
 The message is optional: press <kbd>enter</kbd> with it empty to stash with git's default message.
 With nothing changed, tt-git says `nothing to stash`.
@@ -270,5 +294,6 @@ changes.
 | <kbd>s</kbd> | Stash |
 | <kbd>e</kbd> | Open the file in your editor at its first change |
 | <kbd>b</kbd> | [Blame](/panes/blame/) the file |
+| <kbd>.</kbd> | List only the files in the folder tt-git was started in, and back |
 | <kbd>C</kbd> | Continue a merge, rebase, cherry-pick or revert |
 | <kbd>X</kbd> | Abort it (asks first) |

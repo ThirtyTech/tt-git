@@ -16,6 +16,8 @@ fn discovers_from_subdirectory() {
         std::fs::canonicalize(sb.path()).unwrap()
     );
     assert!(repo.common_dir().join("HEAD").exists());
+    assert_eq!(repo.start_prefix(), Some("a/b/"));
+    assert_eq!(open(&sb).start_prefix(), None, "none at the root");
 }
 
 #[test]

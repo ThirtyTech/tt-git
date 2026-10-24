@@ -179,12 +179,14 @@ impl List {
 pub struct FilterPanel {
     /// The graph's filter when the panel opened.
     current: LogFilter,
+    /// The folder tt-git was started in, offered first on the file tab.
+    folder: Option<String>,
     tab: FilterTab,
     lists: [List; 2],
 }
 
 impl FilterPanel {
-    pub fn new(current: LogFilter) -> Self {
+    pub fn new(current: LogFilter, folder: Option<String>) -> Self {
         // Open on the file tab when only a file is filtered, to change it.
         let tab = if current.author.is_none() && current.path.is_some() {
             FilterTab::File
@@ -193,6 +195,7 @@ impl FilterPanel {
         };
         Self {
             current,
+            folder,
             tab,
             lists: Default::default(),
         }
@@ -203,7 +206,8 @@ impl FilterPanel {
     }
 
     /// Fills in `tab`'s list, led by an entry that clears its part of the
-    /// filter if that part is set.
+    /// filter if that part is set, and on the file tab by the folder tt-git
+    /// was started in.
     pub fn set_choices(&mut self, tab: FilterTab, choices: Result<Vec<Choice>, String>) {
         let clear = tab.value(&self.current).is_some().then(|| Choice {
             value: None,
@@ -213,8 +217,17 @@ impl FilterPanel {
             },
             hint: "clear".into(),
         });
+        let folder = self.folder.clone().filter(|_| tab == FilterTab::File);
+        let here = folder.clone().map(|f| Choice {
+            value: Some(f.clone()),
+            label: f,
+            hint: "current folder".into(),
+        });
         let list = &mut self.lists[tab.index()];
-        list.items = Some(choices.map(|c| clear.into_iter().chain(c).collect()));
+        list.items = Some(choices.map(|c| {
+            let rest = c.into_iter().filter(|c| folder.is_none() || c.value != folder);
+            clear.into_iter().chain(here).chain(rest).collect()
+        }));
         list.refilter();
     }
 
@@ -465,7 +478,7 @@ mod tests {
             author: None,
             path: Some("src/".into()),
         };
-        let mut p = FilterPanel::new(current);
+        let mut p = FilterPanel::new(current, None);
         assert_eq!(p.tab(), FilterTab::File, "opens on the part that's set");
         p.handle_key(k("tab"));
         assert_eq!(p.handle_key(k("enter")), ModalOutcome::Open, "nothing loaded yet");
@@ -488,7 +501,7 @@ mod tests {
 
     #[test]
     fn substring_matches_rank_before_subsequences() {
-        let mut p = FilterPanel::new(LogFilter::default());
+        let mut p = FilterPanel::new(LogFilter::default(), None);
         p.handle_key(k("tab"));
         p.set_choices(
             FilterTab::File,
@@ -509,7 +522,7 @@ mod tests {
 
     #[test]
     fn typed_path_without_a_match_is_used_as_is() {
-        let mut p = FilterPanel::new(LogFilter::default());
+        let mut p = FilterPanel::new(LogFilter::default(), None);
         p.handle_key(k("tab"));
         p.set_choices(FilterTab::File, Ok(file_choices(vec!["a.txt".into()])));
         type_text(&mut p, "gone/old.rs");
@@ -523,12 +536,45 @@ mod tests {
     }
 
     #[test]
+    fn current_folder_comes_first_on_the_file_tab() {
+        let mut p = FilterPanel::new(LogFilter::default(), Some("src/app/".into()));
+        p.handle_key(k("tab"));
+        p.set_choices(
+            FilterTab::File,
+            Ok(file_choices(vec!["a.txt".into(), "src/app/x.rs".into()])),
+        );
+        let labels: Vec<(&str, &str)> = p
+            .list()
+            .items()
+            .iter()
+            .map(|c| (c.label.as_str(), c.hint.as_str()))
+            .collect();
+        assert_eq!(
+            labels,
+            [
+                ("src/app/", "current folder"),
+                ("a.txt", ""),
+                ("src/", ""),
+                ("src/app/x.rs", "")
+            ],
+            "listed once, first"
+        );
+        assert_eq!(
+            p.handle_key(k("enter")),
+            ModalOutcome::Filter(LogFilter {
+                author: None,
+                path: Some("src/app/".into()),
+            })
+        );
+    }
+
+    #[test]
     fn clear_entry_leads_when_set() {
         let current = LogFilter {
             author: Some("Bob <bob@x.io>".into()),
             path: Some("a.txt".into()),
         };
-        let mut p = FilterPanel::new(current);
+        let mut p = FilterPanel::new(current, None);
         p.set_choices(
             FilterTab::Author,
             Ok(author_choices(vec![("Bob <bob@x.io>".into(), 3)])),

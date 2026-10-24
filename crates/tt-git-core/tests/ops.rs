@@ -28,9 +28,9 @@ fn stage_and_unstage() {
     let a = entry(&repo, "a.txt").unwrap();
     assert_eq!((a.index, a.worktree), (FileState::Unmodified, FileState::Modified));
 
-    repo.unstage_all().unwrap();
+    repo.unstage_all(None).unwrap();
     assert!(entry(&repo, "b.txt").unwrap().is_untracked());
-    repo.stage_all().unwrap();
+    repo.stage_all(None).unwrap();
     assert!(repo.status().unwrap().entries.iter().all(|e| e.has_staged()));
 }
 
@@ -52,8 +52,8 @@ fn unstage_on_unborn_branch() {
     repo.stage(&paths(&["first.txt"])).unwrap();
     repo.unstage(&paths(&["first.txt"])).unwrap();
     assert!(entry(&repo, "first.txt").unwrap().is_untracked());
-    repo.stage_all().unwrap();
-    repo.unstage_all().unwrap();
+    repo.stage_all(None).unwrap();
+    repo.unstage_all(None).unwrap();
     assert!(entry(&repo, "first.txt").unwrap().is_untracked());
 }
 
@@ -155,7 +155,7 @@ fn kept_ignored_and_nested(sb: &Sandbox) {
 fn discard_everything() {
     let sb = Sandbox::new();
     let repo = messy(&sb);
-    repo.discard_all(DiscardScope::Everything).unwrap();
+    repo.discard_all(DiscardScope::Everything, None).unwrap();
     for path in ["staged.txt", "unstaged.txt", "both.txt"] {
         assert_eq!(
             read(&sb, path).as_deref(),
@@ -179,7 +179,7 @@ fn discard_everything() {
 fn discard_unstaged_keeps_staged_and_untracked() {
     let sb = Sandbox::new();
     let repo = messy(&sb);
-    repo.discard_all(DiscardScope::Unstaged).unwrap();
+    repo.discard_all(DiscardScope::Unstaged, None).unwrap();
     assert_eq!(
         read(&sb, "unstaged.txt").as_deref(),
         Some(
@@ -225,7 +225,7 @@ fn discard_unstaged_keeps_staged_and_untracked() {
 fn discard_unstaged_and_untracked_keeps_staged() {
     let sb = Sandbox::new();
     let repo = messy(&sb);
-    repo.discard_all(DiscardScope::UnstagedAndUntracked).unwrap();
+    repo.discard_all(DiscardScope::UnstagedAndUntracked, None).unwrap();
     assert_eq!(
         read(&sb, "unstaged.txt").as_deref(),
         Some(
@@ -256,7 +256,7 @@ fn discard_unstaged_and_untracked_keeps_staged() {
 fn discard_untracked_only() {
     let sb = Sandbox::new();
     let repo = messy(&sb);
-    repo.discard_all(DiscardScope::Untracked).unwrap();
+    repo.discard_all(DiscardScope::Untracked, None).unwrap();
     assert_eq!(read(&sb, "untracked.txt"), None);
     assert!(!sb.path().join("dir").exists(), "the emptied folder goes too");
     assert_eq!(
@@ -289,9 +289,9 @@ fn discard_all_with_nothing_tracked() {
     sb.write("a.txt", "a").write("b.txt", "b");
     sb.git(&["add", "a.txt"]);
     let repo = open(&sb);
-    repo.discard_all(DiscardScope::Unstaged).unwrap();
+    repo.discard_all(DiscardScope::Unstaged, None).unwrap();
     assert!(sb.path().join("b.txt").exists());
-    repo.discard_all(DiscardScope::Everything).unwrap();
+    repo.discard_all(DiscardScope::Everything, None).unwrap();
     assert!(repo.status().unwrap().is_clean(), "{:#?}", repo.status().unwrap());
 }
 
@@ -301,7 +301,7 @@ fn discard_all_refused_while_merging() {
     conflicting_branches(&sb);
     let repo = open(&sb);
     repo.merge("other").unwrap_err();
-    let err = repo.discard_all(DiscardScope::Everything).unwrap_err();
+    let err = repo.discard_all(DiscardScope::Everything, None).unwrap_err();
     assert!(err.to_string().contains("merge is in progress"), "{err}");
     assert_eq!(repo.in_progress(), Some(tt_git_core::InProgress::Merge));
 }
@@ -311,7 +311,7 @@ fn undo_does_not_offer_to_undo_a_discard() {
     let sb = Sandbox::new();
     let repo = messy(&sb);
     let before = repo.undo_step().unwrap();
-    repo.discard_all(DiscardScope::Everything).unwrap();
+    repo.discard_all(DiscardScope::Everything, None).unwrap();
     assert_eq!(repo.undo_step().unwrap(), before, "the reset to HEAD isn't a step");
 }
 
@@ -321,12 +321,12 @@ fn commit_and_amend() {
     sb.commit("base");
     sb.write("x.txt", "x");
     let repo = open(&sb);
-    repo.stage_all().unwrap();
+    repo.stage_all(None).unwrap();
     repo.commit(Some("Add x\n\nWith a body."), false).unwrap();
     assert_eq!(sb.git(&["log", "-1", "--format=%B"]), "Add x\n\nWith a body.");
 
     sb.write("y.txt", "y");
-    repo.stage_all().unwrap();
+    repo.stage_all(None).unwrap();
     repo.commit(None, true).unwrap();
     assert_eq!(sb.git(&["log", "-1", "--format=%s"]), "Add x");
     assert_eq!(sb.git(&["rev-list", "--count", "HEAD"]), "2");
@@ -1348,4 +1348,94 @@ mod ignore {
         assert!(!repo.is_tracked("vendor").unwrap());
         assert!(sb.path().join("vendor/lib.rs").is_file());
     }
+}
+
+/// Changes in `app/` and outside it, for the folder-scoped bulk actions:
+/// a modified tracked file, a staged new file and an untracked one in each.
+fn folder_and_outside() -> Sandbox {
+    let sb = Sandbox::new();
+    sb.write("app/a.txt", "1\n").write("lib/b.txt", "1\n");
+    sb.git(&["add", "."]);
+    sb.commit_staged("base");
+    sb.write("app/a.txt", "2\n").write("lib/b.txt", "2\n");
+    sb.write("app/new.txt", "n\n").write("lib/new.txt", "n\n");
+    sb.git(&["add", "app/new.txt", "lib/new.txt"]);
+    sb.write("app/junk.txt", "j\n").write("lib/junk.txt", "j\n");
+    sb
+}
+
+#[test]
+fn stage_and_unstage_all_in_a_folder() {
+    let sb = folder_and_outside();
+    let repo = open(&sb);
+    repo.stage_all(Some("app/")).unwrap();
+    for p in ["app/a.txt", "app/new.txt", "app/junk.txt"] {
+        let e = entry(&repo, p).unwrap();
+        assert!(e.has_staged() && !e.has_unstaged(), "{p} staged");
+    }
+    assert!(entry(&repo, "lib/b.txt").unwrap().has_unstaged(), "outside left alone");
+    assert!(entry(&repo, "lib/junk.txt").unwrap().is_untracked());
+
+    repo.unstage_all(Some("app/")).unwrap();
+    assert!(!entry(&repo, "app/a.txt").unwrap().has_staged());
+    assert!(entry(&repo, "app/new.txt").unwrap().is_untracked());
+    assert!(
+        entry(&repo, "lib/new.txt").unwrap().has_staged(),
+        "outside stays staged"
+    );
+}
+
+#[test]
+fn unstage_all_in_a_folder_on_unborn_branch() {
+    let sb = Sandbox::new();
+    sb.write("app/a.txt", "x").write("lib/b.txt", "y");
+    sb.git(&["add", "."]);
+    let repo = open(&sb);
+    repo.unstage_all(Some("app/")).unwrap();
+    assert!(entry(&repo, "app/a.txt").unwrap().is_untracked());
+    assert!(entry(&repo, "lib/b.txt").unwrap().has_staged());
+    repo.unstage_all(Some("app/")).unwrap();
+}
+
+#[test]
+fn discard_everything_in_a_folder() {
+    let sb = folder_and_outside();
+    let repo = open(&sb);
+    repo.discard_all(DiscardScope::Everything, Some("app/")).unwrap();
+    assert!(
+        repo.status()
+            .unwrap()
+            .entries
+            .iter()
+            .all(|e| e.path.starts_with("lib/")),
+        "nothing left in app/"
+    );
+    assert_eq!(std::fs::read_to_string(sb.path().join("app/a.txt")).unwrap(), "1\n");
+    assert!(!sb.path().join("app/new.txt").exists());
+    assert!(!sb.path().join("app/junk.txt").exists());
+    assert_eq!(repo.status().unwrap().entries.len(), 3, "lib/ untouched");
+}
+
+#[test]
+fn discard_unstaged_and_untracked_in_a_folder() {
+    let sb = folder_and_outside();
+    let repo = open(&sb);
+    repo.discard_all(DiscardScope::UnstagedAndUntracked, Some("app/"))
+        .unwrap();
+    assert!(entry(&repo, "app/a.txt").is_none());
+    assert!(entry(&repo, "app/new.txt").unwrap().has_staged(), "staged stays");
+    assert!(entry(&repo, "app/junk.txt").is_none());
+    assert!(entry(&repo, "lib/b.txt").unwrap().has_unstaged());
+    assert!(entry(&repo, "lib/junk.txt").is_some());
+}
+
+#[test]
+fn discard_everything_in_a_folder_on_unborn_branch() {
+    let sb = Sandbox::new();
+    sb.write("app/a.txt", "x").write("lib/b.txt", "y");
+    sb.git(&["add", "."]);
+    let repo = open(&sb);
+    repo.discard_all(DiscardScope::Everything, Some("app/")).unwrap();
+    assert!(!sb.path().join("app/a.txt").exists());
+    assert!(entry(&repo, "lib/b.txt").unwrap().has_staged());
 }

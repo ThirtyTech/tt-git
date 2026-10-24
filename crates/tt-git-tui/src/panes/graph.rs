@@ -625,7 +625,8 @@ impl GraphPane {
                 t.push_str(&format!(" · author {}", author_name(author)));
             }
             if let Some(path) = &self.filter.path {
-                t.push_str(&format!(" · file {path}"));
+                let what = if path.ends_with('/') { "folder" } else { "file" };
+                t.push_str(&format!(" · {what} {path}"));
             }
         }
         t.push(']');
@@ -935,6 +936,7 @@ impl Component for GraphPane {
             Command::Revert,
             Command::SelectRange,
             Command::Filter,
+            Command::FilterFolder,
             Command::Copy,
             Command::Agent,
             Command::NextTab,
