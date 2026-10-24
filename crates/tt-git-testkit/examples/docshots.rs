@@ -53,7 +53,6 @@ fn main() {
         ("graph-files", &["j", "enter"]),
         ("graph-filter", &["f"]),
         ("graph-filter-folder", &["f", "tab", "text:src/pages/", "enter"]),
-        ("graph-filter-message", &["/", "tab", "tab"]),
         ("graph-zoom-details", &["+", "space"]),
         ("graph-new-branch", &["j", "n", "text:fix/bell-a11y"]),
         ("graph-new-worktree", &["j", "n", "tab", "text:fix/bell-a11y"]),
@@ -176,6 +175,17 @@ children = [
         press(&mut driver, keys);
         save(&out, name, &driver);
     }
+
+    // The message filter's presets are the repo's most used subject
+    // prefixes, and the mock's subjects have none, so this one adds some on
+    // top, in its own repo. The shot only shows the prompt.
+    let prefixed = Sandbox::named(REPO);
+    let mock = Mock::new(&prefixed);
+    mock.build();
+    mock.conventional_commits();
+    let mut driver = TestDriver::with_size(Config::default(), &prefixed, WIDTH, HEIGHT);
+    press(&mut driver, &["/", "tab", "tab"]);
+    save(&out, "graph-filter-message", &driver);
 
     // Blame of src/api/client.ts, written by five people over two months,
     // with two lines changed in the working tree. In its own repo, as its
@@ -642,6 +652,38 @@ impl<'a> Mock<'a> {
     /// src/api/client.ts built up line by line (see [`CLIENT`]), one commit
     /// per author, then changed in the working tree. The last commit also
     /// touches the notifications client, so it has more than one file.
+    /// Commits whose subjects use conventional commit prefixes, so the
+    /// presets read `^feat · ^fix · ^docs · ^test · ^refactor · ^perf ·
+    /// ^chore · ^ci`: most used first, then newest first.
+    fn conventional_commits(&self) {
+        let subjects = [
+            "ci: Cache pnpm in the build",
+            "chore: Bump Vite to 7.1",
+            "feat(cart): Save the cart between visits",
+            "fix(cart): Keep quantities above zero",
+            "perf: Lazy-load the product images",
+            "docs: Describe the cart API",
+            "feat(search): Suggest products as you type",
+            "fix: Close the menu on escape",
+            "refactor: Share the price formatter",
+            "feat: Show stock on the product page",
+            "docs(search): Note the debounce",
+            "fix(search): Ignore empty queries",
+            "test: Cover the checkout form",
+            "feat(checkout): Remember the address",
+        ];
+        for (i, subject) in subjects.into_iter().enumerate() {
+            self.sb.commit_file(
+                "CHANGELOG.md",
+                &format!(
+                    "{i}
+"
+                ),
+                subject,
+            );
+        }
+    }
+
     fn blame_history(&self) {
         let d = DAY;
         let commits: [(char, i64, Person, &str); 6] = [

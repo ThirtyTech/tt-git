@@ -24,7 +24,7 @@ current_includes_upstream = true  # current-branch mode also shows HEAD's upstre
 dates = "relative"              # graph and blame dates: "relative" (3h, 2d) or "clock" (2026-10-17 01:30 PM, local time)
 lanes = true                    # draw the lanes at startup; L in the graph toggles them
 filter_to_cwd = false           # started in a subfolder, show only its commits and Status files (. toggles; --filter-to-cwd / --no-filter-to-cwd override)
-message_presets = ["^feat", "^fix", "^docs", "^test", "^refactor", "^perf", "^chore", "^ci"]  # regexes tab steps through in the / message filter
+# message_presets = ["^feat", "^fix"]  # regexes tab steps through in the / message filter; unset, the repo's 8 most used subject prefixes
 
 [branches]
 unmerged_exclude = ["archive"]  # hide unmerged branches whose name contains any of these

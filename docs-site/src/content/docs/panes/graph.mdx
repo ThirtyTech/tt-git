@@ -231,8 +231,12 @@ features, `^(fix|perf)` the fixes and speedups, `^docs\(graph\)` the graph's doc
 
 </Steps>
 
-- **Presets** are `^feat`, `^fix`, `^docs`, `^test`, `^refactor`, `^perf`, `^chore` and `^ci`. Set
-  your own with [`message_presets`](/configuration/#graph) under `[graph]`.
+- **Presets** are the 8 subject prefixes the repository uses most, in its newest 1000 loaded
+  commits, most used first. A prefix is the first word of a subject followed by `:`, with an optional
+  `(scope)` and `!` in between, so `feat(blame)!: Step through commits` counts for `^feat`. Case
+  doesn't matter: `Fix:` and `fix:` both count for `^fix`. They're worked out from the whole graph
+  and stay the same while it's filtered. A repository with no such prefixes has no presets. Set a
+  fixed list with [`message_presets`](/configuration/#graph) under `[graph]`.
 - **Case** is ignored unless the regex has a capital letter, as in
   [blame's search](/panes/blame/). `fix` finds `Fix typo`; `Fix` doesn't find `fix: typo`.
 - **Only the subject** is searched, so `^feat` means the subject starts with `feat`, not that some
