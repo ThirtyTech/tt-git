@@ -12,6 +12,7 @@ use tt_git_core::{GitCli, Repo};
 use tt_git_plugin::install::{self, GithubSpec};
 use tt_git_plugin::registry::{self, PluginDirs, Registry};
 use tt_git_plugin::socket;
+use tt_git_tui::config;
 
 #[derive(Debug, Subcommand)]
 pub enum Cmd {
@@ -46,6 +47,9 @@ pub enum Cmd {
     /// Branch commands.
     #[command(subcommand)]
     Branch(BranchCmd),
+    /// Config file commands.
+    #[command(subcommand)]
+    Config(ConfigCmd),
     /// Update tt-git to the latest release (or VERSION) with the release's
     /// install script.
     Update {
@@ -225,6 +229,16 @@ pub enum LogCmd {
 }
 
 #[derive(Debug, Subcommand)]
+pub enum ConfigCmd {
+    /// Print the config files read for a repository, in order (later ones
+    /// win), marking the ones that don't exist.
+    Path {
+        #[command(flatten)]
+        repo: RepoArg,
+    },
+}
+
+#[derive(Debug, Subcommand)]
 pub enum UiCmd {
     /// Show a message in the help bar.
     Notify {
@@ -313,6 +327,19 @@ pub fn run(cmd: Cmd) -> Result<()> {
             };
             for ev in socket::subscribe(socket.address()?, params)? {
                 println!("{}", serde_json::to_string(&ev).unwrap_or_default());
+            }
+            Ok(())
+        }
+        Cmd::Config(ConfigCmd::Path { repo }) => {
+            let global = tt_git_core::paths::config_file();
+            // Outside a repository only the global file applies.
+            let paths = match repo.open() {
+                Ok(repo) => config::layer_paths(&global, repo.root(), repo.common_dir()).to_vec(),
+                Err(_) => vec![global],
+            };
+            for path in paths {
+                let missing = if path.exists() { "" } else { "  (not found)" };
+                println!("{}{missing}", path.display());
             }
             Ok(())
         }

@@ -407,3 +407,60 @@ fn opens_another_worktree_in_place() {
     t.send_str("q").unwrap();
     assert!(t.wait_exit().unwrap().success());
 }
+
+#[test]
+fn reads_each_worktrees_own_config() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let side = sb.path().join(".worktrees").join("side");
+    sb.git(&["worktree", "add", "-q", "-b", "side", side.to_str().unwrap(), "main"]);
+    std::fs::write(sb.path().join(".git/info/exclude"), "/.worktrees/\n").unwrap();
+    // Main's file tries to set the editor, which only the user's own config may.
+    std::fs::write(sb.path().join(".tt-git.toml"), "[editor]\ncommand = \"evil {file}\"\n").unwrap();
+    std::fs::write(side.join(".tt-git.toml"), "[graph]\ndates = \"clock\"\n").unwrap();
+
+    let mut t = spawn(&sb, &[]);
+    t.wait_until(|s| s.contains(".tt-git.toml: ignored editor"))
+        .expect("ignored key reported");
+    t.wait_until(|s| s.contains("Status: repo · main") && s.contains("Worktrees"))
+        .expect("main opened");
+    assert!(
+        !t.screen().contains(" AM") && !t.screen().contains(" PM"),
+        "relative dates in main"
+    );
+    t.send_str("3").unwrap();
+    t.send_str("[").unwrap();
+    t.wait_until(|s| s.contains(".worktrees/side")).expect("worktrees tab");
+    t.send_str("j").unwrap();
+    t.send(Key::Enter).unwrap();
+    t.wait_until(|s| s.contains("Status: side · side"))
+        .expect("side opened");
+    t.wait_until(|s| s.contains(" AM") || s.contains(" PM"))
+        .expect("side's file sets clock dates");
+    t.send_str("q").unwrap();
+    assert!(t.wait_exit().unwrap().success());
+}
+
+#[test]
+fn config_path_lists_the_files_read() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    std::fs::write(sb.path().join(".tt-git.toml"), "").unwrap();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_tt-git"))
+        .args(["config", "path"])
+        .current_dir(sb.path())
+        .env_remove("TTGIT_REPO_PATH")
+        .envs(sb.env())
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{out:?}");
+    let text = String::from_utf8(out.stdout).unwrap();
+    let lines: Vec<&str> = text.lines().collect();
+    assert_eq!(lines.len(), 3, "{text}");
+    assert!(lines[0].ends_with("config.toml  (not found)"), "{text}");
+    assert!(lines[1].ends_with(".tt-git.toml"), "{text}");
+    assert!(
+        lines[2].ends_with("tt-git.toml  (not found)") && lines[2].contains(".git"),
+        "{text}"
+    );
+}

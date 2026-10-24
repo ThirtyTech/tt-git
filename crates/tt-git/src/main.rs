@@ -4,9 +4,10 @@ use clap::Parser;
 use color_eyre::eyre::{Result, WrapErr};
 use tt_git_core::{GitCli, GitError, Repo};
 use tt_git_plugin::registry::PluginDirs;
+use tt_git_tui::App;
 use tt_git_tui::app::PluginOptions;
+use tt_git_tui::config::{GlobalConfig, LayeredConfig, SHARED_FILE};
 use tt_git_tui::themes::{ThemeDirs, ThemeOptions};
-use tt_git_tui::{App, Config};
 
 mod cli;
 mod test_plugin;
@@ -49,12 +50,14 @@ fn main() -> Result<()> {
     let _log_guard = init_tracing();
 
     let config_path = args.config.unwrap_or_else(tt_git_core::paths::config_file);
-    let mut config = Config::load(&config_path)?;
-    if args.filter_to_cwd {
-        config.graph.filter_to_cwd = true;
+    let global = GlobalConfig::load(&config_path)?;
+    let filter_to_cwd = if args.filter_to_cwd {
+        Some(true)
     } else if args.no_filter_to_cwd {
-        config.graph.filter_to_cwd = false;
-    }
+        Some(false)
+    } else {
+        None
+    };
     let repo_path = match args.path {
         Some(p) => p,
         None => std::env::current_dir().wrap_err("reading current directory")?,
@@ -68,8 +71,23 @@ fn main() -> Result<()> {
         Err(e) => return Err(e).wrap_err("opening repository"),
     };
     let no_plugins = args.no_plugins;
+    // Each repository, and each worktree opened later, gets its own files
+    // laid over the global config.
     let new_app = |repo: Repo| -> Result<_> {
-        let (mut app, rx) = App::new(config.clone(), repo, tt_git_core::time::system_clock())?;
+        let LayeredConfig { mut config, ignored } = global.for_repo(repo.root(), repo.common_dir())?;
+        if let Some(on) = filter_to_cwd {
+            config.graph.filter_to_cwd = on;
+        }
+        let mouse = config.mouse;
+        let (mut app, rx) = App::new(config, repo, tt_git_core::time::system_clock())?;
+        if !ignored.is_empty() {
+            let msg = format!(
+                "{SHARED_FILE}: ignored {} (only your own config can set them)",
+                ignored.join(", ")
+            );
+            tracing::warn!("{msg}");
+            app.set_notice(msg);
+        }
         app.enable_themes(ThemeOptions {
             dirs: ThemeDirs::from_env(),
             config_path: Some(config_path.clone()),
@@ -82,7 +100,7 @@ fn main() -> Result<()> {
                 extra_env: Vec::new(),
             });
         }
-        Ok((app, rx))
+        Ok((app, rx, mouse))
     };
     // Made before the terminal is taken over, so a bad config is reported
     // on a normal screen.
@@ -99,14 +117,15 @@ fn main() -> Result<()> {
     // Installed after color-eyre so ratatui's panic hook restores the
     // terminal before the report is printed.
     let mut terminal = ratatui::init();
-    let mouse = config.mouse;
+    // Mouse capture is set up once, by the first repository's config.
+    let mouse = next.as_ref().is_some_and(|(_, _, mouse)| *mouse);
     if mouse {
         let _ = crossterm::execute!(std::io::stdout(), crossterm::event::EnableMouseCapture);
     }
     let mut result = Ok(());
     // Opening another worktree quits the app and starts a new one there,
     // as if tt-git had been started in it.
-    while let Some((mut app, mut rx)) = next.take() {
+    while let Some((mut app, mut rx, _)) = next.take() {
         // Like lazygit's "<repo> - Lazygit": lets terminal multiplexers and
         // their plugins tell tt-git is running when the OS only reports the shell.
         let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::SetTitle(app.terminal_title()));
