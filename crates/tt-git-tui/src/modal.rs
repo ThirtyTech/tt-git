@@ -105,6 +105,13 @@ pub enum GitOp {
         oid: String,
         summary: String,
     },
+    /// `git revert`. A merge commit needs `mainline`, the parent (from 1)
+    /// whose side is kept.
+    Revert {
+        oid: String,
+        summary: String,
+        mainline: Option<usize>,
+    },
     Continue(InProgress),
     Abort(InProgress),
     StashPush {
@@ -218,6 +225,12 @@ impl GitOp {
             GitOp::Merge { target } => format!("merge {target}"),
             GitOp::Rebase { onto } => format!("rebase onto {onto}"),
             GitOp::CherryPick { oid, .. } => format!("cherry-pick {}", &oid[..oid.len().min(7)]),
+            GitOp::Revert {
+                oid, mainline: None, ..
+            } => format!("revert {}", &oid[..oid.len().min(7)]),
+            GitOp::Revert {
+                oid, mainline: Some(n), ..
+            } => format!("revert {} -m {n}", &oid[..oid.len().min(7)]),
             GitOp::Continue(op) => format!("{} --continue", op.command()),
             GitOp::Abort(op) => format!("{} --abort", op.command()),
             GitOp::StashPush { scope, .. } => match scope {

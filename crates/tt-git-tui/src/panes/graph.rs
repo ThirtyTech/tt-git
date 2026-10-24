@@ -18,7 +18,7 @@ use crate::component::{Component, EventState};
 use crate::filter::author_name;
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context};
-use crate::modal::{GitOp, Modal, PromptAction};
+use crate::modal::{GitOp, Modal, PaletteItem, PaletteTarget, PromptAction};
 use crate::theme::Theme;
 use crate::widgets::{Cursor, fit, fit_right};
 
@@ -467,6 +467,49 @@ impl GraphPane {
         Some(branch.unwrap_or_else(|| c.oid.to_string()))
     }
 
+    /// Asks before reverting `c`. A merge commit asks which parent's side
+    /// to keep instead, one entry per parent.
+    fn revert_modal(&self, c: &Commit) -> Modal {
+        let op = |mainline| GitOp::Revert {
+            oid: c.oid.to_string(),
+            summary: c.summary.to_string(),
+            mainline,
+        };
+        if !c.is_merge() {
+            return Modal::confirm(
+                "Revert",
+                format!(
+                    "Revert {} \"{}\"? This makes a new commit that undoes it.",
+                    c.short_oid(),
+                    c.summary
+                ),
+                op(None),
+            );
+        }
+        let items = c
+            .parents
+            .iter()
+            .enumerate()
+            .map(|(i, parent)| {
+                let short = &parent.hex()[..7];
+                let label = match self.commits.iter().find(|p| p.oid == *parent) {
+                    Some(p) => format!("Keep parent {}: {short} \"{}\"", i + 1, p.summary),
+                    None => format!("Keep parent {}: {short}", i + 1),
+                };
+                let hint = match i {
+                    0 => "-m 1, the branch merged into".to_string(),
+                    _ => format!("-m {}", i + 1),
+                };
+                PaletteItem {
+                    label,
+                    hint,
+                    target: PaletteTarget::Op(op(Some(i + 1))),
+                }
+            })
+            .collect();
+        Modal::picker(format!("Revert merge {}: keep which side?", c.short_oid()), items, 0)
+    }
+
     /// Checks out the selected commit: the local branch pointing at it if
     /// there is one, else the commit itself with HEAD detached.
     fn checkout(&self, ctx: &Ctx) {
@@ -760,6 +803,12 @@ impl Component for GraphPane {
                 }
                 EventState::Consumed
             }
+            Command::Revert => {
+                if let Some(modal) = self.selected().map(|c| self.revert_modal(c)) {
+                    ctx.emit(Action::OpenModal(modal));
+                }
+                EventState::Consumed
+            }
             Command::NewBranch => {
                 if let Some(c) = self.selected() {
                     ctx.emit(Action::OpenModal(Modal::prompt(
@@ -808,6 +857,7 @@ impl Component for GraphPane {
             Command::Merge,
             Command::Rebase,
             Command::CherryPick,
+            Command::Revert,
             Command::Filter,
             Command::Copy,
             Command::Agent,

@@ -349,12 +349,16 @@ impl App {
                 "cherry_pick.completed",
                 json!({ "picked": oid, "summary": summary, "head": head }),
             ),
+            GitOp::Revert { oid, summary, mainline } => (
+                "revert.completed",
+                json!({ "reverted": oid, "summary": summary, "mainline": mainline, "head": head }),
+            ),
             GitOp::Continue(op) => (
                 match op {
                     tt_git_core::InProgress::Merge => "merge.completed",
                     tt_git_core::InProgress::Rebase => "rebase.completed",
                     tt_git_core::InProgress::CherryPick => "cherry_pick.completed",
-                    tt_git_core::InProgress::Revert => "commit.created",
+                    tt_git_core::InProgress::Revert => "revert.completed",
                 },
                 json!({ "head": head, "continued": true }),
             ),
