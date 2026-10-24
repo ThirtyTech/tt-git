@@ -3,6 +3,7 @@
 
 use std::borrow::Cow;
 use std::collections::HashMap;
+use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
 use std::time::Duration;
 
@@ -77,27 +78,40 @@ const STATUS_ONLY: Change = Change {
     status: true,
 };
 
+const REFS_ONLY: Change = Change {
+    refs: true,
+    status: false,
+};
+
 /// Classifies a changed path. `git_dir` changes to refs/HEAD reload refs and
 /// the graph; the index and worktree reload status. Object writes and lock
-/// files are noise.
-pub fn classify(path: &Path, root: &Path, git_dir: &Path) -> Change {
-    if let Ok(rel) = path.strip_prefix(git_dir) {
-        let first = rel.components().next().and_then(|c| match c {
+/// files are noise. `common_dir` is the shared `.git` (the same as `git_dir`
+/// outside a linked worktree): its refs count, and so does a worktree's
+/// `gitdir`, `locked` or `HEAD` under `worktrees/`, which change what the
+/// worktree list shows. A worktree's index and logs change on every stage
+/// and commit there and don't count.
+pub fn classify(path: &Path, root: &Path, git_dir: &Path, common_dir: &Path) -> Change {
+    let own = path.strip_prefix(git_dir).map(|rel| (rel, true));
+    if let Ok((rel, own)) = own.or_else(|_| path.strip_prefix(common_dir).map(|rel| (rel, false))) {
+        let mut parts = rel.components().map(|c| match c {
             Component::Normal(s) => s.to_str(),
             _ => None,
         });
         let is_lock = path.extension().is_some_and(|e| e == "lock");
-        return match first {
+        return match parts.next().flatten() {
             _ if is_lock => Change::default(),
             Some("objects") | Some("hooks") | Some("info") | Some("description") => Change::default(),
-            Some("index") => Change {
-                refs: false,
-                status: true,
-            },
+            // Another worktree's index.
+            Some("index") if !own => Change::default(),
+            Some("index") => STATUS_ONLY,
             Some("refs") | Some("HEAD") | Some("packed-refs") | Some("logs") | Some("FETCH_HEAD")
             | Some("ORIG_HEAD") | Some("MERGE_HEAD") => Change {
                 refs: true,
                 status: true,
+            },
+            Some("worktrees") => match (parts.next(), parts.next().flatten(), parts.next()) {
+                (Some(_), Some("gitdir" | "locked" | "HEAD"), None) => REFS_ONLY,
+                _ => Change::default(),
             },
             _ => Change::default(),
         };
@@ -127,8 +141,11 @@ struct Watch {
     /// Canonical, as the watch was started on them.
     root: PathBuf,
     git_dir: PathBuf,
+    common_dir: PathBuf,
     repo: Repo,
     rules: Rules,
+    /// The linked worktrees, as their folders under `common_dir/worktrees` say.
+    worktrees: Vec<Linked>,
 }
 
 impl Watch {
@@ -141,10 +158,18 @@ impl Watch {
         let mut real_dirs = HashMap::new();
         let mut change = Change::default();
         let mut reload_rules = false;
+        let mut worktrees_touched = false;
         for raw in paths {
             let path = self.resolve(raw);
-            let c = classify(&path, &self.root, &self.git_dir);
-            if c == STATUS_ONLY && !path.starts_with(&self.git_dir) {
+            let c = classify(&path, &self.root, &self.git_dir, &self.common_dir);
+            worktrees_touched |= path.starts_with(self.common_dir.join("worktrees"));
+            // A linked worktree's folder deleted by hand makes it prunable,
+            // though the folder is ignored. (On Windows it's also reported
+            // when a file right inside it is written, which doesn't count.)
+            if self.worktrees.iter().any(|w| w.root.as_deref() == Some(&*path)) && !path.exists() {
+                change.refs = true;
+            }
+            if c == STATUS_ONLY && !path.starts_with(&self.git_dir) && !path.starts_with(&self.common_dir) {
                 if let Some(rules) = self.rules() {
                     // Seen by way of a symlinked directory, it can be
                     // somewhere else that counts.
@@ -165,6 +190,18 @@ impl Watch {
         }
         if reload_rules {
             self.rules = Rules::Unknown;
+        }
+        // A worktree's folder under `worktrees/` coming or going may be all
+        // that's reported: its files can be gone, or written before a new
+        // folder is watched. The folder itself counts only if the worktrees
+        // changed, since on Windows it's reported whenever a file in it is
+        // written.
+        if worktrees_touched {
+            let now = linked_worktrees(&self.common_dir);
+            if now != self.worktrees {
+                self.worktrees = now;
+                change.refs = true;
+            }
         }
         change
     }
@@ -192,6 +229,7 @@ impl Watch {
     fn resolve<'p>(&self, raw: &'p Path) -> Cow<'p, Path> {
         let rel = raw
             .strip_prefix(&self.git_dir)
+            .or_else(|_| raw.strip_prefix(&self.common_dir))
             .or_else(|_| raw.strip_prefix(&self.root));
         let plain = rel.is_ok_and(|rel| {
             rel.components()
@@ -205,6 +243,40 @@ impl Watch {
             Err(_) => Cow::Borrowed(raw),
         }
     }
+}
+
+/// A linked worktree, from its folder under `common_dir/worktrees`.
+#[derive(Debug, PartialEq, Eq)]
+struct Linked {
+    name: OsString,
+    /// Where its working tree is, from its `gitdir` file, canonical as
+    /// events come.
+    root: Option<PathBuf>,
+}
+
+/// The linked worktrees, by name.
+fn linked_worktrees(common_dir: &Path) -> Vec<Linked> {
+    let mut real_dirs = HashMap::new();
+    let mut linked: Vec<Linked> = std::fs::read_dir(common_dir.join("worktrees"))
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| entry.file_type().is_ok_and(|t| t.is_dir()))
+        .map(|entry| {
+            // `<root>/.git`, with forward slashes on Windows too.
+            let gitdir = std::fs::read_to_string(entry.path().join("gitdir")).ok();
+            let root = gitdir
+                .as_deref()
+                .and_then(|g| Path::new(g.trim_end()).parent())
+                .and_then(|root| real_parent(root, &mut real_dirs));
+            Linked {
+                name: entry.file_name(),
+                root,
+            }
+        })
+        .collect();
+    linked.sort_by(|a, b| a.name.cmp(&b.name));
+    linked
 }
 
 /// Where `path` really is: its directory canonicalized, plus its name. A
@@ -230,15 +302,18 @@ fn real_parent(path: &Path, cache: &mut HashMap<PathBuf, Option<PathBuf>>) -> Op
 }
 
 /// Starts watching `repo`'s working tree (recursively, which includes a
-/// `.git` inside it) and git dir, emitting `Action::RepoChanged` after
-/// changes settle.
+/// `.git` inside it), git dir and shared git dir, emitting
+/// `Action::RepoChanged` after changes settle.
 pub fn watch(repo: Repo, ctx: Ctx) -> notify_debouncer_mini::notify::Result<RepoWatcher> {
     let canonical = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
     let root_buf = canonical(repo.root());
     let git_buf = canonical(repo.git_dir());
+    let common_buf = canonical(repo.common_dir());
     let mut state = Watch {
         root: root_buf.clone(),
         git_dir: git_buf.clone(),
+        worktrees: linked_worktrees(&common_buf),
+        common_dir: common_buf.clone(),
         repo,
         rules: Rules::Unknown,
     };
@@ -255,9 +330,15 @@ pub fn watch(repo: Repo, ctx: Ctx) -> notify_debouncer_mini::notify::Result<Repo
             });
         }
     })?;
-    debouncer.watcher().watch(&root_buf, RecursiveMode::Recursive)?;
-    if !git_buf.starts_with(&root_buf) {
-        debouncer.watcher().watch(&git_buf, RecursiveMode::Recursive)?;
+    // Each folder once: a linked worktree's git dir is inside the shared one.
+    let mut dirs = vec![root_buf, git_buf, common_buf];
+    dirs.sort_by_key(|d| d.as_os_str().len());
+    let mut watched: Vec<PathBuf> = Vec::new();
+    for dir in dirs {
+        if !watched.iter().any(|w| dir.starts_with(w)) {
+            debouncer.watcher().watch(&dir, RecursiveMode::Recursive)?;
+            watched.push(dir);
+        }
     }
     Ok(RepoWatcher { _debouncer: debouncer })
 }
@@ -270,7 +351,7 @@ mod tests {
     fn classifies_paths() {
         let root = Path::new("/r");
         let git = Path::new("/r/.git");
-        let c = |p: &str| classify(Path::new(p), root, git);
+        let c = |p: &str| classify(Path::new(p), root, git, git);
         assert_eq!(
             c("/r/src/main.rs"),
             Change {
@@ -303,6 +384,43 @@ mod tests {
         assert_eq!(c("/r/.git/index.lock"), Change::default());
         assert_eq!(c("/r/.git/refs/heads/main.lock"), Change::default());
         assert_eq!(c("/elsewhere/x"), Change::default());
+
+        // Adding, removing, moving and locking a linked worktree.
+        assert_eq!(c("/r/.git/worktrees/side/gitdir"), REFS_ONLY);
+        assert_eq!(c("/r/.git/worktrees/side/locked"), REFS_ONLY);
+        assert_eq!(c("/r/.git/worktrees/side/HEAD"), REFS_ONLY);
+        assert_eq!(c("/r/.git/worktrees/side/HEAD.lock"), Change::default());
+        // Folders count only if the set of them changed; see `Watch::batch`.
+        assert_eq!(c("/r/.git/worktrees"), Change::default());
+        assert_eq!(c("/r/.git/worktrees/side"), Change::default());
+        // Staging and committing in a linked worktree.
+        assert_eq!(c("/r/.git/worktrees/side/index"), Change::default());
+        assert_eq!(c("/r/.git/worktrees/side/logs/HEAD"), Change::default());
+        assert_eq!(c("/r/.git/worktrees/side/ORIG_HEAD"), Change::default());
+        assert_eq!(c("/r/.git/worktrees/side/refs/bisect/bad"), Change::default());
+    }
+
+    #[test]
+    fn classifies_paths_in_a_linked_worktree() {
+        let root = Path::new("/r/.worktrees/side");
+        let common = Path::new("/r/.git");
+        let git = Path::new("/r/.git/worktrees/side");
+        let c = |p: &str| classify(Path::new(p), root, git, common);
+        assert_eq!(c("/r/.worktrees/side/src/main.rs"), STATUS_ONLY);
+        assert_eq!(c("/r/.git/worktrees/side/index"), STATUS_ONLY);
+        assert_eq!(c("/r/.git/worktrees/side/HEAD"), BOTH);
+        assert_eq!(c("/r/.git/worktrees/side/logs/HEAD"), BOTH);
+        // The shared refs.
+        assert_eq!(c("/r/.git/refs/heads/main"), BOTH);
+        assert_eq!(c("/r/.git/packed-refs"), BOTH);
+        // The main worktree and the other linked ones.
+        assert_eq!(c("/r/.git/HEAD"), BOTH);
+        assert_eq!(c("/r/.git/index"), Change::default());
+        assert_eq!(c("/r/.git/worktrees/other/gitdir"), REFS_ONLY);
+        assert_eq!(c("/r/.git/worktrees/other/index"), Change::default());
+        assert_eq!(c("/r/.git/objects/ab/cdef"), Change::default());
+        // The main worktree's files.
+        assert_eq!(c("/r/README.md"), Change::default());
     }
 
     #[test]
@@ -351,8 +469,11 @@ mod tests {
             let git = tt_git_core::GitCli::new(".").with_env(sb.env());
             let repo = Repo::discover(sb.path(), &git).unwrap();
             let root = std::fs::canonicalize(repo.root()).unwrap();
+            let git_dir = std::fs::canonicalize(repo.git_dir()).unwrap();
             let watch = Watch {
-                git_dir: std::fs::canonicalize(repo.git_dir()).unwrap(),
+                worktrees: linked_worktrees(&git_dir),
+                common_dir: git_dir.clone(),
+                git_dir,
                 root: root.clone(),
                 repo,
                 rules: Rules::Unknown,
@@ -460,6 +581,40 @@ mod tests {
         let mut f = Fixture::new();
         std::os::unix::fs::symlink(f.root.join("src"), f.root.join("target/link")).unwrap();
         assert_eq!(f.batch(&["target/link/main.rs"]), STATUS_ONLY);
+    }
+
+    #[test]
+    fn a_worktree_folder_counts_when_the_set_of_them_changes() {
+        let mut f = Fixture::new();
+        std::fs::write(f.root.join(".git/info/exclude"), "/.worktrees/\n").unwrap();
+        let none = Change::default();
+        assert_eq!(f.batch(&[".git/worktrees"]), none);
+        f.sb.git(&["worktree", "add", "-q", ".worktrees/side"]);
+        // Only the folder, as when its files were written before it was watched.
+        assert_eq!(f.batch(&[".git/worktrees/side"]), REFS_ONLY);
+        // A stage in it touches the folder on Windows, but the set is the same.
+        assert_eq!(f.batch(&[".git/worktrees/side", ".git/worktrees/side/index"]), none);
+        f.sb.git(&["worktree", "remove", ".worktrees/side"]);
+        assert_eq!(f.batch(&[".git/worktrees"]), REFS_ONLY);
+        assert_eq!(f.batch(&[".git/worktrees"]), none);
+
+        // Moved: the same folder under `worktrees/`, pointing elsewhere.
+        f.sb.git(&["worktree", "add", "-q", ".worktrees/a"]);
+        assert_eq!(f.batch(&[".git/worktrees/a"]), REFS_ONLY);
+        f.sb.git(&["worktree", "move", ".worktrees/a", ".worktrees/b"]);
+        assert_eq!(f.batch(&[".git/worktrees/a"]), REFS_ONLY);
+    }
+
+    #[test]
+    fn a_worktree_deleted_by_hand_counts_though_it_is_ignored() {
+        let mut f = Fixture::new();
+        std::fs::write(f.root.join(".git/info/exclude"), "/.worktrees/\n").unwrap();
+        f.sb.git(&["worktree", "add", "-q", ".worktrees/side"]);
+        assert_eq!(f.batch(&[".git/worktrees/side/gitdir"]), REFS_ONLY);
+        assert_eq!(f.batch(&[".worktrees/side/file.txt"]), Change::default());
+        assert_eq!(f.batch(&[".worktrees/side"]), Change::default());
+        std::fs::remove_dir_all(f.root.join(".worktrees/side")).unwrap();
+        assert_eq!(f.batch(&[".worktrees/side"]), REFS_ONLY);
     }
 
     #[test]

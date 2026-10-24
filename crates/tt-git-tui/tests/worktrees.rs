@@ -1,6 +1,7 @@
 //! The branches pane's Worktrees tab: listing, opening and removing.
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use tt_git_testkit::{Sandbox, TestDriver};
 use tt_git_tui::modal::Modal;
@@ -290,4 +291,120 @@ fn measures_more_worktrees_than_run_at_once() {
     assert_eq!(lines.iter().filter(|l| l.contains(".worktrees/")).count(), 7);
     assert!(!lines.iter().any(|l| l.ends_with('…')), "{}", lines.join("\n"));
     assert!(!t.screen().contains("total …"), "{}", t.screen());
+}
+
+/// The worktrees listed, as paths relative to the main one (`.`), sorted,
+/// with `locked` and `prunable` marks.
+fn listed(t: &TestDriver) -> Vec<String> {
+    let worktrees = t.app().branches().worktrees();
+    let Some(main) = worktrees.iter().find(|w| w.main) else {
+        return Vec::new();
+    };
+    let mut names: Vec<String> = worktrees
+        .iter()
+        .map(|w| {
+            // Both as git prints them, so a deleted folder compares too.
+            let mut name = match w.path.strip_prefix(&main.path) {
+                Ok(rel) if rel.as_os_str().is_empty() => ".".to_string(),
+                Ok(rel) => rel.to_string_lossy().replace(std::path::MAIN_SEPARATOR, "/"),
+                Err(_) => w.path.display().to_string(),
+            };
+            if w.locked.is_some() {
+                name.push_str(" locked");
+            }
+            if w.prunable.is_some() {
+                name.push_str(" prunable");
+            }
+            name
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// Waits for the watcher to bring the list to `want`.
+fn wait_for_list(t: &mut TestDriver, want: &[&str]) {
+    let start = Instant::now();
+    loop {
+        t.wait_idle();
+        let now = listed(t);
+        if now == want {
+            return;
+        }
+        assert!(start.elapsed() < WAIT, "still listing {now:?}, not {want:?}");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+}
+
+const WAIT: Duration = Duration::from_secs(10);
+
+#[test]
+fn worktrees_changed_outside_show_without_a_refresh() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let mut t = TestDriver::with_watcher(Config::default(), &sb);
+    wait_for_list(&mut t, &["."]);
+
+    add_worktree(&sb, "side", &["-b", "side"]);
+    wait_for_list(&mut t, &[".", ".worktrees/side"]);
+    add_worktree(&sb, "other", &["--detach"]);
+    wait_for_list(&mut t, &[".", ".worktrees/other", ".worktrees/side"]);
+
+    // On the Worktrees tab, a new one is measured too.
+    t.press("3").press("[");
+    t.wait_idle();
+    assert_eq!(t.app().branches().tab(), BranchTab::Worktrees);
+    add_worktree(&sb, "third", &["--detach"]);
+    wait_for_list(
+        &mut t,
+        &[".", ".worktrees/other", ".worktrees/side", ".worktrees/third"],
+    );
+    let start = Instant::now();
+    loop {
+        let lines = t.pane_lines(PaneId::Branches);
+        let third = lines.iter().find(|l| l.contains(".worktrees/third")).unwrap();
+        if third.trim_end().ends_with('B') {
+            break;
+        }
+        assert!(start.elapsed() < WAIT, "not measured:\n{}", lines.join("\n"));
+        std::thread::sleep(Duration::from_millis(20));
+        t.wait_idle();
+    }
+
+    sb.git(&["worktree", "remove", ".worktrees/side"]);
+    wait_for_list(&mut t, &[".", ".worktrees/other", ".worktrees/third"]);
+
+    sb.git(&["worktree", "move", ".worktrees/other", ".worktrees/moved"]);
+    wait_for_list(&mut t, &[".", ".worktrees/moved", ".worktrees/third"]);
+
+    sb.git(&["worktree", "lock", ".worktrees/moved"]);
+    wait_for_list(&mut t, &[".", ".worktrees/moved locked", ".worktrees/third"]);
+    sb.git(&["worktree", "unlock", ".worktrees/moved"]);
+    wait_for_list(&mut t, &[".", ".worktrees/moved", ".worktrees/third"]);
+
+    // Its folder deleted by hand, then pruned.
+    std::fs::remove_dir_all(sb.path().join(".worktrees/third")).unwrap();
+    wait_for_list(&mut t, &[".", ".worktrees/moved", ".worktrees/third prunable"]);
+    sb.git(&["worktree", "prune"]);
+    wait_for_list(&mut t, &[".", ".worktrees/moved"]);
+}
+
+#[test]
+fn worktrees_changed_outside_show_in_a_linked_worktree() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let side = add_worktree(&sb, "side", &["-b", "side"]);
+    let mut t = TestDriver::with_watcher_at(Config::default(), &sb, &side);
+    wait_for_list(&mut t, &[".", ".worktrees/side"]);
+
+    add_worktree(&sb, "other", &["--detach"]);
+    wait_for_list(&mut t, &[".", ".worktrees/other", ".worktrees/side"]);
+    sb.git(&["worktree", "remove", ".worktrees/other"]);
+    wait_for_list(&mut t, &[".", ".worktrees/side"]);
+
+    // So do the refs in the shared git dir, like a branch made in the main one.
+    sb.git(&["branch", "made-in-main"]);
+    t.wait_until(WAIT, |app| {
+        app.branches().entries().iter().any(|b| b.name == "made-in-main")
+    });
 }
