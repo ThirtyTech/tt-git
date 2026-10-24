@@ -11,7 +11,7 @@ the branch list or the tag list. tt-git asks before it starts each one.
 
 | Where | <kbd>M</kbd> | <kbd>r</kbd> | <kbd>C</kbd> |
 |---|---|---|---|
-| Graph | Merge the selected commit into the current branch | Rebase the current branch onto the selected commit | Cherry-pick the selected commit |
+| Graph | Merge the selected commit into the current branch | Rebase the current branch onto the selected commit | Cherry-pick the selected commit, or every commit in the range |
 | Branches | Merge the selected branch | Rebase onto the selected branch | |
 | Tags | Merge the selected tag | Rebase onto the selected tag | |
 
@@ -42,6 +42,14 @@ terminal.
 <kbd>C</kbd> in the graph applies the selected commit on top of the current
 branch with `git cherry-pick <commit>`. The confirm box shows the commit's
 hash and subject.
+
+To pick several commits, press <kbd>v</kbd> on one end and move to the other
+end, then <kbd>C</kbd>. The confirm box names the oldest and newest commit,
+and tt-git runs `git cherry-pick <oldest> … <newest>`, applying them oldest
+first. If one stops on a conflict, continuing (below) applies the rest of the
+range, and aborting puts the branch back as it was before the first one. A
+range with a merge commit in it is refused. See
+[Graph](/panes/graph/#cherry-picking-several-commits).
 
 ## Resolving conflicts
 

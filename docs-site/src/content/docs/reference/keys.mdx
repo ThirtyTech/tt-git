@@ -40,7 +40,7 @@ else.
 |---|---|
 | <kbd>enter</kbd> | Open the commit fullscreen: changed files on the left, the selected file's diff on the right. |
 | <kbd>space</kbd> | Show / hide the commit's details. |
-| <kbd>esc</kbd> | Hide details. With details already hidden: clear the filter. |
+| <kbd>esc</kbd> | End a range of commits. Otherwise hide details; with details already hidden: clear the filter. |
 | <kbd>a</kbd> | All branches ↔ the current branch (and its upstream). |
 | <kbd>t</kbd> | Dates as age ↔ local date and time. |
 | <kbd>L</kbd> | Hide / show the lanes. |
@@ -50,7 +50,8 @@ else.
 | <kbd>T</kbd> | New tag at the selected commit. <kbd>tab</kbd> in the dialog makes it annotated. |
 | <kbd>M</kbd> | Merge the commit into the current branch. |
 | <kbd>r</kbd> | Rebase the current branch onto the commit. |
-| <kbd>C</kbd> | Cherry-pick the commit. |
+| <kbd>C</kbd> | Cherry-pick the commit, or every commit in the range, oldest first. |
+| <kbd>v</kbd> | Start or end a range of commits to cherry-pick. |
 | <kbd>c</kbd> | Copy the commit hash. |
 | <kbd>A</kbd> | Ask an AI agent about the commit. See [Agent actions](/git/agents/). |
 | <kbd>]</kbd> <kbd>{'}'}</kbd> / <kbd>[</kbd> <kbd>{'{'}</kbd> | Next / previous [branches pane](/panes/branches/#the-tabs) tab. Focus stays on the graph. |
