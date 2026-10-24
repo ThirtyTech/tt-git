@@ -392,6 +392,8 @@ impl App {
             GitOp::Ignore { .. } => return,
             // Not about the repository.
             GitOp::SelfUpdate { .. } => return,
+            // Reported as `fetch.completed` and a `branch.deleted` for each branch.
+            GitOp::PruneGone | GitOp::DeleteBranches { .. } => return,
             GitOp::Commit { message, amend } => (
                 "commit.created",
                 json!({

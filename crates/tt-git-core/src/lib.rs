@@ -26,8 +26,8 @@ pub use git::{GitCli, GitError};
 pub use ignored::IgnoreRules;
 pub use model::*;
 pub use ops::{
-    DiscardKind, DiscardScope, FAST_FORWARD_UP_TO_DATE, IGNORE_TRACKED, IgnoreTarget, PatchOp, STAGED_ASIDE, StageSide,
-    StashScope, UNDO_CHANGES_KEPT, ignore_pattern,
+    BranchDeletes, DiscardKind, DiscardScope, FAST_FORWARD_UP_TO_DATE, GoneBranches, IGNORE_TRACKED, IgnoreTarget,
+    PatchOp, STAGED_ASIDE, StageSide, StashScope, UNDO_CHANGES_KEPT, ignore_pattern,
 };
 pub use repo::{LogFilter, LogScope, RemoteConfig, Repo};
 pub use undo::{NoStep, UndoStep, UndoTarget};

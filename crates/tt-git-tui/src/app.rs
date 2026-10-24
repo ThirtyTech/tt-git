@@ -12,8 +12,8 @@ use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tt_git_core::branches::matches_filter;
 use tt_git_core::time::SharedClock;
 use tt_git_core::{
-    CheckoutPlan, CommitFile, FAST_FORWARD_UP_TO_DATE, FileState, Head, IGNORE_TRACKED, LogFilter, NoStep, Repo, Stash,
-    StatusEntry, UNDO_CHANGES_KEPT, UndoStep,
+    BranchDeletes, CheckoutPlan, CommitFile, FAST_FORWARD_UP_TO_DATE, FileState, GoneBranches, Head, IGNORE_TRACKED,
+    LogFilter, NoStep, Repo, Stash, StatusEntry, UNDO_CHANGES_KEPT, UndoStep,
 };
 
 use crate::action::{Action, RefsSnapshot};
@@ -939,6 +939,8 @@ impl App {
             Action::UndoPlanned(planned) => self.undo_planned(planned),
             Action::UpdateChecked(latest) => self.update_checked(latest),
             Action::OpDone { op, result, head } => self.op_done(op, result, head),
+            Action::GoneFound(result) => self.gone_found(result),
+            Action::BranchesDeleted { names, force, result } => self.branches_deleted(names, force, result),
             Action::StatusLoaded(Ok(status)) => {
                 self.status.set_status(status);
                 self.refresh_staging();
@@ -1271,7 +1273,12 @@ impl App {
         // A second pull, push or fetch would only race the first.
         if matches!(
             op,
-            GitOp::Push | GitOp::Pull | GitOp::FetchAll | GitOp::PushTag { .. } | GitOp::FastForward { .. }
+            GitOp::Push
+                | GitOp::Pull
+                | GitOp::FetchAll
+                | GitOp::PruneGone
+                | GitOp::PushTag { .. }
+                | GitOp::FastForward { .. }
         ) && self.busy.iter().any(|b| b.label == label)
         {
             let verb = doing.split(' ').next().unwrap_or_default();
@@ -1299,7 +1306,13 @@ impl App {
             return;
         }
         let repo = self.repo.clone();
-        self.ctx.spawn(move || loaders::run_op(repo, op));
+        match op {
+            GitOp::PruneGone => self.ctx.spawn(move || loaders::prune_gone(repo)),
+            GitOp::DeleteBranches { names, force } => {
+                self.ctx.spawn(move || loaders::delete_branches(repo, names, force))
+            }
+            op => self.ctx.spawn(move || loaders::run_op(repo, op)),
+        }
     }
 
     /// What the help bar says while `op` runs and once it's done. Pulls,
@@ -1331,7 +1344,7 @@ impl App {
                 };
                 both("pulling", "pulled", what)
             }
-            GitOp::FetchAll => both("fetching", "fetched", "all remotes".into()),
+            GitOp::FetchAll | GitOp::PruneGone => both("fetching", "fetched", "all remotes".into()),
             GitOp::FastForward { name, upstream } => {
                 both("fast-forwarding", "fast-forwarded", format!("{name} to {upstream}"))
             }
@@ -1597,12 +1610,121 @@ impl App {
         }
     }
 
+    /// Takes `op` off the help bar's running list, returning what to say
+    /// now it's done.
+    fn finish_busy(&mut self, op: &GitOp) -> String {
+        let label = op.label();
+        match self.busy.iter().position(|b| b.label == label) {
+            Some(pos) => self.busy.remove(pos).done,
+            None => label,
+        }
+    }
+
+    /// [`GitOp::PruneGone`] fetched: asks to delete the branches whose
+    /// upstream is gone, or says there are none.
+    fn gone_found(&mut self, result: Result<GoneBranches, String>) {
+        let done = self.finish_busy(&GitOp::PruneGone);
+        match result {
+            Ok(gone) => {
+                self.op_event(&GitOp::FetchAll, None);
+                let kept = match &gone.checked_out[..] {
+                    [] => String::new(),
+                    [name] => format!("{name} is gone too, but it's checked out, so it stays.\n\n"),
+                    names => format!(
+                        "{} are gone too, but they're checked out, so they stay.\n\n",
+                        names.join(", ")
+                    ),
+                };
+                if gone.deletable.is_empty() {
+                    let none = if gone.checked_out.is_empty() {
+                        "no branches with a gone upstream".to_string()
+                    } else {
+                        format!(
+                            "only checked-out branches have a gone upstream: {}",
+                            gone.checked_out.join(", ")
+                        )
+                    };
+                    self.renew_notice(format!("✓ {done}; {none}"));
+                } else {
+                    let count = match gone.deletable.len() {
+                        1 => "this local branch".to_string(),
+                        n => format!("these {n} local branches"),
+                    };
+                    self.notice = None;
+                    self.modal = Some(Modal::confirm(
+                        "Delete gone branches",
+                        format!(
+                            "Their upstream was deleted on the remote. Delete {count} (git branch -d)?\n\n{}\n\n\
+                             {kept}(If any are not fully merged you will be asked to force-delete.)",
+                            name_list(&gone.deletable)
+                        ),
+                        GitOp::DeleteBranches {
+                            names: gone.deletable,
+                            force: false,
+                        },
+                    ));
+                }
+            }
+            Err(err) => {
+                self.notice = None;
+                self.error = Some(format!("{} failed:\n{err}", GitOp::PruneGone.label()));
+            }
+        }
+        self.update(Action::Refresh);
+    }
+
+    /// [`GitOp::DeleteBranches`] finished: asks to force-delete the ones
+    /// git kept as not fully merged, and reports any it refused otherwise.
+    fn branches_deleted(&mut self, names: Vec<String>, force: bool, result: BranchDeletes) {
+        self.finish_busy(&GitOp::DeleteBranches { names, force });
+        for name in &result.deleted {
+            self.op_event(
+                &GitOp::DeleteBranch {
+                    name: name.clone(),
+                    force,
+                },
+                None,
+            );
+        }
+        let deleted = match result.deleted.len() {
+            0 => None,
+            1 => Some(format!("deleted branch {}", result.deleted[0])),
+            n => Some(format!("deleted {n} branches")),
+        };
+        self.notice = deleted.as_ref().map(|d| format!("✓ {d}"));
+        self.notice_drawn.0 = None;
+        if !result.failed.is_empty() {
+            let lines: Vec<_> = result
+                .failed
+                .iter()
+                .map(|(name, err)| format!("{name}: {err}"))
+                .collect();
+            self.error = Some(format!("Couldn't delete:\n{}", lines.join("\n")));
+        } else if !result.unmerged.is_empty() {
+            let (these, them) = match result.unmerged.len() {
+                1 => ("This branch is".to_string(), "it"),
+                n => (format!("These {n} branches are"), "them"),
+            };
+            let so_far = deleted.map(|d| format!("{}.\n\n", capitalize(&d))).unwrap_or_default();
+            self.modal = Some(Modal::confirm(
+                "Force delete?",
+                format!(
+                    "{so_far}{these} not fully merged:\n\n{}\n\n\
+                     Delete {them} anyway (git branch -D)? Commits only on {them} are lost.",
+                    name_list(&result.unmerged)
+                ),
+                GitOp::DeleteBranches {
+                    names: result.unmerged,
+                    force: true,
+                },
+            ));
+        }
+        self.update(Action::Refresh);
+    }
+
     fn op_done(&mut self, op: GitOp, result: Result<String, String>, head: Option<String>) {
         let label = op.label();
-        let done = match self.busy.iter().position(|b| b.label == label) {
-            Some(pos) => self.busy.remove(pos).done,
-            None => label.clone(),
-        };
+        let done = self.finish_busy(&op);
         // Nothing in the repository changed.
         if let (GitOp::SelfUpdate { tag }, Ok(_)) = (&op, &result) {
             self.notice = Some(format!("✓ installed tt-git {tag}; restart tt-git to use it"));
@@ -2573,6 +2695,24 @@ fn draw_error_popup(frame: &mut Frame, area: Rect, msg: &str, theme: &Theme) {
 }
 
 /// A revision as a title shows it: a commit id shortened, keeping a `^`.
+/// Branch names one per line, indented, the first ten of them.
+fn name_list(names: &[String]) -> String {
+    const SHOWN: usize = 10;
+    let mut lines: Vec<_> = names.iter().take(SHOWN).map(|n| format!("  {n}")).collect();
+    if names.len() > SHOWN {
+        lines.push(format!("  … and {} more", names.len() - SHOWN));
+    }
+    lines.join("\n")
+}
+
+fn capitalize(s: &str) -> String {
+    let mut chars = s.chars();
+    match chars.next() {
+        Some(c) => c.to_uppercase().chain(chars).collect(),
+        None => String::new(),
+    }
+}
+
 fn short_rev(rev: &str) -> String {
     let (base, suffix) = rev.split_at(rev.find(['^', '~']).unwrap_or(rev.len()));
     let short = if base.len() >= 40 && base.bytes().all(|b| b.is_ascii_hexdigit()) {

@@ -237,7 +237,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `undo` | `z` | global |
 | `toggle_scope`, `toggle_dates`, `toggle_lanes`, `checkout`, `filter`, `new_branch`, `new_tag`, `merge`, `rebase`, `cherry_pick`, `revert`, `select_range`, `agent` | `a`, `t`, `L`, `o`, `f`, `n`, `T`, `M`, `r`, `C`, `R`, `v`, `A` | graph |
 | `filter_folder` | `.` | graph, status |
-| `checkout`, `new_branch`, `new_tag`, `delete_branch`, `rename_branch`, `fetch`, `fast_forward`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `T`, `d`, `R`, `f`, `F`, `/`, `M`, `r` | branches |
+| `checkout`, `new_branch`, `new_tag`, `delete_branch`, `rename_branch`, `fetch`, `prune_gone`, `fast_forward`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `T`, `d`, `R`, `f`, `D`, `F`, `/`, `M`, `r` | branches |
 | `push_tag` | `P` (on the Tags tab; pushes the branch on the others) | branches |
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |
 | `next_tab`, `prev_tab` | `]` `}`, `[` `{` (steps the branches pane's tabs) | graph |

@@ -86,7 +86,7 @@ Leave out `events` to get every event.
 | `head.changed` | `HEAD` moved, from tt-git or outside it. This includes switching between two branches at the same commit, and [undo](/git/undo/), which sends no event of its own. | `{from, from_branch, to, branch}` |
 | `branch.checked_out` | You checked out a branch, or created one (without a worktree). Checking out a commit from the graph with HEAD detached sends only `head.changed`; stashing first also sends `stash.created`. | `{branch, created, tracking?}`. `created` is `true` for a new branch, including tracking branches made for a remote-only branch; `tracking` is the remote branch then. |
 | `branch.created` | A branch was created, from a commit, a tag, a branch or a stash. | `{branch, start, worktree}`. `worktree` is the new worktree's path, or `null`. |
-| `branch.deleted` | A branch was deleted, locally or on a remote. | `{branch, remote}`. `remote` is `null` for a local branch. |
+| `branch.deleted` | A branch was deleted, locally or on a remote. Deleting gone branches sends one for each branch. | `{branch, remote}`. `remote` is `null` for a local branch. |
 | `branch.renamed` | A branch was renamed. | `{from, to}` |
 | `branch.fast_forwarded` | A branch that isn't checked out was fast-forwarded to its upstream. Not sent when it was already up to date. | `{branch, upstream}`. `upstream` is its short name, like `origin/feature`. |
 | `tag.created` | A tag was made. | `{tag, target, annotated}`. `target` is the commit or ref it was made at. |

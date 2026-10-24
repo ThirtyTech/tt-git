@@ -514,6 +514,8 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::Undo { step, stash } => repo.apply_undo(step, *stash),
         GitOp::RemoveWorktree { path, force, .. } => repo.remove_worktree(path, *force),
         GitOp::SelfUpdate { .. } => unreachable!("run by self_update"),
+        GitOp::PruneGone => unreachable!("run by prune_gone"),
+        GitOp::DeleteBranches { .. } => unreachable!("run by delete_branches"),
     };
     let head = match result {
         Ok(_) => repo.head().ok().and_then(|h| h.oid().map(str::to_string)),
@@ -524,6 +526,19 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         result: result.map_err(|e| e.stderr().map(str::to_string).unwrap_or_else(|| e.to_string())),
         head,
     }
+}
+
+/// Fetches every remote with `--prune`, then lists the local branches
+/// whose upstream that left gone.
+pub fn prune_gone(repo: Repo) -> Action {
+    let err = |e: tt_git_core::GitError| e.stderr().map(str::to_string).unwrap_or_else(|| e.to_string());
+    Action::GoneFound(repo.fetch_all().and_then(|_| repo.gone_branches()).map_err(err))
+}
+
+/// Deletes `names`, going on past the ones git refuses.
+pub fn delete_branches(repo: Repo, names: Vec<String>, force: bool) -> Action {
+    let result = repo.delete_branches(&names, force);
+    Action::BranchesDeleted { names, force, result }
 }
 
 /// Looks up the latest tt-git release.

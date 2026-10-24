@@ -5,6 +5,7 @@ use std::collections::HashSet;
 
 use crate::branches::CheckoutPlan;
 use crate::git::{GitError, GitOutput, Result};
+use crate::model::RefKind;
 use crate::parse;
 use crate::patch::{FileDiff, PatchDirection, untracked_diff};
 use crate::repo::{BASE_BRANCH_KEY, Repo, WORKTREE_DIR};
@@ -130,6 +131,45 @@ impl Repo {
     pub fn delete_branch(&self, name: &str, force: bool) -> Result<String> {
         let flag = if force { "-D" } else { "-d" };
         self.git().run(&["branch", flag, name]).map(text)
+    }
+
+    /// Local branches whose upstream is configured but no longer exists,
+    /// as `git fetch --prune` leaves them. Ones checked out here or in
+    /// another worktree are listed apart, since git won't delete them.
+    pub fn gone_branches(&self) -> Result<GoneBranches> {
+        let checked_out: HashSet<String> = self.worktrees()?.into_iter().filter_map(|wt| wt.branch).collect();
+        let mut gone = GoneBranches::default();
+        for r in self.refs()? {
+            if r.kind != RefKind::LocalBranch || !r.upstream_gone {
+                continue;
+            }
+            if r.is_head || checked_out.contains(&r.short_name) {
+                gone.checked_out.push(r.short_name);
+            } else {
+                gone.deletable.push(r.short_name);
+            }
+        }
+        Ok(gone)
+    }
+
+    /// Deletes local branches one by one (`git branch -d`, or `-D` with
+    /// `force`), carrying on past the ones git refuses.
+    pub fn delete_branches(&self, names: &[String], force: bool) -> BranchDeletes {
+        let mut out = BranchDeletes::default();
+        for name in names {
+            match self.delete_branch(name, force) {
+                Ok(_) => out.deleted.push(name.clone()),
+                Err(e) => {
+                    let err = e.stderr().map(str::to_string).unwrap_or_else(|| e.to_string());
+                    if !force && err.contains("not fully merged") {
+                        out.unmerged.push(name.clone());
+                    } else {
+                        out.failed.push((name.clone(), err));
+                    }
+                }
+            }
+        }
+        out
     }
 
     /// Deletes `branch` on `remote` (`git push <remote> --delete <branch>`).
@@ -1097,6 +1137,25 @@ impl IgnoreTarget {
 /// Starts the error [`Repo::ignore`] returns when the path is tracked and
 /// it wasn't asked to stop tracking it.
 pub const IGNORE_TRACKED: &str = "is tracked, so ignoring it wouldn't hide it";
+
+/// What [`Repo::gone_branches`] found.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GoneBranches {
+    /// Not checked out anywhere, so they can be deleted.
+    pub deletable: Vec<String>,
+    /// Checked out here or in another worktree.
+    pub checked_out: Vec<String>,
+}
+
+/// What [`Repo::delete_branches`] did with each branch.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct BranchDeletes {
+    pub deleted: Vec<String>,
+    /// Refused by `git branch -d` as not fully merged.
+    pub unmerged: Vec<String>,
+    /// Refused for any other reason, with git's message.
+    pub failed: Vec<(String, String)>,
+}
 
 /// What [`Repo::fast_forward_branch`] returns when the branch was already
 /// at its upstream.

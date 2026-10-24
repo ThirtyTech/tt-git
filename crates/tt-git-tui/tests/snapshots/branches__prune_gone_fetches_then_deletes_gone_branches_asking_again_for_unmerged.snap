@@ -1,0 +1,34 @@
+---
+source: crates/tt-git-tui/tests/branches.rs
+expression: t.screen()
+---
+╭[1] Graph [all] 1/2───────────────────────────────────────────────────────────────────────────────────────────────────╮
+│●  [unmerged-gone] unmerged work                                                         Test User         23h 1bb92cd│
+│●   main  [kept] [lonely] [merged-gone] [wt-gone] [origin/kept] [origin/main] base       Test User         23h b290cb5│
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                             ╭ Delete gone branches ────────────────────────────────────╮                             │
+│                             │Their upstream was deleted on the remote. Delete these 2  │                             │
+│                             │local branches (git branch -d)?                           │                             │
+│                             │                                                          │                             │
+│                             │  merged-gone                                             │                             │
+│                             │  unmerged-gone                                           │                             │
+│                             │                                                          │                             │
+│                             │wt-gone is gone too, but it's checked out, so it stays.   │                             │
+│                             │                                                          │                             │
+│                             │(If any are not fully merged you will be asked to         │                             │
+│                             │force-delete.)                                            │                             │
+│                             │                                                          │                             │
+╰─────────────────────────────│y confirm · n/esc cancel                                  │─────────────────────────────╯
+╭[2] Status: repo · main → ori╰──────────────────────────────────────────────────────────╯ged · Merged · Worktrees─────╮
+│working tree clean                                        ││  kept                                      ✓          23h│
+│                                                          ││  lonely                                    local      23h│
+│                                                          ││* main                                      ✓          23h│
+│                                                          ││  unmerged-gone                             gone       23h│
+│                                                          ││  merged-gone                               gone       23h│
+│                                                          ││  wt-gone                                   gone       23h│
+│                                                          ││                                                          │
+╰──────────────────────────────────────────────────────────╯╰──────────────────────────────────────────────────────────╯
+enter checkout  ] next tab  [ prev tab  b base branch  n new branch  T new tag  f fetch  tab next pane  ? help  q quit
