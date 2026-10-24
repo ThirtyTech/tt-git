@@ -125,6 +125,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `P` | on the tags tab: push the selected tag (elsewhere: push the current branch) |
 | | `d` (tags tab) | delete the tag: `y` here only, `r` here and on the remote |
 | | `f` | `fetch --all --prune` |
+| | `F` | fast-forward the selected branch to its upstream without checking it out (`git fetch <remote> <branch>:<branch>`) |
 | | `/` | filter as you type (`esc` clears) |
 | | `]` `[` | next / previous tab: all branches, tags, unmerged into the base branch, merged into it, stashes and worktrees (once there are any) |
 | | `b` | pick the base branch (default: the project's primary branch) |
