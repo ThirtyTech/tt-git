@@ -12,6 +12,9 @@ top to bottom, so you can follow a line by eye. From here you open a commit's de
 history down to one author or one file, and start a branch, merge, rebase, cherry-pick or revert at the
 selected commit. Press <kbd>1</kbd> to focus it from anywhere.
 
+Working on one part of a large repository, such as a project in a monorepo or the docs? Start tt-git
+in its folder and press <kbd>.</kbd> to [narrow the graph to it](#narrowing-to-the-folder-you-started-in).
+
 <Screenshot name="graph-overview" alt="The graph pane with its title, lanes, badges, subjects, author and date columns called out" />
 
 ## What it shows
@@ -116,6 +119,56 @@ You don't have to leave the graph to get there. With the graph focused, <kbd>]</
 previous [tab](/panes/branches/#the-tabs), as they do in the branches pane itself. Focus stays on the
 graph, so you can flip to **Unmerged** or **Merged** and watch the graph follow.
 
+## Narrowing to the folder you started in
+
+<Aside type="tip" title="One project in a shared repository">
+  Start tt-git inside a folder and press <kbd>.</kbd>. The graph and Status show only that folder's
+  history and changes, and everything else in the repository gets out of the way.
+</Aside>
+
+Many repositories hold more than one thing, and most of their commits aren't about the part you're
+working on. Start tt-git in that part's folder, such as `apps/web/`, and press <kbd>.</kbd> in the
+graph to see only the commits that changed something under it, as `git log -- apps/web/` would.
+Press <kbd>.</kbd> again to see everything.
+
+```sh
+cd apps/web && tt-git     # then press .
+tt-git apps/web           # the same, without changing directory
+```
+
+### When it helps
+
+| You're working on | Start tt-git in | You see |
+|---|---|---|
+| **One project in a monorepo** | `apps/web/`, `services/billing/`, `packages/ui/` | The commits for your project, not the dozens a day that land in its neighbors. What changed since you last pulled, who's been working on it, and which commit broke it. Status lists only your project's files. |
+| **Documentation** | `docs/`, `docs-site/` | Every docs commit on its own, even when most of them were part of a code change: what was written for the last release, a page's history, and which docs a feature branch touched. |
+| **A Storybook or design system** | `.storybook/`, `src/stories/`, `packages/design-system/` | The commits to your stories and their config, so you can see what changed in the component library without reading through app work. |
+| **Infrastructure or config** | `infra/`, `deploy/`, `.github/` | Every change to your pipelines and deployment config, in order, for when you need to know what changed before something broke. |
+
+Storybook stories often sit next to their components rather than in one folder. If yours do, narrow
+to the component folder instead, or use <kbd>f</kbd> to pick any folder or file.
+
+### How it behaves
+
+- The title shows it: `Graph [all · folder apps/web/]`.
+- An author filter stays set when you press <kbd>.</kbd>, so you can see one person's commits to
+  your project.
+- The [Status](/panes/status/#narrowing-to-a-folder) pane narrows to the same folder, and
+  <kbd>.</kbd> works there too. Status is narrowed whenever the graph's filter is the folder you
+  started in, however you set it: with <kbd>.</kbd>, by picking `current folder` in
+  **Filter graph**, or at startup.
+- <kbd>esc</kbd> in the graph (with details hidden) clears it, like any filter.
+- Started at the top of the repository, there's no folder to narrow to, and <kbd>.</kbd> says so.
+  Use <kbd>f</kbd> to filter by any folder.
+
+To start narrowed every time, set
+[`filter_to_cwd = true`](/configuration/#graph) under `[graph]`. `tt-git --filter-to-cwd` and
+`tt-git --no-filter-to-cwd` turn it on or off for one run; see [CLI](/reference/cli/).
+
+The lanes work as for any [file filter](#filtering-by-author-or-file): each commit links to the
+nearest earlier commit that also changed the folder. Merges that brought no change to the folder
+are left out, as `git log` does by default.
+
 ## Filtering by author or file
 
 <Screenshot name="graph-filter" alt="The Filter graph popup listing authors with their commit counts" />
@@ -156,31 +209,6 @@ A file filter keeps the lanes joined up: each commit links to the nearest earlie
 touched the path, so you still get a readable graph. An author filter can't do that, so each run of
 one person's commits is its own short line. Renames aren't followed. If no commits match, the graph
 says `no commits match the filter (f to change it, esc to clear it)`.
-
-## Narrowing to the folder you started in
-
-In a monorepo, most commits belong to other projects. Start tt-git in your project's folder, such as
-`apps/web/`, and press <kbd>.</kbd> in the graph to see only the commits that changed something
-under it, as `git log -- apps/web/` would. Press <kbd>.</kbd> again to see everything.
-
-- The title shows it: `Graph [all · folder apps/web/]`.
-- An author filter stays set when you press <kbd>.</kbd>, so you can see one person's commits to
-  your project.
-- The [Status](/panes/status/#narrowing-to-a-folder) pane narrows to the same folder, and
-  <kbd>.</kbd> works there too. Status is narrowed whenever the graph's filter is the folder you
-  started in, however you set it: with <kbd>.</kbd>, by picking `current folder` in
-  **Filter graph**, or at startup.
-- <kbd>esc</kbd> in the graph (with details hidden) clears it, like any filter.
-- Started at the top of the repository, there's no folder to narrow to, and <kbd>.</kbd> says so.
-  Use <kbd>f</kbd> to filter by any folder.
-
-To start narrowed every time, set
-[`filter_to_cwd = true`](/configuration/#graph) under `[graph]`. `tt-git --filter-to-cwd` and
-`tt-git --no-filter-to-cwd` turn it on or off for one run; see [CLI](/reference/cli/).
-
-The lanes work as for any file filter: each commit links to the nearest earlier commit that also
-changed the folder. Merges that brought no change to the folder are left out, as `git log` does by
-default.
 
 ## Acting on a commit
 
