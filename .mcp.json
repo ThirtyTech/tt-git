@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "skill-router": {
+      "type": "http",
+      "url": "https://skills.thirtytech.net/mcp"
+    }
+  }
+}
+
