@@ -227,6 +227,30 @@ Every confirmation takes <kbd>y</kbd> to go ahead and <kbd>n</kbd> or
 remote branches that were deleted on the remote, and turns the local
 branches that tracked them `gone`. See [Push, pull and fetch](/git/remotes/).
 
+## Deleting gone branches
+
+A fetch never deletes your local branches. One whose remote branch was
+deleted (usually because its pull request was merged) stays in the list,
+marked `gone`. <kbd>D</kbd> cleans them up:
+
+1. It runs `git fetch --all --prune`.
+2. If no local branch has a gone upstream, the help bar says
+   `✓ fetched all remotes; no branches with a gone upstream`.
+3. Otherwise **Delete gone branches** lists them and asks before deleting
+   them with `git branch -d`.
+
+   <Screenshot name="branches-prune-gone" alt="The Delete gone branches dialog listing fix/typo-footer" />
+
+4. If git refuses some as not fully merged, **Force delete?** lists those
+   and asks again before running `git branch -D`. Answer <kbd>n</kbd> to
+   keep them. A branch that was squash-merged or rebased on the remote
+   usually ends up here, since its own commits never reached the base.
+
+The checked-out branch, and a branch checked out in another worktree, are
+never deleted. The dialog names them as kept.
+
+<kbd>D</kbd> works on the Branches, Unmerged and Merged tabs.
+
 ## Fast-forwarding a branch
 
 <kbd>F</kbd> moves the selected local branch up to its upstream without
@@ -288,6 +312,7 @@ OSC 52 clipboard support, so it also works over SSH.
 | <kbd>T</kbd> | New tag at the selection's commit (<kbd>tab</kbd> in the dialog: annotated) |
 | <kbd>d</kbd> | Delete (asks; asks again before force-deleting unmerged) |
 | <kbd>f</kbd> | `git fetch --all --prune` |
+| <kbd>D</kbd> | Fetch, then delete the local branches whose upstream is gone (asks; asks again before force-deleting unmerged) |
 | <kbd>F</kbd> | Fast-forward the selected branch to its upstream without checking it out |
 | <kbd>/</kbd> | Filter as you type (<kbd>esc</kbd> clears) |
 | <kbd>b</kbd> | Pick the base branch for the Unmerged, Merged and Tags tabs |

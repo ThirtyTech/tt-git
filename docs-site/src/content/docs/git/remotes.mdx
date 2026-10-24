@@ -50,6 +50,9 @@ Press <kbd>f</kbd> in the branches pane to run `git fetch --all --prune`. It
 fetches every remote and removes remote branches that were deleted on the
 server. A local branch whose upstream was deleted then shows `gone` in red in
 the branch list, which usually means it was merged and can be deleted.
+The fetch itself never deletes local branches; press <kbd>D</kbd> in the
+branches pane to fetch and then delete them, after asking. See [Deleting gone
+branches](/panes/branches/#deleting-gone-branches).
 
 <Aside>
 	In the graph, <kbd>f</kbd> opens the author and file filter instead. Fetch

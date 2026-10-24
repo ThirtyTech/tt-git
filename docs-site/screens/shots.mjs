@@ -429,6 +429,15 @@ export const shots = [
 		],
 	},
 	{
+		name: 'branches-prune-gone',
+		capture: 'branches-prune-gone',
+		view: { region: { box: 'Delete gone branches' } },
+		callouts: [
+			{ target: { find: '(If any are not fully merged', w: 54, h: 2 }, text: 'Unmerged? It asks **again** before force-deleting', markerSide: 'left' },
+			{ target: { find: 'y confirm · n/esc cancel' }, text: '**y** deletes them', markerSide: 'left', tone: 'pink' },
+		],
+	},
+	{
 		name: 'branches-filter',
 		capture: 'branches-filter',
 		view: { region: { cells: [95, 35, 95, 3] } },
