@@ -246,6 +246,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `open_worktree`, `remove_worktree`, `new_branch`, `copy`, `next_tab`, `prev_tab`, `filter` | `enter`/`space`, `d`, `n`, `c`, `]` `}`, `[` `{`, `/` | worktrees |
 | `stage_toggle`, `switch_side`, `toggle_line_mode`, `select_range`, `discard`, `commit`, `close_details` | `space`, `tab`, `a`, `v`, `d`, `c`, `esc` | stage |
 | `toggle_files`, `open_link` | `}`, `o` | details |
+| `older_commit`, `newer_commit` | `]`, `[` | details |
 | `open_in_editor` | `e` | status, details, stage, blame |
 | `blame` | `b` | status, details |
 | `open_commit`, `toggle_details`, `blame_back`, `blame_forward`, `blame_older`, `blame_newer`, `search`, `search_next`, `search_prev`, `toggle_dates`, `close_details` | `enter`, `space`, `[`, `]`, `{`, `}`, `/`, `n`, `N`, `t`, `esc` | blame |

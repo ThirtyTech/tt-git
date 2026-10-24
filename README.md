@@ -153,6 +153,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `d` | remove it (asks first; asks again before `--force` if it has changes; never the main worktree or the one tt-git is in) |
 | | `n` / `c` | new branch in a new worktree from it / copy its absolute path |
 | details | `}` | show / hide the commit's changed files below the diff (`j`/`k` pick a file); fullscreen puts them on the left |
+| | `]` / `[` | next (older) / previous (newer) commit in the graph, or stash in the Stash tab |
 | | `o` | open the link in view with a plugin link handler |
 | | `e` | open the file in view in your editor, at the line at the top of the diff |
 | | `b` | blame the file in view as of that commit, at the line at the top of the diff |

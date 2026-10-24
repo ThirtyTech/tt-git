@@ -94,6 +94,19 @@ the left and the selected file's diff fills the right, like a pull request's "Fi
 <kbd>+</kbd> also makes the details pane fullscreen from wherever it is, and with the files view on,
 fullscreen moves the file list to the left.
 
+## Stepping through commits
+
+Press <kbd>]</kbd> in details to show the next commit down the graph (the older one), and
+<kbd>[</kbd> for the one above it (the newer one). The graph's selection moves with it, so when you
+close details you're on the commit you stopped at. Details stays as it was: the files view stays
+open, and fullscreen stays fullscreen. At the top or bottom of the graph, nothing happens.
+
+On a stash, <kbd>]</kbd> and <kbd>[</kbd> step through the [Stash tab](/panes/stash/) the same way.
+
+A commit opened from [blame](/panes/blame/) isn't the graph's selection, so there's nothing to step
+from: the help bar says `this commit isn't selected in the graph: nothing to step from`. Press
+<kbd>esc</kbd> to go back to blame.
+
 ## Other things details shows
 
 - **A stash**: on the [Stash tab](/panes/stash/), details shows what the selected stash holds,
@@ -189,6 +202,7 @@ says `no plugin handles …` rather than guessing which program should open it.
 | <kbd>ctrl+d</kbd> <kbd>ctrl+u</kbd>, <kbd>pagedown</kbd> <kbd>pageup</kbd> | Scroll a page |
 | <kbd>g</kbd> <kbd>G</kbd> | Top / bottom |
 | <kbd>{'}'}</kbd> | Show / hide the changed files |
+| <kbd>]</kbd> <kbd>[</kbd> | [Next (older) / previous (newer) commit](#stepping-through-commits), or stash |
 | <kbd>o</kbd> | Open the link in view with a plugin |
 | <kbd>e</kbd> | Open the file in view in your editor |
 | <kbd>b</kbd> | [Blame](/panes/blame/) the file in view, as of the commit |
