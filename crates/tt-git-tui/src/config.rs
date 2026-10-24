@@ -165,10 +165,6 @@ pub const SHARED_FILE: &str = ".tt-git.toml";
 /// directory so every worktree reads the same one.
 pub const LOCAL_FILE: &str = "tt-git.toml";
 
-/// Settings that run programs, which a committed [`SHARED_FILE`] can't set:
-/// opening someone else's repo mustn't run their commands.
-const SHARED_IGNORED: &[&[&str]] = &[&["editor"], &["agent"], &["keys", "command"]];
-
 /// The config files that apply to a repository, in the order they're read:
 /// the global file, then [`SHARED_FILE`] in `root`, then [`LOCAL_FILE`] in
 /// `common_dir`. Later files win.
@@ -188,15 +184,6 @@ pub struct GlobalConfig {
     table: toml::Table,
 }
 
-/// A repository's config: the global file with its own files laid over.
-#[derive(Debug, Clone)]
-pub struct LayeredConfig {
-    pub config: Config,
-    /// Keys left out of [`SHARED_FILE`] because only the user's own files
-    /// can set them, like `editor.command`.
-    pub ignored: Vec<String>,
-}
-
 impl GlobalConfig {
     /// Reads `path`; a missing file is the defaults.
     pub fn load(path: &Path) -> Result<Self, ConfigError> {
@@ -211,27 +198,18 @@ impl GlobalConfig {
     /// `common_dir`: each file in [`layer_paths`] that exists merged over the
     /// one before. Tables merge key by key; anything else, arrays and
     /// `layout` included, is replaced whole.
-    pub fn for_repo(&self, root: &Path, common_dir: &Path) -> Result<LayeredConfig, ConfigError> {
+    pub fn for_repo(&self, root: &Path, common_dir: &Path) -> Result<Config, ConfigError> {
         let [_, shared, local] = layer_paths(&self.path, root, common_dir);
         let mut table = self.table.clone();
-        let mut ignored = Vec::new();
         // A merged config that doesn't load is blamed on the last file in it.
         let mut last = &self.path;
-        if let Some(mut layer) = read_layer(&shared)? {
-            last = &shared;
-            for key in SHARED_IGNORED {
-                if remove_path(&mut layer, key) {
-                    ignored.push(key.join("."));
-                }
+        for path in [&shared, &local] {
+            if let Some(layer) = read_layer(path)? {
+                last = path;
+                merge(&mut table, layer, true);
             }
-            merge(&mut table, layer, true);
         }
-        if let Some(layer) = read_layer(&local)? {
-            last = &local;
-            merge(&mut table, layer, true);
-        }
-        let config = to_config(last, table)?;
-        Ok(LayeredConfig { config, ignored })
+        to_config(last, table)
     }
 }
 
@@ -280,18 +258,6 @@ fn merge(base: &mut toml::Table, over: toml::Table, top: bool) {
                 base.insert(key, value);
             }
         }
-    }
-}
-
-/// Removes the key at `path` (`["keys", "command"]`), saying whether it was there.
-fn remove_path(table: &mut toml::Table, path: &[&str]) -> bool {
-    match path {
-        [] => false,
-        [key] => table.remove(*key).is_some(),
-        [key, rest @ ..] => match table.get_mut(*key) {
-            Some(toml::Value::Table(inner)) => remove_path(inner, rest),
-            _ => false,
-        },
     }
 }
 
@@ -398,7 +364,7 @@ mod tests {
         (dir, global)
     }
 
-    fn for_repo(dir: &tempfile::TempDir, global: &GlobalConfig) -> Result<LayeredConfig, ConfigError> {
+    fn for_repo(dir: &tempfile::TempDir, global: &GlobalConfig) -> Result<Config, ConfigError> {
         global.for_repo(dir.path(), &dir.path().join(".git"))
     }
 
@@ -409,7 +375,7 @@ mod tests {
             Some("[graph]\nmax_lanes = 8\nmessage_presets = []\n"),
             Some("[graph]\nlanes = false\n"),
         );
-        let cfg = for_repo(&dir, &global).unwrap().config;
+        let cfg = for_repo(&dir, &global).unwrap();
         assert!(!cfg.mouse, "untouched global key kept");
         assert_eq!(cfg.graph.max_lanes, 8, "shared file wins over global");
         assert_eq!(cfg.graph.message_presets, Some(vec![]), "arrays are replaced");
@@ -420,18 +386,13 @@ mod tests {
     #[test]
     fn local_file_wins_over_shared() {
         let (dir, global) = layers(None, Some("theme = \"nord\"\n"), Some("theme = \"dracula\"\n"));
-        assert_eq!(
-            for_repo(&dir, &global).unwrap().config.theme.as_deref(),
-            Some("dracula")
-        );
+        assert_eq!(for_repo(&dir, &global).unwrap().theme.as_deref(), Some("dracula"));
     }
 
     #[test]
     fn no_project_files_is_the_global_config() {
         let (dir, global) = layers(Some("syntax = false\n"), None, None);
-        let layered = for_repo(&dir, &global).unwrap();
-        assert!(!layered.config.syntax);
-        assert!(layered.ignored.is_empty());
+        assert!(!for_repo(&dir, &global).unwrap().syntax);
     }
 
     #[test]
@@ -444,32 +405,21 @@ mod tests {
             Some(&mine),
             None,
         );
-        let cfg = for_repo(&dir, &global).unwrap().config;
+        let cfg = for_repo(&dir, &global).unwrap();
         assert_eq!(cfg.layout, Config::parse(&mine).unwrap().layout);
     }
 
     #[test]
-    fn shared_file_cannot_set_commands() {
-        let shared = "[editor]\ncommand = \"evil {file}\"\n[agent]\ncommand = \"evil\"\n\
-                      [[keys.command]]\nkey = \"ctrl+o\"\ntype = \"plugin_action\"\ncommand = \"a.b.c\"\n\
-                      [keys.global]\nquit = \"x\"\n";
+    fn shared_file_can_set_anything() {
+        let shared = "[editor]\ncommand = \"repo {file}\"\n[agent]\ncommand = \"repo-agent\"\n\
+                      [plugins]\npane_release_keys = [\"f11\"]\n\
+                      [[keys.command]]\nkey = \"ctrl+o\"\ntype = \"plugin_action\"\ncommand = \"a.b.c\"\n";
         let (dir, global) = layers(Some("[editor]\ncommand = \"mine {file}\"\n"), Some(shared), None);
-        let layered = for_repo(&dir, &global).unwrap();
-        assert_eq!(layered.ignored, ["editor", "agent", "keys.command"]);
-        assert_eq!(layered.config.editor.command.as_deref(), Some("mine {file}"));
-        assert_eq!(layered.config.agent.command, "claude");
-        assert!(layered.config.keys.command.is_empty());
-        // The rest of the file still applies.
-        let km = layered.config.keymap().unwrap();
-        assert_eq!(km.lookup(Context::Global, "x".parse().unwrap()), Some(Command::Quit));
-    }
-
-    #[test]
-    fn local_file_can_set_commands() {
-        let (dir, global) = layers(None, None, Some("[editor]\ncommand = \"mine {file}\"\n"));
-        let layered = for_repo(&dir, &global).unwrap();
-        assert!(layered.ignored.is_empty());
-        assert_eq!(layered.config.editor.command.as_deref(), Some("mine {file}"));
+        let cfg = for_repo(&dir, &global).unwrap();
+        assert_eq!(cfg.editor.command.as_deref(), Some("repo {file}"));
+        assert_eq!(cfg.agent.command, "repo-agent");
+        assert_eq!(cfg.plugins.pane_release_keys, ["f11"]);
+        assert_eq!(cfg.keys.command.len(), 1);
     }
 
     #[test]

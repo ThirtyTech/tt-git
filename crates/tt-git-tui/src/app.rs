@@ -476,11 +476,6 @@ impl App {
         self.notice.as_deref()
     }
 
-    /// Shows `notice` in the status line, as a command's result would be.
-    pub fn set_notice(&mut self, notice: String) {
-        self.renew_notice(notice);
-    }
-
     /// Whether a new frame could differ from the last one, clearing the flag.
     /// Input and actions that may change what's shown set it; the runner
     /// skips drawing while it's clear.

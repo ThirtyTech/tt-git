@@ -415,13 +415,10 @@ fn reads_each_worktrees_own_config() {
     let side = sb.path().join(".worktrees").join("side");
     sb.git(&["worktree", "add", "-q", "-b", "side", side.to_str().unwrap(), "main"]);
     std::fs::write(sb.path().join(".git/info/exclude"), "/.worktrees/\n").unwrap();
-    // Main's file tries to set the editor, which only the user's own config may.
-    std::fs::write(sb.path().join(".tt-git.toml"), "[editor]\ncommand = \"evil {file}\"\n").unwrap();
+    std::fs::write(sb.path().join(".tt-git.toml"), "[graph]\ndates = \"relative\"\n").unwrap();
     std::fs::write(side.join(".tt-git.toml"), "[graph]\ndates = \"clock\"\n").unwrap();
 
     let mut t = spawn(&sb, &[]);
-    t.wait_until(|s| s.contains(".tt-git.toml: ignored editor"))
-        .expect("ignored key reported");
     t.wait_until(|s| s.contains("Status: repo · main") && s.contains("Worktrees"))
         .expect("main opened");
     assert!(

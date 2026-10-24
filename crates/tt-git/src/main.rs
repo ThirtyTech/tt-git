@@ -6,7 +6,7 @@ use tt_git_core::{GitCli, GitError, Repo};
 use tt_git_plugin::registry::PluginDirs;
 use tt_git_tui::App;
 use tt_git_tui::app::PluginOptions;
-use tt_git_tui::config::{GlobalConfig, LayeredConfig, SHARED_FILE};
+use tt_git_tui::config::GlobalConfig;
 use tt_git_tui::themes::{ThemeDirs, ThemeOptions};
 
 mod cli;
@@ -74,20 +74,12 @@ fn main() -> Result<()> {
     // Each repository, and each worktree opened later, gets its own files
     // laid over the global config.
     let new_app = |repo: Repo| -> Result<_> {
-        let LayeredConfig { mut config, ignored } = global.for_repo(repo.root(), repo.common_dir())?;
+        let mut config = global.for_repo(repo.root(), repo.common_dir())?;
         if let Some(on) = filter_to_cwd {
             config.graph.filter_to_cwd = on;
         }
         let mouse = config.mouse;
         let (mut app, rx) = App::new(config, repo, tt_git_core::time::system_clock())?;
-        if !ignored.is_empty() {
-            let msg = format!(
-                "{SHARED_FILE}: ignored {} (only your own config can set them)",
-                ignored.join(", ")
-            );
-            tracing::warn!("{msg}");
-            app.set_notice(msg);
-        }
         app.enable_themes(ThemeOptions {
             dirs: ThemeDirs::from_env(),
             config_path: Some(config_path.clone()),
