@@ -269,6 +269,22 @@ command = "acme.github.open-commit"
 context = "graph"         # optional, default: everywhere
 ```
 
+## Per-repository config
+
+A repository can override `config.toml` with files of its own, which take the
+same settings:
+
+- `.tt-git.toml` in the repository's root, to commit and share.
+- `.git/tt-git.toml`, your own, not committed; every worktree reads it.
+
+They're read in that order after `config.toml` (or `--config FILE`), and a
+later file wins. Tables merge key by key; lists and `[layout]` are replaced
+whole. Opening another worktree reads that worktree's files.
+
+A committed `.tt-git.toml` can't set anything that runs a program: `[editor]`,
+`[agent]` and `[[keys.command]]` in it are ignored, with a notice in the help
+bar. `tt-git config path` prints the files that apply to a repository.
+
 ## Logs
 
 tt-git writes its own log to `<state>/logs/tt-git.log`. `<state>` is

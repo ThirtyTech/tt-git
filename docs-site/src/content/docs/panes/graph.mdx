@@ -237,7 +237,8 @@ features, `^(fix|perf)` the fixes and speedups, `^docs\(graph\)` the graph's doc
   or `:shortcode:`s before it stay in the preset: `🤖 feat: Add it` counts for `^🤖 feat`. Case
   doesn't matter: `Fix:` and `fix:` both count for `^fix`. They're worked out from the whole graph
   and stay the same while it's filtered. A repository with no such prefixes has no presets. Set a
-  fixed list with [`message_presets`](/configuration/#graph) under `[graph]`.
+  fixed list with [`message_presets`](/configuration/#graph) under `[graph]`, for every repository
+  in `config.toml` or for one in its [`.tt-git.toml`](/configuration/#per-repository-config).
 - **Case** is ignored unless the regex has a capital letter, as in
   [blame's search](/panes/blame/). `fix` finds `Fix typo`; `Fix` doesn't find `fix: typo`.
 - **Only the subject** is searched, so `^feat` means the subject starts with `feat`, not that some

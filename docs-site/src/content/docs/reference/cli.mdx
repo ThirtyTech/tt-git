@@ -21,7 +21,7 @@ Opens the UI on a repository.
 | Argument | |
 |---|---|
 | `PATH` | The repository to open, or any folder inside it. Default: the current directory. |
-| `--config FILE` | Read this config file instead of the [default one](/configuration/#where-it-lives). |
+| `--config FILE` | Read this config file instead of the [default one](/configuration/#where-it-lives). The repository's own [`.tt-git.toml` and `.git/tt-git.toml`](/configuration/#per-repository-config) still apply on top of it. |
 | `--no-plugins` | Don't load plugins or open the API socket. |
 | `--filter-to-cwd` | Started in a subfolder of the repository (or with `PATH` one), start with the graph and Status [narrowed to it](/panes/graph/#narrowing-to-the-folder-you-started-in), whatever [`filter_to_cwd`](/configuration/#graph) says. |
 | `--no-filter-to-cwd` | Start with the whole repository shown, even with `filter_to_cwd = true`. |
@@ -53,7 +53,7 @@ in `TTGIT_SOCKET_PATH`, which every plugin process has, or in `--socket`:
 Without either, they stop with "no running tt-git". These are marked
 **socket** below.
 
-Two commands read the repository directly instead, and take `--repo`:
+Three commands read the repository directly instead, and take `--repo`:
 
 | Option | |
 |---|---|
@@ -179,6 +179,25 @@ must be installed and enabled. Text is cut to 10 cells.
 tt-git branch decorate feature/login=!1423 fix/typo=!1431
 ```
 
+## tt-git config path
+
+```sh
+tt-git config path [--repo PATH]
+```
+
+Print the config files tt-git reads for a repository, one per line, in the
+order it reads them: `config.toml`, then the repository's `.tt-git.toml`, then
+its `.git/tt-git.toml`. Later files win. Files that don't exist are marked
+`(not found)`. Outside a repository it prints only `config.toml`. See
+[Per-repository config](/configuration/#per-repository-config).
+
+```sh
+$ tt-git config path
+/home/me/.config/tt-git/config.toml
+/home/me/src/website/.tt-git.toml
+/home/me/src/website/.git/tt-git.toml  (not found)
+```
+
 ## tt-git update
 
 ```sh
@@ -226,7 +245,7 @@ The command palette has the same thing as *Update tt-git*. See
 | `TTGIT_STATE_DIR` | Where logs and plugin state live. See [Logs](/configuration/#logs). |
 | `TTGIT_LOG` | The log level, as an `EnvFilter` string. Default `info`. |
 | `TTGIT_SOCKET_PATH` | The socket the **socket** commands use. |
-| `TTGIT_REPO_PATH` | The repository `status` and `branch list` read. |
+| `TTGIT_REPO_PATH` | The repository `status`, `branch list` and `config path` read. |
 
 <Aside type="caution">
 If you start a terminal from inside a tt-git plugin pane, it inherits

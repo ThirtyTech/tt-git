@@ -189,13 +189,61 @@ description = "user-facing notes for this branch"
 prompt = "Write release notes for what {branch} adds since {base}:\n{log}"
 ```
 
-### Per-repository settings
+## Per-repository config
 
-One setting lives in each repository rather than in `config.toml`: the base
-branch the Merged, Unmerged and Tags tabs compare against. Press <kbd>b</kbd>
-in the branches pane to pick it, and tt-git saves it as `tt-git.baseBranch` in
-that repository's own git config (`.git/config`). Nothing is written to your
-global git config. See [The base branch](/panes/merged-unmerged/#the-base-branch).
+A repository can have settings of its own that override `config.toml`. They
+go in one of two files, which take the same settings as `config.toml`:
+
+| File | For |
+|---|---|
+| `.tt-git.toml` in the repository's root | Settings to share. Commit it and everyone who opens the repository with tt-git gets them. |
+| `.git/tt-git.toml` | Your own settings for this repository. It isn't committed, and every worktree of the repository reads it. |
+
+tt-git reads `config.toml` first, then `.tt-git.toml`, then
+`.git/tt-git.toml`. A setting in a later file replaces the same setting in an
+earlier one. Tables combine key by key, so a repository that only sets
+`max_lanes` keeps the rest of your `[graph]` settings. Lists are replaced
+whole, not added to, and so is the whole `[layout]`.
+
+For example, a `.tt-git.toml` that gives a large repository its own message
+presets and loads fewer commits:
+
+```toml title=".tt-git.toml"
+[graph]
+max_commits = 5000
+message_presets = ["^feat", "^fix", "^perf"]
+```
+
+`--config` replaces only `config.toml`. The repository's files still apply on
+top of the file you pass.
+
+The files are read when tt-git starts in the repository, and again when you
+[open another worktree](/git/worktrees/), which gets that worktree's
+`.tt-git.toml`. To pick up a change, restart tt-git. `mouse` only takes effect
+for the repository tt-git started in.
+
+A mistake in either file is reported when tt-git starts, naming the file, the
+same way as one in `config.toml`.
+
+To see which files apply to a repository, run
+[`tt-git config path`](/reference/cli/#tt-git-config-path).
+
+<Aside type="caution" title="What a committed file can't set">
+A `.tt-git.toml` comes with the repository, so whoever wrote it chose what's
+in it. It can't set anything that runs a program: `[editor]`, `[agent]` and
+`[[keys.command]]` are ignored in it, and tt-git says so in the help bar when
+it starts (`.tt-git.toml: ignored editor (only your own config can set them)`).
+Put those in `config.toml` or `.git/tt-git.toml`.
+</Aside>
+
+### The base branch
+
+One setting lives in the repository's git config rather than a tt-git file:
+the base branch the Merged, Unmerged and Tags tabs compare against. Press
+<kbd>b</kbd> in the branches pane to pick it, and tt-git saves it as
+`tt-git.baseBranch` in that repository's own git config (`.git/config`).
+Nothing is written to your global git config. See
+[The base branch](/panes/merged-unmerged/#the-base-branch).
 
 ## Logs
 
