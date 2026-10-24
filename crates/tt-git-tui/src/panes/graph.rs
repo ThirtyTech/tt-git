@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -380,11 +380,22 @@ impl GraphPane {
         if std::mem::take(&mut self.stale) {
             self.clear();
         }
+        // A filtered load lists every match at once, and its parents may name
+        // commits it left out; lanes to those would never end.
+        let listed: Option<HashSet<Oid>> = self
+            .is_filtered()
+            .then(|| self.commits.iter().chain(&commits).map(|c| c.oid).collect());
         let mut parents: Vec<NodeId> = Vec::new();
         for commit in commits {
             let id = intern(&mut self.ids, commit.oid);
             parents.clear();
-            parents.extend(commit.parents.iter().map(|p| intern(&mut self.ids, *p)));
+            parents.extend(
+                commit
+                    .parents
+                    .iter()
+                    .filter(|p| listed.as_ref().is_none_or(|l| l.contains(p)))
+                    .map(|p| intern(&mut self.ids, *p)),
+            );
             self.rows.push(&self.builder.push(id, &parents));
             self.commits.push(commit);
         }
@@ -714,8 +725,10 @@ impl GraphPane {
                 spans.push(Span::raw(" "));
             }
         }
-        // Merge commits are dimmed so the work itself stands out.
-        let dim = |style: Style| if row.is_merge() { theme.muted } else { style };
+        // Merge commits are dimmed so the work itself stands out. The commit,
+        // not the row, says so: a filtered graph lays out only the parents
+        // it lists.
+        let dim = |style: Style| if commit.is_merge() { theme.muted } else { style };
         push_fit(&mut spans, &commit.summary, text_width, dim(Style::default()));
 
         if meta > 0 {
@@ -1230,6 +1243,28 @@ mod tests {
         assert_eq!(style_of(1, "a commit"), Style::default());
         assert_eq!(style_of(1, "Ann"), theme.author);
         assert_eq!(style_of(1, "bbbbbbb"), theme.sha);
+    }
+
+    #[test]
+    fn filtered_merges_stay_dimmed_without_open_lanes() {
+        // The filter matched the merge and an unrelated commit, not the
+        // merge's parents.
+        let (m, a, b, c) = ("a".repeat(40), "b".repeat(40), "c".repeat(40), "d".repeat(40));
+        let commits = vec![commit(&m, &[&a, &b]), commit(&c, &[&a])];
+        let theme = Theme::default();
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
+        let ctx = Ctx::new(tx);
+        let mut graph = GraphPane::new(Arc::new(tt_git_core::time::FixedClock(0)));
+        graph.filter.message = Some("commit".into());
+        let load = graph.begin_load();
+        graph.apply_batch(load.generation(), commits, true, &ctx);
+
+        assert!(graph.commits[0].is_merge(), "keeps its parents");
+        let rows: Vec<(usize, usize)> = graph.rows().iter().map(|r| (r.node_lane(), r.width())).collect();
+        assert_eq!(rows, [(0, 1), (0, 1)], "no lanes to the commits left out");
+        let line = graph.render_row(0, 2, 200, 0, &theme);
+        let summary = line.spans.iter().find(|s| s.content.starts_with("a commit")).unwrap();
+        assert_eq!(summary.style, theme.muted);
     }
 
     #[test]

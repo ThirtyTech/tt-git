@@ -491,8 +491,11 @@ fn filters_commits_by_author_and_path() {
     let mut want = vec![a1.clone(), a2.clone(), a3.clone()];
     want.sort();
     assert_eq!(got, want);
-    // Parents outside the result are dropped (a2's is the b1 commit).
-    assert!(commits.iter().all(|c| c.parents.is_empty()), "{commits:#?}");
+    // Parents are the real ones, even outside the result (a2's is the b1
+    // commit), so a merge still reads as one.
+    let b1 = sb.rev_parse("main~1");
+    let a2_commit = commits.iter().find(|c| c.oid == a2).unwrap();
+    assert_eq!(*a2_commit.parents, vec![b1]);
 
     // A path filter rewrites parents to the previous commit that touched it.
     let in_src = LogFilter {

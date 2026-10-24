@@ -660,9 +660,9 @@ impl Repo {
     }
 
     /// Up to `limit` commits of `scope` that match `filter`, in topological
-    /// order. Parents name only commits in the result: a path filter
-    /// rewrites them to the nearest commit that changed the path, and
-    /// parents an author or message filter leaves out are dropped.
+    /// order. Parents are git's: a path filter rewrites them to the nearest
+    /// commit that changed the path, and an author or message filter keeps
+    /// the real ones, so they may name commits not in the result.
     pub fn filtered_commits(&self, scope: &LogScope, filter: &LogFilter, limit: usize) -> Result<Vec<Commit>> {
         let message = match filter.message.as_deref().map(message_regex).transpose() {
             Ok(message) => message,
@@ -699,10 +699,6 @@ impl Repo {
             }
             commits.len() < limit
         })?;
-        let shown: HashSet<Oid> = commits.iter().map(|c| c.oid).collect();
-        for c in &mut commits {
-            c.parents.retain(|p| shown.contains(p));
-        }
         Ok(commits)
     }
 
