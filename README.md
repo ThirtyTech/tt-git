@@ -112,6 +112,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `t` | dates as age (`3h`) ↔ local date and time (`2026-10-17 01:30 PM`) |
 | | `L` | hide / show the lanes, so each row starts with its badges and subject |
 | | `f` | filter: only one author's commits, or the commits that changed a file or folder (`tab` in the panel switches between the two; both can be set) |
+| | `.` | only the commits that changed the folder tt-git was started in (Status narrows too); again for everything |
 | | `o` | check out the selected commit: the local branch on it if there is one, else the commit with HEAD detached (with uncommitted changes, asks to stash them first) |
 | | `n` | new branch at the selected commit (`tab` in the dialog: create it in a worktree) |
 | | `T` | new tag at the selected commit (`tab` in the dialog: annotated, with a message) |
@@ -142,6 +143,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `s` | stash: everything, only what's staged, only what isn't staged, everything but leave staged changes in place, or just the selected file (`tab` in the dialog picks; the message is optional) |
 | | `e` | open the file in your editor at its first change (a conflicted file: at its first conflict marker) |
 | | `b` | blame the file in the working tree: who last changed each line, when and in which commit |
+| | `.` | list only the files in the folder tt-git was started in; `a`, `D` and `s` then act on it alone |
 | | `C` / `X` | continue / abort a merge, rebase, cherry-pick or revert |
 | stash tab | `space` / `a` | pop / apply the selected stash (pop drops it once applied) |
 | | `d` | drop it (asks first) |

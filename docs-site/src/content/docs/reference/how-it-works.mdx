@@ -110,6 +110,10 @@ The filtered log adds:
   rewriting: each commit's parent becomes the nearest ancestor that also
   touched the path, so the lanes still join up into a readable graph
   instead of hundreds of disconnected dots.
+  [Narrowing to the folder you started in](/panes/graph/#narrowing-to-the-folder-you-started-in)
+  is this path filter with that folder as the path. The folder comes from
+  `git rev-parse --show-prefix`, run where tt-git started, when the
+  repository is opened.
 
 An author filter can't rewrite parents that way, so a line ends where the
 next commit is by someone else, and the next match starts a new lane.
@@ -268,6 +272,7 @@ without stashes pays nothing for it.
 | Stash unstaged | `git stash push --staged -m "tt-git: staged changes set aside"`, `git stash push --include-untracked [-m <message>]`, then `git stash pop --index stash@{1}` to put the staged changes back. With nothing staged, just the middle command |
 | Stash, keep staged | `git stash push --include-untracked --keep-index` |
 | Stash one file | `git stash push --include-untracked -- :(literal)<path>…`, after `git restore --staged` for a staged deletion (the old path of a rename) |
+| Stash a folder | The same, with the folder as the path |
 | Pop / apply | `git stash pop stash@{n}` / `git stash apply stash@{n}` |
 | Drop | `git stash drop stash@{n}` |
 | Branch | `git stash branch <name> stash@{n}` |
@@ -358,6 +363,7 @@ files git leaves behind (`rebase-merge/`, `rebase-apply/`, `MERGE_HEAD`,
 | Stage | `git add -- <path>` |
 | Unstage | `git restore --staged -- <path>`, or `git rm --cached` before the first commit, when there's no `HEAD` |
 | Stage all / unstage all | `git add -A` / `git reset -q` (`git rm --cached -r .` before the first commit) |
+| Stage all / unstage all, [narrowed to a folder](/panes/status/#narrowing-to-a-folder) | `git add -A -- :(literal)<folder>` / `git reset -q -- :(literal)<folder>` (`git rm --cached -r -q --ignore-unmatch -- :(literal)<folder>` before the first commit) |
 | Discard an untracked file | Deletes it |
 | Discard a new file | `git rm -f` |
 | Discard a rename | Undone on both paths |
@@ -366,6 +372,7 @@ files git leaves behind (`rebase-merge/`, `rebase-apply/`, `MERGE_HEAD`,
 | Discard all: unstaged | `git restore --worktree -- .`, skipped when `git diff --quiet` finds nothing to restore |
 | Discard all: unstaged + untracked | The same restore, then `git clean -fd -q` |
 | Discard all: untracked | `git clean -fd -q` |
+| Discard all, narrowed to a folder | The same steps limited to `-- :(literal)<folder>`, except that **Everything** runs `git restore --source=HEAD --staged --worktree` there in place of `git reset --hard` (`git rm --cached -r` before the first commit), then `git clean -fd -q` |
 | Ignore | Appends `/<path>` (`/<folder>/` for a folder) to the root `.gitignore`, or to the file `git rev-parse --git-path info/exclude` names. `git ls-files -z -- :(literal)<path>` checks whether it's tracked first |
 | Ignore a tracked path | The same, then `git rm --cached -r -q -- :(literal)<path>` |
 | Commit | `git commit -F -`, with the message on stdin, so multi-line messages and ones starting with `-` are safe |

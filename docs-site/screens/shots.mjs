@@ -149,7 +149,7 @@ export const shots = [
 		capture: 'graph-filter-folder',
 		view: { region: { cells: [0, 0, 70, 12] } },
 		callouts: [
-			{ target: { find: 'file src/pages/', dx: -2, w: 18 }, text: 'The **filter**, in the title; esc clears it', markerSide: 'above' },
+			{ target: { find: 'folder src/pages/', dx: -2, w: 20 }, text: 'The **filter**, in the title; esc clears it', markerSide: 'above' },
 			{ target: { cells: [1, 1, 5, 10] }, text: 'Lanes still **join up** across matches', markerSide: 'right' },
 		],
 	},

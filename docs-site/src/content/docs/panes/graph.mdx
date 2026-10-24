@@ -41,7 +41,7 @@ that did the work stand out. Their badges and the `◉` in the lanes keep their 
 
 The title tells you what you're looking at: `Graph [all] 12/4031` means every branch is shown and the
 12th of 4,031 loaded commits is selected. A filter adds to it, for example
-`Graph [all · author Ada · file src/] 3/120`. While a load is running the title ends in `loading…`.
+`Graph [all · author Ada · folder src/] 3/120` (a single file reads `file src/main.rs`). While a load is running the title ends in `loading…`.
 
 <Aside type="tip">
   The graph follows your selection in the other panes: pick a branch or a tag in the
@@ -139,7 +139,8 @@ changing the filter.
 - **Authors** are listed with the most commits first. Each person appears once, even if they've
   committed under several email addresses, as long as your `.mailmap` says they're the same person.
 - **Files** lists every tracked file, with each folder listed just before the first file in it. Pick
-  a folder, such as `src/components/`, to see every commit that touched anything under it.
+  a folder, such as `src/components/`, to see every commit that touched anything under it. When
+  tt-git was started in a subfolder, that folder comes first, marked `current folder`.
 - **Matching** ignores case. Entries that contain what you typed come first, then entries that only
   match it as a sequence of letters, so `apcmp` still finds `app/components/`.
 - **Deleted files** aren't in the list, since only files that still exist are. If nothing matches on
@@ -155,6 +156,31 @@ A file filter keeps the lanes joined up: each commit links to the nearest earlie
 touched the path, so you still get a readable graph. An author filter can't do that, so each run of
 one person's commits is its own short line. Renames aren't followed. If no commits match, the graph
 says `no commits match the filter (f to change it, esc to clear it)`.
+
+## Narrowing to the folder you started in
+
+In a monorepo, most commits belong to other projects. Start tt-git in your project's folder, such as
+`apps/web/`, and press <kbd>.</kbd> in the graph to see only the commits that changed something
+under it, as `git log -- apps/web/` would. Press <kbd>.</kbd> again to see everything.
+
+- The title shows it: `Graph [all · folder apps/web/]`.
+- An author filter stays set when you press <kbd>.</kbd>, so you can see one person's commits to
+  your project.
+- The [Status](/panes/status/#narrowing-to-a-folder) pane narrows to the same folder, and
+  <kbd>.</kbd> works there too. Status is narrowed whenever the graph's filter is the folder you
+  started in, however you set it: with <kbd>.</kbd>, by picking `current folder` in
+  **Filter graph**, or at startup.
+- <kbd>esc</kbd> in the graph (with details hidden) clears it, like any filter.
+- Started at the top of the repository, there's no folder to narrow to, and <kbd>.</kbd> says so.
+  Use <kbd>f</kbd> to filter by any folder.
+
+To start narrowed every time, set
+[`filter_to_cwd = true`](/configuration/#graph) under `[graph]`. `tt-git --filter-to-cwd` and
+`tt-git --no-filter-to-cwd` turn it on or off for one run; see [CLI](/reference/cli/).
+
+The lanes work as for any file filter: each commit links to the nearest earlier commit that also
+changed the folder. Merges that brought no change to the folder are left out, as `git log` does by
+default.
 
 ## Acting on a commit
 
@@ -255,6 +281,7 @@ See [How tt-git uses git](/reference/how-it-works/#graph) for the details, and
 | <kbd>t</kbd> | Dates as age ↔ local date and time (also in [blame](/panes/blame/#dates)) |
 | <kbd>L</kbd> | Hide / show the lanes |
 | <kbd>f</kbd> | Filter by author or file |
+| <kbd>.</kbd> | Only the commits that changed the folder tt-git was started in, and back |
 | <kbd>o</kbd> | Check out the commit (its local branch if it has one) |
 | <kbd>n</kbd> | New branch at the commit (<kbd>tab</kbd> in the dialog: in a worktree) |
 | <kbd>T</kbd> | New tag at the commit (<kbd>tab</kbd> in the dialog: annotated) |

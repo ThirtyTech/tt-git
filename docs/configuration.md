@@ -23,6 +23,7 @@ max_lanes = 16                  # lanes drawn before collapsing into …
 current_includes_upstream = true  # current-branch mode also shows HEAD's upstream
 dates = "relative"              # graph and blame dates: "relative" (3h, 2d) or "clock" (2026-10-17 01:30 PM, local time)
 lanes = true                    # draw the lanes at startup; L in the graph toggles them
+filter_to_cwd = false           # started in a subfolder, show only its commits and Status files (. toggles; --filter-to-cwd / --no-filter-to-cwd override)
 
 [branches]
 unmerged_exclude = ["archive"]  # hide unmerged branches whose name contains any of these
@@ -235,6 +236,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |
 | `undo` | `z` | global |
 | `toggle_scope`, `toggle_dates`, `toggle_lanes`, `checkout`, `filter`, `new_branch`, `new_tag`, `merge`, `rebase`, `cherry_pick`, `revert`, `select_range`, `agent` | `a`, `t`, `L`, `o`, `f`, `n`, `T`, `M`, `r`, `C`, `R`, `v`, `A` | graph |
+| `filter_folder` | `.` | graph, status |
 | `checkout`, `new_branch`, `new_tag`, `delete_branch`, `rename_branch`, `fetch`, `fast_forward`, `filter`, `merge`, `rebase` | `enter`/`space`, `n`, `T`, `d`, `R`, `f`, `F`, `/`, `M`, `r` | branches |
 | `push_tag` | `P` (on the Tags tab; pushes the branch on the others) | branches |
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |
