@@ -1,8 +1,8 @@
 //! Messages that drive [`App::update`](crate::App::update).
 
 use tt_git_core::{
-    BaseBranches, BranchEntry, BranchHistory, Checkout, CheckoutPlan, Commit, CommitFile, GitRef, Head, NoStep,
-    StageSide, Stash, Status, StatusEntry, UndoStep, Worktree,
+    BaseBranches, BranchDeletes, BranchEntry, BranchHistory, Checkout, CheckoutPlan, Commit, CommitFile, GitRef,
+    GoneBranches, Head, NoStep, StageSide, Stash, Status, StatusEntry, UndoStep, Worktree,
 };
 use tt_git_plugin::runtime::CommandLog;
 use tt_git_plugin::socket::Call;
@@ -139,6 +139,14 @@ pub enum Action {
         op: GitOp,
         result: Result<String, String>,
         head: Option<String>,
+    },
+    /// [`GitOp::PruneGone`] fetched, and found these branches.
+    GoneFound(Result<GoneBranches, String>),
+    /// [`GitOp::DeleteBranches`] finished.
+    BranchesDeleted {
+        names: Vec<String>,
+        force: bool,
+        result: BranchDeletes,
     },
     /// Open this file in the user's editor.
     OpenInEditor(EditTarget),

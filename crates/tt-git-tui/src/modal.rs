@@ -37,6 +37,12 @@ pub enum GitOp {
         name: String,
         force: bool,
     },
+    /// Local branches, deleted one by one; without `force` the unmerged
+    /// ones are kept and offered for force-deleting.
+    DeleteBranches {
+        names: Vec<String>,
+        force: bool,
+    },
     DeleteRemoteBranch {
         remote: String,
         branch: String,
@@ -60,6 +66,9 @@ pub enum GitOp {
         new: String,
     },
     FetchAll,
+    /// `fetch --all --prune`, then offers to delete the local branches
+    /// whose upstream is gone.
+    PruneGone,
     /// Fast-forward local branch `name` to `upstream` without checking it out.
     FastForward {
         name: String,
@@ -191,6 +200,10 @@ impl GitOp {
                 format!("create worktree {}", worktree_rel_path(name))
             }
             GitOp::DeleteBranch { name, .. } => format!("delete branch {name}"),
+            GitOp::DeleteBranches { names, .. } => match &names[..] {
+                [name] => format!("delete branch {name}"),
+                _ => format!("delete {} branches", names.len()),
+            },
             GitOp::DeleteRemoteBranch { remote, branch } => format!("delete {remote}/{branch}"),
             GitOp::DeleteTag { name, remote: None } => format!("delete tag {name}"),
             GitOp::DeleteTag {
@@ -201,6 +214,7 @@ impl GitOp {
             GitOp::PushTag { name } => format!("push tag {name}"),
             GitOp::RenameBranch { old, new } => format!("rename {old} → {new}"),
             GitOp::FetchAll => "fetch --all".into(),
+            GitOp::PruneGone => "fetch --all and find gone branches".into(),
             GitOp::FastForward { name, .. } => format!("fast-forward {name}"),
             GitOp::SetBaseBranch(Some(base)) => format!("base branch {base}"),
             GitOp::SetBaseBranch(None) => "base branch auto".into(),

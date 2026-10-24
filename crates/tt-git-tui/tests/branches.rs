@@ -638,3 +638,110 @@ fn fast_forward_refuses_a_branch_another_worktree_has_checked_out() {
     let err = t.app().error().unwrap_or_default().to_string();
     assert!(err.contains("feature is checked out in the worktree at"), "{err}");
 }
+
+/// `main` tracking `origin/main`, and branches whose remote branch someone
+/// else deletes (not fetched yet): `merged-gone` at main, `unmerged-gone`
+/// with a commit of its own, and `wt-gone` checked out in a worktree.
+/// `kept` still has its remote branch and `lonely` never had one.
+fn repo_with_gone_branches() -> Sandbox {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let remote = sb.add_remote("origin");
+    sb.git(&["branch", "-q", "--set-upstream-to=origin/main"]);
+    for name in ["merged-gone", "unmerged-gone", "wt-gone", "kept"] {
+        sb.git(&["branch", "-q", name]);
+    }
+    sb.checkout("unmerged-gone");
+    sb.commit("unmerged work");
+    sb.checkout("main");
+    for name in ["merged-gone", "unmerged-gone", "wt-gone", "kept"] {
+        sb.git(&["push", "-q", "-u", "origin", name]);
+    }
+    sb.git(&["branch", "-q", "lonely"]);
+    let wt = sb.root().join("wt");
+    sb.git(&["worktree", "add", "-q", wt.to_str().unwrap(), "wt-gone"]);
+    let other = sb.clone_to(&remote, "other");
+    for name in ["merged-gone", "unmerged-gone", "wt-gone"] {
+        sb.git_in(&other, &["push", "-q", "origin", "--delete", name]);
+    }
+    sb
+}
+
+fn local_branches(sb: &Sandbox) -> Vec<String> {
+    let mut names: Vec<_> = sb
+        .git(&["branch", "--format=%(refname:short)"])
+        .lines()
+        .map(str::to_string)
+        .collect();
+    names.sort();
+    names
+}
+
+#[test]
+fn prune_gone_fetches_then_deletes_gone_branches_asking_again_for_unmerged() {
+    let sb = repo_with_gone_branches();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 120, 30);
+    t.press("3").press("D");
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    insta::assert_snapshot!(t.screen());
+    // The fetch pruned the remote-tracking branches.
+    assert_eq!(sb.git(&["branch", "-r", "--list", "origin/merged-gone"]), "");
+
+    t.press("y");
+    let screen = t.screen();
+    assert!(screen.contains("Force delete?"), "{screen}");
+    assert!(screen.contains("Deleted branch merged-gone."), "{screen}");
+    assert!(screen.contains("unmerged-gone"), "{screen}");
+    assert_eq!(
+        local_branches(&sb),
+        ["kept", "lonely", "main", "unmerged-gone", "wt-gone"]
+    );
+
+    t.press("y");
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(t.app().notice(), Some("✓ deleted branch unmerged-gone"));
+    assert_eq!(local_branches(&sb), ["kept", "lonely", "main", "wt-gone"]);
+    assert!(!names(&t).contains(&"unmerged-gone".to_string()));
+}
+
+#[test]
+fn prune_gone_keeps_unmerged_branches_when_force_is_declined() {
+    let sb = repo_with_gone_branches();
+    let mut t = TestDriver::new(&sb);
+    t.press("3").press("D").press("y");
+    assert!(t.screen().contains("Force delete?"), "{}", t.screen());
+    t.press("n");
+    assert!(t.app().modal().is_none());
+    assert_eq!(
+        local_branches(&sb),
+        ["kept", "lonely", "main", "unmerged-gone", "wt-gone"]
+    );
+}
+
+#[test]
+fn prune_gone_says_when_there_is_nothing_to_delete() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.add_remote("origin");
+    sb.git(&["branch", "-q", "--set-upstream-to=origin/main"]);
+    let mut t = TestDriver::new(&sb);
+    t.press("3").press("D");
+    assert!(t.app().modal().is_none());
+    assert_eq!(
+        t.app().notice(),
+        Some("✓ fetched all remotes; no branches with a gone upstream")
+    );
+}
+
+#[test]
+fn prune_gone_never_offers_a_checked_out_branch() {
+    let sb = repo_with_gone_branches();
+    sb.git(&["branch", "-q", "-D", "merged-gone", "unmerged-gone"]);
+    let mut t = TestDriver::new(&sb);
+    t.press("3").press("D");
+    assert!(t.app().modal().is_none());
+    assert_eq!(
+        t.app().notice(),
+        Some("✓ fetched all remotes; only checked-out branches have a gone upstream: wt-gone")
+    );
+}

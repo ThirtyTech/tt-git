@@ -239,6 +239,8 @@ pub enum Command {
     NewTag,
     PushTag,
     Fetch,
+    /// Fetches with `--prune` and offers to delete branches whose upstream is gone.
+    PruneGone,
     FastForward,
     Filter,
     /// Narrows the graph and Status to the folder tt-git was started in.
@@ -334,6 +336,7 @@ impl Command {
             Command::NewTag => "new tag",
             Command::PushTag => "push tag",
             Command::Fetch => "fetch",
+            Command::PruneGone => "prune gone",
             Command::FastForward => "fast-forward",
             Command::Filter => "filter",
             Command::FilterFolder => "this folder",
@@ -593,6 +596,7 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Branches, Command::NewTag, &["T"]),
     (Context::Branches, Command::PushTag, &["P"]),
     (Context::Branches, Command::Fetch, &["f"]),
+    (Context::Branches, Command::PruneGone, &["D"]),
     (Context::Branches, Command::FastForward, &["F"]),
     (Context::Branches, Command::Filter, &["/"]),
     (Context::Branches, Command::PrevTab, &["[", "{"]),

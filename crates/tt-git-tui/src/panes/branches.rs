@@ -1406,6 +1406,9 @@ impl Component for BranchesPane {
         match cmd {
             Command::Filter => self.editing_filter = true,
             Command::Fetch => ctx.emit(Action::Run(GitOp::FetchAll)),
+            Command::PruneGone if matches!(self.tab, BranchTab::All | BranchTab::Unmerged | BranchTab::Merged) => {
+                ctx.emit(Action::Run(GitOp::PruneGone))
+            }
             Command::NextTab => self.switch_tab(1, ctx),
             Command::PrevTab => self.switch_tab(BranchTab::ALL.len() - 1, ctx),
             Command::PickBase => ctx.emit(Action::OpenModal(self.base_picker())),
@@ -1466,6 +1469,7 @@ impl Component for BranchesPane {
             Command::DeleteBranch,
             Command::RenameBranch,
             Command::Fetch,
+            Command::PruneGone,
             Command::FastForward,
             Command::Filter,
             Command::Merge,
