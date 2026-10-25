@@ -15,7 +15,11 @@ here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
 
 | File | What it does |
 |---|---|
-| `src/main.rs` | Sets the app up as `tt-git`'s `main` does (config, themes, plugins) and opens the window. |
+| `src/main.rs` | Sets the app up as `tt-git`'s `main` does (config, themes, plugins) and opens the first window: the repository's, or the start window outside one. |
+| `src/windows.rs` | Every way of opening a repository (command line, start window, "Open repository", another worktree) goes through `open_repo`/`open_path`: a new window with its own `AppModel`, or the window that shows it already brought forward. `pick_repos` is the native folder picker. The app quits when its last window closes. |
+| `src/window_state.rs` | `<state_dir>/gui.json`: the last window's bounds and mode, and the recent repositories. `place` puts a new window on a display that still exists. Only `main` installs it, so tests never touch the state folder. |
+| `src/start.rs` | The start window: recent repositories and "Open folder…". |
+| `src/tt_git_bin.rs` | The `tt-git` plugins get as `TTGIT_BIN_PATH`. |
 | `src/model.rs` | `AppModel`, the GPUI entity that owns `tt_git_app::App`. A task applies the app's actions, a timer sends `Action::Tick` every 250 ms, and after every input it carries out what the app asks: `take_redraw` (notify), `take_clipboard` (system clipboard), `take_editor` (a windowed editor starts detached, a terminal one in a pane: see [Editors](#editors)), `should_quit` (close the window). |
 | `src/shell.rs` | `Shell`, the window's view. Draws the layout, the help bar and what opens over the panes, sends every key to tt-git's keymap, and reports where each pane went (`begin_frame`, `set_layout`), as the TUI's `draw_app` does. |
 | `src/keys.rs` | GPUI's `Keystroke` as tt-git's `KeyCombo`. tt-git's keymap resolves every key, text input included. There is no GPUI action per command. |
@@ -41,6 +45,11 @@ Things that work differently from the TUI, on purpose:
   scroll offset and the view model returns only the rows on screen. The
   GUI doesn't scroll lists itself: the wheel becomes `MouseKind::ScrollUp`
   and `ScrollDown` (one per 3 lines of movement) and the app scrolls.
+- **One window per repository.** "Open repository" (in the palette, from
+  `Command::OpenRepository`, which only a front end that calls
+  `App::enable_open_repository` offers) opens another in a window of its
+  own. Opening another worktree still replaces the window, as the TUI
+  does. Closing a window whose terminal editor is running asks first.
 - **Sizes come from the last frame.** GPUI lays out after it renders, so a
   view asks how many rows fit where its list was laid out last frame
   (`Ui::fit`). When that changes, the window draws again at once. Before
@@ -328,9 +337,18 @@ they run on every OS.
 
 ## Known gaps
 
-- Closing the window while a terminal editor runs closes it as closing a
-  terminal emulator would (vim and nano keep their recovery files); it
-  doesn't ask first.
-- Plugins get no `TTGIT_BIN_PATH` from the GUI, since `tt-git-gui` has no
-  CLI subcommands.
-- No menus, no remembered window size, one repository per window (C1, C3).
+- No menus (C1).
+- On Wayland the compositor places windows, so only the size (and
+  maximized or fullscreen) comes back, not the position.
+- The folder picker needs the desktop portal on Linux
+  (`xdg-desktop-portal`); without it "Open repository" says it couldn't
+  show the picker, and the start window can still open a recent
+  repository. There's no way to type a path instead.
+- Every window's app runs in one process, which has one current
+  directory: opening a repository changes it to that one (so plugins
+  start there, as in the TUI). The API socket of a closed window keeps
+  listening until the app quits.
+- `TTGIT_BIN_PATH` is the `tt-git` next to `tt-git-gui` or on `PATH`;
+  with neither, plugins get none.
+- Quitting the whole app (cmd+Q on macOS) doesn't ask about running
+  terminal editors; closing their window does.
