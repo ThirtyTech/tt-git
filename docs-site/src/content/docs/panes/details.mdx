@@ -90,7 +90,8 @@ you type, like `[4] Commit 59f1c2a /parse 2/7`.
 2. Press <kbd>enter</kbd> to keep the search, or <kbd>esc</kbd> to drop it and go back to where you
    started.
 3. Press <kbd>n</kbd> for the next matching line and <kbd>N</kbd> for the one before. Past the last
-   match it goes round to the first, and the help bar says `search wrapped to the top`.
+   match it goes round to the first, and the help bar says `search wrapped to the top`. In the
+   [files view](#changed-files), it goes on through the files instead, as below.
 
 </Steps>
 
@@ -104,6 +105,12 @@ you type, like `[4] Commit 59f1c2a /parse 2/7`.
   another commit with <kbd>]</kbd> <kbd>[</kbd>, and it finds its matches in the new diff, so
   <kbd>n</kbd> goes on from there. Press <kbd>/</kbd> and <kbd>enter</kbd> on an empty box to drop it.
 - After scrolling, <kbd>n</kbd> starts from the top of the view rather than the last match.
+- **Across files**: in the files view, <kbd>n</kbd> past the diff's last match picks the next file
+  with a match and goes to its first one, loading the diffs on the way and passing files with none.
+  <kbd>N</kbd> before the first match goes back to the previous file's last one. Past the last file
+  it goes round to the first, and the help bar says `search wrapped to the first file` (or `last
+  file`). If no file has a match, it comes back to where it started and says
+  `no match for /… in any file`. The title's count is for the file shown.
 
 To find the commits whose diff mentions something in the first place, filter the graph with
 <kbd>/</kbd> and <kbd>ctrl+t</kbd> to [search the diff](/panes/graph/#filtering-by-message).
