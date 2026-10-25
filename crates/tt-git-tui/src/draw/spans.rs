@@ -207,4 +207,37 @@ mod tests {
         assert_eq!(text(&spans), fit("ab", 4));
         assert!(code_spans("ab", None, Style::new(), &theme, 0, true).is_empty());
     }
+
+    #[test]
+    fn the_view_models_code_spans_look_the_same() {
+        use crate::syntax::Class;
+        use crate::view::{StyleRole, code};
+        let theme = Theme::default();
+        let app_theme = crate::theme::Theme::default();
+        let tokens = vec![(0..2, Class::Keyword), (5..6, Class::Operator), (7..9, Class::Number)];
+        let text = "fn x = 42;";
+        let cases = [
+            (Some(&tokens), Style::new(), StyleRole::Plain),
+            (None, Style::new(), StyleRole::Plain),
+            (None, theme.diff_add, StyleRole::DiffAdd),
+        ];
+        for (tokens, base, role) in cases {
+            for width in [0, 1, 3, 6, 10, 20] {
+                for pad in [false, true] {
+                    for marks in [vec![], std::iter::once(1..4).collect(), vec![0..1, 6..9]] {
+                        let tui: Vec<_> = marked_code_spans(text, tokens, base, &theme, width, pad, &marks)
+                            .into_iter()
+                            .filter(|s| !s.content.is_empty())
+                            .map(|s| (s.content.to_string(), s.style))
+                            .collect();
+                        let view: Vec<_> = code::code_spans(text, tokens, role, width, pad, &marks)
+                            .iter()
+                            .map(|s| (s.text.to_string(), crate::tui_theme::style(app_theme.span(s))))
+                            .collect();
+                        assert_eq!(tui, view, "{role:?} width {width} pad {pad} marks {marks:?}");
+                    }
+                }
+            }
+        }
+    }
 }

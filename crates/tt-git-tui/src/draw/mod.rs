@@ -7,7 +7,7 @@ use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Borders, Clear, Paragraph, Wrap};
+use ratatui::widgets::{Block, BorderType, Borders, Paragraph};
 use unicode_width::UnicodeWidthStr;
 
 use crate::app::{App, StatusLook, Zoom};
@@ -97,14 +97,14 @@ fn draw_app(app: &mut App, frame: &mut Frame, hits: &mut Hits) {
 
     draw_help_bar(app, frame, help, theme);
     if app.shows_help() {
-        draw_help_popup(app, frame, main, theme);
+        modal::draw_help_popup(app, frame, main, theme);
     }
     draw_modal_panes(app, frame, main, details_area, theme);
     if let Some(modal) = app.modal() {
         modal::draw_modal(modal, frame, main, theme);
     }
     if let Some(err) = app.error() {
-        draw_error_popup(frame, main, err, theme);
+        modal::draw_error_popup(frame, main, err, theme);
     }
     if app.config().theme_background
         && let (Some(bg), Some(fg)) = (theme.background, theme.foreground)
@@ -193,43 +193,6 @@ fn draw_help_bar(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     frame.render_widget(Paragraph::new(Line::from(spans)), keys_area);
 }
 
-/// The keys popup, narrowed to what's typed.
-fn draw_help_popup(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
-    let search = if app.help_query().is_empty() {
-        Line::from(vec![
-            Span::styled("> ", theme.help_key),
-            Span::styled("type to search", theme.muted),
-        ])
-    } else {
-        Line::from(vec![
-            Span::styled("> ", theme.help_key),
-            Span::raw(app.help_query().to_string()),
-            Span::styled("█", theme.help_key),
-        ])
-    };
-    let mut lines = vec![search];
-    let rows = app.help_rows();
-    if rows.is_empty() {
-        lines.push(Line::styled("no matching keys", theme.muted));
-    }
-    for (keys, label) in rows {
-        lines.push(Line::from(vec![
-            Span::styled(format!("{keys:>16}  "), theme.help_key),
-            Span::styled(label, theme.help_text),
-        ]));
-    }
-
-    // Size for the unfiltered list so the popup holds still while typing.
-    let popup = centered(area, 50, app.all_help_row_count() as u16 + 3);
-    frame.render_widget(Clear, popup);
-    let block = Block::bordered()
-        .border_type(BorderType::Rounded)
-        .border_style(theme.border_focused)
-        .title(Span::styled(" Keybindings ", theme.title_focused))
-        .title_top(Line::styled(concat!(" tt-git ", env!("CARGO_PKG_VERSION"), " "), theme.muted).right_aligned());
-    frame.render_widget(Paragraph::new(lines).block(block), popup);
-}
-
 /// Gives every cell left in the terminal's own colors the theme's instead.
 /// Done to the finished frame, so it also covers popups that cleared their
 /// area and plugin panes' default colors.
@@ -242,22 +205,6 @@ fn paint_background(frame: &mut Frame, bg: Color, fg: Color) {
             cell.fg = fg;
         }
     }
-}
-
-fn draw_error_popup(frame: &mut Frame, area: Rect, msg: &str, theme: &Theme) {
-    let width = 70.min(area.width);
-    let inner_width = width.saturating_sub(2).max(1) as usize;
-    let text_lines: usize = msg
-        .lines()
-        .map(|l| l.chars().count().div_ceil(inner_width).max(1))
-        .sum();
-    let popup = centered(area, width, text_lines as u16 + 2);
-    frame.render_widget(Clear, popup);
-    let block = Block::bordered()
-        .border_type(BorderType::Rounded)
-        .border_style(theme.error)
-        .title(Span::styled(" Error ", theme.error));
-    frame.render_widget(Paragraph::new(msg).wrap(Wrap { trim: false }).block(block), popup);
 }
 
 /// A pane that draws itself into a frame. Drawing first tells the pane how

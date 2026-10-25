@@ -1,4 +1,5 @@
-//! Dialogs: prompts, confirmations, the command palette and pickers.
+//! Dialogs: prompts, confirmations, the command palette and pickers, the
+//! keys popup and the error popup.
 
 use ratatui::Frame;
 use ratatui::layout::Rect;
@@ -8,7 +9,9 @@ use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 
 use tt_git_core::{DiscardScope, SearchIn, StashScope, ignores_case, message_regex};
 
+use super::centered;
 use super::filter::draw_filter;
+use crate::app::App;
 use crate::modal::{Modal, PALETTE_ROWS, PaletteItem, PromptAction, worktree_rel_path};
 use crate::tui_theme::Theme;
 
@@ -351,4 +354,58 @@ fn draw_palette(
         });
     }
     frame.render_widget(Paragraph::new(lines).block(block), popup);
+}
+
+/// The keys popup, narrowed to what's typed.
+pub(super) fn draw_help_popup(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
+    let search = if app.help_query().is_empty() {
+        Line::from(vec![
+            Span::styled("> ", theme.help_key),
+            Span::styled("type to search", theme.muted),
+        ])
+    } else {
+        Line::from(vec![
+            Span::styled("> ", theme.help_key),
+            Span::raw(app.help_query().to_string()),
+            Span::styled("█", theme.help_key),
+        ])
+    };
+    let mut lines = vec![search];
+    let rows = app.help_rows();
+    if rows.is_empty() {
+        lines.push(Line::styled("no matching keys", theme.muted));
+    }
+    for (keys, label) in rows {
+        lines.push(Line::from(vec![
+            Span::styled(format!("{keys:>16}  "), theme.help_key),
+            Span::styled(label, theme.help_text),
+        ]));
+    }
+
+    // Size for the unfiltered list so the popup holds still while typing.
+    let popup = centered(area, 50, app.all_help_row_count() as u16 + 3);
+    frame.render_widget(Clear, popup);
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(theme.border_focused)
+        .title(Span::styled(" Keybindings ", theme.title_focused))
+        .title_top(Line::styled(concat!(" tt-git ", env!("CARGO_PKG_VERSION"), " "), theme.muted).right_aligned());
+    frame.render_widget(Paragraph::new(lines).block(block), popup);
+}
+
+/// The error popup.
+pub(super) fn draw_error_popup(frame: &mut Frame, area: Rect, msg: &str, theme: &Theme) {
+    let width = 70.min(area.width);
+    let inner_width = width.saturating_sub(2).max(1) as usize;
+    let text_lines: usize = msg
+        .lines()
+        .map(|l| l.chars().count().div_ceil(inner_width).max(1))
+        .sum();
+    let popup = centered(area, width, text_lines as u16 + 2);
+    frame.render_widget(Clear, popup);
+    let block = Block::bordered()
+        .border_type(BorderType::Rounded)
+        .border_style(theme.error)
+        .title(Span::styled(" Error ", theme.error));
+    frame.render_widget(Paragraph::new(msg).wrap(Wrap { trim: false }).block(block), popup);
 }

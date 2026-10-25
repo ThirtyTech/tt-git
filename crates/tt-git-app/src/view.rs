@@ -3,13 +3,23 @@
 //! each [`StyleRole`] looks from the theme
 //! ([`Theme::role`](crate::theme::Theme::role) gives the theme's choice).
 //!
-//! So far only the graph has one ([`graph`]).
+//! So far only the graph has one ([`graph`]). Each area ported to the GUI
+//! fills in its own module here; they're declared already so no port has
+//! to edit this file.
 
 use std::borrow::Cow;
 
 use crate::syntax::Class;
 
+pub mod blame;
+pub mod branches;
+pub mod code;
+pub mod details;
+pub mod dialogs;
 pub mod graph;
+pub mod stage;
+pub mod status;
+pub mod terminal;
 
 /// What a piece of text is, which decides how it looks. There's one for
 /// every style in [`Theme`](crate::theme::Theme), so a view model never
