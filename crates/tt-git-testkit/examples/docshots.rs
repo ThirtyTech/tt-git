@@ -66,6 +66,7 @@ fn main() {
             &["j", "A", "tab", "tab", "text:start from the bell icon"],
         ),
         ("details-files", &["j", "space", "4", "}"]),
+        ("details-search", &["j", "enter", "/", "text:items", "enter", "n"]),
         (
             "details-link",
             &["j", "j", "j", "j", "j", "j", "j", "j", "j", "j", "j", "j", "space"],
@@ -186,6 +187,10 @@ children = [
     let mut driver = TestDriver::with_size(Config::default(), &prefixed, WIDTH, HEIGHT);
     press(&mut driver, &["/", "tab", "tab"]);
     save(&out, "graph-filter-message", &driver);
+    // ctrl+t twice searches the diff, git log -G.
+    let mut driver = TestDriver::with_size(Config::default(), &prefixed, WIDTH, HEIGHT);
+    press(&mut driver, &["/", "ctrl+t", "ctrl+t", "text:notification", "enter"]);
+    save(&out, "graph-filter-diff", &driver);
 
     // Blame of src/api/client.ts, written by five people over two months,
     // with two lines changed in the working tree. In its own repo, as its

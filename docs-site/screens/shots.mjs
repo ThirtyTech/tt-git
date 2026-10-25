@@ -149,10 +149,19 @@ export const shots = [
 		capture: 'graph-filter-message',
 		view: { region: { box: 'Filter commits by message' } },
 		callouts: [
+			{ target: { find: 'Search in: Subject' }, text: '**ctrl+t**: subject, whole message or diff', markerSide: 'right' },
 			{ target: { find: '^feat · ^fix · ^docs' }, text: '**tab** fills in the next preset', markerSide: 'right' },
 			{ target: { find: '^fix█' }, text: 'A **regex** on the subject; edit it before enter', markerSide: 'left' },
 			{ target: { find: 'regex on the subject · ignores case' }, text: 'Whether it ignores case, or what is wrong', markerSide: 'left' },
 			{ target: { find: 'enter filter · tab presets' }, text: '**enter** filters, esc cancels', markerSide: 'left' },
+		],
+	},
+	{
+		name: 'graph-filter-diff',
+		capture: 'graph-filter-diff',
+		view: { region: { cells: [0, 0, 120, 6] } },
+		callouts: [
+			{ target: { find: 'diff /notification] 1/4' }, text: 'Commits whose **diff** adds or removes a match', markerSide: 'right' },
 		],
 	},
 	{
@@ -237,6 +246,15 @@ export const shots = [
 			{ target: { find: '[4]', w: 34 }, text: '**enter** on a commit: files and diff, fullscreen', markerSide: 'right' },
 			{ target: { find: 'Files', nth: 0, w: 30 }, text: '**Changed files**: j and k pick one', markerSide: 'right' },
 			{ target: { find: 'diff --git', w: 60 }, text: '**That file\'s diff**: pgup and pgdn scroll', markerSide: 'left' },
+		],
+	},
+	{
+		name: 'details-search',
+		capture: 'details-search',
+		legend: { x: 1200, y: 620, width: 680 },
+		callouts: [
+			{ target: { find: '/items 2/5' }, text: '**/** searches the diff: match 2 of 5', markerSide: 'right' },
+			{ target: { find: 'const items', w: 11 }, text: '**n** and **N** step through the matches; the current one is picked out', markerSide: 'left' },
 		],
 	},
 	{

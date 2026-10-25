@@ -175,7 +175,7 @@ Every command you can bind, with its default keys:
 | `go_to_line` | <kbd>ctrl+g</kbd> | blame |
 | `blame_back`, `blame_forward` | <kbd>[</kbd>, <kbd>]</kbd> | blame |
 | `blame_older`, `blame_newer` | <kbd>{'{'}</kbd>, <kbd>{'}'}</kbd> | blame |
-| `search`, `search_next`, `search_prev` | <kbd>/</kbd>, <kbd>n</kbd>, <kbd>N</kbd> | blame |
+| `search`, `search_next`, `search_prev` | <kbd>/</kbd>, <kbd>n</kbd>, <kbd>N</kbd> | details, blame |
 
 A command does nothing in a context it isn't meant for, so binding, say,
 `commit` in `[keys.graph]` has no effect.
@@ -185,14 +185,15 @@ A command does nothing in a context it isn't meant for, so binding, say,
 A few keys belong to dialogs and lists rather than to a pane, and are fixed:
 
 - In dialogs and prompts: <kbd>enter</kbd> confirms, <kbd>esc</kbd> cancels,
-  <kbd>tab</kbd> switches options (worktree, what to stash), <kbd>ctrl+w</kbd>
+  <kbd>tab</kbd> switches options (worktree, what to stash), <kbd>ctrl+t</kbd>
+  changes what the graph's message filter searches, <kbd>ctrl+w</kbd>
   deletes the word before the cursor, <kbd>ctrl+u</kbd> clears the text, and
   <kbd>y</kbd>/<kbd>n</kbd> answer a yes/no question.
 - In the palette and pickers: <kbd>up</kbd>/<kbd>down</kbd> or
   <kbd>ctrl+p</kbd>/<kbd>ctrl+n</kbd> move.
 - In the help popup: type to search, <kbd>backspace</kbd> and
   <kbd>ctrl+u</kbd> edit the search, <kbd>esc</kbd> closes.
-- While you type a filter or a blame search: <kbd>backspace</kbd> deletes,
+- While you type a filter or a search in details or blame: <kbd>backspace</kbd> deletes,
   <kbd>enter</kbd> keeps it and <kbd>esc</kbd> drops it.
 - In plugin panes, the keys in `[plugins] pane_release_keys` (default
   <kbd>ctrl+\\</kbd> and <kbd>f12</kbd>); every other key goes to the plugin.

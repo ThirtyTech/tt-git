@@ -115,13 +115,20 @@ The filtered log adds:
   `git rev-parse --show-prefix`, run where tt-git started, when the
   repository is opened.
 
-- for a [message](/panes/graph/#filtering-by-message), nothing: git's
-  `--grep` would match every line of the message and share
+- for a [message](/panes/graph/#filtering-by-message) on the subject,
+  nothing: git's `--grep` would match every line of the message and share
   `--fixed-strings` with the author filter, so tt-git matches the regex
   against each commit's subject itself. git then lists the scope without
   `--max-count`, and tt-git stops it once `max_commits` commits have
   matched. `--topo-order` already makes git walk the whole history before
   the first commit comes out, so this costs about the same.
+- for a message on the whole message, `%B` (the raw message) added to the
+  log's format. tt-git matches the regex against it the same way, with
+  `^` and `$` at each line.
+- for a message on the diff, `-G<regex>`, and `--regexp-ignore-case` when
+  the regex has no capital letter. git keeps only the commits whose patch
+  adds or removes a line matching it, so `--max-count` stays. `-G` reads
+  every commit's patch, which is why it's slower than the other filters.
 
 An author or message filter can't rewrite parents that way, so a line ends
 where the next commit doesn't match, and the next match starts a new lane.

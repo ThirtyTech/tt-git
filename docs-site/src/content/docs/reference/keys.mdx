@@ -45,7 +45,7 @@ else.
 | <kbd>t</kbd> | Dates as age ↔ local date and time. |
 | <kbd>L</kbd> | Hide / show the lanes. |
 | <kbd>f</kbd> | Filter by author or by file or folder. |
-| <kbd>/</kbd> | Filter by a regex on the commit subject. <kbd>tab</kbd> / <kbd>shift+tab</kbd> in the prompt fill in the next / previous preset. See [Filtering by message](/panes/graph/#filtering-by-message). |
+| <kbd>/</kbd> | Filter by a regex on the commit subject. <kbd>tab</kbd> / <kbd>shift+tab</kbd> in the prompt fill in the next / previous preset; <kbd>ctrl+t</kbd> searches the whole message or the diff (`git log -G`) instead. See [Filtering by message](/panes/graph/#filtering-by-message). |
 | <kbd>.</kbd> | Only the commits that changed the folder tt-git was started in (Status narrows too); again to see everything. See [Narrowing to the folder you started in](/panes/graph/#narrowing-to-the-folder-you-started-in). |
 | <kbd>o</kbd> | Check out the selected commit: the local branch on it, else the commit with HEAD detached. Asks to stash uncommitted changes first. |
 | <kbd>n</kbd> | New branch at the selected commit. |
@@ -83,6 +83,8 @@ See [Graph](/panes/graph/).
 | <kbd>o</kbd> | Open the link in view with a plugin link handler. |
 | <kbd>e</kbd> | Open the file in view in your editor, at the line at the top of the diff. |
 | <kbd>b</kbd> | [Blame](/panes/blame/) the file in view as of that commit, at the line at the top of the diff. |
+| <kbd>/</kbd> | Search the text shown with a regex, jumping as you type. <kbd>enter</kbd> keeps it, <kbd>esc</kbd> drops it. See [Searching the diff](/panes/details/#searching-the-diff). |
+| <kbd>n</kbd> <kbd>N</kbd> | Next / previous line matching the search. |
 | <kbd>esc</kbd> <kbd>space</kbd> | Close details. |
 
 See [Details](/panes/details/).
@@ -223,6 +225,7 @@ These are fixed and can't be rebound.
 | Text prompts (commit message, branch name, stash, message filter) | <kbd>enter</kbd> | Confirm. |
 | | <kbd>esc</kbd> | Cancel. |
 | | <kbd>tab</kbd> <kbd>shift+tab</kbd> | New branch: create it in a worktree, or not. Stash: what to stash. Message filter: the next / previous preset. |
+| | <kbd>ctrl+t</kbd> | Message filter: search the subject, the whole message or the diff. |
 | | <kbd>backspace</kbd>, <kbd>ctrl+w</kbd>, <kbd>ctrl+u</kbd> | Delete a character, the word before the cursor (back to the previous space, as in a shell), or all the text. |
 | Yes/no questions | <kbd>y</kbd> <kbd>enter</kbd> | Yes. |
 | | <kbd>n</kbd> <kbd>esc</kbd> | No. |

@@ -112,7 +112,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `t` | dates as age (`3h`) ↔ local date and time (`2026-10-17 01:30 PM`) |
 | | `L` | hide / show the lanes, so each row starts with its badges and subject |
 | | `f` | filter: only one author's commits, or the commits that changed a file or folder (`tab` in the panel switches between the two; both can be set) |
-| | `/` | filter by a regex on the commit subject, such as `^feat` (`tab` in the prompt fills in the next of the repo's most used prefixes) |
+| | `/` | filter by a regex on the commit subject, such as `^feat` (`tab` in the prompt fills in the next of the repo's most used prefixes; `ctrl+t` searches the whole message or the diff, `git log -G`, instead) |
 | | `.` | only the commits that changed the folder tt-git was started in (Status narrows too); again for everything |
 | | `o` | check out the selected commit: the local branch on it if there is one, else the commit with HEAD detached (with uncommitted changes, asks to stash them first) |
 | | `n` | new branch at the selected commit (`tab` in the dialog: create it in a worktree) |
@@ -159,6 +159,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `o` | open the link in view with a plugin link handler |
 | | `e` | open the file in view in your editor, at the line at the top of the diff |
 | | `b` | blame the file in view as of that commit, at the line at the top of the diff |
+| | `/` | search the text shown with a regex, jumping as you type; `n` / `N` next / previous match |
 | | `esc` `space` | close details |
 | staging | `j` / `k` | next / previous hunk (or changed line) |
 | | `space` | stage the selection, or unstage it on the staged side |
