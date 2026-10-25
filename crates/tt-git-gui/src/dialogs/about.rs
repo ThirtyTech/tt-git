@@ -85,7 +85,7 @@ pub fn render(ui: &Ui, close: Close) -> AnyElement {
                 .child(link(ui, REPO_LINK, "github.com/thirtytech/tt-git", REPO_URL)),
         )
         .child(blank(ui))
-        .child(line("Prefer the terminal? tt-git is a TUI too: run `tt-git`.".into()))
+        .child(line("Prefer the terminal? Run `tt-git` for the TUI.".into()))
         .child(
             div()
                 .flex()
