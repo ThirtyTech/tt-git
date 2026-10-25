@@ -62,9 +62,13 @@ overrides:
       - mesa-vulkan-drivers | vulkan-icd
       - xdg-desktop-portal
   # Sonames rather than package names, so it installs on Fedora and
-  # openSUSE alike.
+  # openSUSE alike. libm's GLIBC_2.35 is the newest glibc symbol it uses;
+  # RHEL 9's glibc 2.34 has 2.35 in libc (backports) but not in libm, so
+  # dnf refuses the package there instead of installing a binary that
+  # won't start.
   rpm:
     depends:
+      - libm.so.6(GLIBC_2.35)(64bit)
       - git-core >= 2.31
       - libvulkan.so.1()(64bit)
       - libwayland-client.so.0()(64bit)
