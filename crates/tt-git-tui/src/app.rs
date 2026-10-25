@@ -2,9 +2,8 @@
 
 use std::time::{Duration, Instant};
 
-use crossterm::event::{Event, KeyCode, KeyEvent, KeyEventKind, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Position, Rect};
+use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
@@ -19,13 +18,16 @@ use tt_git_core::{
 use crate::action::{Action, RefsSnapshot};
 use crate::component::{Component, EventState};
 use crate::config::Config;
+use crate::convert;
 use crate::editor::{self, EditTarget, EditorLaunch};
 use crate::filter::FilterPanel;
+use crate::geom::Rect;
 use crate::jobs::{Ctx, JobTracker, LatestJob, Reload};
-use crate::keymap::{Command, Context, KeyCombo, Keymap, KeymapError};
+use crate::keymap::{Command, Context, KeyCode, KeyCombo, KeyModifiers, Keymap, KeymapError};
 use crate::layout::View;
 use crate::loaders;
 use crate::modal::{GitOp, Modal, ModalOutcome, PaletteItem, PaletteTarget, PromptAction};
+use crate::mouse::{FilterSpot, MouseInput, MouseKind, MouseTarget};
 use crate::panes::{
     BlameView, BranchFocus, BranchTab, BranchesPane, DetailsPane, DetailsSubject, GraphPane, LoadToken, PaneId,
     SavedDetails, StatusPane,
@@ -512,31 +514,27 @@ impl App {
         self.pane_areas.iter().find(|(p, _)| *p == pane).map(|(_, r)| *r)
     }
 
-    /// Handles a terminal event.
-    pub fn handle_event(&mut self, event: Event) {
-        if let Event::Key(key) = &event {
-            tracing::debug!(code = ?key.code, modifiers = ?key.modifiers, kind = ?key.kind, "key");
-        }
-        match event {
-            // Windows reports releases too; only act on presses (and repeats).
-            Event::Key(key) if key.kind != KeyEventKind::Release => {
-                self.dirty = true;
-                self.handle_key(key);
-            }
-            Event::Mouse(m) if self.config.mouse => {
-                // Only these do anything; any-motion capture also reports
-                // every move.
-                if matches!(
-                    m.kind,
-                    MouseEventKind::Down(MouseButton::Left) | MouseEventKind::ScrollDown | MouseEventKind::ScrollUp
-                ) {
-                    self.dirty = true;
-                }
-                self.handle_mouse(m);
-            }
-            Event::Resize(..) => self.dirty = true,
-            _ => {}
-        }
+    /// Where every pane was drawn in the last frame.
+    pub fn pane_areas(&self) -> &[(PaneId, Rect)] {
+        &self.pane_areas
+    }
+
+    /// The area under the help bar that panes and popups were drawn in
+    /// last frame.
+    pub fn main_area(&self) -> Rect {
+        self.layout_rects.0
+    }
+
+    /// A key press from the front end: [`handle_key`](Self::handle_key),
+    /// and the next frame may differ.
+    pub fn key_pressed(&mut self, key: KeyCombo) {
+        self.dirty = true;
+        self.handle_key(key);
+    }
+
+    /// The front end's screen changed size.
+    pub fn resized(&mut self) {
+        self.dirty = true;
     }
 
     /// Whether the app wants terminal mouse capture.
@@ -544,16 +542,26 @@ impl App {
         self.config.mouse
     }
 
-    pub fn handle_mouse(&mut self, m: MouseEvent) {
+    /// A mouse event, with what it was over. The front end only sends them
+    /// while [`wants_mouse`](Self::wants_mouse).
+    pub fn handle_mouse(&mut self, m: MouseInput) {
+        // Only these do anything; any-motion capture also reports every move.
+        if matches!(m.kind, MouseKind::Click | MouseKind::ScrollDown | MouseKind::ScrollUp) {
+            self.dirty = true;
+        }
         self.mouse(m);
         self.flush_details();
     }
 
-    fn mouse(&mut self, m: MouseEvent) {
+    fn mouse(&mut self, m: MouseInput) {
         if self.error.is_none()
             && let Some(Modal::Filter(panel)) = &mut self.modal
         {
-            let outcome = panel.handle_mouse(m, self.layout_rects.0);
+            let spot = match m.target {
+                MouseTarget::Filter(spot) => spot,
+                _ => FilterSpot::Nothing,
+            };
+            let outcome = panel.handle_mouse(m.kind, spot);
             self.modal_outcome(outcome);
             return;
         }
@@ -561,22 +569,19 @@ impl App {
         if self.modal.is_some() || self.error.is_some() || self.show_help || self.panes.iter().any(|p| p.is_modal()) {
             return;
         }
-        let pos = Position::new(m.column, m.row);
-        let Some((pane, area)) = self.pane_areas.iter().copied().find(|(_, r)| r.contains(pos)) else {
+        let MouseTarget::Pane { pane, body_row, part } = m.target else {
             return;
         };
         if pane == PaneId::Details && self.has_split_pane() {
-            if matches!(m.kind, MouseEventKind::Down(MouseButton::Left)) {
+            if m.kind == MouseKind::Click {
                 self.focus = PaneId::Details;
             }
             return;
         }
-        let body_row =
-            (m.row > area.y && m.row < area.bottom().saturating_sub(1)).then(|| (m.row - area.y - 1) as usize);
         let ctx = self.ctx.clone();
         match m.kind {
-            MouseEventKind::Down(MouseButton::Left) => {
-                if pane == PaneId::Details && m.modifiers.contains(KeyModifiers::CONTROL) {
+            MouseKind::Click => {
+                if pane == PaneId::Details && m.ctrl {
                     if let Some(row) = body_row {
                         self.ctrl_click_details(row);
                     }
@@ -585,7 +590,7 @@ impl App {
                 let before = self.focus;
                 self.focus = pane;
                 let target = self.pane_mut(pane);
-                let handled = target.on_click_at(pos, &ctx);
+                let handled = part.is_some_and(|part| target.on_click_part(part, &ctx));
                 let row = body_row.filter(|_| !handled);
                 if let Some(row) = row {
                     target.on_click(row, &ctx);
@@ -605,17 +610,17 @@ impl App {
                     self.update(Action::Command(Command::ExpandDetails));
                 }
             }
-            MouseEventKind::ScrollDown | MouseEventKind::ScrollUp => {
-                let down = m.kind == MouseEventKind::ScrollDown;
+            MouseKind::ScrollDown | MouseKind::ScrollUp => {
+                let down = m.kind == MouseKind::ScrollDown;
                 let cmd = if down { Command::MoveDown } else { Command::MoveUp };
                 for _ in 0..3 {
                     let target = self.pane_mut(pane);
-                    if !target.on_scroll_at(pos, down, &ctx) {
+                    if !part.is_some_and(|part| target.on_scroll_part(part, down, &ctx)) {
                         target.on_command(cmd, &ctx);
                     }
                 }
             }
-            _ => {}
+            MouseKind::Other => {}
         }
     }
 
@@ -640,13 +645,12 @@ impl App {
         }
     }
 
-    pub fn handle_key(&mut self, key: KeyEvent) {
+    pub fn handle_key(&mut self, key: KeyCombo) {
         self.key(key);
         self.flush_details();
     }
 
-    fn key(&mut self, key: KeyEvent) {
-        let combo = KeyCombo::from(key);
+    fn key(&mut self, combo: KeyCombo) {
         if self.error.is_none() && self.modal.is_none() && self.pane_key(combo) {
             return;
         }
@@ -2677,26 +2681,31 @@ impl App {
             self.notice_drawn = (self.notice.clone(), self.ticks);
         }
         let [main, help] = Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(frame.area());
-        self.pane_areas = match self.zoom {
+        let pane_areas = match self.zoom {
             Zoom::Full(pane) => vec![(pane, main)],
             _ => self.config.layout.place(main, self.view()),
         };
         // Where details would open, for sizing split plugin panes while it's closed.
-        let details_area = self.pane_area(PaneId::Details).unwrap_or_else(|| {
-            let open = View {
-                details: true,
-                ..self.view()
-            };
-            let placed = self.config.layout.place(main, open);
-            placed
-                .into_iter()
-                .find(|(p, _)| *p == PaneId::Details)
-                .map_or(main, |(_, r)| r)
-        });
-        self.layout_rects = (main, details_area);
+        let details_area = pane_areas
+            .iter()
+            .find(|(p, _)| *p == PaneId::Details)
+            .map(|(_, r)| *r)
+            .unwrap_or_else(|| {
+                let open = View {
+                    details: true,
+                    ..self.view()
+                };
+                let placed = self.config.layout.place(main, open);
+                placed
+                    .into_iter()
+                    .find(|(p, _)| *p == PaneId::Details)
+                    .map_or(main, |(_, r)| r)
+            });
+        self.pane_areas = pane_areas.iter().map(|(p, r)| (*p, convert::geom_rect(*r))).collect();
+        self.layout_rects = (convert::geom_rect(main), convert::geom_rect(details_area));
         let focus = self.focus;
         let theme = &self.theme;
-        for (pane, area) in self.pane_areas.clone() {
+        for &(pane, area) in &pane_areas {
             match pane {
                 PaneId::Status => self.status.draw(frame, area, focus == pane, theme),
                 PaneId::Branches => self.branches.draw(frame, area, focus == pane, theme),
@@ -2729,7 +2738,7 @@ impl App {
         }
     }
 
-    fn draw_help_bar(&self, frame: &mut Frame, area: Rect) {
+    fn draw_help_bar(&self, frame: &mut Frame, area: ratatui::layout::Rect) {
         use unicode_width::UnicodeWidthStr;
 
         // The notice and any running git operation get their own
@@ -2802,7 +2811,7 @@ impl App {
         frame.render_widget(Paragraph::new(Line::from(spans)), keys_area);
     }
 
-    fn draw_help_popup(&self, frame: &mut Frame, area: Rect) {
+    fn draw_help_popup(&self, frame: &mut Frame, area: ratatui::layout::Rect) {
         let search = if self.help_query.is_empty() {
             Line::from(vec![
                 Span::styled("> ", self.theme.help_key),
@@ -2856,7 +2865,7 @@ fn paint_background(frame: &mut Frame, bg: ratatui::style::Color, fg: ratatui::s
     }
 }
 
-fn draw_error_popup(frame: &mut Frame, area: Rect, msg: &str, theme: &Theme) {
+fn draw_error_popup(frame: &mut Frame, area: ratatui::layout::Rect, msg: &str, theme: &Theme) {
     let width = 70.min(area.width);
     let inner_width = width.saturating_sub(2).max(1) as usize;
     let text_lines: usize = msg
@@ -2933,10 +2942,10 @@ fn short_rev(rev: &str) -> String {
     format!("{short}{suffix}")
 }
 
-pub(crate) fn centered(area: Rect, width: u16, height: u16) -> Rect {
+pub(crate) fn centered(area: ratatui::layout::Rect, width: u16, height: u16) -> ratatui::layout::Rect {
     let width = width.min(area.width);
     let height = height.min(area.height);
-    Rect {
+    ratatui::layout::Rect {
         x: area.x + (area.width - width) / 2,
         y: area.y + (area.height - height) / 2,
         width,

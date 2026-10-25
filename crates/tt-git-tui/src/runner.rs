@@ -32,7 +32,7 @@ pub async fn run(
     loop {
         tokio::select! {
             ev = events.next() => match ev {
-                Some(Ok(ev)) => app.handle_event(ev),
+                Some(Ok(ev)) => crate::input::handle_event(app, ev),
                 Some(Err(e)) => return Err(e),
                 None => break,
             },

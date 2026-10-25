@@ -142,7 +142,7 @@ impl TestDriver {
         let combo: KeyCombo = key.parse().unwrap_or_else(|e| panic!("{e}"));
         {
             let _guard = self.runtime.enter();
-            self.app.handle_key(combo.to_event());
+            self.app.handle_key(combo);
         }
         self.wait_idle()
     }
@@ -156,7 +156,7 @@ impl TestDriver {
         let combo: KeyCombo = key.parse().unwrap_or_else(|e| panic!("{e}"));
         {
             let _guard = self.runtime.enter();
-            self.app.handle_key(combo.to_event());
+            self.app.handle_key(combo);
         }
         self.render();
         self
@@ -175,7 +175,7 @@ impl TestDriver {
         for c in text.chars() {
             {
                 let _guard = self.runtime.enter();
-                self.app.handle_key(KeyCombo::char(c).to_event());
+                self.app.handle_key(KeyCombo::char(c));
             }
             self.wait_idle();
         }
@@ -198,7 +198,7 @@ impl TestDriver {
         });
         {
             let _guard = self.runtime.enter();
-            self.app.handle_event(ev);
+            tt_git_tui::input::handle_event(&mut self.app, ev);
         }
         self.wait_idle()
     }
@@ -259,7 +259,7 @@ impl TestDriver {
         });
         {
             let _guard = self.runtime.enter();
-            self.app.handle_event(ev);
+            tt_git_tui::input::handle_event(&mut self.app, ev);
         }
         self.wait_idle()
     }
@@ -389,7 +389,7 @@ impl TestDriver {
             .app
             .pane_area(pane)
             .unwrap_or_else(|| panic!("{pane:?} was not drawn"));
-        let title_row = Rect { height: 1, ..area };
+        let title_row = Rect::new(area.x, area.y, area.width, 1);
         rows(self.buffer(), title_row).remove(0)
     }
 

@@ -5,7 +5,6 @@ use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-use crossterm::event::{KeyCode, KeyModifiers};
 use portable_pty::{CommandBuilder, MasterPty, PtySize, native_pty_system};
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
@@ -17,7 +16,7 @@ use tt_git_plugin::runtime::{CommandRequest, HostEnv, plugin_env, resolve_progra
 
 use crate::action::Action;
 use crate::jobs::Ctx;
-use crate::keymap::KeyCombo;
+use crate::keymap::{KeyCode, KeyCombo, KeyModifiers};
 use crate::theme::Theme;
 
 pub type PaneId = u64;

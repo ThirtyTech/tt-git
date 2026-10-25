@@ -1,10 +1,11 @@
 //! The pane abstraction.
 
 use ratatui::Frame;
-use ratatui::layout::{Position, Rect};
+use ratatui::layout::Rect;
 
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context, KeyCombo};
+use crate::mouse::PanePart;
 use crate::theme::Theme;
 
 /// Whether a component handled a command.
@@ -53,17 +54,17 @@ pub trait Component {
     /// A click on the `row`-th visible line of the pane's body.
     fn on_click(&mut self, _row: usize, _ctx: &Ctx) {}
 
-    /// A click at screen cell `pos`, tried before [`on_click`](Self::on_click)
+    /// A click on `part` of the pane, tried before [`on_click`](Self::on_click)
     /// for panes with more than one list, or tabs in their title. Returns
     /// whether it was handled.
-    fn on_click_at(&mut self, _pos: Position, _ctx: &Ctx) -> bool {
+    fn on_click_part(&mut self, _part: PanePart, _ctx: &Ctx) -> bool {
         false
     }
 
-    /// The mouse wheel at screen cell `pos`, tried before the pane gets
+    /// The mouse wheel over `part` of the pane, tried before the pane gets
     /// [`Command::MoveUp`] or [`Command::MoveDown`]. Returns whether it was
     /// handled.
-    fn on_scroll_at(&mut self, _pos: Position, _down: bool, _ctx: &Ctx) -> bool {
+    fn on_scroll_part(&mut self, _part: PanePart, _down: bool, _ctx: &Ctx) -> bool {
         false
     }
 

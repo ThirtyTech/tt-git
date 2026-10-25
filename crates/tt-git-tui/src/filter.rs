@@ -3,7 +3,6 @@
 
 use std::collections::HashSet;
 
-use crossterm::event::{KeyCode, KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
@@ -13,8 +12,9 @@ use tt_git_core::LogFilter;
 use tt_git_core::branches::matches_filter;
 use unicode_width::UnicodeWidthStr;
 
-use crate::keymap::KeyCombo;
+use crate::keymap::{KeyCode, KeyCombo, KeyModifiers};
 use crate::modal::ModalOutcome;
+use crate::mouse::{FilterSpot, MouseKind};
 use crate::theme::Theme;
 use crate::widgets::{fit, truncate};
 
@@ -293,36 +293,20 @@ impl FilterPanel {
 
     /// A click on a choice applies it as enter would, a click on a tab
     /// switches to it, and a click outside the panel closes it. The wheel
-    /// moves the selection. `area` is what [`draw`](Self::draw) was given.
-    pub fn handle_mouse(&mut self, m: MouseEvent, area: Rect) -> ModalOutcome {
-        let popup = popup_area(area);
-        let pos = Position::new(m.column, m.row);
-        match m.kind {
-            MouseEventKind::Down(MouseButton::Left) if !popup.contains(pos) => ModalOutcome::Cancelled,
-            MouseEventKind::Down(MouseButton::Left) => {
-                let inner = Block::bordered().inner(popup);
-                if !inner.contains(pos) {
-                    return ModalOutcome::Open;
-                }
-                let row = (pos.y - inner.y) as usize;
-                if row == 0 {
-                    let mut x = inner.x;
-                    for tab in FilterTab::ALL {
-                        if tab.index() > 0 {
-                            x += 3;
-                        }
-                        let width = self.tab_text(tab).width() as u16;
-                        if (x..x + width).contains(&pos.x) {
-                            self.tab = tab;
-                        }
-                        x += width;
-                    }
-                    return ModalOutcome::Open;
-                }
+    /// moves the selection.
+    pub fn handle_mouse(&mut self, kind: MouseKind, spot: FilterSpot) -> ModalOutcome {
+        match (kind, spot) {
+            (MouseKind::Click, FilterSpot::Outside) => ModalOutcome::Cancelled,
+            (MouseKind::Click, FilterSpot::Nothing) => ModalOutcome::Open,
+            (MouseKind::Click, FilterSpot::Tab(tab)) => {
+                self.tab = tab;
+                ModalOutcome::Open
+            }
+            (MouseKind::Click, FilterSpot::Choice(shown)) => {
                 let list = self.list_mut();
-                let Some(shown) = row.checked_sub(FIRST_CHOICE_ROW).filter(|&r| r < ROWS) else {
+                if shown >= ROWS {
                     return ModalOutcome::Open;
-                };
+                }
                 let picked = list.first_shown() + shown;
                 if picked >= list.matches.len() {
                     return ModalOutcome::Open;
@@ -330,11 +314,44 @@ impl FilterPanel {
                 list.selected = picked;
                 self.submit().map_or(ModalOutcome::Open, ModalOutcome::Filter)
             }
-            MouseEventKind::ScrollUp | MouseEventKind::ScrollDown => {
-                self.list_mut().step(m.kind == MouseEventKind::ScrollUp, 3);
+            (MouseKind::ScrollUp | MouseKind::ScrollDown, _) => {
+                self.list_mut().step(kind == MouseKind::ScrollUp, 3);
                 ModalOutcome::Open
             }
-            _ => ModalOutcome::Open,
+            (MouseKind::Other, _) => ModalOutcome::Open,
+        }
+    }
+
+    /// What's at cell `pos` of the panel drawn in `area` (what
+    /// [`draw`](Self::draw) was given).
+    pub fn spot_at(&self, area: Rect, pos: Position) -> FilterSpot {
+        let popup = popup_area(area);
+        if !popup.contains(pos) {
+            return FilterSpot::Outside;
+        }
+        let inner = Block::bordered().inner(popup);
+        if !inner.contains(pos) {
+            return FilterSpot::Nothing;
+        }
+        let row = (pos.y - inner.y) as usize;
+        if row == 0 {
+            let mut x = inner.x;
+            let mut hit = FilterSpot::Nothing;
+            for tab in FilterTab::ALL {
+                if tab.index() > 0 {
+                    x += 3;
+                }
+                let width = self.tab_text(tab).width() as u16;
+                if (x..x + width).contains(&pos.x) {
+                    hit = FilterSpot::Tab(tab);
+                }
+                x += width;
+            }
+            return hit;
+        }
+        match row.checked_sub(FIRST_CHOICE_ROW) {
+            Some(shown) => FilterSpot::Choice(shown),
+            None => FilterSpot::Nothing,
         }
     }
 

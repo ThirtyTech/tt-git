@@ -10,7 +10,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
@@ -24,7 +23,7 @@ use crate::action::Action;
 use crate::component::EventState;
 use crate::editor::EditTarget;
 use crate::jobs::Ctx;
-use crate::keymap::{Command, KeyCombo};
+use crate::keymap::{Command, KeyCode, KeyCombo, KeyModifiers};
 use crate::search::{LineSearch, SearchKey};
 use crate::syntax::LineTokens;
 use crate::theme::Theme;

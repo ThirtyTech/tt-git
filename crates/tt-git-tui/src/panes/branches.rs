@@ -1,4 +1,3 @@
-use crossterm::event::KeyCode;
 use ratatui::Frame;
 use ratatui::layout::{Position, Rect};
 use ratatui::style::{Modifier, Style};
@@ -16,8 +15,9 @@ use super::{BranchFocus, DrawnDates, PaneId, pane_block, title_x};
 use crate::action::Action;
 use crate::component::{Component, EventState};
 use crate::jobs::Ctx;
-use crate::keymap::{Command, Context, KeyCombo};
+use crate::keymap::{Command, Context, KeyCode, KeyCombo};
 use crate::modal::{GitOp, Modal, PaletteItem, PaletteTarget, PromptAction};
+use crate::mouse::PanePart;
 use crate::theme::Theme;
 use crate::widgets::{Cursor, fit, fit_right, truncate};
 
@@ -129,6 +129,14 @@ pub struct BranchesPane {
 }
 
 impl BranchesPane {
+    /// The tab drawn at screen cell `pos` in the last frame.
+    pub fn part_at(&self, pos: Position) -> Option<PanePart> {
+        self.tab_cells
+            .iter()
+            .find(|(_, y, xs)| *y == pos.y && xs.contains(&pos.x))
+            .map(|&(tab, ..)| PanePart::Tab(tab))
+    }
+
     pub fn new(clock: SharedClock) -> Self {
         Self {
             clock,
@@ -1508,12 +1516,8 @@ impl Component for BranchesPane {
         }
     }
 
-    fn on_click_at(&mut self, pos: Position, ctx: &Ctx) -> bool {
-        let Some(&(tab, ..)) = self
-            .tab_cells
-            .iter()
-            .find(|(_, y, xs)| *y == pos.y && xs.contains(&pos.x))
-        else {
+    fn on_click_part(&mut self, part: PanePart, ctx: &Ctx) -> bool {
+        let PanePart::Tab(tab) = part else {
             return false;
         };
         if tab != self.tab {

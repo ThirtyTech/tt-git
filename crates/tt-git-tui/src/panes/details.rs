@@ -20,6 +20,7 @@ use crate::component::{Component, EventState};
 use crate::editor::EditTarget;
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context, KeyCombo};
+use crate::mouse::PanePart;
 use crate::search::{LineSearch, SearchKey};
 use crate::syntax::{HunkTokens, LineTokens, Tokens};
 use crate::theme::Theme;
@@ -141,6 +142,19 @@ impl SavedDetails {
 }
 
 impl DetailsPane {
+    /// The part of the files view drawn at screen cell `pos` in the last
+    /// frame: a row of the file list, or the diff.
+    pub fn part_at(&self, pos: Position) -> Option<PanePart> {
+        let view = self.files.as_ref()?;
+        if view.rows_area.contains(pos) {
+            Some(PanePart::FileRow((pos.y - view.rows_area.y) as usize))
+        } else if view.diff_area.contains(pos) {
+            Some(PanePart::Diff)
+        } else {
+            None
+        }
+    }
+
     pub fn subject(&self) -> Option<&DetailsSubject> {
         self.subject.as_ref()
     }
@@ -1057,17 +1071,16 @@ impl Component for DetailsPane {
     }
 
     /// In the files view, a click on a file shows its diff.
-    fn on_click_at(&mut self, pos: Position, ctx: &Ctx) -> bool {
+    fn on_click_part(&mut self, part: PanePart, ctx: &Ctx) -> bool {
         if self.stage.is_some() || self.blame.is_some() {
             return false;
         }
         let Some(view) = &mut self.files else { return false };
-        if !view.rows_area.contains(pos) {
+        let PanePart::FileRow(row) = part else {
             return false;
-        }
+        };
         let before = view.cursor.selected;
         view.seek = None;
-        let row = (pos.y - view.rows_area.y) as usize;
         if view.cursor.click(row, view.files.len()) && view.cursor.selected != before {
             self.show_selected_file(ctx);
         }
@@ -1076,11 +1089,8 @@ impl Component for DetailsPane {
 
     /// In the files view, the wheel scrolls the diff when over it (and
     /// moves through the files elsewhere, like the arrow keys).
-    fn on_scroll_at(&mut self, pos: Position, down: bool, _ctx: &Ctx) -> bool {
-        if self.stage.is_some()
-            || self.blame.is_some()
-            || !self.files.as_ref().is_some_and(|v| v.diff_area.contains(pos))
-        {
+    fn on_scroll_part(&mut self, part: PanePart, down: bool, _ctx: &Ctx) -> bool {
+        if self.stage.is_some() || self.blame.is_some() || self.files.is_none() || part != PanePart::Diff {
             return false;
         }
         self.scroll(if down { Command::MoveDown } else { Command::MoveUp });

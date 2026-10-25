@@ -29,19 +29,22 @@ fn only_input_and_actions_that_change_things_redraw() {
         kind: KeyEventKind::Release,
         ..KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE)
     };
-    t.app_mut().handle_event(Event::Key(release));
+    tt_git_tui::input::handle_event(t.app_mut(), Event::Key(release));
     assert!(!t.app_mut().take_redraw(), "key release");
 
     for kind in [
         MouseEventKind::Moved,
         MouseEventKind::Up(crossterm::event::MouseButton::Left),
     ] {
-        t.app_mut().handle_event(Event::Mouse(MouseEvent {
-            kind,
-            column: 5,
-            row: 5,
-            modifiers: KeyModifiers::NONE,
-        }));
+        tt_git_tui::input::handle_event(
+            t.app_mut(),
+            Event::Mouse(MouseEvent {
+                kind,
+                column: 5,
+                row: 5,
+                modifiers: KeyModifiers::NONE,
+            }),
+        );
         assert!(!t.app_mut().take_redraw(), "{kind:?}");
     }
 
@@ -49,7 +52,7 @@ fn only_input_and_actions_that_change_things_redraw() {
     t.send(Action::Tick);
     assert!(!t.app_mut().take_redraw(), "tick");
 
-    t.app_mut().handle_event(Event::Resize(80, 20));
+    tt_git_tui::input::handle_event(t.app_mut(), Event::Resize(80, 20));
     assert!(t.app_mut().take_redraw(), "resize");
 
     t.press("j");

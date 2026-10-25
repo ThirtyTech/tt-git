@@ -1,7 +1,6 @@
 //! Modal popups: a one-line text prompt, a yes/no confirmation, a
 //! fuzzy-filtered list and the graph's filter panel.
 
-use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::style::Modifier;
@@ -14,7 +13,7 @@ use tt_git_core::{
 
 use crate::agent::{AgentAction, AgentHunk, AgentRequest};
 use crate::filter::FilterPanel;
-use crate::keymap::{Command, KeyCombo};
+use crate::keymap::{Command, KeyCode, KeyCombo, KeyModifiers};
 use crate::theme::Theme;
 
 /// A git write operation, run as a background job.

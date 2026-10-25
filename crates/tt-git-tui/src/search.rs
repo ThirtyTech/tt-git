@@ -4,13 +4,12 @@
 
 use std::ops::Range;
 
-use crossterm::event::KeyCode;
 use regex::{Regex, RegexBuilder};
 use tt_git_core::ignores_case;
 
 use crate::action::Action;
 use crate::jobs::Ctx;
-use crate::keymap::KeyCombo;
+use crate::keymap::{KeyCode, KeyCombo};
 
 #[derive(Debug, Default)]
 pub struct LineSearch {

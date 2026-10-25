@@ -16,8 +16,89 @@ use std::collections::HashMap;
 use std::fmt;
 use std::str::FromStr;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use serde::{Deserialize, Serialize};
+
+/// A key, whichever front end reported it. The TUI converts crossterm's
+/// key codes to these.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum KeyCode {
+    Backspace,
+    Enter,
+    Left,
+    Right,
+    Up,
+    Down,
+    Home,
+    End,
+    PageUp,
+    PageDown,
+    Tab,
+    /// shift+tab.
+    BackTab,
+    Delete,
+    Insert,
+    /// F1 to F24.
+    F(u8),
+    Char(char),
+    /// A key tt-git has no use for (caps lock, media keys…).
+    Null,
+    Esc,
+}
+
+/// The modifier keys held with a key: any of [`CONTROL`](Self::CONTROL),
+/// [`ALT`](Self::ALT) and [`SHIFT`](Self::SHIFT). The bits match
+/// crossterm's, so keys sort the same in the help bar and popup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub struct KeyModifiers(u8);
+
+impl KeyModifiers {
+    pub const NONE: Self = Self(0);
+    pub const SHIFT: Self = Self(0b0001);
+    pub const CONTROL: Self = Self(0b0010);
+    pub const ALT: Self = Self(0b0100);
+
+    pub const fn bits(self) -> u8 {
+        self.0
+    }
+
+    pub const fn contains(self, other: Self) -> bool {
+        self.0 & other.0 == other.0
+    }
+
+    pub const fn intersects(self, other: Self) -> bool {
+        self.0 & other.0 != 0
+    }
+
+    pub fn remove(&mut self, other: Self) {
+        self.0 &= !other.0;
+    }
+
+    pub fn insert(&mut self, other: Self) {
+        self.0 |= other.0;
+    }
+}
+
+impl std::ops::BitOr for KeyModifiers {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl std::ops::BitOrAssign for KeyModifiers {
+    fn bitor_assign(&mut self, rhs: Self) {
+        self.0 |= rhs.0;
+    }
+}
+
+impl std::ops::BitAnd for KeyModifiers {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self {
+        Self(self.0 & rhs.0)
+    }
+}
 
 /// A normalized key press: the code plus ctrl/alt/shift modifiers.
 ///
@@ -52,16 +133,6 @@ impl KeyCombo {
 
     pub fn char(c: char) -> Self {
         Self::plain(KeyCode::Char(c))
-    }
-
-    pub fn to_event(self) -> KeyEvent {
-        KeyEvent::new(self.code, self.modifiers)
-    }
-}
-
-impl From<KeyEvent> for KeyCombo {
-    fn from(ev: KeyEvent) -> Self {
-        Self::new(ev.code, ev.modifiers)
     }
 }
 
@@ -840,12 +911,16 @@ mod tests {
     }
 
     #[test]
-    fn normalizes_terminal_events() {
-        // crossterm reports an uppercase letter with SHIFT set.
-        let ev = KeyEvent::new(KeyCode::Char('G'), KeyModifiers::SHIFT);
-        assert_eq!(KeyCombo::from(ev), KeyCombo::char('G'));
-        let ev = KeyEvent::new(KeyCode::BackTab, KeyModifiers::SHIFT);
-        assert_eq!(KeyCombo::from(ev), KeyCombo::plain(KeyCode::BackTab));
+    fn normalizes_shift() {
+        // Terminals report an uppercase letter with SHIFT set.
+        assert_eq!(
+            KeyCombo::new(KeyCode::Char('G'), KeyModifiers::SHIFT),
+            KeyCombo::char('G')
+        );
+        assert_eq!(
+            KeyCombo::new(KeyCode::BackTab, KeyModifiers::SHIFT),
+            KeyCombo::plain(KeyCode::BackTab)
+        );
     }
 
     #[test]
