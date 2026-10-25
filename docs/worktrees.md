@@ -68,10 +68,47 @@ one `CARGO_TARGET_DIR`:
 - Integration tests run `env!("CARGO_BIN_EXE_tt-git")`. With a shared target,
   a test in one worktree can run a binary the other one just linked.
 
-The price is disk and a cold first build: the primary's `target/debug` is
-about 16 GB. Delete a worktree's `target/` (or the whole worktree) when it's
-done. If cold builds hurt, `sccache` (`RUSTC_WRAPPER=sccache`) shares compiled
-dependencies across checkouts without sharing a target dir.
+Built from scratch, a worktree's target costs 13–16 GB and a cold build.
+About 7 GB of that is third-party crates identical to the primary's, so
+seed the new worktree's target from the primary's before its first build.
+The worktree then shares those files on disk, and only the workspace
+crates compile. Seed like for like (`target/debug` to `target/debug`,
+`target/agent` to `target/agent`), and not while a build is writing into
+the source.
+
+**Windows (NTFS), and any filesystem without copy-on-write:**
+
+```powershell
+./scripts/seed-worktree-target.ps1 -Worktree .worktrees/<name> -Dir target   # your target/debug etc.
+./scripts/seed-worktree-target.ps1 -Worktree .worktrees/<name>               # target/agent
+```
+
+The script hard-links third-party `.rlib` and `.rmeta` files (6.3 GB on
+tt-git's `target/agent`). It copies the rest of the third-party output
+(about 1 GB), and skips workspace crates and `incremental/`. Only those two
+file types are linked: rustc deletes them before writing them again, so a
+rebuild in one checkout never changes the other's. Cargo rewrites `.d` and
+`.fingerprint` files in place, so hard-linking those (or a whole target dir)
+would let one worktree's build change another's. Explorer and `du` count
+each link at full size; check free space instead.
+
+**Copy-on-write filesystems** can clone the whole target, workspace crates
+included:
+
+| Platform | Filesystem | Command |
+|---|---|---|
+| Linux | btrfs, XFS (reflink), bcachefs | `cp -a --reflink=always target/debug .worktrees/<name>/target/debug` |
+| Linux | btrfs, with `target/` a subvolume | `btrfs subvolume snapshot target .worktrees/<name>/target` (remove it with `btrfs subvolume delete` before `git worktree remove`) |
+| macOS | APFS | `cp -cRp target/debug .worktrees/<name>/target/debug` |
+| Windows 11 24H2+ | ReFS / Dev Drive | `Copy-Item -Recurse target\debug .worktrees\<name>\target\debug` (block-clones automatically) |
+
+Create `.worktrees/<name>/target` first. On btrfs, reflinks fail on a
+`nodatacow` mount or a directory with `chattr +C`; use the script there.
+
+What the worktree still holds is its own workspace build, mostly debug info
+(about 5 GB of PDBs on Windows for `--workspace --all-targets`). Delete a
+worktree's `target/` (or the whole worktree) when it's done. The
+`worktree-shared-target` agent skill covers the details.
 
 ### tt-git config and state: one per worktree
 
