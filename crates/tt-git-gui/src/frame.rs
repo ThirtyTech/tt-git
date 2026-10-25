@@ -1,12 +1,15 @@
 //! [`PaneFrame`]: the bordered box every pane draws in, titled `[n] title`.
 
+use std::rc::Rc;
+
 use gpui::{
-    AnyElement, App, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, RenderOnce,
-    ScrollDelta, ScrollWheelEvent, SharedString, Styled, Window, div, px,
+    AnyElement, App, Div, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, RenderOnce,
+    ScrollDelta, ScrollWheelEvent, SharedString, Styled, Window, div, prelude::FluentBuilder, px,
 };
 use tt_git_app::mouse::{MouseInput, MouseKind, MouseTarget};
 use tt_git_app::panes::PaneId;
 use tt_git_app::view::{StyleRole, TextSpan};
+use unicode_width::UnicodeWidthStr;
 
 use crate::rows::WHEEL_STEP_LINES;
 use crate::text::StyledLine;
@@ -24,8 +27,33 @@ pub fn body_id(pane: PaneId) -> SharedString {
     format!("body:{}", pane.name()).into()
 }
 
+/// The id a pane's title line (inside the frame's padding, `[n] ` and
+/// the right-hand part included) is measured as, for [`title_cols`].
+pub fn title_id(pane: PaneId) -> SharedString {
+    format!("title:{}", pane.name()).into()
+}
+
+/// The columns a pane's title has after `[n] `, as its title line was laid
+/// out last frame, for a title fitted to its room (the branches tabs, the
+/// part of blame's title that goes at the right). Zero before the first
+/// frame.
+pub fn title_cols(ui: &Ui, pane: PaneId) -> usize {
+    ui.fit(&title_id(pane)).cols.saturating_sub(prefix(pane).width())
+}
+
+/// `[n] `, before every title.
+fn prefix(pane: PaneId) -> String {
+    format!("[{}] ", pane.number())
+}
+
+/// What a click on column `n` of a pane's title (from its start, after
+/// `[n] `) is over, if anything with clicks of its own.
+pub type TitleTargetFn = Rc<dyn Fn(usize) -> Option<MouseTarget>>;
+
 /// A pane's bordered box: `[n]` and the title on top, in the focus colors
-/// when `focused`, and the children below, filling the rest.
+/// when `focused`, with an optional part pushed to the right of the title
+/// line; the children below, filling the rest; and an optional line along
+/// the bottom, as the TUI writes on a pane's bottom border.
 ///
 /// A click or the wheel anywhere in the frame that nothing inside handles
 /// goes to the app as on the pane's border (no body row), which focuses it.
@@ -35,6 +63,10 @@ pub struct PaneFrame {
     pane: PaneId,
     focused: bool,
     title: Vec<TextSpan<'static>>,
+    title_right: Vec<TextSpan<'static>>,
+    title_target: Option<TitleTargetFn>,
+    bottom_left: Vec<TextSpan<'static>>,
+    bottom_right: Vec<TextSpan<'static>>,
     children: Vec<AnyElement>,
 }
 
@@ -45,6 +77,10 @@ impl PaneFrame {
             pane,
             focused,
             title: Vec::new(),
+            title_right: Vec::new(),
+            title_target: None,
+            bottom_left: Vec::new(),
+            bottom_right: Vec::new(),
             children: Vec::new(),
         }
     }
@@ -59,6 +95,32 @@ impl PaneFrame {
     /// it), for a title with parts of its own, like the branches tabs.
     pub fn title_spans(mut self, spans: Vec<TextSpan<'static>>) -> Self {
         self.title = spans;
+        self
+    }
+
+    /// Spans at the right end of the title line, each laid over the title
+    /// look, like blame's date. The title is cut short before them; fit
+    /// what goes here to [`title_cols`] to keep both whole.
+    pub fn title_right(mut self, spans: Vec<TextSpan<'static>>) -> Self {
+        self.title_right = spans;
+        self
+    }
+
+    /// Clicks on the title's text: `target(n)` says what column `n` of the
+    /// title (after `[n] `) is for the mouse, found from where the text was
+    /// laid out, so it's exact whatever the font. A click it returns
+    /// `Some` for goes to the app as that, instead of as on the border.
+    pub fn on_title_click(mut self, target: impl Fn(usize) -> Option<MouseTarget> + 'static) -> Self {
+        self.title_target = Some(Rc::new(target));
+        self
+    }
+
+    /// A line along the bottom of the frame, under the children, as the
+    /// TUI writes on a pane's bottom border: `left` at the left and
+    /// `right` pushed to the right. Not drawn while both are empty.
+    pub fn bottom(mut self, left: Vec<TextSpan<'static>>, right: Vec<TextSpan<'static>>) -> Self {
+        self.bottom_left = left;
+        self.bottom_right = right;
         self
     }
 }
@@ -76,6 +138,10 @@ impl RenderOnce for PaneFrame {
             pane,
             focused,
             title,
+            title_right,
+            title_target,
+            bottom_left,
+            bottom_right,
             children,
         } = self;
         let theme = &ui.theme;
@@ -84,9 +150,61 @@ impl RenderOnce for PaneFrame {
         } else {
             (StyleRole::Border, StyleRole::Title)
         };
-        let mut spans = vec![TextSpan::plain(format!("[{}] ", pane.number()))];
+        let mut spans = vec![TextSpan::plain(prefix(pane))];
         spans.extend(title);
         let title = StyledLine::new(theme, &spans, Some(title_role));
+        let title_text = title.element();
+        let title_click = title_target.map(|target| {
+            let (ui, layout, text) = (ui.clone(), title_text.layout().clone(), title.text.clone());
+            move |ev: &MouseDownEvent, _: &mut Window, cx: &mut App| {
+                // On a character, not past the end or between lines.
+                let Ok(index) = layout.index_for_position(ev.position) else {
+                    return;
+                };
+                let col = text.get(..index).map_or(0, UnicodeWidthStr::width);
+                let Some(target) = col.checked_sub(prefix(pane).width()).and_then(|col| target(col)) else {
+                    return;
+                };
+                cx.stop_propagation();
+                ui.send_mouse(
+                    MouseInput {
+                        kind: MouseKind::Click,
+                        ctrl: ev.modifiers.control,
+                        target,
+                    },
+                    cx,
+                );
+            }
+        });
+        let right = (!title_right.is_empty()).then(|| {
+            div()
+                .flex_none()
+                .child(StyledLine::new(theme, &title_right, Some(title_role)).element())
+        });
+        let title_line = div()
+            .relative()
+            .size_full()
+            .flex()
+            .flex_row()
+            .child(ui.measure(title_id(pane)))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w_0()
+                    .overflow_hidden()
+                    .when_some(title_click, |d, click| d.on_mouse_down(MouseButton::Left, click))
+                    .child(title_text),
+            )
+            .children(right);
+        let bottom = (!bottom_left.is_empty() || !bottom_right.is_empty()).then(|| {
+            let part = |spans: &[TextSpan]| StyledLine::new(theme, spans, None).element();
+            line(&ui)
+                .flex()
+                .flex_row()
+                .justify_between()
+                .child(div().flex_1().min_w_0().overflow_hidden().child(part(&bottom_left)))
+                .child(div().flex_none().child(part(&bottom_right)))
+        });
         let target = MouseTarget::Pane {
             pane,
             body_row: None,
@@ -144,16 +262,7 @@ impl RenderOnce for PaneFrame {
             .on_mouse_down(MouseButton::Left, click)
             .on_scroll_wheel(wheel)
             .child(ui.measure(frame_id(pane)))
-            .child(
-                div()
-                    .flex_none()
-                    .h(ui.font.line_height)
-                    .px(ui.font.cell_width)
-                    .overflow_hidden()
-                    .whitespace_nowrap()
-                    .text_color(theme.fg(title_role))
-                    .child(title.element()),
-            )
+            .child(line(&ui).text_color(theme.fg(title_role)).child(title_line))
             .child(
                 div()
                     .relative()
@@ -164,5 +273,16 @@ impl RenderOnce for PaneFrame {
                     .child(ui.measure(body_id(pane)))
                     .children(children),
             )
+            .children(bottom)
     }
+}
+
+/// A line of the frame outside its body: the title, the bottom line.
+fn line(ui: &Ui) -> Div {
+    div()
+        .flex_none()
+        .h(ui.font.line_height)
+        .px(ui.font.cell_width)
+        .overflow_hidden()
+        .whitespace_nowrap()
 }

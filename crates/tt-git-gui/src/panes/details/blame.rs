@@ -8,10 +8,11 @@
 use gpui::{AnyElement, IntoElement, ParentElement, Styled, div};
 use tt_git_app::panes::PaneId;
 use tt_git_app::view::blame::{BlameCommitView, BlameLines};
+use tt_git_app::view::details::fit_title_right;
 use tt_git_app::view::{StyleRole, TextSpan};
 use unicode_width::UnicodeWidthStr;
 
-use crate::frame::{PaneFrame, body_id, frame_id};
+use crate::frame::{PaneFrame, body_id, title_cols};
 use crate::panes::PaneCx;
 use crate::rows::{StyledRow, StyledRows};
 use crate::text::StyledLine;
@@ -29,10 +30,8 @@ pub fn render(cx: &mut PaneCx) -> AnyElement {
         return frame.title(title).into_any_element();
     };
 
-    // The title bar loses a column to each side's padding and one to the
-    // border, as the TUI loses its corners.
-    let title_cols = ui.fit(&frame_id(PaneId::Details)).cols.saturating_sub(3);
-    let title = title_spans(title, right, title_cols);
+    // With a space to spare between the two.
+    let right = fit_title_right(right, title.width() + 1, title_cols(ui, PaneId::Details));
 
     let commit_rows = view.commit_rows(ui.fit(&body_id(PaneId::Details)).rows);
     let fit = ui.fit(ROWS);
@@ -50,21 +49,11 @@ pub fn render(cx: &mut PaneCx) -> AnyElement {
         Some(commit) => body.child(commit_details(ui, commit, commit_rows)),
         None => body,
     };
-    frame.title_spans(title).child(body).into_any_element()
-}
-
-/// `title`, then the first of `right` that fits in `cols` columns with a
-/// space to spare, pushed to the right edge.
-fn title_spans(title: String, right: Vec<Vec<TextSpan<'static>>>, cols: usize) -> Vec<TextSpan<'static>> {
-    // `[n] ` comes before the title.
-    let used = 4 + title.width();
-    let mut spans = vec![TextSpan::plain(title)];
-    let width = |o: &[TextSpan]| o.iter().map(|s| s.text.width()).sum::<usize>();
-    if let Some(right) = right.into_iter().find(|o| used + 1 + width(o) <= cols) {
-        spans.push(TextSpan::plain(" ".repeat(cols - used - width(&right))));
-        spans.extend(right);
-    }
-    spans
+    frame
+        .title(title)
+        .title_right(right.unwrap_or_default())
+        .child(body)
+        .into_any_element()
 }
 
 /// The code rows, or what's shown instead (`loading…`, an error), filling
@@ -219,20 +208,5 @@ mod tests {
         assert!(text[1].contains("fn b() {}"), "the version before: {text:#?}");
         gui.press("]");
         assert_eq!(gui.read(|app| app.details().blame().unwrap().depth()), 1);
-    }
-
-    #[test]
-    fn the_title_puts_the_part_that_fits_at_the_right() {
-        let right = vec![
-            vec![TextSpan::plain(" changed long ago · latest ")],
-            vec![TextSpan::plain(" latest ")],
-        ];
-        let text = |spans: &[TextSpan]| spans.iter().map(|s| s.text.as_ref()).collect::<String>();
-        let wide = title_spans("Blame f".into(), right.clone(), 60);
-        assert_eq!(text(&wide).width() + 4, 60);
-        assert!(text(&wide).ends_with(" changed long ago · latest "));
-        let narrow = title_spans("Blame f".into(), right.clone(), 22);
-        assert!(text(&narrow).ends_with("  latest "), "{}", text(&narrow));
-        assert_eq!(text(&title_spans("Blame f".into(), right, 12)), "Blame f");
     }
 }
