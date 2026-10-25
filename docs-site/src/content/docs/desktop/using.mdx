@@ -4,6 +4,7 @@ description: "What the desktop app does that the terminal app doesn't: menus, ri
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/Screenshot.astro';
 
 The desktop app works like the [terminal app](/getting-started/tour/), with
 the same panes and keys. This page covers what's different.
@@ -19,7 +20,7 @@ item does exactly what pressing its key does.
 
 | Menu | Holds |
 |---|---|
-| **tt-git** | *About tt-git* (the version), *Theme*, *Plugin logs* and *Quit* |
+| **tt-git** | *About tt-git* (the version), *Theme*, *Font*, *Plugin logs* and *Quit* |
 | **Repository** | *Fetch*, *Prune gone*, *Pull*, *Push*, *Refresh*; *Continue merge/rebase*, *Abort merge/rebase*, *Undo*; *Ask agent*; *Open repository* |
 | **View** | Focus *Graph*, *Status*, *Branches* or *Details*; *Next pane*, *Prev pane*; *Zoom*; *Zoom in*, *Zoom out*, *Reset zoom*; *Commands* (the [palette](/git/palette/)) and *Help* |
 | The focused pane | Named after it (**Graph**, **Status**, **Branches**, **Details**, **Stage**, **Blame**, **Stash** or **Worktrees**): that pane's commands, the ones the [help popup](/getting-started/navigation/#getting-help) lists first |
@@ -101,6 +102,49 @@ there yourself, to any percent from 50 to 300.
 
 Not to be confused with *Zoom* (<kbd>+</kbd>), which shows one
 [pane fullscreen](/getting-started/navigation/#zoom).
+
+## Font
+
+The desktop app draws everything in one font: the panes, the dialogs, the
+menus and the help bar. Out of the box it's your system's usual monospace
+font: Cascadia Mono (or Consolas) on Windows, SF Mono (or Menlo) on macOS,
+and Noto Sans Mono, Liberation Mono or DejaVu Sans Mono on Linux.
+
+To pick another, choose *Font* in the **tt-git** menu or the
+[palette](/git/palette/). It has no key, but you can
+[bind one](/configuration/keys/) to `font`. The picker lists every font
+installed on your system:
+
+- **Default (&lt;font&gt;)** first, which goes back to the system's usual font.
+- Then the monospace fonts.
+- Then the proportional ones, marked *proportional*.
+
+Type to narrow the list, and move with <kbd>up</kbd> and <kbd>down</kbd>.
+The window draws in the highlighted font as you go, so you see it before
+you choose it.
+
+<Screenshot name="gui-font-picker" alt="The Font picker on Windows with jetbrains typed and JetBrains Mono highlighted; the graph, status and branches panes behind it are drawn in JetBrains Mono" />
+
+<kbd>enter</kbd> keeps the highlighted font, and the help bar says
+*font &lt;name&gt;, saved to &lt;config.toml&gt;*. <kbd>esc</kbd> closes the
+picker and puts the font you had back.
+
+Like the zoom, the font is one setting for the whole app: every window
+switches to it. It's saved as [`font` in `[ui]`](/configuration/#ui) in your
+global `config.toml`, and choosing *Default* takes the setting out again.
+The size is [`font_size`](/configuration/#ui) there (13 pixels at 100%
+zoom), and the [zoom](#zoom) scales it.
+
+tt-git lines its text up in columns, as in a terminal, so a proportional
+font draws but its columns don't line up: the dates and hashes in the graph
+wander, and lines can overlap.
+
+<Screenshot name="gui-font-proportional" alt="The Font picker with georgia typed: Georgia is marked proportional, and the graph behind it, drawn in Georgia, has its author, date and hash columns out of line" />
+
+If the font in your config isn't installed (you copied the config to
+another computer, say), the app draws in the system's usual font instead,
+and the help bar says *font &lt;name&gt; isn't installed: using
+&lt;font&gt;*.
 
 ## Windows
 
