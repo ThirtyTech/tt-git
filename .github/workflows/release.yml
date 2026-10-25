@@ -7,6 +7,19 @@ name: Release
 #
 # Every target builds natively on its own runner, so there's no
 # cross-compiling. Tags with a pre-release suffix are marked as pre-releases.
+#
+# The desktop app (tt-git-gui) is packaged by the gui job with the scripts
+# in crates/tt-git-gui/packaging. It signs when these repository secrets are
+# set, and builds unsigned (ad hoc on macOS) when they aren't:
+#
+#   MACOS_CERT_P12          base64 of a Developer ID Application .p12
+#   MACOS_CERT_PASSWORD     its password
+#   MACOS_SIGNING_IDENTITY  optional; default: the .p12's Developer ID identity
+#   MACOS_NOTARY_APPLE_ID   with the next two, notarizes the .dmg
+#   MACOS_NOTARY_TEAM_ID
+#   MACOS_NOTARY_PASSWORD   an app-specific password
+#   WINDOWS_CERT_PFX        base64 of an Authenticode .pfx
+#   WINDOWS_CERT_PASSWORD   its password
 
 on:
   push:
@@ -92,8 +105,104 @@ jobs:
             tt-git-*.zip
           if-no-files-found: error
 
+  # The desktop app, packaged per OS: a .dmg on macOS, a zip and an
+  # installer on Windows, a tarball and an AppImage on Linux. Each carries
+  # tt-git next to tt-git-gui, since plugins in the app run that tt-git. They
+  # are separate downloads named tt-git-gui-*, so the TUI archives above, and
+  # install.sh, install.ps1 and `tt-git update` that fetch them, don't change.
+  gui:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            name: linux-x64
+            os: ubuntu-22.04
+          - target: aarch64-unknown-linux-gnu
+            name: linux-arm64
+            os: ubuntu-22.04-arm
+          - target: aarch64-apple-darwin
+            name: macos-arm64
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            name: windows-x64
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: gui-${{ matrix.target }}
+      # What GPUI needs to build on Linux, as in gui.yml.
+      - name: Install Linux packages
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            gcc g++ clang libfontconfig-dev libfreetype-dev libwayland-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libx11-xcb-dev libxcb1-dev \
+            libssl-dev libzstd-dev libasound2-dev libvulkan1
+      - name: Build
+        run: cargo build --release --locked -p tt-git -p tt-git-gui --target ${{ matrix.target }}
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          case "${{ matrix.target }}" in
+            x86_64-*) arch=x86_64 sum=ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0 ;;
+            aarch64-*) arch=aarch64 sum=f0837e7448a0c1e4e650a93bb3e85802546e60654ef287576f46c71c126a9158 ;;
+          esac
+          tool="$RUNNER_TEMP/appimagetool"
+          curl -fsSL -o "$tool" \
+            "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-$arch.AppImage"
+          echo "$sum  $tool" | sha256sum -c -
+          chmod +x "$tool"
+          APPIMAGETOOL="$tool" crates/tt-git-gui/packaging/linux/package.sh \
+            "target/${{ matrix.target }}/release" "$GITHUB_REF_NAME" "${{ matrix.name }}"
+      - name: Package (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          MACOS_SIGNING_IDENTITY: ${{ secrets.MACOS_SIGNING_IDENTITY }}
+          MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+          MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+          MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+        run: |
+          crates/tt-git-gui/packaging/macos/package.sh \
+            "target/${{ matrix.target }}/release" "$GITHUB_REF_NAME" "${{ matrix.name }}"
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+          WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          choco install innosetup --no-progress -y
+          if ($LASTEXITCODE -ne 0) { throw "couldn't install Inno Setup" }
+          ./crates/tt-git-gui/packaging/windows/package.ps1 `
+            "target/${{ matrix.target }}/release" $env:GITHUB_REF_NAME "${{ matrix.name }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gui-${{ matrix.name }}
+          path: |
+            tt-git-gui-*.tar.gz
+            tt-git-gui-*.AppImage
+            tt-git-gui-*.dmg
+            tt-git-gui-*.zip
+            tt-git-gui-*-setup.exe
+          if-no-files-found: error
+
+  # A failed gui job doesn't hold back the TUI release: it's published
+  # without the desktop app, with a warning on the run.
   release:
-    needs: build
+    needs: [build, gui]
+    if: ${{ !cancelled() && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -103,6 +212,9 @@ jobs:
         with:
           path: dist
           merge-multiple: true
+      - name: Desktop app built
+        if: needs.gui.result != 'success'
+        run: echo "::warning::The gui job didn't succeed, so this release has no desktop app or only part of it"
       - name: Checksums
         working-directory: dist
         run: sha256sum tt-git-* > SHA256SUMS.txt
@@ -130,6 +242,26 @@ jobs:
             echo "\$env:TTGIT_VERSION = '$GITHUB_REF_NAME'; irm ${url%.sh}.ps1 | iex"
             echo '```'
             echo
+            # The desktop app's downloads, whichever were built.
+            if compgen -G 'dist/tt-git-gui-*' >/dev/null; then
+              echo '### Desktop app'
+              echo
+              echo 'The desktop app, `tt-git-gui`, is a separate download. Each one also carries `tt-git`.'
+              echo
+              for f in dist/tt-git-gui-*; do
+                file="${f#dist/}"
+                case "$file" in
+                  *.dmg) what='macOS (Apple Silicon): open it and drag tt-git to Applications' ;;
+                  *-setup.exe) what='Windows installer' ;;
+                  *windows*.zip) what='Windows, to unpack anywhere' ;;
+                  *.AppImage) what='Linux AppImage' ;;
+                  *linux*.tar.gz) what='Linux, to unpack into `~/.local` or `/usr/local`' ;;
+                  *) what='' ;;
+                esac
+                echo "- [\`$file\`](https://github.com/$GITHUB_REPOSITORY/releases/download/$GITHUB_REF_NAME/$file)${what:+: $what}"
+              done
+              echo
+            fi
           } > notes.md
           # --generate-notes appends the changelog after notes.md.
           gh release create "$GITHUB_REF_NAME" dist/* \
