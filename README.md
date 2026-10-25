@@ -384,6 +384,7 @@ those when you remove a test.
 | `tt-git-core` | git CLI runner, parsers, unified branch list, write operations |
 | `tt-git-graph` | lane layout for the commit graph (no git or UI dependencies) |
 | `tt-git-plugin` | manifest, registry, runtime, install/GC, NDJSON socket |
-| `tt-git-tui` | the ratatui app: panes, keymap, modals, PTY plugin panes |
+| `tt-git-app` | the app's state and logic, shared by front ends: panes, keymap, modals, jobs, PTY plugin panes (no ratatui or crossterm) |
+| `tt-git-tui` | the terminal front end: draws `tt-git-app` with ratatui and feeds it crossterm input |
 | `tt-git` | the binary and CLI |
 | `tt-git-testkit` | sandbox repos, the in-process `TestDriver`, plugin fixtures |
