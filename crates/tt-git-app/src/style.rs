@@ -121,4 +121,24 @@ impl Style {
         self.sub_modifier = self.sub_modifier.union(modifier);
         self
     }
+
+    /// `other` laid over this: its colors where it sets them, and its
+    /// attributes turned on and off.
+    pub const fn patch(mut self, other: Self) -> Self {
+        if other.fg.is_some() {
+            self.fg = other.fg;
+        }
+        if other.bg.is_some() {
+            self.bg = other.bg;
+        }
+        self.add_modifier = self
+            .add_modifier
+            .difference(other.sub_modifier)
+            .union(other.add_modifier);
+        self.sub_modifier = self
+            .sub_modifier
+            .difference(other.add_modifier)
+            .union(other.sub_modifier);
+        self
+    }
 }

@@ -4,7 +4,7 @@ use crate::style::{Color, Modifier, Style};
 
 use crate::syntax::Class;
 use crate::themes::Palette;
-use crate::view::StyleRole;
+use crate::view::{StyleRole, TextSpan};
 
 #[derive(Debug, Clone)]
 pub struct Theme {
@@ -226,6 +226,18 @@ impl Theme {
         match role {
             StyleRole::Plain => Style::new(),
             StyleRole::Muted => self.muted,
+            StyleRole::Error => self.error,
+            StyleRole::Underlined => Style::new().add_modifier(Modifier::UNDERLINED),
+            StyleRole::Border => self.border,
+            StyleRole::BorderFocused => self.border_focused,
+            StyleRole::Title => self.title,
+            StyleRole::TitleFocused => self.title_focused,
+            StyleRole::Selected => self.selected,
+            StyleRole::SelectedUnfocused => self.selected_unfocused,
+            StyleRole::HelpKey => self.help_key,
+            StyleRole::HelpKeyAccel => self.help_key.add_modifier(Modifier::UNDERLINED),
+            StyleRole::HelpText => self.help_text,
+            StyleRole::Busy => self.help_key.add_modifier(Modifier::BOLD),
             StyleRole::Lane(color) => self.lane(color),
             StyleRole::LabelHead => self.label_head,
             StyleRole::LabelDetached => self.label_detached,
@@ -235,6 +247,33 @@ impl Theme {
             StyleRole::Author => self.author,
             StyleRole::Date => self.date,
             StyleRole::Sha => self.sha,
+            StyleRole::DiffAdd => self.diff_add,
+            StyleRole::DiffDel => self.diff_del,
+            StyleRole::DiffHunk => self.diff_hunk,
+            StyleRole::DiffHeader => self.diff_header,
+            StyleRole::DiffAddLine => self.diff_add_line,
+            StyleRole::DiffDelLine => self.diff_del_line,
+            StyleRole::Code(class) => self.code(class),
+            StyleRole::BlameHeat(age) => {
+                Style::new().fg(self.blame_heat[usize::from(age).min(self.blame_heat.len() - 1)])
+            }
+            StyleRole::BlameAuthor(slot) => {
+                Style::new().fg(self.blame_authors[usize::from(slot) % self.blame_authors.len()])
+            }
+            StyleRole::BlameUncommitted => self.blame_uncommitted,
+            StyleRole::BlameLatest => self.blame_latest,
+            StyleRole::BlameOlder => self.blame_older,
+            StyleRole::SearchMatch => self.search_match,
+        }
+    }
+
+    /// How `span` looks: its role, with its [`over`](TextSpan::over) role
+    /// laid over that.
+    pub fn span(&self, span: &TextSpan) -> Style {
+        let style = self.role(span.role);
+        match span.over {
+            Some(over) => style.patch(self.role(over)),
+            None => style,
         }
     }
 

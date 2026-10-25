@@ -143,6 +143,8 @@ impl App {
 
     /// Runs the agent in a pane in place of details, and focuses it.
     fn open_agent_pane(&mut self, argv: &[String], title: &str) -> Result<(), String> {
+        // GUI: sizes the PTY from the details rect as terminal cells (minus
+        // the border). The GUI reports pixels; convert with font metrics.
         let (_, details) = self.layout_rects;
         let id = self.next_pane_id;
         self.next_pane_id += 1;

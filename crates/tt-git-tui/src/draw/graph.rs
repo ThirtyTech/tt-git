@@ -51,5 +51,6 @@ impl Draw for GraphPane {
 
 /// A view model span in its theme style.
 pub fn span<'a>(s: TextSpan<'a>, theme: &Theme) -> Span<'a> {
-    Span::styled(s.text, theme.role(s.role))
+    let style = theme.span(&s);
+    Span::styled(s.text, style)
 }

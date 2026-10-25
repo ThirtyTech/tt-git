@@ -376,6 +376,8 @@ impl App {
             panes: Vec::new(),
             next_pane_id: 1,
             release_keys,
+            // GUI: a guess in terminal cells until the first frame reports
+            // the real areas.
             layout_rects: (Rect::new(0, 0, 120, 40), Rect::new(0, 0, 80, 15)),
             show_help: false,
             help_query: String::new(),

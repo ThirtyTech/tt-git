@@ -6,7 +6,7 @@ use ratatui::style::{Color, Modifier, Style};
 use crate::style;
 use crate::syntax::Class;
 use crate::theme;
-use crate::view::StyleRole;
+use crate::view::{StyleRole, TextSpan};
 
 pub fn color(c: style::Color) -> Color {
     use style::Color as C;
@@ -142,6 +142,18 @@ impl Theme {
         match role {
             StyleRole::Plain => Style::new(),
             StyleRole::Muted => self.muted,
+            StyleRole::Error => self.error,
+            StyleRole::Underlined => Style::new().add_modifier(Modifier::UNDERLINED),
+            StyleRole::Border => self.border,
+            StyleRole::BorderFocused => self.border_focused,
+            StyleRole::Title => self.title,
+            StyleRole::TitleFocused => self.title_focused,
+            StyleRole::Selected => self.selected,
+            StyleRole::SelectedUnfocused => self.selected_unfocused,
+            StyleRole::HelpKey => self.help_key,
+            StyleRole::HelpKeyAccel => self.help_key.add_modifier(Modifier::UNDERLINED),
+            StyleRole::HelpText => self.help_text,
+            StyleRole::Busy => self.help_key.add_modifier(Modifier::BOLD),
             StyleRole::Lane(color) => self.lane(color),
             StyleRole::LabelHead => self.label_head,
             StyleRole::LabelDetached => self.label_detached,
@@ -151,6 +163,32 @@ impl Theme {
             StyleRole::Author => self.author,
             StyleRole::Date => self.date,
             StyleRole::Sha => self.sha,
+            StyleRole::DiffAdd => self.diff_add,
+            StyleRole::DiffDel => self.diff_del,
+            StyleRole::DiffHunk => self.diff_hunk,
+            StyleRole::DiffHeader => self.diff_header,
+            StyleRole::DiffAddLine => self.diff_add_line,
+            StyleRole::DiffDelLine => self.diff_del_line,
+            StyleRole::Code(class) => self.code(class),
+            StyleRole::BlameHeat(age) => {
+                Style::new().fg(self.blame_heat[usize::from(age).min(self.blame_heat.len() - 1)])
+            }
+            StyleRole::BlameAuthor(slot) => {
+                Style::new().fg(self.blame_authors[usize::from(slot) % self.blame_authors.len()])
+            }
+            StyleRole::BlameUncommitted => self.blame_uncommitted,
+            StyleRole::BlameLatest => self.blame_latest,
+            StyleRole::BlameOlder => self.blame_older,
+            StyleRole::SearchMatch => self.search_match,
+        }
+    }
+
+    /// How `span` looks: its role, with its `over` role laid over that.
+    pub fn span(&self, span: &TextSpan) -> Style {
+        let style = self.role(span.role);
+        match span.over {
+            Some(over) => style.patch(self.role(over)),
+            None => style,
         }
     }
 
@@ -225,23 +263,18 @@ mod tests {
 
     #[test]
     fn roles_look_as_the_app_theme_says() {
-        let app = theme::Theme::default();
-        let tui = Theme::from(&app);
-        let mut roles = vec![
-            StyleRole::Plain,
-            StyleRole::Muted,
-            StyleRole::LabelHead,
-            StyleRole::LabelDetached,
-            StyleRole::LabelLocal,
-            StyleRole::LabelRemote,
-            StyleRole::LabelTag,
-            StyleRole::Author,
-            StyleRole::Date,
-            StyleRole::Sha,
-        ];
-        roles.extend((0..20).map(StyleRole::Lane));
-        for role in roles {
-            assert_eq!(tui.role(role), style(app.role(role)), "{role:?}");
+        let mut themes = vec![theme::Theme::default()];
+        for (name, text) in crate::themes::BUILTIN {
+            let palette = crate::themes::Palette::parse(text).unwrap_or_else(|e| panic!("{name}: {e}"));
+            themes.push(theme::Theme::from_palette(&palette));
+        }
+        for app in themes {
+            let tui = Theme::from(&app);
+            for role in StyleRole::samples() {
+                assert_eq!(tui.role(role), style(app.role(role)), "{role:?}");
+                let span = TextSpan::new("x", role).with_over(StyleRole::SearchMatch);
+                assert_eq!(tui.span(&span), style(app.span(&span)), "{role:?} under a match");
+            }
         }
     }
 }

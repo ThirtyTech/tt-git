@@ -44,6 +44,8 @@ impl App {
             return Err("ui_busy: another popup is open".into());
         }
         let host_env = state.host.runner().host();
+        // GUI: sizes the PTY from the main or details rect as terminal cells
+        // (minus the border). The GUI reports pixels; convert with font metrics.
         let (main, details) = self.layout_rects;
         let target = match placement {
             Placement::Split => details,

@@ -20,7 +20,7 @@ const MAX_LINES: usize = 20_000;
 const MAX_LINE_BYTES: usize = 2_000;
 
 /// What a piece of code is, as far as its color goes.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum Class {
     Comment,
     String,
@@ -41,6 +41,26 @@ pub enum Class {
     Link,
     Strong,
     Emphasis,
+}
+
+impl Class {
+    pub const ALL: [Class; 15] = [
+        Class::Comment,
+        Class::String,
+        Class::Keyword,
+        Class::Operator,
+        Class::Type,
+        Class::Function,
+        Class::Number,
+        Class::Constant,
+        Class::Macro,
+        Class::Tag,
+        Class::Attribute,
+        Class::Heading,
+        Class::Link,
+        Class::Strong,
+        Class::Emphasis,
+    ];
 }
 
 /// One line's highlighted byte ranges, in order. The gaps are plain text.
