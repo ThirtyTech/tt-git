@@ -100,6 +100,20 @@ fn main() {
         ("status-staged", &["2", "j", "space"]),
         ("after-commit", &["2", "c", "text:Bump React to 19.2", "enter"]),
     ];
+    // Status as a folder tree, then discarding a folder in it. Before the
+    // shots below change the files.
+    let tree = Config {
+        status: tt_git_tui::config::StatusConfig { tree: true },
+        ..Config::default()
+    };
+    for (name, keys) in [
+        ("status-tree", &["2"][..]),
+        ("status-tree-discard", &["2", "G", "k", "k", "d"]),
+    ] {
+        let mut driver = TestDriver::with_size(tree.clone(), &sb, WIDTH, HEIGHT);
+        press(&mut driver, keys);
+        save(&out, name, &driver);
+    }
     for (name, keys) in shots {
         let mut driver = TestDriver::with_size(Config::default(), &sb, WIDTH, HEIGHT);
         press(&mut driver, keys);

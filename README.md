@@ -146,6 +146,8 @@ command palette, which lists built-in commands and plugin actions.
 | | `e` | open the file in your editor at its first change (a conflicted file: at its first conflict marker) |
 | | `b` | blame the file in the working tree: who last changed each line, when and in which commit |
 | | `.` | list only the files in the folder tt-git was started in; `a`, `D` and `s` then act on it alone |
+| | `` ` `` | list the files as a folder tree ↔ flat (saved to config.toml); in the tree, `space`, `d` and `i` on a folder act on everything under it |
+| | `enter` (on a folder) / `-` / `=` | fold or open the folder / fold all / open all |
 | | `C` / `X` | continue / abort a merge, rebase, cherry-pick or revert |
 | stash tab | `space` / `a` | pop / apply the selected stash (pop drops it once applied) |
 | | `d` | drop it (asks first) |

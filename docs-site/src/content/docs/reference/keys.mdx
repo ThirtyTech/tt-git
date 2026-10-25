@@ -91,18 +91,20 @@ See [Details](/panes/details/).
 
 | Key | Does |
 |---|---|
-| <kbd>space</kbd> | Stage / unstage the file. On a conflicted file, mark it resolved. |
-| <kbd>enter</kbd> | Open the file's changes to stage them by hunk or line. |
+| <kbd>space</kbd> | Stage / unstage the file. On a conflicted file, mark it resolved. On a folder in the tree, stage everything under it, or unstage it all if it's all staged. |
+| <kbd>enter</kbd> | Open the file's changes to stage them by hunk or line. On a folder in the tree, fold or open it. |
 | <kbd>a</kbd> | Stage everything, or unstage everything if it's all staged. |
-| <kbd>d</kbd> | Discard the file's changes (asks first). |
+| <kbd>d</kbd> | Discard the file's changes (asks first). On a folder in the tree, discard the changes under it, with the same choices as <kbd>D</kbd>. |
 | <kbd>D</kbd> | Discard all changes: everything, only unstaged ones (with or without untracked files), or only untracked files (asks first). |
-| <kbd>i</kbd> | [Ignore](/panes/status/#ignoring-a-file) the file or its folder: add it to `.gitignore` or `.git/info/exclude`. A tracked file asks before it stops being tracked. |
+| <kbd>i</kbd> | [Ignore](/panes/status/#ignoring-a-file) the file or its folder: add it to `.gitignore` or `.git/info/exclude`. A tracked file asks before it stops being tracked. On a folder in the tree, ignore that folder. |
 | <kbd>c</kbd> | Commit what's staged. |
 | <kbd>A</kbd> | Amend the last commit with what's staged, keeping its message. |
 | <kbd>s</kbd> | Stash. |
 | <kbd>e</kbd> | Open the file in your editor at its first change, or a conflicted file at its first conflict marker. |
 | <kbd>b</kbd> | [Blame](/panes/blame/) the file in the working tree. |
 | <kbd>.</kbd> | List only the files in the folder tt-git was started in, with <kbd>a</kbd>, <kbd>D</kbd> and <kbd>s</kbd> acting on it alone (the graph narrows too); again to list everything. See [Narrowing to a folder](/panes/status/#narrowing-to-a-folder). |
+| <kbd>&#96;</kbd> | List the files as a [folder tree](/panes/status/#the-folder-tree), or flat again. Saved to `config.toml`. |
+| <kbd>-</kbd> <kbd>=</kbd> | Fold every folder in the tree / open them all. |
 | <kbd>C</kbd> | Continue a merge, rebase, cherry-pick or revert. |
 | <kbd>X</kbd> | Abort a merge, rebase, cherry-pick or revert (asks first). |
 

@@ -318,6 +318,25 @@ export const shots = [
 		],
 	},
 	{
+		name: 'status-tree',
+		capture: 'status-tree',
+		view: { region: { cells: [0, 35, 95, 13] } },
+		callouts: [
+			{ target: { find: '▾ src/', in: 'status', w: 6 }, text: '**▾** an open folder; **enter** folds it', markerSide: 'right' },
+			{ target: { find: 'M  notifications.ts', in: 'status' }, text: 'Each file by its **name**, under its folder', markerSide: 'right' },
+			{ target: { find: '▾ styles/', in: 'status', w: 9 }, text: '**space**, **d**, **i** on a folder act on all of it', markerSide: 'right' },
+		],
+	},
+	{
+		name: 'status-tree-discard',
+		capture: 'status-tree-discard',
+		view: { region: { box: 'Discard all in src/styles/' } },
+		callouts: [
+			{ target: { find: 'Discard all in src/styles/' }, text: '**d** on a folder: discard only the changes under it', markerSide: 'above' },
+			{ target: { find: 'everything outside src/styles/.' }, text: 'The rest of the tree is **kept**', markerSide: 'left' },
+		],
+	},
+	{
 		name: 'status-ignore',
 		capture: 'ignore-picker',
 		view: { region: { box: 'Ignore' } },

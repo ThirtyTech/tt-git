@@ -55,6 +55,9 @@ lanes = true                      # draw the lanes at startup; L in the graph to
 filter_to_cwd = false             # started in a subfolder, show only its commits and files; . toggles it
 # message_presets = ["^feat", "^fix"]  # tab steps through these after /; unset, the repo's 8 most used prefixes
 
+[status]
+tree = false                      # list changed files as a folder tree; ` toggles it and saves it here
+
 [branches]
 unmerged_exclude = ["archive"]    # hide unmerged branches whose name contains any of these
 safe_branches = ["master", "main", "production", "prod"]  # never listed on the merged/unmerged tabs
@@ -100,6 +103,14 @@ Themes have one too: [Themes](/configuration/themes/).
 | `message_presets` | unset | The regexes <kbd>tab</kbd> and <kbd>shift+tab</kbd> step through in the graph's <kbd>/</kbd> message filter. Each one fills in the prompt, so you can edit it before pressing <kbd>enter</kbd>. Unset, they're the 8 subject prefixes (`feat:`, `fix(scope):`) the repository uses most, as `^feat`, `^fix` and so on. A list here replaces them; an empty list leaves just the typed regex. See [Filtering by message](/panes/graph/#filtering-by-message). |
 
 See [Graph](/panes/graph/).
+
+### `[status]`
+
+| Setting | Default | What it does |
+|---|---|---|
+| `tree` | `false` | List the changed files as a folder tree at startup, instead of one row per path. <kbd>&#96;</kbd> in Status switches between the two and saves your choice here, in the global `config.toml`. A repository's own config file that sets `tree` still wins. See [The folder tree](/panes/status/#the-folder-tree). |
+
+See [Status](/panes/status/).
 
 ### `[branches]`
 
