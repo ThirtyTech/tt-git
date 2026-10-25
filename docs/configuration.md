@@ -266,6 +266,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `plugin_logs` | (palette only) | global |
 | `theme` | (palette only) | global |
 | `self_update` | (palette only) | global |
+| `open_repository` | (palette and menu only; desktop app only, the TUI just says it needs the desktop app) | global |
 
 ### Plugin action bindings
 

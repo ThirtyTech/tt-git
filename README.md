@@ -88,6 +88,22 @@ cargo install --path crates/tt-git
 tt-git            # in a repository, or: tt-git path/to/repo
 ```
 
+### The desktop app
+
+`tt-git-gui` is tt-git as a desktop app for Windows, macOS and Linux, drawn
+with [GPUI](https://gpui.rs/). It has the same panes, keys, config and
+plugins as the terminal app, plus menus that show each command's key,
+right-click menus, panes you resize by dragging, and a window per
+repository. It comes in the same release archives as `tt-git` (keep `tt-git`
+installed next to it: plugins use it). See
+[The desktop app](https://thirtytech.github.io/tt-git/desktop/) for
+installing it and what's different.
+
+```sh
+cargo install --path crates/tt-git-gui   # from source
+tt-git-gui                               # in a repository, or: tt-git-gui path/to/repo
+```
+
 ## Keys
 
 Press `?` for the keys of the focused pane (type to search them, `esc` to
@@ -217,6 +233,8 @@ The full documentation is at <https://thirtytech.github.io/tt-git/>. For how eac
 - [How it works](https://thirtytech.github.io/tt-git/reference/how-it-works/): the git commands behind each
   pane
 - [Configuration](https://thirtytech.github.io/tt-git/configuration/): settings, keys and layout
+- [The desktop app](https://thirtytech.github.io/tt-git/desktop/): installing `tt-git-gui`, menus,
+  right-click menus, windows, and what it can't do yet
 - [Themes](https://thirtytech.github.io/tt-git/configuration/themes/): built-in themes, Omarchy's,
   and writing your own
 
@@ -387,6 +405,6 @@ those when you remove a test.
 | `tt-git-plugin` | manifest, registry, runtime, install/GC, NDJSON socket |
 | `tt-git-app` | the app's state and logic, shared by front ends: panes, keymap, modals, jobs, PTY plugin panes (no ratatui or crossterm) |
 | `tt-git-tui` | the terminal front end: draws `tt-git-app` with ratatui and feeds it crossterm input |
-| `tt-git-gui` | the desktop front end (in progress, not released): draws `tt-git-app` with GPUI; see [docs/gui.md](docs/gui.md) |
+| `tt-git-gui` | the desktop front end and the `tt-git-gui` binary: draws `tt-git-app` with GPUI; see [docs/gui.md](docs/gui.md) |
 | `tt-git` | the binary and CLI |
 | `tt-git-testkit` | sandbox repos, the in-process `TestDriver`, plugin fixtures |
