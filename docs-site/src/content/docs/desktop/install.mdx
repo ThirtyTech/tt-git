@@ -1,0 +1,207 @@
+---
+title: Install and open
+description: "Install the desktop app on Windows, macOS or Linux, start it, and open repositories."
+---
+
+import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+
+## Requirements
+
+- **git 2.31 or newer** on your `PATH`, as for the
+  [terminal app](/getting-started/install/#requirements).
+- Windows (x64, arm64), macOS (Apple Silicon) or Linux (x64, arm64).
+- On Linux, a graphics driver with Vulkan, and the system libraries listed
+  [below](#linux).
+
+## Download a release
+
+{/* D1: the archive names and their contents below are assumptions. Adjust
+    them to the release workflow's final artifact names. */}
+
+The desktop app comes in the same [release](https://github.com/ThirtyTech/tt-git/releases)
+archives as `tt-git`, named like `tt-git-v0.10.0-linux-x64.tar.gz` (see
+[Download a release](/getting-started/install/#download-a-release) for the
+list). Each archive holds the desktop app next to the `tt-git` binary.
+
+Keep `tt-git` installed alongside it, on your `PATH` or in the same folder.
+Plugins talk to the app by running it (see [Plugins](/desktop/using/#plugins)).
+
+<Tabs syncKey="os">
+<TabItem label="Windows">
+
+The archive (`windows-x64.zip` or `windows-arm64.zip`) holds
+`tt-git-gui.exe` and `tt-git.exe`.
+
+<Steps>
+
+1. Unpack it into a folder of your own, such as
+   `%LOCALAPPDATA%\Programs\tt-git\bin`.
+2. Add that folder to your user `PATH` if you also want `tt-git` in a
+   terminal.
+3. Run `tt-git-gui.exe`. To find it again, pin it to Start or the taskbar.
+
+</Steps>
+
+</TabItem>
+<TabItem label="macOS">
+
+The archive (`macos-arm64.tar.gz`) holds `tt-git.app` and the `tt-git`
+binary.
+
+<Steps>
+
+1. Move `tt-git.app` to `/Applications`.
+2. Put `tt-git` somewhere on your `PATH`, such as `~/.local/bin`.
+3. The app isn't notarized, so macOS blocks it the first time if you
+   downloaded it with a browser. Clear the quarantine flag:
+
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/tt-git.app
+   ```
+
+4. Open **tt-git** from Applications or Spotlight.
+
+</Steps>
+
+</TabItem>
+<TabItem label="Linux">
+
+The archive (`linux-x64.tar.gz` or `linux-arm64.tar.gz`) holds
+`tt-git-gui`, `tt-git` and `tt-git.desktop`.
+
+<Steps>
+
+1. Put `tt-git-gui` and `tt-git` on your `PATH`, such as in
+   `~/.local/bin`.
+2. Copy `tt-git.desktop` to `~/.local/share/applications/`, so tt-git shows
+   up in your app launcher. On Wayland it also gives the window its icon.
+3. Install the libraries below if you don't have them yet.
+4. Start **tt-git** from your launcher, or run `tt-git-gui`.
+
+</Steps>
+
+</TabItem>
+</Tabs>
+
+<Aside type="note">
+	The [install script](/getting-started/install/#install-script) and
+	`tt-git update` install the terminal app only. *Update tt-git* in the
+	desktop app doesn't update it yet either (see
+	[Known gaps](/desktop/using/#known-gaps)). To update the desktop app,
+	download the new release.
+</Aside>
+
+### Linux
+
+The desktop app draws with the GPU through Vulkan and uses the system's
+font, keyboard and window libraries. Most desktops have them already. On
+Debian or Ubuntu:
+
+```sh
+sudo apt install libvulkan1 mesa-vulkan-drivers libfontconfig1 libfreetype6 \
+  libwayland-client0 libxkbcommon0 libxkbcommon-x11-0 libx11-xcb1 libxcb1 \
+  libasound2 libzstd1
+```
+
+It runs on both Wayland and X11. The folder picker behind *Open repository*
+needs the desktop portal (`xdg-desktop-portal` and the one for your
+desktop, such as `xdg-desktop-portal-gtk` or `-kde`).
+
+## Build from source
+
+You need **Rust 1.89 or newer**. On Linux, also the development packages
+GPUI builds against (`.github/workflows/gui.yml` lists them for Ubuntu):
+
+```sh
+sudo apt install gcc g++ clang libfontconfig-dev libfreetype-dev libwayland-dev \
+  libxkbcommon-dev libxkbcommon-x11-dev libx11-xcb-dev libxcb1-dev \
+  libssl-dev libzstd-dev libasound2-dev libvulkan1
+```
+
+Then, from a clone of the repository:
+
+```sh
+cargo install --path crates/tt-git-gui
+cargo install --path crates/tt-git      # for plugins
+```
+
+The first build takes several minutes: the GPUI toolkit is large. A build
+from source has no app bundle or `.desktop` file, so on macOS and Wayland
+the window has no icon.
+
+## Starting it
+
+Start it from your launcher, or from a terminal inside a repository or with
+a path:
+
+```sh
+tt-git-gui                  # the repository in the current directory
+tt-git-gui path/to/repo     # another repository
+```
+
+Any folder inside a repository works, and so do linked worktrees. The
+window's title is `<repo> - tt-git`.
+
+It takes the same options as [`tt-git`](/reference/cli/#tt-git):
+
+| Option | Does |
+|---|---|
+| `PATH` | Open this repository instead of the current directory |
+| `--config FILE` | Read settings from this file instead of the default `config.toml` |
+| `--no-plugins` | Start without plugins and without the plugin API socket |
+| `--filter-to-cwd`, `--no-filter-to-cwd` | Started in a subfolder, narrow the graph and Status to it, or don't |
+| `--version`, `--help` | Print the version or help and exit |
+
+`tt-git-gui` has no subcommands. Use `tt-git` for `tt-git plugin list` and
+the others in [Command line](/reference/cli/).
+
+A config file tt-git can't read stops it before any window opens, with the
+error printed in the terminal. It logs to `<state>/logs/tt-git-gui.log`,
+next to the terminal app's `tt-git.log` (see [Logs](/configuration/#logs)).
+
+## The start window
+
+Started outside a repository, from a launcher say, tt-git opens a small
+start window instead:
+
+{/* Screenshot: the start window with a few recent repositories, one of them
+    marked (missing). Name it `gui-start`. */}
+
+- **Open folder…** shows the system's folder picker. Pick one or more
+  repositories, and each opens in its own window.
+- **Recent** lists the last 10 repositories you opened, newest first. Click
+  one to open it. One whose folder is gone says *(missing)*; opening it
+  fails, says why, and drops it from the list.
+
+| Key | Does |
+|---|---|
+| <kbd>up</kbd> <kbd>down</kbd>, <kbd>k</kbd> <kbd>j</kbd> | Pick a recent repository |
+| <kbd>enter</kbd> | Open it |
+| <kbd>o</kbd> | Open folder… (also <kbd>ctrl+o</kbd>, or <kbd>cmd+o</kbd> on macOS) |
+| <kbd>q</kbd> <kbd>esc</kbd> | Close the window |
+
+The start window closes once a repository opens. If you named a folder on
+the command line that isn't in a repository, it opens with a message saying
+so.
+
+## Opening another repository
+
+From a repository window, run **Open repository** from the
+[command palette](/git/palette/) or the **Repository** menu. It shows the
+folder picker, and each folder you pick opens in a new window. A repository
+that already has a window isn't opened twice: its window comes to the front.
+A folder that isn't in a repository shows an error popup.
+
+*Open repository* has no key. To give it one, bind `open_repository` (see
+[Key bindings](/configuration/keys/#commands)):
+
+```toml title="config.toml"
+[keys.global]
+open_repository = "ctrl+o"
+```
+
+In the terminal app the palette doesn't list it, and a key bound to it only
+says *opening another repository needs the desktop app*.
+
+Each window is a repository of its own: its own panes, file watcher, plugins
+and API socket. Closing the last window quits the app.

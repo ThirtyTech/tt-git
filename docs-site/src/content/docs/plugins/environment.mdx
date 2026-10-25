@@ -16,7 +16,7 @@ Every plugin process gets these:
 | Variable | |
 |---|---|
 | `TTGIT_ENV` | `1`, so a program can tell it's running under tt-git. |
-| `TTGIT_BIN_PATH` | The running `tt-git` executable. Use it rather than `tt-git` from `PATH`, so you talk to the same version. |
+| `TTGIT_BIN_PATH` | The running `tt-git` executable. Use it rather than `tt-git` from `PATH`, so you talk to the same version. Under the [desktop app](/desktop/using/#plugins), the `tt-git` next to `tt-git-gui`, else the first on `PATH`; with neither, it isn't set. |
 | `TTGIT_SOCKET_PATH` | This tt-git's API socket. The CLI commands that need a running tt-git use it automatically. |
 | `TTGIT_PLUGIN_ID` | The plugin's id. |
 | `TTGIT_PLUGIN_ROOT` | The plugin's directory. |

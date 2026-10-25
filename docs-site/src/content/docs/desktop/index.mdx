@@ -1,0 +1,67 @@
+---
+title: The desktop app
+description: "tt-git in a window of its own: the same panes, keys and plugins as in the terminal, plus menus and the mouse."
+---
+
+import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+
+`tt-git-gui` is tt-git as a desktop app. It runs in a window of its own on
+Windows, macOS and Linux instead of in a terminal. Under the window it's the
+same program: the same panes, the same keys, the same config and plugins.
+Everything else on this site applies to it.
+
+{/* Screenshot: the desktop app on the docs repository, the graph on top and
+    status and branches below, with the menus in the title bar (Windows or
+    Linux). Name it `gui-hero`. */}
+
+It adds what a window can do and a terminal can't:
+
+- **Menus** listing every command with its key.
+- **Right-click** a pane for a menu of what you can do on the row you
+  clicked.
+- **Drag the borders** between panes to resize them.
+- **One window per repository.** Open another repository and it gets its own
+  window.
+- A **start window** when you open it outside a repository, with the
+  repositories you opened last.
+
+## What's the same as in the terminal
+
+The desktop app runs the same app as `tt-git`, so you don't learn anything
+twice:
+
+- **The panes.** [Graph](/panes/graph/), [Details](/panes/details/),
+  [Status](/panes/status/), [staging](/panes/staging/),
+  [Blame](/panes/blame/), [Branches](/panes/branches/) and its tabs, in the
+  same places and doing the same things.
+- **The keys.** Every key works as in the terminal, in every pane and
+  dialog, with the same defaults. The keymap is the only place keys are
+  bound: the menus, the right-click menus, the help bar, the help popup
+  (<kbd>?</kbd>) and the [command palette](/git/palette/) all show the keys
+  from it. See [Keyboard shortcuts](/reference/keys/).
+- **Your config.** The desktop app reads the same
+  [`config.toml`](/configuration/), the repository's own `.tt-git.toml` and
+  `.git/tt-git.toml`, your [key bindings](/configuration/keys/), your
+  [layout](/configuration/layout/) and your [theme](/configuration/themes/).
+  A key you rebind for one is rebound for both.
+- **Plugins.** The same installed [plugins](/plugins/) load, with their
+  actions, event hooks, startup commands and
+  [panes](/panes/plugin-panes/). Plugin panes and the
+  [agent pane](/git/agents/) are terminals drawn inside the window.
+- **git.** It runs the `git` on your `PATH` for everything, as the terminal
+  app does (see [How tt-git uses git](/reference/how-it-works/)).
+
+<Aside type="note">
+	Keys pressed with <kbd>cmd</kbd> on macOS or the Windows key are left to
+	the system and never reach tt-git. Bindings use <kbd>ctrl</kbd>,
+	<kbd>alt</kbd> and <kbd>shift</kbd>, as in the terminal.
+</Aside>
+
+## Next steps
+
+<CardGrid>
+	<LinkCard title="Install and open" href="/desktop/install/" description="Install the desktop app, start it and open repositories." />
+	<LinkCard title="Menus, mouse and windows" href="/desktop/using/" description="What the desktop app does differently, and what it can't do yet." />
+	<LinkCard title="Keyboard shortcuts" href="/reference/keys/" description="Every default key, by pane. The same in both apps." />
+	<LinkCard title="Configuration" href="/configuration/" description="Settings, layout and key bindings. The same file for both apps." />
+</CardGrid>

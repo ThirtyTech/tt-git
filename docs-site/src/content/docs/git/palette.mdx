@@ -29,6 +29,9 @@ The list depends on which pane is focused. In order, it shows:
 4. **Common commands** that aren't already listed: [*Ask agent*](/git/agents/), continue or abort a merge
    or rebase, [undo](/git/undo/), pull, push, refresh, switch the graph between all and current
    branch, focus a pane, zoom, *Theme*, *Plugin logs*, *Update tt-git* and help.
+5. In the [desktop app](/desktop/) only, *Open repository*, last. It opens
+   another repository in a window of its own; see
+   [Opening another repository](/desktop/install/#opening-another-repository).
 
 The right side of each row shows its key, if it has one, so the palette
 doubles as a way to learn the keys. For a plugin action it shows the
@@ -58,6 +61,8 @@ shows a spinner beside *update tt-git to v0.4.0*, with each line the install
 script prints next to it. When it's done it reads *✓
 installed tt-git v0.4.0; restart tt-git to use it*. If the check or the install
 fails (no network, say), an error popup shows why, with the script's output.
+In the [desktop app](/desktop/using/#known-gaps) it doesn't work yet: it
+stops at once with an error popup.
 
 It does the same as [`tt-git update`](/reference/cli/#tt-git-update), and
 refuses in the same cases, such as a tt-git run from a cargo build.
