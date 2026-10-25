@@ -19,7 +19,7 @@ use tt_git_app::panes::PaneId;
 use crate::dialogs::{self, DialogCx};
 use crate::font::MonoFont;
 use crate::frame::frame_id;
-use crate::menus::{self, About, RunCommand};
+use crate::menus::{self, About, CheckForUpdates, RunCommand};
 use crate::model::{AppEvent, AppModel};
 use crate::panes::{self, PaneCx};
 use crate::rows::WHEEL_STEP_LINES;
@@ -63,6 +63,9 @@ impl Shell {
                         tracing::error!("{e}");
                     }
                     window.remove_window();
+                }
+                AppEvent::CheckForUpdates => {
+                    crate::update::check(window.window_handle(), model.downgrade(), cx);
                 }
                 AppEvent::OpenRepository => {
                     let model = model.downgrade();
@@ -129,6 +132,11 @@ impl Shell {
     /// C1: the app menu's About.
     fn about(&mut self, _: &About, window: &mut Window, cx: &mut Context<Self>) {
         menus::about(window, cx);
+    }
+
+    /// The app menu's Check for Updates.
+    fn check_for_updates(&mut self, _: &CheckForUpdates, window: &mut Window, cx: &mut Context<Self>) {
+        crate::update::check(window.window_handle(), self.model.downgrade(), cx);
     }
 
     /// Picks up a new [zoom](crate::zoom): the font at its size, and
@@ -271,6 +279,7 @@ impl Render for Shell {
             .on_key_down(cx.listener(Self::key_down))
             .on_action(cx.listener(Self::run_command))
             .on_action(cx.listener(Self::about))
+            .on_action(cx.listener(Self::check_for_updates))
             .size_full()
             .flex()
             .flex_col()

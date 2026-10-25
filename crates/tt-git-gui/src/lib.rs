@@ -39,6 +39,7 @@ pub mod text;
 pub mod theme;
 pub mod tt_git_bin;
 pub mod ui;
+pub mod update;
 pub mod window_state;
 pub mod windows;
 pub mod zoom;

@@ -108,11 +108,17 @@ pub struct UiConfig {
     /// How big everything is drawn, in percent: text, spacing and widgets
     /// together, as a browser zooms. Zooming in the app saves it here.
     pub zoom: u16,
+    /// Look for a new tt-git release in the background, once a day, and
+    /// say in the help bar when there is one.
+    pub check_for_updates: bool,
 }
 
 impl Default for UiConfig {
     fn default() -> Self {
-        Self { zoom: DEFAULT_ZOOM }
+        Self {
+            zoom: DEFAULT_ZOOM,
+            check_for_updates: true,
+        }
     }
 }
 

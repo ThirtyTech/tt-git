@@ -472,7 +472,6 @@ impl App {
             PALETTE_BUILTINS
                 .iter()
                 .filter(|c| !pane_cmds.contains(c))
-                .filter(|c| self.self_updates() || **c != Command::SelfUpdate)
                 .map(|c| builtin(*c)),
         );
         if self.opens_repos() {

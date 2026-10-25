@@ -45,6 +45,7 @@ pub fn quit_when_last_closes(cx: &mut App) {
     cx.on_window_closed(|cx, _| {
         if cx.windows().is_empty() {
             window_state::flush(cx);
+            crate::update::leave(cx);
             cx.quit();
         }
     })
@@ -64,6 +65,22 @@ pub fn repo_windows(cx: &mut App) -> Vec<(AnyWindowHandle, PathBuf)> {
     let windows = cx.default_global::<RepoWindows>();
     windows.0.retain(|(w, _)| open.contains(w));
     windows.0.clone()
+}
+
+/// The apps of the open repository windows.
+pub fn models(cx: &mut App) -> Vec<gpui::Entity<crate::model::AppModel>> {
+    repo_windows(cx)
+        .into_iter()
+        .filter_map(|(w, _)| w.downcast::<gpui::component::Root>())
+        .filter_map(|root| {
+            root.update(cx, |root, _, cx| {
+                let shell = root.view().clone().downcast::<crate::shell::Shell>().ok()?;
+                Some(shell.read(cx).model().clone())
+            })
+            .ok()
+            .flatten()
+        })
+        .collect()
 }
 
 /// The window showing the repository at `root`, if one does.

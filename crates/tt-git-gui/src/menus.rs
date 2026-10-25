@@ -29,6 +29,8 @@ gpui::actions!(
     [
         /// Shows tt-git's version.
         About,
+        /// Looks for a newer release and offers to install it.
+        CheckForUpdates,
         /// Quits every window, as the quit key does in each.
         Quit
     ]
@@ -61,6 +63,7 @@ pub enum ItemSpec {
 pub enum MenuAction {
     Command(Command),
     About,
+    CheckForUpdates,
     Quit,
 }
 
@@ -69,6 +72,7 @@ impl MenuAction {
         match self {
             MenuAction::Command(cmd) => RunCommand(cmd).boxed_clone(),
             MenuAction::About => About.boxed_clone(),
+            MenuAction::CheckForUpdates => CheckForUpdates.boxed_clone(),
             MenuAction::Quit => Quit.boxed_clone(),
         }
     }
@@ -104,7 +108,8 @@ const VIEW: &[&[Command]] = &[
 ];
 
 /// The app's settings and tools, in the app menu between About and Quit.
-const APP: &[Command] = &[Command::Theme, Command::PluginLogs, Command::SelfUpdate];
+/// "Check for Updates…" stands for [`Command::SelfUpdate`].
+const APP: &[Command] = &[Command::Theme, Command::PluginLogs];
 
 /// The menus for `app` as it is now: the app menu, Repository, View, and a
 /// menu named after the focused pane listing its commands (the help
@@ -139,14 +144,15 @@ pub fn build(app: &tt_git_app::App) -> Vec<MenuSpec> {
             action: MenuAction::About,
             enabled: true,
         },
+        ItemSpec::Item {
+            label: "Check for Updates…".into(),
+            key: None,
+            action: MenuAction::CheckForUpdates,
+            enabled: true,
+        },
         ItemSpec::Separator,
     ];
-    // Update tt-git only where `tt-git update` can update this front end.
-    app_items.extend(
-        APP.iter()
-            .filter(|c| app.self_updates() || **c != Command::SelfUpdate)
-            .map(|c| item(*c)),
-    );
+    app_items.extend(APP.iter().map(|c| item(*c)));
     app_items.push(ItemSpec::Separator);
     app_items.push(ItemSpec::Item {
         label: "Quit".into(),
@@ -224,6 +230,7 @@ pub fn native(specs: &[MenuSpec]) -> Vec<Menu> {
                     let item = match *action {
                         MenuAction::Command(cmd) => MenuItem::action(name, RunCommand(cmd)),
                         MenuAction::About => MenuItem::action(name, About),
+                        MenuAction::CheckForUpdates => MenuItem::action(name, CheckForUpdates),
                         MenuAction::Quit => MenuItem::action(name, Quit),
                     };
                     item.disabled(!enabled)
@@ -260,7 +267,7 @@ pub fn init(cx: &mut App) {
 /// Sends every window the quit command, so each closes as its quit key
 /// would close it; GPUI quits once the last one has. With no tt-git
 /// window, quits at once.
-fn quit_all(cx: &mut App) {
+pub(crate) fn quit_all(cx: &mut App) {
     let shells: Vec<_> = cx
         .windows()
         .into_iter()
@@ -401,11 +408,9 @@ mod tests {
     }
 
     #[gpui::test]
-    fn update_tt_git_points_at_the_release_instead(cx: &mut TestAppContext) {
+    fn check_for_updates_follows_about(cx: &mut TestAppContext) {
         let sb = sandbox();
         let mut gui = Gui::open(cx, &sb);
-        // `tt-git update` installs the TUI's archive, not the app.
-        assert!(!gui.read(|app| app.self_updates()));
         let app_menu: Vec<String> = menus(&mut gui)[0]
             .items
             .iter()
@@ -414,27 +419,14 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert!(app_menu.iter().any(|n| n.starts_with("Theme")), "{app_menu:?}");
+        assert_eq!(app_menu[..2], ["About tt-git", "Check for Updates…"]);
+        // It stands for the palette's Update tt-git.
         assert!(!app_menu.iter().any(|n| n.starts_with("Update tt-git")), "{app_menu:?}");
 
-        gui.press(":");
-        let offered = gui.read(|app| match app.modal() {
-            Some(tt_git_app::modal::Modal::Palette { items, .. }) => {
-                items.iter().map(|i| i.label.clone()).collect::<Vec<_>>()
-            }
-            _ => panic!("no palette"),
-        });
-        assert!(offered.iter().any(|l| l == "Theme"), "{offered:?}");
-        assert!(!offered.iter().any(|l| l == "Update tt-git"), "{offered:?}");
-        gui.press("esc");
-
-        // A plugin or a key can still run it: it says where to update.
-        gui.cx.dispatch_action(RunCommand(Command::SelfUpdate));
-        gui.wait_idle();
-        let notice = gui.read(|app| app.notice().unwrap_or_default().to_string());
-        assert!(notice.starts_with("update the desktop app by downloading"), "{notice}");
-        assert!(notice.ends_with("/releases/latest"), "{notice}");
-        assert_eq!(gui.read(|app| app.error().map(str::to_string)), None);
+        gui.press("?");
+        let (disabled, action) = item(&mut gui, "tt-git", "Check for Updates…").expect("item");
+        assert!(!disabled, "enabled while a dialog is open, as About is");
+        assert_eq!(action.name(), CheckForUpdates.name());
     }
 
     #[gpui::test]

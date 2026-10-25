@@ -3,6 +3,7 @@
 
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use clap::Parser;
 use color_eyre::eyre::{Result, WrapErr};
@@ -18,8 +19,9 @@ use tt_git_plugin::registry::PluginDirs;
 #[derive(Debug, Parser)]
 #[command(name = "tt-git-gui", version, about)]
 struct Cli {
-    /// Repository to open (defaults to the current directory).
-    path: Option<PathBuf>,
+    /// Repositories to open, each in its own window (defaults to the
+    /// current directory).
+    paths: Vec<PathBuf>,
 
     /// Use this config file instead of the default location.
     #[arg(long, value_name = "FILE")]
@@ -38,12 +40,29 @@ struct Cli {
     /// is set.
     #[arg(long, overrides_with = "filter_to_cwd")]
     no_filter_to_cwd: bool,
+
+    /// Open the start window rather than a repository (how an update
+    /// restarts a copy that had no repository open).
+    #[arg(long, hide = true)]
+    start_window: bool,
+
+    /// Run as the update's waiter on this instances folder: wait for every
+    /// instance to quit, then start them again.
+    #[arg(long, hide = true, value_name = "DIR")]
+    finish_update: Option<PathBuf>,
+
+    /// With --finish-update: the installer to run before starting them.
+    #[arg(long, hide = true, value_name = "FILE", requires = "finish_update")]
+    installer: Option<PathBuf>,
 }
 
 fn main() -> Result<()> {
     color_eyre::install()?;
     let args = Cli::parse();
     let _log_guard = init_tracing();
+    if let Some(dir) = &args.finish_update {
+        return finish_update(dir, args.installer.as_deref());
+    }
 
     let config_path = args.config.unwrap_or_else(tt_git_core::paths::config_file);
     let global = GlobalConfig::load(&config_path)?;
@@ -56,23 +75,32 @@ fn main() -> Result<()> {
     } else {
         None
     };
-    let named = args.path.is_some();
-    let repo_path = match args.path {
-        Some(p) => p,
-        None => std::env::current_dir().wrap_err("reading current directory")?,
-    };
+    let mut paths = args.paths.into_iter();
+    let named = paths.len() > 0;
+    // The rest open in windows of their own once the first is up.
+    let first_path = paths.next();
+    let more: Vec<PathBuf> = paths.collect();
     // Outside a repository, the start window asks which to open (saying
     // why, when the folder was named on the command line).
     let mut not_a_repo = None;
-    let repo = match Repo::discover(&repo_path, &GitCli::new(&repo_path)) {
-        Ok(repo) => Some(repo),
-        Err(e @ GitError::NotARepo(_)) => {
-            tracing::info!("{e}: showing the start window");
-            not_a_repo = named.then(|| e.to_string());
-            None
+    let repo = if args.start_window {
+        None
+    } else {
+        let repo_path = match first_path {
+            Some(p) => p,
+            None => std::env::current_dir().wrap_err("reading current directory")?,
+        };
+        match Repo::discover(&repo_path, &GitCli::new(&repo_path)) {
+            Ok(repo) => Some(repo),
+            Err(e @ GitError::NotARepo(_)) => {
+                tracing::info!("{e}: showing the start window");
+                not_a_repo = named.then(|| e.to_string());
+                None
+            }
+            Err(e) => return Err(e).wrap_err("opening repository"),
         }
-        Err(e) => return Err(e).wrap_err("opening repository"),
     };
+    let check_for_updates = global.config()?.ui.check_for_updates;
     let no_plugins = args.no_plugins;
     // Plugins call `$TTGIT_BIN_PATH <subcommand>`; the GUI has none, so
     // they get the TUI's `tt-git`.
@@ -118,6 +146,7 @@ fn main() -> Result<()> {
         tt_git_gui::window_state::install(tt_git_gui::window_state::default_path(), cx);
         tt_git_gui::set_launcher(Rc::new(new_app), cx);
         tt_git_gui::windows::quit_when_last_closes(cx);
+        start_updates(check_for_updates, cx);
         let opened = match first {
             Some((app, rx)) => tt_git_gui::open_window(app, rx, cx).map(|_| ()),
             None => tt_git_gui::start::open(not_a_repo, cx).map(|_| ()),
@@ -126,8 +155,65 @@ fn main() -> Result<()> {
             eprintln!("tt-git-gui: couldn't open a window: {e}");
             cx.quit();
         }
+        for path in &more {
+            if let Err(e) = tt_git_gui::windows::open_path(path, cx) {
+                tracing::warn!("{e}");
+            }
+        }
         cx.activate(true);
     });
+    tracing::info!("quit");
+    Ok(())
+}
+
+/// Sets up updating: the real updater, this process among the running
+/// instances (so an update restarts it), and the daily check unless
+/// `[ui] check_for_updates` is off. Clears out what an earlier update set
+/// aside.
+fn start_updates(check: bool, cx: &mut gpui::App) {
+    use tt_git_gui::update::{self, Releases, install, instances};
+
+    let state = tt_git_core::paths::state_dir();
+    let installed = Releases::detect();
+    if let Ok(exe) = std::env::current_exe()
+        && let Some(dir) = exe.parent()
+    {
+        install::remove_leftovers(dir);
+        // The old bundle sits next to tt-git.app.
+        if let Ok(install::Install::AppBundle { app }) = &installed
+            && let Some(apps) = app.parent()
+        {
+            install::remove_leftovers(apps);
+        }
+    }
+    update::set_updater(
+        Arc::new(Releases {
+            work: state.join("gui-update"),
+        }),
+        cx,
+    );
+    let launch = match &installed {
+        Ok(install) => install.launch(install::Os::CURRENT),
+        Err(_) => std::env::current_exe().unwrap_or_default(),
+    };
+    match instances::Instance::register(&state.join(instances::DIR), launch) {
+        Ok(instance) => update::join(instance, cx),
+        Err(e) => tracing::warn!("couldn't register with the other instances: {e}"),
+    }
+    if check {
+        update::check_in_background(state.join(update::CHECK_FILE), cx);
+    }
+}
+
+/// `--finish-update`: the waiter an update starts.
+fn finish_update(dir: &std::path::Path, installer: Option<&std::path::Path>) -> Result<()> {
+    use tt_git_gui::update::instances;
+
+    tracing::info!("waiting for tt-git to quit, to restart it");
+    match instances::finish(dir, installer, &mut instances::System, instances::WAIT) {
+        Ok(done) => tracing::info!("restarted {} instances", done.started),
+        Err(e) => tracing::error!("finishing the update: {e}"),
+    }
     Ok(())
 }
 

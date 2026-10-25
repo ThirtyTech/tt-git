@@ -25,6 +25,8 @@ pub enum AppEvent {
     Quit,
     /// "Open repository" ran: ask which.
     OpenRepository,
+    /// "Update tt-git" ran: check for updates as the app menu does.
+    CheckForUpdates,
 }
 
 /// tt-git's [`App`] as a GPUI entity. Input goes in through
@@ -53,8 +55,8 @@ impl AppModel {
         app.enable_open_repository();
         app.enable_ui_zoom();
         // The install scripts behind `tt-git update` only know the TUI's
-        // archives, not the app's packages.
-        app.disable_self_update();
+        // archives: the app updates itself (crate::update).
+        app.delegate_self_update();
         app.start();
         let rx = Rc::new(RefCell::new(rx));
         let waiting = rx.clone();
@@ -147,6 +149,9 @@ impl AppModel {
         }
         if self.app.take_open_repository() {
             cx.emit(AppEvent::OpenRepository);
+        }
+        if self.app.take_self_update() {
+            cx.emit(AppEvent::CheckForUpdates);
         }
         if let Some(step) = self.app.take_ui_zoom() {
             // Every window redraws at the new zoom (`Shell` watches it).
