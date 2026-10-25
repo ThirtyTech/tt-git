@@ -2,11 +2,11 @@
 source: crates/tt-git-tui/tests/details_search.rs
 expression: t.screen()
 ---
-╭[4] Commit 5d55791 files /needle█ 1/3─────────────────────────────────────────────────────────────╮
-│Files (2)          │ add hay                                                                      │
-│A long.txt         │ 5d55791 · Test User <test@example.com> · 2024-01-01 00:01                    │
-│A short.txt        │ ─────────────────────────────────────────────────────────────────────────────│
-│                   │ diff --git a/long.txt b/long.txt                                             │
+╭[4] Commit af97410 files /needle█ 1/3─────────────────────────────────────────────────────────────╮
+│Files (3)          │ add hay                                                                      │
+│A long.txt         │ af97410 · Test User <test@example.com> · 2024-01-01 00:01                    │
+│A middle.txt       │ ─────────────────────────────────────────────────────────────────────────────│
+│A short.txt        │ diff --git a/long.txt b/long.txt                                             │
 │                   │ new file mode 100644                                                         │
 │                   │ index 0000000..c79ccab                                                       │
 │                   │ --- /dev/null                                                                │
