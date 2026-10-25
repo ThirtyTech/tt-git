@@ -386,5 +386,6 @@ those when you remove a test.
 | `tt-git-plugin` | manifest, registry, runtime, install/GC, NDJSON socket |
 | `tt-git-app` | the app's state and logic, shared by front ends: panes, keymap, modals, jobs, PTY plugin panes (no ratatui or crossterm) |
 | `tt-git-tui` | the terminal front end: draws `tt-git-app` with ratatui and feeds it crossterm input |
+| `tt-git-gui` | the desktop front end (in progress, not released): draws `tt-git-app` with GPUI; see [docs/gui.md](docs/gui.md) |
 | `tt-git` | the binary and CLI |
 | `tt-git-testkit` | sandbox repos, the in-process `TestDriver`, plugin fixtures |

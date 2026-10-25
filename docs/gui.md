@@ -1,0 +1,311 @@
+# The desktop app: porting an area
+
+tt-git's desktop app is `crates/tt-git-gui`, a separate `tt-git-gui` binary
+drawn with [GPUI](https://gpui.rs/) and gpui-component. It runs the same
+app as the TUI: `tt-git-app` holds the state and logic, and each front end
+only draws it and feeds it input. This page is for whoever ports an area
+(a pane, the dialogs, the terminal panes) from the TUI to the GUI: what's
+already there, which files are yours, and the steps.
+
+Read [CLAUDE.md](../CLAUDE.md) first. Its build rules apply to everything
+here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
+`TTGIT_CONFIG_DIR` and `TTGIT_STATE_DIR`, and a scratch repo.
+
+## How the GUI works
+
+| File | What it does |
+|---|---|
+| `src/main.rs` | Sets the app up as `tt-git`'s `main` does (config, themes, plugins) and opens the window. |
+| `src/model.rs` | `AppModel`, the GPUI entity that owns `tt_git_app::App`. A task applies the app's actions, a timer sends `Action::Tick` every 250 ms, and after every input it carries out what the app asks: `take_redraw` (notify), `take_clipboard` (system clipboard), `take_editor` (start it detached), `should_quit` (close the window). |
+| `src/shell.rs` | `Shell`, the window's view. Draws the layout, the help bar and what opens over the panes, sends every key to tt-git's keymap, and reports where each pane went (`begin_frame`, `set_layout`), as the TUI's `draw_app` does. |
+| `src/keys.rs` | GPUI's `Keystroke` as tt-git's `KeyCombo`. tt-git's keymap resolves every key, text input included. There is no GPUI action per command. |
+| `src/theme.rs` | `GuiTheme`: tt-git's colors as `Hsla`, every `StyleRole` as a `HighlightStyle`, and gpui-component's theme set to match. |
+| `src/font.rs` | `MonoFont`: the monospace font and its cell size. |
+| `src/layout.rs` | The `[layout]` tree as resizable splits. |
+| `src/ui.rs` | `Ui`, what every view draws with, and `Measures`. |
+| `src/frame.rs`, `src/rows.rs`, `src/text.rs`, `src/overlay.rs` | The building blocks (below). |
+| `src/help_bar.rs` | The help bar. |
+| `src/panes/`, `src/dialogs/`, `src/terminal.rs` | One file per area, placeholders until ported. |
+| `src/testing.rs` | The GPUI test harness. |
+| `src/gpui_tokio.rs` | Zed's tokio adapter, copied in. Jobs run on its runtime. |
+
+Things that work differently from the TUI, on purpose:
+
+- **Sizes are in pixels, text in columns.** `geom::Rect` holds logical pixels
+  in the GUI. View models still fit text to a width in columns, so the GUI
+  draws everything in one monospace font and turns a measured size into
+  columns and rows with `MonoFont::fit`. Places in `tt-git-app` that read a
+  rect's size as terminal cells are marked `// GUI:` (see
+  [Cell units](#cell-units)).
+- **The app owns scrolling.** As in the TUI, a pane's `Cursor` keeps the
+  scroll offset and the view model returns only the rows on screen. The
+  GUI doesn't scroll lists itself: the wheel becomes `MouseKind::ScrollUp`
+  and `ScrollDown` (one per 3 lines of movement) and the app scrolls.
+- **Sizes come from the last frame.** GPUI lays out after it renders, so a
+  view asks how many rows fit where its list was laid out last frame
+  (`Ui::fit`). When that changes, the window draws again at once. Before
+  the first frame the answer is 0.
+
+## Your files
+
+Each area owns the files in its row. Edit only those. If you need a change
+anywhere else, ask the lead (see [Shared files](#shared-files)).
+
+| Area | `tt-git-app/src` | `tt-git-tui/src/draw` | `tt-git-gui/src` |
+|---|---|---|---|
+| B1 Graph | `view/graph.rs`, `panes/graph.rs` | `graph.rs` | `panes/graph.rs` |
+| B2 Status | `view/status.rs`, `panes/status.rs` | `status.rs` | `panes/status.rs` |
+| B3 Branches | `view/branches.rs`, `panes/branches.rs` | `branches.rs` | `panes/branches.rs` |
+| B4 Details | `view/details.rs`, `panes/details.rs` | `details.rs` | `panes/details.rs`, `panes/details/diff.rs` |
+| B5 Stage | `view/stage.rs`, `panes/stage.rs` | `stage.rs` | `panes/details/stage.rs` |
+| B6 Blame | `view/blame.rs`, `panes/blame.rs` | `blame.rs` | `panes/details/blame.rs` |
+| B7 Dialogs | `view/dialogs.rs`, `modal.rs`, `filter.rs` | `modal.rs` (palette, prompts, confirms, discard-all, help popup, error popup), `filter.rs` | `dialogs/*.rs` except `dialogs/mod.rs` |
+| B8 Terminal panes | `view/terminal.rs`, `pty_pane.rs` | `pty.rs` | `terminal.rs` |
+
+Every `view/<area>.rs` is declared in `view.rs` already, and every GUI file
+is registered already (`panes/mod.rs`, `dialogs/mod.rs`, the shell), so a
+port never edits those. Need more files? Make them submodules of your own:
+`view/details/files.rs` declared in `view/details.rs`, say.
+
+B4, B5 and B6 all draw in the details pane. `panes/mod.rs` picks the file:
+staging goes to `details/stage.rs`, blame to `details/blame.rs`, anything
+else to `details.rs`. Each draws the whole pane, its `PaneFrame` included.
+
+### Shared files
+
+Don't edit these. Ask the lead, who changes them on `gui` for everyone.
+
+- `tt-git-app`: `view.rs` (`StyleRole`, `TextSpan`), `view/code.rs`,
+  `theme.rs`, `style.rs`, `widgets.rs`, `app.rs` and `app/`, `keymap.rs`,
+  `mouse.rs`, `geom.rs`, `layout.rs`, `component.rs`.
+- `tt-git-tui`: `draw/mod.rs`, `draw/spans.rs`, `draw/layout.rs`,
+  `tui_theme.rs`, `input.rs`, `runner.rs`, `convert.rs`.
+- `tt-git-gui`: everything not in the table above, `Cargo.toml` included.
+- `Cargo.toml`, `Cargo.lock`, `.github/`, `docs/`, `docs-site/`.
+
+If you're sure a change to a shared file is small and only yours (a new
+`pub` on a pane field your view model reads, say), make it, keep it to one
+line, and say so in your report.
+
+## The building blocks
+
+All of them have rustdoc; `cargo doc -p tt-git-gui --open` with the agent
+target dir.
+
+- **`PaneCx`** (`panes/mod.rs`): what a pane's `render` gets. `app` is
+  `&mut tt_git_app::App` (for `set_viewport`, `note_drawn`), `ui` is the
+  `Ui`, `pane` and `focused` say which pane and whether it has the focus.
+  Dialogs get `DialogCx` (`app`, `ui`).
+- **`Ui`** (`ui.rs`): `theme` (`GuiTheme`), `font` (`MonoFont`),
+  `fit(id)` (the columns and rows where the element measured as `id` was
+  laid out), `measure(id)` (an element that records its parent's bounds as
+  `id`; put it in a `.relative()` parent), and `send_mouse(MouseInput, cx)`.
+  Clone it into event handlers.
+- **`PaneFrame`** (`frame.rs`): the bordered pane with `[n] title` on top,
+  in the focus colors when focused. `.title(text)` or `.title_spans(spans)`
+  (each span laid over the title look, like the branches tabs), then
+  `.child(...)` for the body. It measures itself as `frame_id(pane)` (that's
+  what the shell reports) and its body as `body_id(pane)`. A click or wheel
+  that nothing inside handles goes to the app as on the border, which
+  focuses the pane.
+- **`StyledRows`** (`rows.rs`): a list of one-line rows filling its parent.
+  `StyledRows::new(ui, id, pane, rows)` measures itself as `id`, sends a
+  click on line `n` as `MouseKind::Click` at body row `n`, and the wheel as
+  scroll steps. `.first_body_row(k)` when the pane draws `k` lines above the
+  list; `.on_target(|line| ...)` for a list that is a part of its own
+  (`PanePart::FileRow(line)` for the details file list).
+- **`StyledRow`** (`rows.rs`): one row. `StyledRow::new(theme, spans, row)`
+  where `row` is the look of the whole row, laid under the spans as the TUI
+  patches a line's style: `text::selection(picked, focused)` for a picked
+  row, or a role such as `StyleRole::DiffAddLine`.
+- **`StyledLine`** (`text.rs`): a line of spans as GPUI text, for anything
+  that isn't a list row (titles, headers, a prompt's input).
+- **`overlay::centered(content)`**: a layer over the main area with
+  `content` in its middle, for dialogs.
+- **`GuiTheme`** (`theme.rs`): `role(role)` and `span(span)` give a
+  `HighlightStyle`; `fg(role)` and `bg(role)` give colors; `background` and
+  `foreground` are the window's.
+- **`MonoFont`** (`font.rs`): `family`, `size`, `line_height`,
+  `cell_width`, and `fit(size)`.
+
+### Style roles
+
+A view model never carries a style, only a `StyleRole` per span, and the
+front end looks it up in the theme. There's a role for every `Theme` field:
+
+`Plain`, `Muted`, `Error`, `Underlined`, `Border`, `BorderFocused`,
+`Title`, `TitleFocused`, `Selected`, `SelectedUnfocused`, `HelpKey`,
+`HelpKeyAccel` (the underlined letter of `[y]es`), `HelpText`, `Busy`,
+`Lane(n)`, `LabelHead`, `LabelDetached`, `LabelLocal`, `LabelRemote`,
+`LabelTag`, `Author`, `Date`, `Sha`, `DiffAdd`, `DiffDel`, `DiffHunk`,
+`DiffHeader`, `DiffAddLine`, `DiffDelLine`, `Code(Class)`, `BlameHeat(n)`
+(0 newest), `BlameAuthor(n)`, `BlameUncommitted`, `BlameLatest`,
+`BlameOlder`, `SearchMatch`.
+
+A span can lay a second role over its own: `TextSpan::with_over(role)`.
+Code on a changed line and search matches use it. `view::code::code_spans`
+turns code (syntax tokens and search matches) into spans the way the TUI's
+`marked_code_spans` draws it; a test in `draw/spans.rs` checks the two look
+the same.
+
+If your area needs a look no role gives, ask the lead for a role rather
+than putting a style in your view model.
+
+## Porting an area, step by step
+
+`view/graph.rs` and `draw/graph.rs` are the template: read them first.
+
+1. **Move the view model into `tt-git-app/src/view/<area>.rs`.** Take what
+   the TUI's `draw/<area>.rs` decides (which text, in which role, which row
+   is picked, what's cut to fit) and make it a function on the pane state
+   that returns plain data: rows of `TextSpan`s plus whatever the front end
+   needs to lay them out (the visible range, a header, the selection). Keep
+   ratatui and crossterm out: `tt-git-app/tests/front_end_free.rs` fails if
+   they get in. The pane's `set_viewport` stays the one place that scrolls.
+2. **Redraw the TUI from it.** `draw/<area>.rs` calls the view model and only
+   maps roles to styles (`theme.span(&span)`) and lays the result out. The
+   insta snapshots must not change. If one does, the view model is wrong,
+   not the snapshot.
+3. **Write the view model's unit tests** next to it, as `view/graph.rs`
+   does: the roles, the fitting to a width, the selection, the empty and
+   loading states. Move the TUI's tests of the same logic there.
+4. **Build the GUI view** in your file in `tt-git-gui`. The pattern:
+
+   ```rust
+   pub const ROWS: &str = "status";
+
+   pub fn render(cx: &mut PaneCx) -> AnyElement {
+       let (ui, focused) = (cx.ui, cx.focused);
+       let pane = cx.app.status_mut();
+       let fit = ui.fit(ROWS);
+       pane.set_viewport(fit.rows);
+       // `view` and `title` are what your view model provides.
+       let view = pane.view(fit.rows, fit.cols);
+       let rows = view
+           .rows
+           .iter()
+           .map(|r| StyledRow::new(&ui.theme, &r.spans, selection(r.picked, focused)))
+           .collect();
+       PaneFrame::new(ui, PaneId::Status, focused)
+           .title(pane.title())
+           .child(StyledRows::new(ui, ROWS, PaneId::Status, rows))
+           .into_any_element()
+   }
+   ```
+
+   Clicks and the wheel go to the app as `MouseInput`, with the same
+   `MouseTarget` the TUI's `input.rs` would make, so the app handles them
+   the same way. Anything with a key in the TUI keeps working with no GUI
+   code: the keymap handles it.
+5. **Write GUI tests** in a `#[cfg(test)] mod tests` at the bottom of your
+   GUI file, with the harness in `testing.rs`:
+
+   ```rust
+   #[gpui::test]
+   fn shows_the_changed_files(cx: &mut TestAppContext) {
+       let sb = Sandbox::new();
+       sb.commit_file("a.txt", "a", "first");
+       sb.write("a.txt", "changed");
+       let mut gui = Gui::open(cx, &sb);
+       gui.press("tab");
+       assert_eq!(gui.read(|app| app.focus()), PaneId::Status);
+       let fit = gui.shell.read_with(&gui.cx, |shell, _| shell.ui().fit(ROWS));
+       assert!(fit.rows > 0, "the list was drawn");
+   }
+   ```
+
+   `Gui::open(cx, &sb)` opens the real window on a `Sandbox` repo and waits
+   until the first loads are drawn. `press("ctrl+l")` sends a key in the
+   keymap's syntax; `keystrokes("ctrl-l")` sends GPUI keystrokes through
+   the window's real dispatch. Both wait until the app is idle (no jobs in
+   flight, everything applied and drawn). `read(|app| ...)` reads the
+   state; `gui.model.update(&mut gui.cx, ...)` gets `&mut App` to call a
+   view model. GPUI tests check state, not pixels, and run headless on
+   every OS.
+6. **Look at it.** Run the binary on a scratch repo (below) and check the
+   area against the TUI on the same repo.
+7. **Remove the placeholder** text, and the `placeholder::` call, from your
+   files.
+
+## Commands
+
+From the worktree root:
+
+```sh
+# Your area's GUI tests, and all of them
+CARGO_TARGET_DIR=target/agent cargo test -p tt-git-gui panes::status
+CARGO_TARGET_DIR=target/agent cargo test -p tt-git-gui
+
+# The view model's tests
+CARGO_TARGET_DIR=target/agent cargo test -p tt-git-app view::status
+
+# Everything (TUI snapshots, all tests, doc tests), lint and format
+CARGO_TARGET_DIR=target/agent cargo insta test --workspace --check --unreferenced reject
+CARGO_TARGET_DIR=target/agent cargo test --workspace --doc
+CARGO_TARGET_DIR=target/agent cargo clippy --workspace --all-targets
+cargo fmt --all
+```
+
+The first build of `tt-git-gui` takes several minutes: GPUI is large.
+
+To run it, make a scratch repo in your scratchpad, then:
+
+```sh
+env -u TTGIT_SOCKET_PATH -u TTGIT_REPO_PATH \
+  TTGIT_CONFIG_DIR=target/agent/dev/config TTGIT_STATE_DIR=target/agent/dev/state \
+  CARGO_TARGET_DIR=target/agent cargo run -p tt-git-gui -- --no-plugins <scratch repo>
+```
+
+It logs to `target/agent/dev/state/logs/tt-git-gui.log` (`TTGIT_LOG=debug`
+logs every key).
+
+CI builds and tests `tt-git-gui` on Windows, macOS and Linux in its own
+workflow, `.github/workflows/gui.yml`. The TUI's jobs in `ci.yml` leave it
+out. On Linux GPUI needs system packages; `gui.yml` lists them.
+
+## The pass/fail test
+
+An area is done when:
+
+- `cargo insta test --workspace --check --unreferenced reject` passes with
+  **no TUI snapshot changes**.
+- The view model has unit tests in `tt-git-app`, and the GUI view has
+  `#[gpui::test]`s in its file, and they pass.
+- `cargo test --workspace --doc`, `cargo clippy --workspace --all-targets`
+  and `cargo fmt --all` are clean.
+- `tt-git-gui` builds, and you've run it and looked at your area.
+- You touched only your files, or said which shared line you changed and
+  why.
+
+Rebase on `gui` before you finish. Commit as CLAUDE.md says:
+`refactor(<area>): ...` for moving the view model and redrawing the TUI
+from it, `feat(gui): ...` for the GUI view.
+
+## Cell units
+
+`geom::Rect` is in the front end's units: terminal cells in the TUI, logical
+pixels in the GUI. These places in `tt-git-app` read a rect's size as cells,
+and are marked `// GUI:`. They behave as before; B8 converts them with the
+font's cell size.
+
+- `app/panes.rs`, `App::open_pane`: a plugin pane's PTY size from the main
+  or details rect, minus the border.
+- `app/agent.rs`, `App::open_agent_pane`: the agent pane's PTY size from the
+  details rect.
+- `app.rs`, `App::new`: the rects assumed before the first frame
+  (120×40 and 80×15).
+
+Also in cells, outside `tt-git-app`: a plugin manifest's pane `width` and
+`height` (`tt-git-plugin`'s `Dimension`, resolved in the TUI's
+`draw/pty.rs`), and `PtyPane::resize`, which takes rows and columns.
+
+Focus moves (`ctrl+h/j/k/l`) compare rects only with each other, and mouse
+input arrives already hit-tested, so they work in either unit.
+
+## Known gaps
+
+- Terminal editors (vim, nano) can't run from the GUI yet; it says so in
+  the error popup. Phase C4 decides how.
+- Plugins get no `TTGIT_BIN_PATH` from the GUI, since `tt-git-gui` has no
+  CLI subcommands.
+- No menus, no remembered window size, one repository per window (C1, C3).
