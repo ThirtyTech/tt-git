@@ -154,6 +154,10 @@ fn shoot(out: PathBuf) {
             // window closes once the next one is open.
             let mut last = None;
             for shot in &shots {
+                // macOS's menus are in its menu bar, outside the window.
+                if matches!(shot.mouse, Mouse::Menu(_)) && !tt_git_gui::menus::bar::DRAWS_MENUS {
+                    continue;
+                }
                 last = Some(take(shot, &sb, &out, last, cx).await);
             }
             let last = take(&Shot::keys("blame", blame_keys), &blamed, &out, last, cx).await;
