@@ -24,7 +24,8 @@ here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
 | `src/shell.rs` | `Shell`, the window's view. Draws the layout, the help bar and what opens over the panes, sends every key to tt-git's keymap, and reports where each pane went (`begin_frame`, `set_layout`), as the TUI's `draw_app` does. |
 | `src/keys.rs` | GPUI's `Keystroke` as tt-git's `KeyCombo`. tt-git's keymap resolves every key, text input included. There is no GPUI action per command. |
 | `src/theme.rs` | `GuiTheme`: tt-git's colors as `Hsla`, every `StyleRole` as a `HighlightStyle`, and gpui-component's theme set to match. |
-| `src/font.rs` | `MonoFont`: the monospace font and its cell size. |
+| `src/font.rs` | `MonoFont`: the monospace font and its cell size, at the zoom. |
+| `src/zoom.rs` | `UiZoom`, the app-wide zoom (`[ui] zoom`), a GPUI global. The font scales with it, and so does gpui-component's `font_size`, which its `Root` makes each window's rem size. Size anything that isn't a number of cells in rems (or from `cx.theme().font_size`), not fixed pixels, so it zooms too. |
 | `src/layout.rs` | The `[layout]` tree as resizable splits. Dragging a handle resizes them; each split keeps its sizes for the session, by its place and what it shows (`split_sizes` reads them). |
 | `src/context_menu.rs` | The right-click menu every `PaneFrame` has: the focused pane's commands with their keys (`App::pane_commands`), each run as its key would. |
 | `src/ui.rs` | `Ui`, what every view draws with, and `Measures`. |

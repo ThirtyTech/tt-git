@@ -74,6 +74,9 @@ pane_release_keys = ["ctrl+\\", "f12"]   # leave or close plugin panes
 command = "claude"   # the agent A starts
 placement = "auto"   # a herdr tab inside herdr, else in place of details
 # system_prompt = "" # unset: tt-git's own
+
+[ui]
+zoom = 100           # desktop app only: how big everything is drawn, in percent
 ```
 
 Two more tables, `[layout]` and `[keys]`, have pages of their own:
@@ -200,6 +203,14 @@ name = "Write release notes"
 description = "user-facing notes for this branch"
 prompt = "Write release notes for what {branch} adds since {base}:\n{log}"
 ```
+
+### `[ui]`
+
+Settings for the [desktop app](/desktop/). The terminal app ignores them.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `zoom` | `100` | How big the desktop app draws everything, in percent: text, spacing, menus and dialogs together, as a browser zooms. From `50` to `300`; a value outside that is taken as the nearest end. [Zooming](/desktop/using/#zoom) in the app saves the new value here. Only the global config file sets it, for every window; a repository's own file can't. |
 
 ## Per-repository config
 

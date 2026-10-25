@@ -21,7 +21,7 @@ item does exactly what pressing its key does.
 |---|---|
 | **tt-git** | *About tt-git* (the version), *Theme*, *Plugin logs* and *Quit* |
 | **Repository** | *Fetch*, *Prune gone*, *Pull*, *Push*, *Refresh*; *Continue merge/rebase*, *Abort merge/rebase*, *Undo*; *Ask agent*; *Open repository* |
-| **View** | Focus *Graph*, *Status*, *Branches* or *Details*; *Next pane*, *Prev pane*; *Zoom*; *Commands* (the [palette](/git/palette/)) and *Help* |
+| **View** | Focus *Graph*, *Status*, *Branches* or *Details*; *Next pane*, *Prev pane*; *Zoom*; *Zoom in*, *Zoom out*, *Reset zoom*; *Commands* (the [palette](/git/palette/)) and *Help* |
 | The focused pane | Named after it (**Graph**, **Status**, **Branches**, **Details**, **Stage**, **Blame**, **Stash** or **Worktrees**): that pane's commands, the ones the [help popup](/getting-started/navigation/#getting-help) lists first |
 
 The last menu follows the focus, so its name and items change as you move
@@ -62,6 +62,8 @@ click a tab in the branches pane's title, a file in the changed-files view
 or a row in the [staging view](/panes/staging/), and scroll with the wheel.
 See [The mouse](/getting-started/navigation/#the-mouse). Setting
 `mouse = false` turns clicks and the wheel off in the desktop app as well.
+Holding <kbd>ctrl</kbd> while you turn the wheel [zooms](#zoom) instead of
+scrolling.
 
 ### Resizing panes
 
@@ -70,6 +72,31 @@ sizes you dragged it to while the window is open, even when the screen
 shows something else for a while (details open, a pane [zoomed](/getting-started/navigation/#zoom)).
 The sizes aren't saved: a new window starts from the sizes in your
 [layout](/configuration/layout/).
+
+## Zoom
+
+Zoom makes everything bigger or smaller together, as a browser does: the
+text in the panes, the spacing, the menus and dialogs. The title bar keeps
+its height.
+
+| Key | Does |
+|---|---|
+| <kbd>ctrl+=</kbd> or <kbd>ctrl++</kbd> | Zoom in. |
+| <kbd>ctrl+-</kbd> | Zoom out. |
+| <kbd>ctrl+0</kbd> | Back to 100%. |
+| <kbd>ctrl</kbd>+wheel | Zoom in (wheel up) or out (wheel down). |
+
+They're in the **View** menu and the [palette](/git/palette/) too. Each step
+goes to the next of 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250
+and 300%, and the help bar says the new zoom, such as *zoom 110%*.
+
+The zoom is one setting for the whole app: every window follows it. It's
+saved as [`zoom` in `[ui]`](/configuration/#ui) in your global
+`config.toml`, so the app opens at the same size next time. You can set it
+there yourself, to any percent from 50 to 300.
+
+Not to be confused with *Zoom* (<kbd>+</kbd>), which shows one
+[pane fullscreen](/getting-started/navigation/#zoom).
 
 ## Windows
 

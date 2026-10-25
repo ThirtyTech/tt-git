@@ -124,6 +124,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `ctrl+r` | refresh |
 | | `:` `ctrl+p` | command palette |
 | | `q` | quit |
+| | `ctrl+=` `ctrl+-` `ctrl+0` | desktop app only: zoom everything in / out / back to 100% (saved as `[ui] zoom`) |
 | graph | `enter` | the commit fullscreen: changed files on the left, the selected file's diff on the right (`j`/`k` pick a file, `pgup`/`pgdn` scroll, `esc` or `space` back) |
 | | `space` | show / hide the commit's details (they replace the bottom row) |
 | | `shift+pgdn` `shift+pgup` | page the details down / up without leaving the graph |
