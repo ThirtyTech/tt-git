@@ -31,6 +31,7 @@ VersionInfoVersion={#FileVersion}
 DefaultDirName={autopf}\tt-git
 DefaultGroupName=tt-git
 DisableProgramGroupPage=yes
+DisableWelcomePage=no
 PrivilegesRequired=lowest
 PrivilegesRequiredOverridesAllowed=dialog
 ArchitecturesAllowed={#Arch}
@@ -43,6 +44,12 @@ UninstallDisplayName=tt-git
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+; The modern wizard's image sizes at 100% DPI: sidebar.bmp is sidebar.svg
+; at 202x386 (24-bit), small.bmp is ../../assets/icon.svg at 58x58 (32-bit,
+; straight alpha). Render them again after changing either SVG.
+WizardImageAlphaFormat=defined
+WizardImageFile=sidebar.bmp
+WizardSmallImageFile=small.bmp
 
 [Tasks]
 Name: desktopicon; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
