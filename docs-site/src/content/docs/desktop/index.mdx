@@ -1,20 +1,35 @@
 ---
 title: The desktop app
-description: "tt-git in a window of its own: the same panes, keys and plugins as in the terminal, plus menus and the mouse."
+description: "tt-git in a window of its own, drawn on the GPU with GPUI, the UI framework behind the Zed editor: the same panes, keys and plugins as in the terminal, plus menus and the mouse."
 ---
 
-import { Aside, CardGrid, LinkCard } from '@astrojs/starlight/components';
+import { Aside, CardGrid, LinkCard, TabItem, Tabs } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/Screenshot.astro';
 
 `tt-git-gui` is tt-git as a desktop app. It runs in a window of its own on
 Windows, macOS and Linux instead of in a terminal. Under the window it's the
 same program: the same panes, the same keys, the same config and plugins.
 Everything else on this site applies to it.
 
-{/* Screenshot: the desktop app on the docs repository, the graph on top and
-    status and branches below, with the menus in the title bar (Windows or
-    Linux). Name it `gui-hero`. */}
+<Screenshot name="gui-overview-windows" alt="The tt-git desktop app on Windows: the tt-git, Repository, View and Graph menus in the title bar, the commit graph on top, the status pane and the branch list below, and the help bar along the bottom" caption="The desktop app on Windows, on the same project as the rest of this site's screenshots." />
 
-It adds what a window can do and a terminal can't:
+## Built with GPUI
+
+The desktop app is drawn with [GPUI](https://gpui.rs/), the UI framework the
+[Zed](https://zed.dev/) editor is built on. GPUI draws every frame on the
+GPU (Direct3D 11 on Windows, Metal on macOS, Vulkan on Linux), so the graph,
+diffs and blame scroll smoothly, at any size and zoom. The title bar, menus
+and right-click menus come from
+[gpui-component](https://github.com/longbridge/gpui-kit); the panes are
+tt-git's own, in the same monospace look and [theme](/configuration/themes/)
+as the terminal app.
+
+GPUI only draws. What the app does, from the keymap to the git commands it
+runs, is shared with the terminal app, which is why the two can't drift
+apart. [How it's built](/desktop/architecture/) shows the crates and how the
+two front ends share them.
+
+The desktop app adds what a window can do and a terminal can't:
 
 - **Menus** listing every command with its key.
 - **Right-click** a pane for a menu of what you can do on the row you
@@ -24,6 +39,72 @@ It adds what a window can do and a terminal can't:
   window.
 - A **start window** when you open it outside a repository, with the
   repositories you opened last.
+
+## A look around
+
+Every pane and dialog from the terminal app is here, drawn in the window.
+
+<Screenshot name="gui-details-windows" alt="A commit open full size in the desktop app: its changed file on the left and the diff with syntax colors on the right" caption="A commit's files and diff (enter on a commit)." />
+
+<Screenshot name="gui-staging-windows" alt="Staging a file in the desktop app: the unstaged hunks of NotificationBell.tsx, the first hunk picked" caption="Staging a file a hunk at a time." />
+
+<Screenshot name="gui-blame-windows" alt="Blame of src/api/client.ts in the desktop app: each line's commit, author and age beside the code" caption="Blame, with each line's commit, author and age." />
+
+<Screenshot name="gui-palette-windows" alt="The command palette over the graph in the desktop app, filtered by sta" caption="The command palette (:)." />
+
+<Screenshot name="gui-help-windows" alt="The keybindings popup over the graph in the desktop app" caption="The help popup (?), listing every key for the pane you're in." />
+
+<Screenshot name="gui-light-windows" alt="The desktop app in the Catppuccin Latte light theme, with a commit's details open below the graph" caption="Any theme works, light ones included (here Catppuccin Latte)." />
+
+## On each system
+
+The app is the same on all three. What changes is where the menus go and
+how the window fits in with the desktop.
+
+<Tabs syncKey="os">
+<TabItem label="Windows">
+
+The window draws its own title bar: the tt-git icon, the menus (**tt-git**,
+**Repository**, **View** and one for the focused pane), the window's title,
+and the minimize, maximize and close buttons.
+
+<Screenshot name="gui-menu-windows" alt="The Graph menu open in the desktop app's title bar on Windows, listing the graph's commands with their keys" caption="The menus live in the title bar on Windows." />
+
+Install it with the setup program or the zip; see
+[Install and open](/desktop/install/).
+
+</TabItem>
+<TabItem label="macOS">
+
+The menus are in the macOS menu bar at the top of the screen, as in any Mac
+app, each item with its key after its name. The window's title bar has the
+traffic-light buttons, then the tt-git icon and the window's title.
+
+{/* Screenshot: the desktop app on macOS on the lumen-web mock repository.
+    `gui-overview-macos` comes from the guishots example on a Mac. The Graph
+    menu open in the menu bar, `gui-menu-macos`, is outside the window, so
+    take it with the system's screenshot tool (shift+cmd+4). */}
+
+Install it from the `.dmg`; see [Install and open](/desktop/install/).
+
+</TabItem>
+<TabItem label="Linux">
+
+The window draws its own title bar with the menus, as on Windows. Under
+Wayland on GNOME, which leaves window buttons to the app, it draws those
+too. It runs on Wayland and X11, and draws with Vulkan.
+
+{/* Screenshot: the desktop app on Linux (GNOME on Wayland) on the lumen-web
+    mock repository, with its title bar and the Graph menu open. Name it
+    `gui-overview-linux` (and `gui-menu-linux` for the menu open). GPUI has
+    no render_to_image on Linux, so guishots can't take it there yet: use the
+    desktop's screenshot tool on the window. */}
+
+Install it from the tarball or the AppImage; see
+[Install and open](/desktop/install/).
+
+</TabItem>
+</Tabs>
 
 ## What's the same as in the terminal
 
@@ -62,6 +143,7 @@ twice:
 <CardGrid>
 	<LinkCard title="Install and open" href="/desktop/install/" description="Install the desktop app, start it and open repositories." />
 	<LinkCard title="Menus, mouse and windows" href="/desktop/using/" description="What the desktop app does differently, and what it can't do yet." />
+	<LinkCard title="How it's built" href="/desktop/architecture/" description="The crates, the shared app, and what GPUI draws." />
 	<LinkCard title="Keyboard shortcuts" href="/reference/keys/" description="Every default key, by pane. The same in both apps." />
 	<LinkCard title="Configuration" href="/configuration/" description="Settings, layout and key bindings. The same file for both apps." />
 </CardGrid>

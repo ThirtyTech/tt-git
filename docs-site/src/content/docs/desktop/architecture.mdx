@@ -1,0 +1,95 @@
+---
+title: How it's built
+description: "One app, two front ends: tt-git's crates, what the shared app does, what the terminal and desktop front ends each draw, and how GPUI fits in."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import CrateDiagram from '../../../components/CrateDiagram.astro';
+
+tt-git is one app with two front ends. Everything the app knows and decides
+lives in one crate, `tt-git-app`. The terminal app draws it with
+[ratatui](https://ratatui.rs/); the desktop app draws it with
+[GPUI](https://gpui.rs/), the UI framework the [Zed](https://zed.dev/) editor
+is built on. Neither front end decides what a key does, what a pane shows or
+which git command runs. That's why the two apps behave the same, and why a
+key you rebind or a plugin you install works in both.
+
+## The crates
+
+tt-git is a Cargo workspace. The arrows follow each crate's dependencies in
+its `Cargo.toml`:
+
+<CrateDiagram />
+
+| Crate | What it is | Uses |
+|---|---|---|
+| `tt-git-core` | Runs the `git` on your `PATH` and parses what it prints: commits, branches, status, diffs, blame. Also the write operations, undo and the config and state paths. | none of the others |
+| `tt-git-graph` | Lays out the commit graph's lanes. No git, no UI. | none of the others |
+| `tt-git-plugin` | The plugin host: manifests, the registry, installing, running plugins and the JSON socket. | `tt-git-core` |
+| `tt-git-app` | The app itself, for both front ends (below). It has no ratatui, crossterm or GPUI in it; a test fails if one gets in. | `tt-git-core`, `tt-git-graph`, `tt-git-plugin` |
+| `tt-git-tui` | The terminal front end: draws `tt-git-app` with ratatui and turns crossterm's keys and mouse into the app's input. | `tt-git-app`, `tt-git-core`, `tt-git-graph`, `tt-git-plugin` |
+| `tt-git` | The terminal app's binary: the command line (`tt-git plugin list`, `tt-git update`…) and starting the terminal front end. | `tt-git-tui`, `tt-git-core`, `tt-git-plugin` |
+| `tt-git-gui` | The desktop app: its binary and its front end. Draws `tt-git-app` with GPUI and gpui-component, and adds windows, menus and the start window. | `tt-git-app`, `tt-git-core`, `tt-git-plugin`, GPUI |
+| `tt-git-testkit` | For tests only: throwaway repositories, a driver that runs the app in-process, and the mock project the screenshots on this site show. | `tt-git-tui`, `tt-git-core`, `tt-git-plugin` |
+
+Outside the crates, the [GitHub](/plugins/github/) and
+[Azure DevOps](/plugins/azure-devops/) plugins in `plugins/` are separate Go
+programs. Like any [plugin](/plugins/), they talk to tt-git only through its
+command line and socket, so they work with both apps.
+
+## What the shared app does
+
+`tt-git-app` holds everything that isn't drawing:
+
+- **The state**: the repository, every pane and its selection and scroll
+  position, the open dialog, the layout, the theme.
+- **The keymap.** Every key, in both apps, goes through it. A front end
+  only says which key was pressed.
+- **What each pane shows.** For every pane and dialog the app works out the
+  rows to show: plain text split into spans, each with a *style role* (a
+  branch name, a date, an added line) rather than a color. A front end looks
+  each role up in the [theme](/configuration/themes/) and draws it.
+- **The mouse.** A front end says what the pointer was over (a row, a tab,
+  a pane's border); the app decides what that click means, double-clicks
+  included.
+- **Jobs**: git commands, run in the background so the screen never waits
+  on them, with their results applied when they finish.
+- **Plugins**, their events and socket, and the terminal panes
+  ([plugin panes](/panes/plugin-panes/) and the [agent pane](/git/agents/)),
+  which run in a pseudo-terminal the app owns.
+
+## What each front end does
+
+| | Terminal (`tt-git-tui`) | Desktop (`tt-git-gui`) |
+|---|---|---|
+| Draws with | ratatui, into the terminal | GPUI, on the GPU, in a window |
+| Sizes in | terminal cells | pixels, with text fitted to columns of one monospace font |
+| Input | crossterm's keys and mouse | the window's keys, clicks, right-clicks and wheel |
+| Its own extras | runs in any terminal, over SSH too | [menus](/desktop/using/#menus), [right-click menus](/desktop/using/#right-click-menus), [resizable panes](/desktop/using/#resizing-panes), [zoom](/desktop/using/#zoom), a [window per repository](/desktop/using/#windows), the [start window](/desktop/install/#the-start-window) |
+| Editors | suspends itself and runs a terminal editor | runs a terminal editor in a pane over the window |
+| Clipboard | the terminal's (OSC 52) | the system clipboard |
+
+A key press goes the same way in both: the front end turns it into the
+app's key, the app's keymap runs the command, the app works out what
+changed, and the front end draws it again.
+
+## Built with GPUI
+
+[GPUI](https://gpui.rs/) is the UI framework Zed's team wrote for the
+[Zed](https://zed.dev/) editor. It draws everything on the GPU: Direct3D 11
+on Windows, Metal on macOS and Vulkan on Linux, so a long graph, a big diff
+or a blame scrolls smoothly in a window too.
+
+The desktop app uses GPUI through [GPUI Kit](https://gpui-kit.com/), which
+pins a published snapshot of Zed's GPUI together with
+[gpui-component](https://github.com/longbridge/gpui-kit), the component
+library the title bar, the menus, the right-click menus and the resizable
+splits come from. The panes themselves are tt-git's own: one monospace font,
+laid out in rows, styled from the same theme as the terminal app.
+
+<Aside type="tip">
+	For working on the desktop app (its files, its test harness and how to
+	port a pane), see
+	[`docs/gui.md`](https://github.com/ThirtyTech/tt-git/blob/main/docs/gui.md)
+	in the repository.
+</Aside>

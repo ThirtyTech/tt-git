@@ -89,6 +89,7 @@ export default defineConfig({
 						{ label: 'Overview', slug: 'desktop' },
 						{ label: 'Install and open', slug: 'desktop/install' },
 						{ label: 'Menus, mouse and windows', slug: 'desktop/using' },
+						{ label: "How it's built", slug: 'desktop/architecture' },
 					],
 				},
 				{

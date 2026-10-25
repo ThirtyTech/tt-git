@@ -75,6 +75,26 @@ a zoomed region, and callouts that point at text found on screen (so they
 survive small layout changes). After a UI change, run both steps and look
 over the images before committing them.
 
+### The desktop app
+
+The `gui-*` images are the desktop app's real windows, not renders of a
+capture. From the checkout root (with `CARGO_TARGET_DIR=target/agent` and
+the other build rules in `CLAUDE.md` when you're an agent):
+
+1. **Capture.** `pnpm screens:gui:capture` runs the `guishots` example in
+   `crates/tt-git-gui/examples/`. It opens the app's windows on the same
+   `lumen-web` mock (`tt_git_testkit::mock`), drives them, and saves each
+   window as a PNG in `screens/gui-captures/` (ignored by git), named after
+   the system it ran on: `overview-windows.png`.
+2. **Convert.** `pnpm screens:gui` (or `pnpm screens:gui menu`) saves them
+   as `src/assets/screens/gui-<name>-<os>.webp`, losslessly. No callouts.
+
+Each system takes its own: GPUI draws a window to an image on Windows and
+macOS, so run the capture on each of them. On Linux, take the window with
+the desktop's screenshot tool and save it under the same name. Pages show
+the shots for a system under its tab in [the desktop app's
+overview](src/content/docs/desktop/index.mdx).
+
 ## Link previews
 
 When someone pastes a link to the site in Discord, Slack or X, the preview

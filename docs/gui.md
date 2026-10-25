@@ -7,6 +7,11 @@ only draws it and feeds it input. This page is for whoever ports an area
 (a pane, the dialogs, the terminal panes) from the TUI to the GUI: what's
 already there, which files are yours, and the steps.
 
+For the big picture (the crates, what `tt-git-app` owns and what each
+front end owns), see
+[How it's built](https://thirtytech.github.io/tt-git/desktop/architecture/)
+on the docs site.
+
 Read [CLAUDE.md](../CLAUDE.md) first. Its build rules apply to everything
 here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
 `TTGIT_CONFIG_DIR` and `TTGIT_STATE_DIR`, and a scratch repo.
@@ -287,6 +292,28 @@ logs every key).
 CI builds and tests `tt-git-gui` on Windows, macOS and Linux in its own
 workflow, `.github/workflows/gui.yml`. The TUI's jobs in `ci.yml` leave it
 out. On Linux GPUI needs system packages; `gui.yml` lists them.
+
+## Screenshots for the docs
+
+The docs site's `gui-*` images come from the real app: the `guishots`
+example opens windows on the docs' mock repository
+(`tt_git_testkit::mock`, the same one `docshots` draws for the terminal
+app), presses keys, opens a title bar menu and a right-click menu, and
+saves each window with GPUI's `Window::render_to_image` (a
+`test-support` feature, which the example gets from the dev-dependencies).
+From the checkout root:
+
+```sh
+env -u TTGIT_SOCKET_PATH -u TTGIT_REPO_PATH   TTGIT_CONFIG_DIR=target/agent/dev/config TTGIT_STATE_DIR=target/agent/dev/state   CARGO_TARGET_DIR=target/agent cargo run -p tt-git-gui --example guishots -- docs-site/screens/gui-captures
+cd docs-site && pnpm screens:gui
+```
+
+The windows open on screen for a moment each and close again. Each PNG is
+named after the system it was taken on (`overview-windows.png`), and
+`pnpm screens:gui` saves it as `src/assets/screens/gui-overview-windows.webp`.
+`render_to_image` exists on Windows and macOS only; on Linux, take the
+window with the desktop's screenshot tool. On macOS the menu shot is
+skipped, since the menus are in the system menu bar.
 
 ## The pass/fail test
 
