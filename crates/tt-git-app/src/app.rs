@@ -271,6 +271,8 @@ pub struct App {
     release_keys: Vec<KeyCombo>,
     /// (main, details) areas from the last frame, for sizing new panes.
     layout_rects: (Rect, Rect),
+    /// The front end's cell (width, height) in `layout_rects`' units.
+    cell_size: (u16, u16),
     show_help: bool,
     /// What's typed into the help popup to narrow its list.
     help_query: String,
@@ -376,9 +378,10 @@ impl App {
             panes: Vec::new(),
             next_pane_id: 1,
             release_keys,
-            // GUI: a guess in terminal cells until the first frame reports
-            // the real areas.
+            // A guess in terminal cells until the first frame reports the
+            // real areas; `cell_size` stays 1×1 until a front end sets it.
             layout_rects: (Rect::new(0, 0, 120, 40), Rect::new(0, 0, 80, 15)),
+            cell_size: (1, 1),
             show_help: false,
             help_query: String::new(),
             error: None,

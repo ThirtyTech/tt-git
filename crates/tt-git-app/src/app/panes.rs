@@ -44,13 +44,13 @@ impl App {
             return Err("ui_busy: another popup is open".into());
         }
         let host_env = state.host.runner().host();
-        // GUI: sizes the PTY from the main or details rect as terminal cells
-        // (minus the border). The GUI reports pixels; convert with font metrics.
+        // Sizes the PTY from the main or details rect, in cells of `cell_size`.
         let (main, details) = self.layout_rects;
         let target = match placement {
             Placement::Split => details,
             _ => main,
         };
+        let (rows, cols) = crate::view::terminal::pty_size(target, self.cell_size);
         let id = self.next_pane_id;
         self.next_pane_id += 1;
         let pane = PtyPane::spawn(
@@ -60,8 +60,8 @@ impl App {
             &command,
             &host_env,
             &req.env,
-            target.height.saturating_sub(2).max(5),
-            target.width.saturating_sub(2).max(20),
+            rows,
+            cols,
             self.ctx.clone(),
         )?;
         if pane.placement == Placement::Split {
@@ -82,6 +82,14 @@ impl App {
         // A split pane may have been covering details.
         self.flush_details();
         before != self.panes.len()
+    }
+
+    /// How big a character cell is in the units of the areas
+    /// [`set_layout`](App::set_layout) gets: 1×1 (the default) for terminal
+    /// cells, the font's cell in pixels for the GUI. New panes' PTYs are
+    /// sized with it.
+    pub fn set_cell_size(&mut self, width: u16, height: u16) {
+        self.cell_size = (width.max(1), height.max(1));
     }
 
     pub fn plugin_panes(&self) -> &[PtyPane] {
