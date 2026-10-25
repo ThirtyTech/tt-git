@@ -374,7 +374,10 @@ Per platform (gpui-pre 0.3.9):
 
 The window's title bar is always drawn by the app (`TitleBar` moves the
 window and, under client-side decorations such as GNOME on Wayland, draws
-its controls), with the title in it. The icon: on X11 through
+its controls), with the app icon, the menus (not on macOS) and the title
+in it. The title bar's icon is `menus::icon::title_icon`, the PNG scaled
+down once to twice its 16px size (GPUI samples images without mipmaps);
+the start window's title bar draws it too. The window's icon: on X11 through
 `WindowOptions::icon`, on Windows as the executable's icon resource
 (`build.rs`); Wayland and macOS take it from the packages
 (`packaging/`): on Wayland from `share/applications/tt-git.desktop` and
