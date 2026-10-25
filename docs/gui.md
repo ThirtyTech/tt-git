@@ -360,7 +360,13 @@ Every command item carries one action, `menus::RunCommand(Command)`. The
 shell handles it by sending `Action::Command`, which is what a bound key
 does. No GPUI key binding is made: the key is part of the item's text.
 `About` and `Quit` are the only other actions; `Quit` sends the quit
-command to every window.
+command to every window. `About` opens the About dialog
+(`dialogs/about.rs`): the icon at 96px (`menus::icon::about_icon`), the
+version, the developer, and links to the repository and gpui.rs that open
+with `cx.open_url`. The TUI has no About, so there's no `Modal` for it: the
+`Shell` keeps whether it's open, draws it over the other overlays, and
+takes the keys while it is (esc, enter, `q` or space close it; others are
+dropped). `menus::build(app, about)` disables the command items meanwhile.
 
 Per platform (gpui-pre 0.3.9):
 
@@ -377,7 +383,8 @@ The window's title bar is always drawn by the app (`TitleBar` moves the
 window and, under client-side decorations such as GNOME on Wayland, draws
 its controls), with the app icon, the menus (not on macOS) and the title
 in it. The title bar's icon is `menus::icon::title_icon`, the PNG scaled
-down once to twice its 16px size (GPUI samples images without mipmaps);
+down once to twice its 16px size (GPUI samples images without mipmaps; the
+About dialog's `about_icon` is scaled the same way);
 the start window's title bar draws it too. The window's icon: on X11 through
 `WindowOptions::icon`, on Windows as the executable's icon resource
 (`build.rs`); Wayland and macOS take it from the packages
