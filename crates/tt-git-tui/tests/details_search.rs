@@ -3,7 +3,7 @@ use tt_git_tui::Config;
 use tt_git_tui::panes::PaneId;
 
 /// A commit adding `long.txt`, 60 lines with a needle on lines 10, 40 and
-/// 55, and `short.txt`, with one more.
+/// 55, `middle.txt` with none, and `short.txt`, with one more.
 fn needles() -> Sandbox {
     let sb = Sandbox::new();
     let long: String = (1..=60)
@@ -12,7 +12,9 @@ fn needles() -> Sandbox {
             _ => format!("hay {i}\n"),
         })
         .collect();
-    sb.write("long.txt", &long).write("short.txt", "a Needle\n");
+    sb.write("long.txt", &long)
+        .write("middle.txt", "hay\n")
+        .write("short.txt", "a Needle\n");
     sb.git(&["add", "."]);
     sb.commit_staged("add hay");
     sb
@@ -42,20 +44,37 @@ fn slash_searches_the_diff_and_n_steps_through_the_matches() {
     t.press("enter");
     assert!(title(&t).contains(" /needle 1/3"), "{}", title(&t));
 
-    // Keys are commands again: n and N go through the matches, round the end.
+    // Keys are commands again: n and N go through the matches.
     t.press("n");
     assert!(title(&t).contains(" /needle 2/3"), "{}", title(&t));
     assert!(shows(&t, "+needle 40"));
-    t.press("n").press("n");
-    assert!(title(&t).contains(" /needle 1/3"), "{}", title(&t));
-    assert_eq!(t.app().notice(), Some("search wrapped to the top"));
-    t.press("N");
+    t.press("n");
     assert!(title(&t).contains(" /needle 3/3"), "{}", title(&t));
-    assert_eq!(t.app().notice(), Some("search wrapped to the bottom"));
+    let file = |t: &TestDriver| t.app().details().selected_file().unwrap().path.clone();
+
+    // Past the file's last match, n goes on to the next file with one,
+    // loading the diffs on the way and passing middle.txt, which has none.
+    t.press("n").wait_idle();
+    assert_eq!(file(&t), "short.txt");
+    assert!(title(&t).contains(" /needle 1/1"), "{}", title(&t));
+    // And round from the last file to the first.
+    t.press("n").wait_idle();
+    assert_eq!(file(&t), "long.txt");
+    assert!(title(&t).contains(" /needle 1/3"), "{}", title(&t));
+    assert_eq!(t.app().notice(), Some("search wrapped to the first file"));
+    // N goes back the same way, to the previous file's last match.
+    t.press("N").wait_idle();
+    assert_eq!(file(&t), "short.txt");
+    assert_eq!(t.app().notice(), Some("search wrapped to the last file"));
+    t.press("N").wait_idle();
+    assert_eq!(file(&t), "long.txt");
+    assert!(title(&t).contains(" /needle 3/3"), "{}", title(&t));
+    assert!(shows(&t, "+needle 55"));
 
     // The search stays for the next file's diff, matching it afresh. A
     // capital would match case; this one doesn't have one.
-    t.press("j").wait_idle();
+    t.press("G").wait_idle();
+    assert_eq!(file(&t), "short.txt");
     assert!(title(&t).contains(" /needle 1 match"), "{}", title(&t));
     t.press("n");
     assert!(title(&t).contains(" /needle 1/1"), "{}", title(&t));
@@ -88,8 +107,13 @@ fn matches_are_marked_and_esc_goes_back() {
 
     t.press("/").type_text("zeta").press("enter");
     assert!(title(&t).contains(" /zeta no match"), "{}", title(&t));
-    t.press("n");
-    assert_eq!(t.app().notice(), Some("no match for /zeta"));
+    t.press("n").wait_idle();
+    assert_eq!(t.app().notice(), Some("no match for /zeta in any file"));
+    assert_eq!(
+        t.app().details().selected_file().unwrap().path,
+        "long.txt",
+        "back where it started"
+    );
 }
 
 #[test]
@@ -100,4 +124,7 @@ fn the_commit_view_is_searched_too() {
     t.press("/").type_text("^\\+a needle").press("enter");
     assert!(title(&t).contains(" /^\\+a needle 1/1"), "{}", title(&t));
     assert!(shows(&t, "+a Needle"));
+    // Outside the files view there's one text, so n goes round it.
+    t.press("n");
+    assert_eq!(t.app().notice(), Some("search wrapped to the top"));
 }

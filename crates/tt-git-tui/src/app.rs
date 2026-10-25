@@ -1054,7 +1054,8 @@ impl App {
                 text,
                 syntax,
             } => {
-                self.details.set_file_diff(&oid, &path, &text, syntax);
+                let ctx = self.ctx.clone();
+                self.details.set_file_diff(&oid, &path, &text, syntax, &ctx);
                 if let Some(next) = self.file_diff_job.finished(|(o, f)| *o == oid && f.path == path) {
                     self.spawn_file_diff(next);
                 }

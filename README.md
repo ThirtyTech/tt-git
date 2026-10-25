@@ -163,7 +163,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `o` | open the link in view with a plugin link handler |
 | | `e` | open the file in view in your editor, at the line at the top of the diff |
 | | `b` | blame the file in view as of that commit, at the line at the top of the diff |
-| | `/` | search the text shown with a regex, jumping as you type; `n` / `N` next / previous match |
+| | `/` | search the text shown with a regex, jumping as you type; `n` / `N` next / previous match, on through the files in the files view |
 | | `A` | ask an AI agent about the hunk at the top of the diff |
 | | `esc` `space` | close details |
 | staging | `j` / `k` | next / previous hunk (or changed line) |

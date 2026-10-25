@@ -59,6 +59,26 @@ impl LineSearch {
         &self.lines
     }
 
+    /// Whether there's a pattern to search for.
+    pub fn active(&self) -> bool {
+        self.regex.is_some()
+    }
+
+    pub fn pattern(&self) -> &str {
+        &self.pattern
+    }
+
+    /// The next matching line after `at`, or the one before it, without
+    /// going round past the end.
+    pub fn after(&self, at: usize, forward: bool) -> Option<usize> {
+        let lines = &self.lines;
+        if forward {
+            lines.get(lines.partition_point(|&l| l <= at)).copied()
+        } else {
+            lines[..lines.partition_point(|&l| l < at)].last().copied()
+        }
+    }
+
     /// Compiles the pattern: ignoring case unless it has a capital letter.
     fn compile(&mut self) {
         self.regex = None;
@@ -147,12 +167,7 @@ impl LineSearch {
             ctx.emit(Action::Notify(format!("no match for /{}", self.pattern)));
             return None;
         };
-        let to = if forward {
-            lines.get(lines.partition_point(|&l| l <= at)).copied()
-        } else {
-            lines[..lines.partition_point(|&l| l < at)].last().copied()
-        };
-        Some(to.unwrap_or_else(|| {
+        Some(self.after(at, forward).unwrap_or_else(|| {
             let why = if forward {
                 "search wrapped to the top"
             } else {

@@ -63,6 +63,30 @@ struct FilesView {
     marked: Option<(usize, usize, u32)>,
     /// Scroll the marked line a third of the way down at the next draw.
     center: bool,
+    /// `n` or `N` going on through the files for a match.
+    seek: Option<Seek>,
+}
+
+/// A search going on from file to file in the files view, for `n` (forward)
+/// or `N`, waiting on each diff that isn't loaded yet.
+#[derive(Debug, Clone, Copy)]
+struct Seek {
+    forward: bool,
+    /// The file it started in: back there, it has been through them all.
+    from: usize,
+    /// It went round past the last file (or the first).
+    wrapped: bool,
+}
+
+/// What the file a [`Seek`] reached says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SeekStep {
+    /// Its diff is still loading.
+    Wait,
+    /// It stopped: at a match, or with none in any file.
+    Done,
+    /// No match here; on to the next file.
+    Next,
 }
 
 /// Commit details or file diff for the current selection.
@@ -280,8 +304,8 @@ impl DetailsPane {
     }
 
     /// Stores a file's diff and its code, showing it if that file is still
-    /// selected.
-    pub fn set_file_diff(&mut self, oid: &str, path: &str, text: &str, syntax: LineTokens) {
+    /// selected, and goes on with a search through the files waiting on it.
+    pub fn set_file_diff(&mut self, oid: &str, path: &str, text: &str, syntax: LineTokens, ctx: &Ctx) {
         let Some(view) = &mut self.files else { return };
         if view.oid != oid {
             return;
@@ -305,7 +329,11 @@ impl DetailsPane {
                 view.center = true;
             }
         }
+        let seeking = idx == view.cursor.selected && view.seek.is_some();
         view.diffs.insert(idx, (lines, syntax));
+        if seeking && self.seek_check(ctx) == SeekStep::Next {
+            self.seek_on(ctx);
+        }
     }
 
     fn show_selected_file(&mut self, ctx: &Ctx) {
@@ -349,22 +377,113 @@ impl DetailsPane {
     }
 
     /// Goes to the next match, or the one before: after the one gone to
-    /// last if it's in view, otherwise from the top of the view.
+    /// last if it's in view, otherwise from the top of the view. In the
+    /// files view, past the diff's last match it goes on to the next file
+    /// with one (or back to the previous), round past the end.
     fn next_match(&mut self, forward: bool, ctx: &Ctx) {
         let (top, height) = (self.cursor.offset, self.cursor.height.max(1));
-        let at = match self.found.filter(|&f| (top..top + height).contains(&f)) {
-            Some(found) => found,
-            None if forward => {
-                if let Some(&first) = self.search.lines().iter().find(|&&l| l >= top) {
-                    return self.show_match(first);
+        let found = self.found.filter(|&f| (top..top + height).contains(&f));
+        let Some(view) = &mut self.files else {
+            let at = match found {
+                Some(found) => found,
+                None if forward => {
+                    if let Some(&first) = self.search.lines().iter().find(|&&l| l >= top) {
+                        return self.show_match(first);
+                    }
+                    top
                 }
-                top
+                None => top,
+            };
+            if let Some(row) = self.search.step(at, forward, ctx) {
+                self.show_match(row);
             }
-            None => top,
+            return;
         };
-        if let Some(row) = self.search.step(at, forward, ctx) {
-            self.show_match(row);
+        if view.seek.is_some() {
+            // Still waiting on a diff.
+            return;
         }
+        if !self.search.active() {
+            ctx.emit(Action::Notify("nothing to search for yet".into()));
+            return;
+        }
+        let next = match found {
+            Some(found) => self.search.after(found, forward),
+            None if forward => self.search.lines().iter().find(|&&l| l >= top).copied(),
+            None => self.search.after(top, false),
+        };
+        if let Some(row) = next {
+            return self.show_match(row);
+        }
+        view.seek = Some(Seek {
+            forward,
+            from: view.cursor.selected,
+            wrapped: false,
+        });
+        self.seek_on(ctx);
+    }
+
+    /// Moves the seek on a file at a time, showing each, until one has a
+    /// match or a diff to wait for.
+    fn seek_on(&mut self, ctx: &Ctx) {
+        loop {
+            let Some(view) = &mut self.files else { return };
+            let n = view.files.len();
+            let Some(seek) = &mut view.seek else { return };
+            if n == 0 {
+                view.seek = None;
+                return;
+            }
+            let at = view.cursor.selected;
+            let next = if seek.forward { (at + 1) % n } else { (at + n - 1) % n };
+            if (seek.forward && next <= at) || (!seek.forward && next >= at) {
+                seek.wrapped = true;
+            }
+            view.cursor.selected = next;
+            self.show_selected_file(ctx);
+            if self.seek_check(ctx) != SeekStep::Next {
+                return;
+            }
+        }
+    }
+
+    /// Where the seek stands with the file it reached shown: at its first
+    /// match (last, going back), or back where it started with no match
+    /// anywhere.
+    fn seek_check(&mut self, ctx: &Ctx) -> SeekStep {
+        let Some(view) = &mut self.files else {
+            return SeekStep::Done;
+        };
+        let Some(seek) = view.seek else { return SeekStep::Done };
+        let at = view.cursor.selected;
+        if !view.diffs.contains_key(&at) {
+            return SeekStep::Wait;
+        }
+        let lines = self.search.lines();
+        let row = if seek.forward { lines.first() } else { lines.last() };
+        if let Some(&row) = row {
+            view.seek = None;
+            if seek.wrapped {
+                let why = match (view.files.len(), seek.forward) {
+                    (1, true) => "search wrapped to the top",
+                    (1, false) => "search wrapped to the bottom",
+                    (_, true) => "search wrapped to the first file",
+                    (_, false) => "search wrapped to the last file",
+                };
+                ctx.emit(Action::Notify(why.into()));
+            }
+            self.show_match(row);
+            return SeekStep::Done;
+        }
+        if at == seek.from {
+            view.seek = None;
+            ctx.emit(Action::Notify(format!(
+                "no match for /{} in any file",
+                self.search.pattern()
+            )));
+            return SeekStep::Done;
+        }
+        SeekStep::Next
     }
 
     /// The file shown and the line at the top of the view, to open in an
@@ -866,6 +985,9 @@ impl Component for DetailsPane {
             Command::Search => {
                 self.search = LineSearch::start(self.cursor.offset);
                 self.found = None;
+                if let Some(view) = &mut self.files {
+                    view.seek = None;
+                }
                 return EventState::Consumed;
             }
             Command::SearchNext | Command::SearchPrev => {
@@ -882,6 +1004,7 @@ impl Component for DetailsPane {
             )
         {
             let before = view.cursor.selected;
+            view.seek = None;
             view.cursor.apply(cmd, view.files.len());
             if view.cursor.selected != before {
                 self.show_selected_file(ctx);
@@ -943,6 +1066,7 @@ impl Component for DetailsPane {
             return false;
         }
         let before = view.cursor.selected;
+        view.seek = None;
         let row = (pos.y - view.rows_area.y) as usize;
         if view.cursor.click(row, view.files.len()) && view.cursor.selected != before {
             self.show_selected_file(ctx);
