@@ -143,9 +143,9 @@ impl App {
 
     /// Runs the agent in a pane in place of details, and focuses it.
     fn open_agent_pane(&mut self, argv: &[String], title: &str) -> Result<(), String> {
-        // GUI: sizes the PTY from the details rect as terminal cells (minus
-        // the border). The GUI reports pixels; convert with font metrics.
+        // Sizes the PTY from the details rect, in cells of `cell_size`.
         let (_, details) = self.layout_rects;
+        let (rows, cols) = crate::view::terminal::pty_size(details, self.cell_size);
         let id = self.next_pane_id;
         self.next_pane_id += 1;
         let pane = PtyPane::spawn_command(
@@ -154,8 +154,8 @@ impl App {
             title,
             argv,
             self.repo.root(),
-            details.height.saturating_sub(2).max(5),
-            details.width.saturating_sub(2).max(20),
+            rows,
+            cols,
             self.ctx.clone(),
         )?;
         // One split at a time: it takes the details pane's place.

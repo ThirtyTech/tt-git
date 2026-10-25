@@ -290,6 +290,11 @@ impl PtyPane {
         }
     }
 
+    /// The pseudo-terminal's size: rows, then columns.
+    pub fn size(&self) -> (u16, u16) {
+        self.size
+    }
+
     /// Resizes the pseudo-terminal and its screen to `rows` by `cols`.
     pub fn resize(&mut self, rows: u16, cols: u16) {
         if (rows, cols) == self.size || rows == 0 || cols == 0 {
