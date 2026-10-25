@@ -195,6 +195,7 @@ switch. If the switch fails, it runs `git stash pop` to put the changes back
 | Push | `git push`, or `git push -u <remote> HEAD` the first time, to set the upstream |
 | Cherry-pick | `git cherry-pick <commit>`; a range is `git cherry-pick <oldest> … <newest>` in one call, so `--continue` applies the rest after a conflict |
 | Revert | `git revert --no-edit <commit>`, with `-m <parent>` for a merge commit |
+| Reset | `git rev-list --count <target>..HEAD` and `git diff --name-only HEAD` first, for what a hard reset would lose; then `git reset -q --<mode> <target>` (`--soft`, `--mixed` or `--hard`) with `GIT_REFLOG_ACTION` set to `reset --<mode> <target>`, so the reflog says which mode it was |
 | Rebase | `git -c core.editor=: rebase <onto>`, non-interactive |
 | Copy | OSC 52 escape sequence to the terminal, which also works over SSH |
 
@@ -330,7 +331,9 @@ moves `HEAD` runs with `GIT_REFLOG_ACTION` set to the marker:
 | Step | Runs |
 |---|---|
 | Back over your own commit or amend (`commit:` or `commit (amend):` in the reflog) | `git reset --soft <commit>`: the index and files stay as they are |
-| Back over anything else on the current branch | `git reset --keep <commit>` |
+| Back over a soft reset made in tt-git (`reset --soft …` in the reflog) | `git reset --soft <commit>` |
+| Back over a mixed reset made in tt-git (`reset --mixed …`) | `git reset -q --mixed <commit>`: the files stay as they are |
+| Back over anything else on the current branch, a hard reset included | `git reset --keep <commit>` |
 | Back to a branch | `git switch <branch>` |
 | Back to a detached commit | `git switch --detach <commit>` |
 | Back over a rebase of another branch | `git switch <branch you were on>`, then `git update-ref refs/heads/<rebased> <before> <rebased commit>` |

@@ -9,7 +9,7 @@ import { Aside, Steps } from '@astrojs/starlight/components';
 The graph is tt-git's main view. It shows the history of every branch, remote branch and tag as one
 GitLens-style graph, newest commit first, with one row per commit. Branches keep their column from
 top to bottom, so you can follow a line by eye. From here you open a commit's details, filter the
-history down to one author or one file, and start a branch, merge, rebase, cherry-pick or revert at the
+history down to one author or one file, and start a branch, merge, rebase, cherry-pick, revert or reset at the
 selected commit. Press <kbd>1</kbd> to focus it from anywhere.
 
 Working on one part of a large repository, such as a project in a monorepo or the docs? Start tt-git
@@ -271,6 +271,7 @@ These keys act on the selected commit:
 | <kbd>r</kbd> | Rebases the current branch onto the commit, after asking. |
 | <kbd>C</kbd> | Cherry-picks the commit onto the current branch, after asking. With a [range selected](#cherry-picking-several-commits), cherry-picks every commit in it. |
 | <kbd>R</kbd> | Reverts the commit: a new commit that undoes it, after asking. For a merge commit it asks which parent's side to keep. See [Revert](/git/merge-rebase/#revert). |
+| <kbd>X</kbd> | Resets the current branch to the commit: soft, mixed or hard. Hard asks first and says what's lost. See [Reset](/git/reset/). |
 | <kbd>v</kbd> | Starts or ends a range of commits. See [Cherry-picking several commits](#cherry-picking-several-commits). |
 | <kbd>c</kbd> | Copies the full commit hash to the clipboard. |
 | <kbd>A</kbd> | Asks an AI agent about the commit, or starts a ready-made request such as *Explain branch*. See [Agent actions](/git/agents/). |
@@ -362,6 +363,7 @@ See [How tt-git uses git](/reference/how-it-works/#graph) for the details, and
 | <kbd>r</kbd> | Rebase the current branch onto it |
 | <kbd>C</kbd> | Cherry-pick (every commit in the range, if one is selected) |
 | <kbd>R</kbd> | Revert the commit |
+| <kbd>X</kbd> | Reset the current branch to the commit (soft, mixed or hard) |
 | <kbd>v</kbd> | Start or end a range of commits |
 | <kbd>c</kbd> | Copy the commit hash |
 | <kbd>A</kbd> | Ask an AI agent about the commit |

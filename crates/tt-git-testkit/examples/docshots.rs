@@ -57,6 +57,8 @@ fn main() {
         ("graph-new-branch", &["j", "n", "text:fix/bell-a11y"]),
         ("graph-new-worktree", &["j", "n", "tab", "text:fix/bell-a11y"]),
         ("graph-merge-confirm", &["j", "j", "j", "j", "j", "M"]),
+        ("graph-reset", &["j", "j", "j", "X"]),
+        ("graph-reset-hard", &["j", "j", "j", "X", "text:hard", "enter"]),
         (
             "graph-cherry-pick-range",
             &["j", "j", "j", "j", "j", "v", "j", "j", "C"],

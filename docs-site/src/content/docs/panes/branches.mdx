@@ -296,6 +296,13 @@ pane](/panes/status/#merges-rebases-and-cherry-picks-in-progress) shows them
 and how to continue or abort. See [Merge, rebase and
 cherry-pick](/git/merge-rebase/).
 
+## Resetting to a branch
+
+<kbd>X</kbd> resets the current branch to the selected one: soft, mixed or
+hard. On the checked-out branch it resets to its remote branch, such as
+`origin/main`, which is how you throw away local commits and match the
+remote. Hard asks first and says what's lost. See [Reset](/git/reset/).
+
 ## Copying the name
 
 <kbd>c</kbd> copies the branch name to the clipboard. It uses the terminal's
@@ -318,6 +325,7 @@ OSC 52 clipboard support, so it also works over SSH.
 | <kbd>b</kbd> | Pick the base branch for the Unmerged, Merged and Tags tabs |
 | <kbd>M</kbd> | Merge the selection into the current branch |
 | <kbd>r</kbd> | Rebase the current branch onto the selection |
+| <kbd>X</kbd> | Reset the current branch to the selection (on the checked-out branch: to its remote branch) |
 | <kbd>c</kbd> | Copy the branch name |
 
 The keys that work everywhere ([push, pull](/git/remotes/), focus, zoom)
