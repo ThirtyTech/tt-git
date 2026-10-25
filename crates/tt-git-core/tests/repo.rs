@@ -1,5 +1,6 @@
 use tt_git_core::{
-    BranchHistory, FileState, GitCli, GitError, Head, LogFilter, LogScope, Recency, RefKind, Repo, message_prefixes,
+    BranchHistory, FileState, GitCli, GitError, Head, LogFilter, LogScope, Recency, RefKind, Repo, SearchIn,
+    message_prefixes,
 };
 use tt_git_testkit::{BASE_TIME, Sandbox};
 
@@ -486,6 +487,7 @@ fn filters_commits_by_author_and_path() {
         author: Some(alice.into()),
         path: None,
         message: None,
+        search_in: SearchIn::Subject,
     };
     let commits = repo.filtered_commits(&LogScope::All, &by_alice, 100).unwrap();
     let mut got = oids(&commits);
@@ -504,6 +506,7 @@ fn filters_commits_by_author_and_path() {
         author: None,
         path: Some("src".into()),
         message: None,
+        search_in: SearchIn::Subject,
     };
     let commits = repo.filtered_commits(&LogScope::All, &in_src, 100).unwrap();
     assert_eq!(oids(&commits), vec![a2.clone(), a1.clone()]);
@@ -513,6 +516,7 @@ fn filters_commits_by_author_and_path() {
         author: Some(alice.into()),
         path: Some("c.txt".into()),
         message: None,
+        search_in: SearchIn::Subject,
     };
     assert_eq!(
         oids(&repo.filtered_commits(&LogScope::All, &both, 100).unwrap()),
@@ -524,6 +528,7 @@ fn filters_commits_by_author_and_path() {
         author: Some("Bob <bob@example.com>".into()),
         path: None,
         message: None,
+        search_in: SearchIn::Subject,
     };
     assert!(repo.filtered_commits(&LogScope::All, &nobody, 100).unwrap().is_empty());
 
@@ -562,6 +567,7 @@ feat in the body doesn't count",
             author: author.map(Into::into),
             path: None,
             message: Some(message.into()),
+            search_in: SearchIn::Subject,
         };
         let mut got: Vec<String> = repo
             .filtered_commits(&LogScope::All, &filter, limit)
@@ -596,6 +602,77 @@ feat in the body doesn't count",
     };
     let err = repo.filtered_commits(&LogScope::All, &bad, 100).unwrap_err();
     assert!(err.to_string().starts_with("invalid regex"), "{err}");
+}
+
+#[test]
+fn filters_commits_by_whole_message_or_diff() {
+    let sb = Sandbox::new();
+    let subject = sb.commit_file(
+        "a.txt",
+        "one
+",
+        "feat: Search the body",
+    );
+    let body = sb.commit_file(
+        "b.txt",
+        "fn parse_body() {}
+",
+        "fix: Mend it
+
+The feat in the body counts.
+
+Co-authored-by: Ann <ann@example.com>",
+    );
+    let removed = sb.commit_file("b.txt", "", "chore: Drop the parser");
+    let repo = open(&sb);
+    let matching = |search_in: SearchIn, pattern: &str| {
+        let filter = LogFilter {
+            message: Some(pattern.into()),
+            search_in,
+            ..LogFilter::default()
+        };
+        let commits = repo.filtered_commits(&LogScope::All, &filter, 100).unwrap();
+        let summaries: Vec<String> = commits.iter().map(|c| c.summary.to_string()).collect();
+        let oids: Vec<String> = commits.into_iter().map(|c| c.oid.to_string()).collect();
+        (oids, summaries)
+    };
+
+    assert_eq!(matching(SearchIn::Subject, "feat").0, vec![subject.clone()]);
+    let (oids, summaries) = matching(SearchIn::Message, "feat");
+    assert_eq!(oids, vec![body.clone(), subject.clone()]);
+    assert_eq!(summaries, ["fix: Mend it", "feat: Search the body"], "subjects only");
+    // Multi-line: ^ matches a trailer's line, and still the subject.
+    assert_eq!(
+        matching(SearchIn::Message, "^co-authored-by: ann").0,
+        vec![body.clone()]
+    );
+    assert_eq!(matching(SearchIn::Message, "^fix").0, vec![body.clone()]);
+    assert_eq!(
+        matching(SearchIn::Message, "^Co-authored-by: Ann").0,
+        vec![body.clone()]
+    );
+    assert!(
+        matching(SearchIn::Message, "^Co-Authored-By").0.is_empty(),
+        "a capital matches case"
+    );
+
+    // The diff: lines added or removed, as git log -G finds them.
+    assert_eq!(
+        matching(SearchIn::Diff, "parse_body").0,
+        vec![removed.clone(), body.clone()]
+    );
+    assert_eq!(
+        matching(SearchIn::Diff, "PARSE_BODY").0,
+        Vec::<String>::new(),
+        "a capital matches case"
+    );
+    assert_eq!(matching(SearchIn::Diff, "parse_bo(d|x)y").0.len(), 2, "extended regex");
+    let one = LogFilter {
+        message: Some("parse_body".into()),
+        search_in: SearchIn::Diff,
+        ..LogFilter::default()
+    };
+    assert_eq!(repo.filtered_commits(&LogScope::All, &one, 1).unwrap().len(), 1);
 }
 
 #[test]
@@ -677,6 +754,7 @@ fn author_filter_includes_every_mailmapped_account() {
         author: Some("Jon Sheely <jon@work.com>".into()),
         path: None,
         message: None,
+        search_in: SearchIn::Subject,
     };
     let mut got: Vec<String> = repo
         .filtered_commits(&LogScope::All, &filter, 100)

@@ -28,15 +28,17 @@ pub enum LogScope {
     Head { upstream: Option<String> },
 }
 
-/// Narrows a log to some of its commits. Both parts must match.
+/// Narrows a log to some of its commits. Every part set must match.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LogFilter {
     /// `Name <email>` as [`Repo::authors`] lists it (after `.mailmap`).
     pub author: Option<String>,
     /// A path or pathspec; commits that didn't change it are left out.
     pub path: Option<String>,
-    /// A regex the subject must match; see [`message_regex`].
+    /// A regex for what `search_in` names; see [`message_regex`].
     pub message: Option<String>,
+    /// What `message` is matched against.
+    pub search_in: SearchIn,
 }
 
 impl LogFilter {
@@ -45,11 +47,56 @@ impl LogFilter {
     }
 }
 
+/// What a [`LogFilter::message`] regex is matched against.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum SearchIn {
+    /// The subject line.
+    #[default]
+    Subject,
+    /// The whole message, `^` and `$` matching at each line.
+    Message,
+    /// Lines the commit adds or removes, as `git log -G` finds them: the
+    /// pattern is git's POSIX extended regex.
+    Diff,
+}
+
+impl SearchIn {
+    pub const ALL: [SearchIn; 3] = [SearchIn::Subject, SearchIn::Message, SearchIn::Diff];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            SearchIn::Subject => "subject",
+            SearchIn::Message => "message",
+            SearchIn::Diff => "diff",
+        }
+    }
+
+    /// The next choice, round again after the last.
+    pub fn next(self) -> Self {
+        Self::ALL[(self as usize + 1) % Self::ALL.len()]
+    }
+}
+
 /// Compiles a [`LogFilter::message`] pattern: ignoring case unless it has
 /// a capital letter.
 pub fn message_regex(pattern: &str) -> Result<Regex, regex::Error> {
-    let ignore_case = !pattern.chars().any(char::is_uppercase);
-    RegexBuilder::new(pattern).case_insensitive(ignore_case).build()
+    RegexBuilder::new(pattern)
+        .case_insensitive(ignores_case(pattern))
+        .build()
+}
+
+/// Whether a search for `pattern` ignores case: when it has no capital letter.
+pub fn ignores_case(pattern: &str) -> bool {
+    !pattern.chars().any(char::is_uppercase)
+}
+
+/// [`message_regex`] for searching `search_in`: multi-line for the whole
+/// message.
+fn message_matcher(pattern: &str, search_in: SearchIn) -> Result<Regex, regex::Error> {
+    RegexBuilder::new(pattern)
+        .case_insensitive(ignores_case(pattern))
+        .multi_line(search_in == SearchIn::Message)
+        .build()
 }
 
 /// The `limit` subject prefixes used most in `summaries`, as message filter
@@ -724,15 +771,33 @@ impl Repo {
     /// commit that changed the path, and an author or message filter keeps
     /// the real ones, so they may name commits not in the result.
     pub fn filtered_commits(&self, scope: &LogScope, filter: &LogFilter, limit: usize) -> Result<Vec<Commit>> {
-        let message = match filter.message.as_deref().map(message_regex).transpose() {
+        let diff = filter.message.as_deref().filter(|_| filter.search_in == SearchIn::Diff);
+        let pattern = filter.message.as_deref().filter(|_| diff.is_none());
+        let message = match pattern.map(|p| message_matcher(p, filter.search_in)).transpose() {
             Ok(message) => message,
             Err(e) => return Err(GitError::Refused(format!("invalid regex: {e}"))),
         };
+        let whole = filter.search_in == SearchIn::Message && message.is_some();
         let mut args = topo_log_args(limit);
+        if whole {
+            // The raw message after the subject; see `parse::split_message`.
+            let format = args
+                .iter_mut()
+                .find(|a| a.starts_with("--format="))
+                .expect("has a format");
+            format.push_str(parse::MESSAGE_FIELD);
+        }
         if message.is_some() {
-            // The subject is matched here, so git lists everything and the
+            // The message is matched here, so git lists everything and the
             // limit counts only the commits that match.
             args.retain(|a| !a.starts_with("--max-count="));
+        }
+        if let Some(pattern) = diff {
+            // git matches the lines each commit adds or removes.
+            args.push(format!("-G{pattern}"));
+            if ignores_case(pattern) {
+                args.push("--regexp-ignore-case".into());
+            }
         }
         if let Some(author) = &filter.author {
             // --use-mailmap so the match is against the mapped identity
@@ -753,8 +818,18 @@ impl Repo {
         args.push("--".into());
         args.extend(filter.path.clone());
         let mut commits = Vec::new();
-        self.stream_log(&args, |c| {
-            if message.as_ref().is_none_or(|re| re.is_match(&c.summary)) {
+        self.stream_log(&args, |mut c| {
+            let matched = match &message {
+                None => true,
+                Some(re) if whole => {
+                    let (summary, raw) = parse::split_message(&c.summary);
+                    let matched = re.is_match(raw);
+                    c.summary = summary.into();
+                    matched
+                }
+                Some(re) => re.is_match(&c.summary),
+            };
+            if matched {
                 commits.push(c);
             }
             commits.len() < limit

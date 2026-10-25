@@ -75,6 +75,39 @@ Each file's diff loads when you pick it, and stays cached while the view is open
 another commit in the graph, details stays in the files view and the old list stays up until the new
 one arrives, so the layout doesn't jump.
 
+## Searching the diff
+
+<Screenshot name="details-search" alt="A commit's diff searched for items, the matches highlighted and the second of five picked out, with /items 2/5 in the title" />
+
+Press <kbd>/</kbd> in details to search what it shows for a regex: a commit's message and diff, a
+stash, a file's diff, or in the files view the selected file's diff. The title shows the search as
+you type, like `[4] Commit 59f1c2a /parse 2/7`.
+
+<Steps>
+
+1. Press <kbd>/</kbd> and type. Each letter jumps to the first matching line from where you were,
+   a third of the way down the view.
+2. Press <kbd>enter</kbd> to keep the search, or <kbd>esc</kbd> to drop it and go back to where you
+   started.
+3. Press <kbd>n</kbd> for the next matching line and <kbd>N</kbd> for the one before. Past the last
+   match it goes round to the first, and the help bar says `search wrapped to the top`.
+
+</Steps>
+
+- **Matches** are highlighted in yellow, and the line <kbd>n</kbd> or <kbd>N</kbd> went to is picked
+  out. The title says which match it is, of how many: `2/7`, or `7 matches` when you've scrolled
+  away from it, or `no match`.
+- **Case** is ignored unless the regex has a capital letter, as in [blame](/panes/blame/).
+- **Each line** is matched on its own, as shown, `+` or `-` included: `^\+.*todo` finds added lines
+  with a todo.
+- **The search stays** when the text changes: pick another file in the files view or step to
+  another commit with <kbd>]</kbd> <kbd>[</kbd>, and it finds its matches in the new diff, so
+  <kbd>n</kbd> goes on from there. Press <kbd>/</kbd> and <kbd>enter</kbd> on an empty box to drop it.
+- After scrolling, <kbd>n</kbd> starts from the top of the view rather than the last match.
+
+To find the commits whose diff mentions something in the first place, filter the graph with
+<kbd>/</kbd> and <kbd>ctrl+t</kbd> to [search the diff](/panes/graph/#filtering-by-message).
+
 ## Fullscreen files and diff
 
 <Screenshot name="details-fullscreen" alt="A commit opened fullscreen with the changed files on the left and the diff on the right" />
@@ -209,6 +242,8 @@ says `no plugin handles …` rather than guessing which program should open it.
 | <kbd>o</kbd> | Open the link in view with a plugin |
 | <kbd>e</kbd> | Open the file in view in your editor |
 | <kbd>b</kbd> | [Blame](/panes/blame/) the file in view, as of the commit |
+| <kbd>/</kbd> | [Search](#searching-the-diff) the text shown for a regex |
+| <kbd>n</kbd> <kbd>N</kbd> | Next / previous match |
 | <kbd>esc</kbd> <kbd>space</kbd> | Close details |
 | <kbd>+</kbd> | Fullscreen and back |
 

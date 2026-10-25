@@ -478,6 +478,7 @@ mod tests {
             author: None,
             path: Some("src/".into()),
             message: None,
+            ..LogFilter::default()
         };
         let mut p = FilterPanel::new(current, None);
         assert_eq!(p.tab(), FilterTab::File, "opens on the part that's set");
@@ -497,6 +498,7 @@ mod tests {
                 author: Some("Alice <alice@x.io>".into()),
                 path: Some("src/".into()),
                 message: None,
+                ..LogFilter::default()
             })
         );
     }
@@ -534,6 +536,7 @@ mod tests {
                 author: None,
                 path: Some("gone/old.rs".into()),
                 message: None,
+                ..LogFilter::default()
             })
         );
     }
@@ -568,6 +571,7 @@ mod tests {
                 author: None,
                 path: Some("src/app/".into()),
                 message: None,
+                ..LogFilter::default()
             })
         );
     }
@@ -578,6 +582,7 @@ mod tests {
             author: Some("Bob <bob@x.io>".into()),
             path: Some("a.txt".into()),
             message: None,
+            ..LogFilter::default()
         };
         let mut p = FilterPanel::new(current, None);
         p.set_choices(
@@ -591,6 +596,7 @@ mod tests {
                 author: None,
                 path: Some("a.txt".into()),
                 message: None,
+                ..LogFilter::default()
             })
         );
         assert_eq!(p.handle_key(k("esc")), ModalOutcome::Cancelled);

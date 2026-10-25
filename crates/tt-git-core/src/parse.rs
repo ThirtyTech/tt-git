@@ -17,6 +17,16 @@ pub const FS: char = '\u{1f}';
 /// Records are NUL-terminated (`-z`), fields separated by [`FS`].
 pub const LOG_FORMAT: &str = "--format=%H%x1f%P%x1f%aN%x1f%aE%x1f%at%x1f%ct%x1f%s";
 
+/// Added to [`LOG_FORMAT`] for the raw message (`%B`), which then follows
+/// the subject in [`Commit::summary`] until [`split_message`] takes it off.
+pub const MESSAGE_FIELD: &str = "%x1f%B";
+
+/// The subject and the raw message from the summary of a commit logged
+/// with [`MESSAGE_FIELD`].
+pub fn split_message(summary: &str) -> (&str, &str) {
+    summary.split_once(FS).unwrap_or((summary, summary))
+}
+
 /// Parses one record of [`LOG_FORMAT`].
 pub fn parse_commit(record: &[u8]) -> Result<Commit, GitError> {
     parse_commit_interned(record, &mut Idents::default())

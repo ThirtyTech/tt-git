@@ -8,7 +8,6 @@
 //! the next and previous matching line.
 
 use std::collections::HashMap;
-use std::ops::Range;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use crossterm::event::{KeyCode, KeyModifiers};
@@ -17,7 +16,6 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Color, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
-use regex::{Regex, RegexBuilder};
 use tt_git_core::time::{SharedClock, clock_time, relative};
 use tt_git_core::{Blame, BlameCommit, Recency, follow_line};
 
@@ -27,6 +25,7 @@ use crate::component::EventState;
 use crate::editor::EditTarget;
 use crate::jobs::Ctx;
 use crate::keymap::{Command, KeyCombo};
+use crate::search::{LineSearch, SearchKey};
 use crate::syntax::LineTokens;
 use crate::theme::Theme;
 use crate::widgets::{Cursor, expand_tabs, fit, fit_right, marked_code_spans};
@@ -177,45 +176,6 @@ impl Level {
     }
 }
 
-/// A search through the code, typed after `/`.
-#[derive(Debug, Default)]
-struct Search {
-    pattern: String,
-    /// `pattern` compiled; `None` while it's empty or doesn't compile.
-    regex: Option<Regex>,
-    /// Why `pattern` doesn't compile.
-    invalid: Option<String>,
-    /// Keys go to the pattern.
-    typing: bool,
-    /// The line (index) the search was started from, to come back to.
-    origin: usize,
-    /// The lines (indices) that match, in the version shown.
-    lines: Vec<usize>,
-}
-
-impl Search {
-    /// Compiles the pattern: ignoring case unless it has a capital letter.
-    fn compile(&mut self) {
-        self.regex = None;
-        self.invalid = None;
-        if self.pattern.is_empty() {
-            return;
-        }
-        let ignore_case = !self.pattern.chars().any(char::is_uppercase);
-        match RegexBuilder::new(&self.pattern).case_insensitive(ignore_case).build() {
-            Ok(regex) => self.regex = Some(regex),
-            Err(e) => self.invalid = Some(e.to_string()),
-        }
-    }
-
-    /// Where it matches `text`, leaving out empty matches.
-    fn ranges(&self, text: &str) -> Vec<Range<usize>> {
-        self.regex.as_ref().map_or_else(Vec::new, |r| {
-            r.find_iter(text).filter(|m| !m.is_empty()).map(|m| m.range()).collect()
-        })
-    }
-}
-
 /// The blame view for one file.
 #[derive(Debug)]
 pub struct BlameView {
@@ -231,7 +191,7 @@ pub struct BlameView {
     count: Option<usize>,
     /// The count for the command the last key resolves to.
     pending: Option<usize>,
-    search: Search,
+    search: LineSearch,
 }
 
 impl BlameView {
@@ -256,7 +216,7 @@ impl BlameView {
             messages: HashMap::new(),
             count: None,
             pending: None,
-            search: Search::default(),
+            search: LineSearch::default(),
         }
     }
 
@@ -577,13 +537,7 @@ impl BlameView {
                 Ok(target) => Action::OpenInEditor(target),
                 Err(why) => Action::Notify(why),
             }),
-            Command::Search => {
-                self.search = Search {
-                    typing: true,
-                    origin: self.level().cursor.selected,
-                    ..Search::default()
-                };
-            }
+            Command::Search => self.search = LineSearch::start(self.level().cursor.selected),
             Command::SearchNext => self.next_match(true, ctx),
             Command::SearchPrev => self.next_match(false, ctx),
             _ => {
@@ -600,114 +554,44 @@ impl BlameView {
     /// The search for the title: ` /pattern█` while it's typed, then which
     /// matching line is selected, of how many.
     pub fn search_title(&self) -> Option<String> {
-        let search = &self.search;
-        if !search.typing && search.pattern.is_empty() {
-            return None;
-        }
-        let mut title = format!(" /{}", search.pattern);
-        if search.typing {
-            title.push('█');
-        }
-        if search.invalid.is_some() {
-            title.push_str(" invalid regex");
-        } else if search.regex.is_some() && !self.loading() {
-            let count = search.lines.len();
-            match search.lines.binary_search(&self.level().cursor.selected) {
-                _ if count == 0 => title.push_str(" no match"),
-                Ok(i) => title.push_str(&format!(" {}/{count}", i + 1)),
-                Err(_) if count == 1 => title.push_str(" 1 match"),
-                Err(_) => title.push_str(&format!(" {count} matches")),
-            }
-        }
-        Some(title)
+        self.search.title(Some(self.level().cursor.selected), !self.loading())
     }
 
     /// Whether the search is being typed.
     pub fn searching(&self) -> bool {
-        self.search.typing
+        self.search.typing()
     }
 
     /// A key while the search is typed: each change jumps to the first
     /// match from where the search started.
     pub fn on_search_key(&mut self, key: KeyCombo, ctx: &Ctx) {
-        match key.code {
-            KeyCode::Enter => {
-                self.search.typing = false;
-                if let Some(why) = self.search.invalid.take() {
-                    ctx.emit(Action::Notify(format!("invalid regex: {why}")));
-                    self.search = Search::default();
-                } else if self.search.pattern.is_empty() {
-                    self.search = Search::default();
-                }
-                return;
+        match self.search.on_key(key, ctx) {
+            SearchKey::Changed => {
+                self.find_matches();
+                let to = self.search.landing();
+                self.select(to, ctx);
             }
-            KeyCode::Esc => {
-                let origin = self.search.origin;
-                self.search = Search::default();
-                self.select(origin, ctx);
-                return;
-            }
-            KeyCode::Backspace => {
-                self.search.pattern.pop();
-            }
-            KeyCode::Char(c) => self.search.pattern.push(c),
-            _ => return,
+            SearchKey::Cancelled(origin) => self.select(origin, ctx),
+            SearchKey::Done => {}
         }
-        self.search.compile();
-        self.find_matches();
-        let origin = self.search.origin;
-        let lines = &self.search.lines;
-        let to = lines
-            .get(lines.partition_point(|&l| l < origin))
-            .or(lines.first())
-            .copied()
-            .unwrap_or(origin);
-        self.select(to, ctx);
     }
 
     /// Works out which lines of the version shown match the search.
     fn find_matches(&mut self) {
-        let lines = match (&self.search.regex, self.level().blame()) {
-            (Some(regex), Some(blame)) => blame
-                .lines
-                .iter()
-                .enumerate()
-                .filter(|(_, l)| regex.is_match(&l.text))
-                .map(|(i, _)| i)
-                .collect(),
-            _ => Vec::new(),
-        };
-        self.search.lines = lines;
+        let shown = self.shown();
+        let texts = self.levels[shown]
+            .blame()
+            .into_iter()
+            .flat_map(|b| b.lines.iter().map(|l| l.text.as_str()));
+        self.search.find(texts);
     }
 
     /// Goes to the next matching line after the selected one, or the one
     /// before it, round past the end.
     fn next_match(&mut self, forward: bool, ctx: &Ctx) {
-        if self.search.regex.is_none() {
-            ctx.emit(Action::Notify("nothing to search for yet".into()));
-            return;
+        if let Some(to) = self.search.step(self.level().cursor.selected, forward, ctx) {
+            self.select(to, ctx);
         }
-        let lines = &self.search.lines;
-        let (Some(&first), Some(&last)) = (lines.first(), lines.last()) else {
-            ctx.emit(Action::Notify(format!("no match for /{}", self.search.pattern)));
-            return;
-        };
-        let selected = self.level().cursor.selected;
-        let to = if forward {
-            lines.get(lines.partition_point(|&l| l <= selected)).copied()
-        } else {
-            lines[..lines.partition_point(|&l| l < selected)].last().copied()
-        };
-        let to = to.unwrap_or_else(|| {
-            let why = if forward {
-                "search wrapped to the top"
-            } else {
-                "search wrapped to the bottom"
-            };
-            ctx.emit(Action::Notify(why.into()));
-            if forward { first } else { last }
-        });
-        self.select(to, ctx);
     }
 
     /// Selects line `index`, bringing it a third of the way down when it's

@@ -212,12 +212,24 @@ says `no commits match the filter (f or / to change it, esc to clear it)`.
 
 ## Filtering by message
 
-<Screenshot name="graph-filter-message" alt="The Filter commits by message prompt with its row of presets" />
+<Screenshot name="graph-filter-message" alt="The Filter commits by message prompt with its search-in choices and row of presets" />
 
 Press <kbd>/</kbd> to open **Filter commits by message**. Type a regex, press <kbd>enter</kbd>, and
 the graph shows only the commits whose subject (the first line of the message) matches it. It's
 built for [conventional commit](https://www.conventionalcommits.org/) prefixes: `^feat` shows the
 features, `^(fix|perf)` the fixes and speedups, `^docs\(graph\)` the graph's docs.
+
+Press <kbd>ctrl+t</kbd> in the prompt to change what the regex searches. The top row,
+`Search in: Subject · Whole message · Diff`, underlines the choice, and each <kbd>ctrl+t</kbd> moves
+on to the next, round from **Diff** to **Subject**:
+
+| Search in | Finds the commits whose |
+|---|---|
+| **Subject** | first line matches. The default. |
+| **Whole message** | message matches anywhere: subject, body or trailers. `^` and `$` match at the start and end of each line, so `^Co-authored-by: Ann` finds Ann's pairings and `^feat` still finds `feat:` subjects. |
+| **Diff** | changes add or remove a line that matches, as `git log -G` finds them. `parse_body` finds where a function came and went. |
+
+<Screenshot name="graph-filter-diff" alt="The graph filtered to the commits whose diff adds or removes a match for notification, with diff /notification in its title" />
 
 <Steps>
 
@@ -241,16 +253,22 @@ features, `^(fix|perf)` the fixes and speedups, `^docs\(graph\)` the graph's doc
   in `config.toml` or for one in its [`.tt-git.toml`](/configuration/#per-repository-config).
 - **Case** is ignored unless the regex has a capital letter, as in
   [blame's search](/panes/blame/). `fix` finds `Fix typo`; `Fix` doesn't find `fix: typo`.
-- **Only the subject** is searched, so `^feat` means the subject starts with `feat`, not that some
-  line of the body does.
+- **Only the subject** is searched until you pick another choice, so `^feat` means the subject
+  starts with `feat`, not that some line of the body does.
 - **Regex syntax** is Rust's [`regex`](https://docs.rs/regex/latest/regex/#syntax), close to what
-  most editors use. The line under the box says whether it ignores case, or what's wrong with it. An
-  invalid regex keeps the prompt open.
+  most editors use. The line under the box says what's searched, whether it ignores case, or what's
+  wrong with it. An invalid regex keeps the prompt open.
+- **The diff** is searched by git, so its regex is git's POSIX extended regex: `\d` and `\b` don't
+  work there, `[0-9]` does. git checks it when the graph loads, and a bad one shows git's error. A
+  diff search reads every commit's changes, so on a big repository it takes a while; the title says
+  `loading…` until it's done. Merge commits have no diff of their own and are never found.
 - **With other filters**, a commit has to match all of them: the message, an author and a file from
   <kbd>f</kbd>, and the [folder](#narrowing-to-the-folder-you-started-in).
-- **The title** shows it: `Graph [all · message /^feat]`. Press <kbd>/</kbd> again to change it; the
-  prompt starts with the regex set now. Clear the box and press <kbd>enter</kbd> to drop just the
-  message part, or close details and press <kbd>esc</kbd> in the graph to clear the whole filter.
+- **The title** shows it, with what's searched: `Graph [all · subject /^feat]`,
+  `message /^Co-authored-by` or `diff /parse_body`. Press <kbd>/</kbd> again to change it; the prompt
+  starts with the regex and the choice set now. Clear the box and press <kbd>enter</kbd> to drop just
+  the message part (the choice goes back to **Subject**), or close details and press <kbd>esc</kbd>
+  in the graph to clear the whole filter.
 
 As with an author filter, the lanes don't join up across the commits left out.
 
@@ -354,7 +372,7 @@ See [How tt-git uses git](/reference/how-it-works/#graph) for the details, and
 | <kbd>t</kbd> | Dates as age ↔ local date and time (also in [blame](/panes/blame/#dates)) |
 | <kbd>L</kbd> | Hide / show the lanes |
 | <kbd>f</kbd> | Filter by author or file |
-| <kbd>/</kbd> | Filter by a regex on the commit subject (<kbd>tab</kbd> in the prompt: next preset) |
+| <kbd>/</kbd> | Filter by a regex on the commit subject, the whole message or the diff (<kbd>tab</kbd> in the prompt: next preset; <kbd>ctrl+t</kbd>: what to search) |
 | <kbd>.</kbd> | Only the commits that changed the folder tt-git was started in, and back |
 | <kbd>o</kbd> | Check out the commit (its local branch if it has one) |
 | <kbd>n</kbd> | New branch at the commit (<kbd>tab</kbd> in the dialog: in a worktree) |

@@ -8,8 +8,8 @@ use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tt_git_core::{
-    CheckoutPlan, DiscardKind, DiscardScope, IgnoreTarget, InProgress, LogFilter, PatchOp, ResetMode, StashScope,
-    StatusEntry, UndoStep, message_regex,
+    CheckoutPlan, DiscardKind, DiscardScope, IgnoreTarget, InProgress, LogFilter, PatchOp, ResetMode, SearchIn,
+    StashScope, StatusEntry, UndoStep, ignores_case, message_regex,
 };
 
 use crate::agent::{AgentAction, AgentRequest};
@@ -348,8 +348,9 @@ pub enum PromptAction {
         actions: Vec<AgentAction>,
         selected: Option<usize>,
     },
-    /// A regex for the graph's commit subjects, added to `filter` (the
-    /// graph's filter now). `tab` puts the next of `presets` in the input.
+    /// A regex for the graph's commits, added to `filter` (the graph's
+    /// filter now). `tab` puts the next of `presets` in the input, and
+    /// `ctrl+t` changes what it searches, `filter.search_in`.
     FilterMessage {
         filter: LogFilter,
         presets: Vec<String>,
@@ -760,12 +761,18 @@ impl Modal {
                         };
                     }
                     if let PromptAction::FilterMessage { filter, .. } = action {
-                        // Empty clears the message part; an invalid regex stays open.
-                        if !value.is_empty() && message_regex(value).is_err() {
+                        // Empty clears the message part; an invalid regex stays
+                        // open. git checks its own for the diff.
+                        if !value.is_empty() && filter.search_in != SearchIn::Diff && message_regex(value).is_err() {
                             return ModalOutcome::Open;
                         }
                         return ModalOutcome::Filter(LogFilter {
                             message: (!value.is_empty()).then(|| value.to_string()),
+                            search_in: if value.is_empty() {
+                                SearchIn::default()
+                            } else {
+                                filter.search_in
+                            },
                             ..filter.clone()
                         });
                     }
@@ -795,6 +802,12 @@ impl Modal {
                 }
                 KeyCode::Char('u') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                     input.clear();
+                    ModalOutcome::Open
+                }
+                KeyCode::Char('t') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                    if let PromptAction::FilterMessage { filter, .. } = action {
+                        filter.search_in = filter.search_in.next();
+                    }
                     ModalOutcome::Open
                 }
                 // The word before the cursor, as in a shell: spaces, then
@@ -1009,8 +1022,21 @@ impl Modal {
                         let body = vec![Line::from(tabs), input_line, Line::styled(note, theme.muted)];
                         (title, body, "enter start · tab ready-made actions · esc cancel".into())
                     }
-                    PromptAction::FilterMessage { presets, .. } => {
+                    PromptAction::FilterMessage { presets, filter } => {
                         let typed = input.trim();
+                        let search_in = filter.search_in;
+                        let mut choices = vec![Span::styled("Search in: ", theme.muted)];
+                        for choice in SearchIn::ALL {
+                            if choices.len() > 1 {
+                                choices.push(Span::styled(" · ", theme.muted));
+                            }
+                            let label = match choice {
+                                SearchIn::Subject => "Subject",
+                                SearchIn::Message => "Whole message",
+                                SearchIn::Diff => "Diff",
+                            };
+                            choices.push(tab(label.into(), choice == search_in));
+                        }
                         let mut tabs = Vec::new();
                         for p in presets {
                             if !tabs.is_empty() {
@@ -1018,12 +1044,23 @@ impl Modal {
                             }
                             tabs.push(tab(p.clone(), p == typed));
                         }
-                        let note = match message_regex(typed) {
-                            _ if typed.is_empty() => Line::styled("empty shows every subject again", theme.muted),
-                            Ok(_) if typed.chars().any(char::is_uppercase) => {
-                                Line::styled("regex on the subject · matches case", theme.muted)
-                            }
-                            Ok(_) => Line::styled("regex on the subject · ignores case", theme.muted),
+                        let what = match search_in {
+                            SearchIn::Subject => "regex on the subject",
+                            SearchIn::Message => "regex on the whole message, ^ and $ at each line",
+                            SearchIn::Diff => "extended regex on lines added or removed",
+                        };
+                        let case = if ignores_case(typed) {
+                            "ignores case"
+                        } else {
+                            "matches case"
+                        };
+                        let checked = match search_in {
+                            SearchIn::Diff => Ok(()),
+                            _ => message_regex(typed).map(drop),
+                        };
+                        let note = match checked {
+                            _ if typed.is_empty() => Line::styled("empty shows every commit again", theme.muted),
+                            Ok(()) => Line::styled(format!("{what} · {case}"), theme.muted),
                             Err(e) => {
                                 let why = e.to_string();
                                 // The last line of the error says what's wrong, after a
@@ -1033,7 +1070,7 @@ impl Modal {
                                 Line::styled(format!("invalid regex: {last}"), theme.error)
                             }
                         };
-                        let mut body = Vec::new();
+                        let mut body = vec![Line::from(choices)];
                         if !tabs.is_empty() {
                             // A dotted rule, so presets wrapped onto a second line
                             // don't read as part of the input.
@@ -1041,9 +1078,9 @@ impl Modal {
                         }
                         body.extend([input_line, note]);
                         let hint = if presets.is_empty() {
-                            "enter filter · esc cancel"
+                            "enter filter · ctrl+t search in · esc cancel"
                         } else {
-                            "enter filter · tab presets · esc cancel"
+                            "enter filter · tab presets · ctrl+t search in · esc cancel"
                         };
                         (title, body, hint.into())
                     }
@@ -1352,6 +1389,51 @@ mod tests {
             m.handle_key(k("enter")),
             ModalOutcome::Filter(author),
             "empty clears only the message"
+        );
+    }
+
+    #[test]
+    fn message_filter_prompt_picks_what_to_search() {
+        let mut m = Modal::prompt(
+            "Filter commits by message",
+            "",
+            PromptAction::FilterMessage {
+                filter: LogFilter::default(),
+                presets: Vec::new(),
+            },
+        );
+        let typed = |m: &mut Modal, text: &str| {
+            m.handle_key(k("ctrl+u"));
+            for c in text.chars() {
+                m.handle_key(KeyCombo::char(c));
+            }
+        };
+        let filter = |message: &str, search_in| {
+            ModalOutcome::Filter(LogFilter {
+                message: Some(message.into()),
+                search_in,
+                ..LogFilter::default()
+            })
+        };
+        typed(&mut m, "trailer");
+        m.handle_key(k("ctrl+t"));
+        assert_eq!(m.handle_key(k("enter")), filter("trailer", SearchIn::Message));
+        m.handle_key(k("ctrl+t"));
+        // git checks the diff's regex, which isn't Rust's.
+        typed(&mut m, "[[:alpha:]");
+        assert_eq!(m.handle_key(k("enter")), filter("[[:alpha:]", SearchIn::Diff));
+        m.handle_key(k("ctrl+t"));
+        assert_eq!(
+            m.handle_key(k("enter")),
+            ModalOutcome::Open,
+            "back to the subject, checked"
+        );
+        typed(&mut m, "");
+        m.handle_key(k("ctrl+t"));
+        assert_eq!(
+            m.handle_key(k("enter")),
+            ModalOutcome::Filter(LogFilter::default()),
+            "empty clears the choice too"
         );
     }
 
