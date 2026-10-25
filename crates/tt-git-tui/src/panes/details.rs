@@ -6,7 +6,7 @@ use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
-use tt_git_core::patch::{DiffPosition, diff_text_position, diff_text_row_of_line};
+use tt_git_core::patch::{DiffPosition, diff_text_hunk, diff_text_position, diff_text_row_of_line};
 use tt_git_core::{CommitFile, FileState, StageSide, StatusEntry};
 use unicode_width::UnicodeWidthStr;
 
@@ -14,6 +14,7 @@ use super::blame::BlameView;
 use super::stage::StageView;
 use super::{PaneId, pane_block};
 use crate::action::Action;
+use crate::agent::AgentHunk;
 use crate::component::{Component, EventState};
 use crate::editor::EditTarget;
 use crate::jobs::Ctx;
@@ -363,6 +364,62 @@ impl DetailsPane {
                 _ => Err(nothing()),
             },
         }
+    }
+
+    /// What to ask an agent about here: the staging view's selection, or
+    /// the diff hunk at the top of the view (the line `e` opens). `None`
+    /// for what isn't a diff (blame, plain text); an error when the diff
+    /// has no hunk there.
+    pub fn agent_hunk(&self) -> Option<Result<AgentHunk, String>> {
+        let none = || "no diff hunk here to ask about".to_string();
+        if let Some(view) = &self.stage {
+            return Some(view.agent_hunk().ok_or_else(none));
+        }
+        if self.blame.is_some() {
+            return None;
+        }
+        let subject = self.subject.as_ref()?;
+        if matches!(
+            subject,
+            DetailsSubject::Text(_) | DetailsSubject::Blame(_) | DetailsSubject::Stage(_)
+        ) {
+            return None;
+        }
+        let Some(found) = diff_text_hunk(self.lines.as_slice(), self.cursor.offset) else {
+            return Some(Err(none()));
+        };
+        let hunk = &found.hunk;
+        let picks = [(hunk, 0, hunk.lines.len().saturating_sub(1))];
+        let short = |oid: &str| oid.chars().take(7).collect::<String>();
+        Some(Ok(match subject {
+            DetailsSubject::File(path) => {
+                // The file's diff is in staged and unstaged sections.
+                let staged = self.lines[..found.rows.start]
+                    .iter()
+                    .rev()
+                    .find(|l| l.starts_with("── "))
+                    .is_some_and(|l| l.contains("staged") && !l.contains("unstaged"));
+                let source = if staged {
+                    "the staged changes (the index against HEAD)"
+                } else {
+                    "the unstaged changes (the working tree against the index)"
+                };
+                AgentHunk::new(found.path.as_deref().unwrap_or(path), source.into(), &picks)
+            }
+            DetailsSubject::Stash(oid) => {
+                let path = found.path.clone().unwrap_or_default();
+                AgentHunk::new(&path, format!("the stash at commit {}", short(oid)), &picks).in_commit(oid, None)
+            }
+            DetailsSubject::Commit(oid) | DetailsSubject::CommitFiles(oid) => {
+                let path = found
+                    .path
+                    .clone()
+                    .or_else(|| self.selected_file().map(|f| f.path.clone()))
+                    .unwrap_or_default();
+                AgentHunk::new(&path, format!("commit {}", short(oid)), &picks).in_commit(oid, None)
+            }
+            DetailsSubject::Text(_) | DetailsSubject::Blame(_) | DetailsSubject::Stage(_) => return None,
+        }))
     }
 
     pub fn clear(&mut self) {
@@ -800,6 +857,7 @@ impl Component for DetailsPane {
                 Command::OpenInEditor,
                 Command::PrevFile,
                 Command::NextFile,
+                Command::Agent,
                 Command::CloseDetails,
             ];
         }
@@ -830,6 +888,7 @@ impl Component for DetailsPane {
             Command::ToggleFiles,
             Command::NewerCommit,
             Command::OlderCommit,
+            Command::Agent,
             Command::CloseDetails,
         ]
     }

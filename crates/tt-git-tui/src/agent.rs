@@ -1,5 +1,5 @@
 //! Agent actions: ask an AI coding agent (`claude` by default) about the
-//! selected commit. The agent opens in a new herdr tab when tt-git runs
+//! selected commit, or a diff hunk or lines. The agent opens in a new herdr tab when tt-git runs
 //! inside herdr, otherwise in place of the details pane.
 
 use std::path::{Path, PathBuf};
@@ -7,6 +7,7 @@ use std::process::Command as Process;
 
 use serde::Deserialize;
 use serde_json::Value;
+use tt_git_core::patch::{Hunk, LineKind};
 use tt_git_core::repo::Repo;
 
 use crate::editor::split_command;
@@ -21,6 +22,8 @@ pub struct AgentConfig {
     pub placement: AgentPlacement,
     /// Goes ahead of every prompt. Placeholders work here too.
     pub system_prompt: Option<String>,
+    /// Goes after the system prompt when asking about a diff hunk.
+    pub hunk_prompt: Option<String>,
     /// Replaces the built-in actions when set.
     pub actions: Option<Vec<AgentAction>>,
 }
@@ -31,6 +34,7 @@ impl Default for AgentConfig {
             command: "claude".into(),
             placement: AgentPlacement::Auto,
             system_prompt: None,
+            hunk_prompt: None,
             actions: None,
         }
     }
@@ -69,12 +73,21 @@ pub enum When {
     Always,
     /// Only while a merge, rebase, cherry-pick or revert is stopped.
     Merging,
+    /// Only when asking about a diff hunk or lines, and then only these.
+    Hunk,
 }
 
 pub const DEFAULT_SYSTEM_PROMPT: &str = "\
 You were started from tt-git, a terminal git client, in the git repository at {repo}. \
 The current branch is {branch}. Run git yourself to read history and diffs. \
 Don't push, and don't commit unless you're asked to.";
+
+pub const DEFAULT_HUNK_PROMPT: &str = "\
+This is about {lines} of {file}, in {source}:
+
+```diff
+{hunk}
+```";
 
 fn action(name: &str, description: &str, when: When, prompt: &str) -> AgentAction {
     AgentAction {
@@ -118,13 +131,32 @@ pub fn default_actions() -> Vec<AgentAction> {
             "Review commit {commit} (\"{subject}\") for bugs, missed cases and risky changes. \
              List only real problems, most serious first, with file and line.",
         ),
+        action(
+            "Explain change",
+            "what these lines change and why",
+            When::Hunk,
+            "Explain what this change does and why it was made. Read the code around it in {file}, \
+             and its history with git log or git blame, as you need.",
+        ),
+        action(
+            "Review change",
+            "look for bugs in these lines",
+            When::Hunk,
+            "Review this change for bugs, missed cases and risky edits. List only real problems, \
+             most serious first, with file and line.",
+        ),
     ]
 }
 
 /// The actions to offer: the configured ones (or the defaults), with the
-/// merge-only ones first while merging and left out otherwise.
-pub fn offered(cfg: &AgentConfig, merging: bool) -> Vec<AgentAction> {
+/// merge-only ones first while merging and left out otherwise. About a
+/// hunk, only the hunk ones.
+pub fn offered(cfg: &AgentConfig, merging: bool, hunk: bool) -> Vec<AgentAction> {
     let all = cfg.actions.clone().unwrap_or_else(default_actions);
+    let (hunks, all): (Vec<_>, Vec<_>) = all.into_iter().partition(|a| a.when == When::Hunk);
+    if hunk {
+        return hunks;
+    }
     let (merge, other): (Vec<_>, Vec<_>) = all.into_iter().partition(|a| a.when == When::Merging);
     if merging {
         merge.into_iter().chain(other).collect()
@@ -150,6 +182,11 @@ pub struct AgentContext {
     pub merge_head: String,
     /// `git log --oneline base..branch`, capped.
     pub log: String,
+    /// About a hunk: its file, lines, diff and what it's a diff of.
+    pub file: String,
+    pub lines: String,
+    pub hunk: String,
+    pub source: String,
 }
 
 /// Commits listed for `{log}` at most.
@@ -190,8 +227,24 @@ impl AgentContext {
             "conflicts" => &self.conflicts,
             "merge_head" => &self.merge_head,
             "log" => &self.log,
+            "file" => &self.file,
+            "lines" => &self.lines,
+            "hunk" => &self.hunk,
+            "source" => &self.source,
             _ => return None,
         })
+    }
+
+    /// Points the placeholders at `hunk`, and at its commit if it has one.
+    pub fn set_hunk(&mut self, hunk: &AgentHunk) {
+        self.file = hunk.file.clone();
+        self.lines = hunk.lines.clone();
+        self.hunk = hunk.diff.clone();
+        self.source = hunk.source.clone();
+        if let Some(commit) = &hunk.commit {
+            self.commit = commit.clone();
+            self.subject = hunk.subject.clone().unwrap_or_default();
+        }
     }
 
     /// `template` with each known `{name}` replaced. Unknown ones stay as
@@ -228,6 +281,84 @@ pub struct AgentRequest {
     pub action: Option<AgentAction>,
     /// What was typed: the request, or extra instructions for the action.
     pub message: String,
+    /// The hunk or lines asked about, rather than the graph's commit.
+    pub hunk: Option<AgentHunk>,
+}
+
+/// A diff hunk, or a range of its lines, to ask an agent about.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentHunk {
+    pub file: String,
+    /// `line 12`, `lines 12-30`, or `old lines 5-7` when only deleted
+    /// lines are picked.
+    pub lines: String,
+    /// The picked lines, each hunk's under its `@@` heading.
+    pub diff: String,
+    /// What the diff is of: `the unstaged changes…`, `commit <hash>`.
+    pub source: String,
+    /// The commit (or stash) the diff is from, and its subject.
+    pub commit: Option<String>,
+    pub subject: Option<String>,
+}
+
+impl AgentHunk {
+    /// Lines `first..=last` of each hunk in `picks`, of `file`, from `source`.
+    pub fn new(file: &str, source: String, picks: &[(&Hunk, usize, usize)]) -> Self {
+        let mut new_lines = Vec::new();
+        let mut old_lines = Vec::new();
+        let mut diff = Vec::new();
+        for &(hunk, first, last) in picks {
+            diff.push(hunk.heading());
+            // `git diff` numbers an empty range by the line before it.
+            let mut old = if hunk.old_count == 0 {
+                hunk.old_start + 1
+            } else {
+                hunk.old_start
+            };
+            for (i, line) in hunk.lines.iter().enumerate().take(last + 1) {
+                if i >= first {
+                    let prefix = match line.kind {
+                        LineKind::Context => ' ',
+                        LineKind::Add => '+',
+                        LineKind::Del => '-',
+                    };
+                    diff.push(format!("{prefix}{}", line.text.trim_end_matches('\r')));
+                    match line.kind {
+                        LineKind::Del => old_lines.push(old),
+                        _ => new_lines.push(hunk.new_line_of(i)),
+                    }
+                }
+                if line.kind != LineKind::Add {
+                    old += 1;
+                }
+            }
+        }
+        let span = |nums: &[u32]| match (nums.iter().min(), nums.iter().max()) {
+            (Some(a), Some(b)) if a == b => format!("line {a}"),
+            (Some(a), Some(b)) => format!("lines {a}-{b}"),
+            _ => String::new(),
+        };
+        let lines = if new_lines.is_empty() {
+            format!("old {}", span(&old_lines))
+        } else {
+            span(&new_lines)
+        };
+        Self {
+            file: file.to_string(),
+            lines,
+            diff: diff.join("\n"),
+            source,
+            commit: None,
+            subject: None,
+        }
+    }
+
+    /// Says it's from `commit`.
+    pub fn in_commit(mut self, commit: &str, subject: Option<String>) -> Self {
+        self.commit = Some(commit.to_string());
+        self.subject = subject;
+        self
+    }
 }
 
 impl AgentRequest {
@@ -240,17 +371,22 @@ impl AgentRequest {
     }
 }
 
-/// The whole prompt: the system prompt, then the action's prompt or the
-/// message, with the placeholders filled.
+/// The whole prompt: the system prompt, the hunk prompt when it's about a
+/// hunk, then the action's prompt or the message, with the placeholders
+/// filled.
 pub fn build_prompt(cfg: &AgentConfig, req: &AgentRequest, ctx: &AgentContext) -> String {
     let system = cfg.system_prompt.as_deref().unwrap_or(DEFAULT_SYSTEM_PROMPT);
+    let hunk = match &req.hunk {
+        Some(_) => cfg.hunk_prompt.as_deref().unwrap_or(DEFAULT_HUNK_PROMPT),
+        None => "",
+    };
     let message = req.message.trim();
     let body = match &req.action {
         Some(a) if message.is_empty() => a.prompt.clone(),
         Some(a) => format!("{}\n\n{message}", a.prompt.trim_end()),
         None => message.to_string(),
     };
-    let parts = [ctx.fill(system.trim()), ctx.fill(body.trim())];
+    let parts = [ctx.fill(system.trim()), ctx.fill(hunk.trim()), ctx.fill(body.trim())];
     parts
         .into_iter()
         .filter(|p| !p.is_empty())
@@ -515,6 +651,9 @@ pub fn start(
     mut ctx: AgentContext,
     herdr: Option<Herdr>,
 ) -> Result<AgentStart, String> {
+    if let Some(hunk) = &req.hunk {
+        ctx.set_hunk(hunk);
+    }
     ctx.load(repo);
     let prompt = build_prompt(cfg, req, &ctx);
     let file = prompt_file(&repo.name());
@@ -577,6 +716,7 @@ mod tests {
         let mut req = AgentRequest {
             action: Some(action("Explain", "", When::Always, "Explain {commit}.")),
             message: String::new(),
+            hunk: None,
         };
         assert_eq!(build_prompt(&cfg, &req, &ctx()), "In /r.\n\nExplain abc1234.");
         req.message = " keep it short ".into();
@@ -596,10 +736,73 @@ mod tests {
     #[test]
     fn merge_actions_come_first_and_only_while_merging() {
         let cfg = AgentConfig::default();
-        let names = |merging| offered(&cfg, merging).into_iter().map(|a| a.name).collect::<Vec<_>>();
-        assert_eq!(names(false), ["Explain commit", "Explain branch", "Review commit"]);
-        assert_eq!(names(true)[0], "Resolve conflicts");
-        assert_eq!(names(true).len(), 4);
+        let names = |merging, hunk| {
+            offered(&cfg, merging, hunk)
+                .into_iter()
+                .map(|a| a.name)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(
+            names(false, false),
+            ["Explain commit", "Explain branch", "Review commit"]
+        );
+        assert_eq!(names(true, false)[0], "Resolve conflicts");
+        assert_eq!(names(true, false).len(), 4);
+        assert_eq!(names(false, true), ["Explain change", "Review change"]);
+        assert_eq!(names(true, true), ["Explain change", "Review change"]);
+    }
+
+    fn hunk() -> Hunk {
+        let diff = "@@ -10,4 +10,4 @@ fn f\n a\n-b\n+B\n+C\n c\n-d\n";
+        tt_git_core::patch::FileDiff::parse(diff).unwrap().hunks.remove(0)
+    }
+
+    #[test]
+    fn a_hunk_names_its_lines() {
+        let h = hunk();
+        let whole = AgentHunk::new("f.rs", "commit x".into(), &[(&h, 0, h.lines.len() - 1)]);
+        assert_eq!(whole.lines, "lines 10-13");
+        assert_eq!(whole.diff, "@@ -10,4 +10,4 @@ fn f\n a\n-b\n+B\n+C\n c\n-d");
+        let added = AgentHunk::new("f.rs", String::new(), &[(&h, 2, 3)]);
+        assert_eq!(added.lines, "lines 11-12");
+        assert_eq!(added.diff, "@@ -10,4 +10,4 @@ fn f\n+B\n+C");
+        assert_eq!(AgentHunk::new("f.rs", String::new(), &[(&h, 2, 2)]).lines, "line 11");
+        // Only deletions: their lines on the old side.
+        assert_eq!(
+            AgentHunk::new("f.rs", String::new(), &[(&h, 1, 1)]).lines,
+            "old line 11"
+        );
+        assert_eq!(
+            AgentHunk::new("f.rs", String::new(), &[(&h, 5, 5)]).lines,
+            "old line 13"
+        );
+    }
+
+    #[test]
+    fn a_hunk_request_carries_the_hunk() {
+        let cfg = AgentConfig {
+            system_prompt: Some(String::new()),
+            ..Default::default()
+        };
+        let h = hunk();
+        let found = AgentHunk::new("f.rs", "commit abc".into(), &[(&h, 2, 3)]).in_commit("abc", Some("S".into()));
+        let req = AgentRequest {
+            action: None,
+            message: "why?".into(),
+            hunk: Some(found.clone()),
+        };
+        let mut c = ctx();
+        c.set_hunk(&found);
+        assert_eq!(c.fill("{commit} {subject}"), "abc S");
+        assert_eq!(
+            build_prompt(&cfg, &req, &c),
+            "This is about lines 11-12 of f.rs, in commit abc:\n\n```diff\n@@ -10,4 +10,4 @@ fn f\n+B\n+C\n```\n\nwhy?"
+        );
+        let custom = AgentConfig {
+            hunk_prompt: Some("{file}:{lines}".into()),
+            ..cfg
+        };
+        assert_eq!(build_prompt(&custom, &req, &c), "f.rs:lines 11-12\n\nwhy?");
     }
 
     #[test]

@@ -10,6 +10,7 @@ use tt_git_core::patch::{FileDiff, LineKind};
 use tt_git_core::{PatchOp, StageSide, StatusEntry};
 
 use crate::action::Action;
+use crate::agent::AgentHunk;
 use crate::component::EventState;
 use crate::editor::EditTarget;
 use crate::jobs::Ctx;
@@ -370,6 +371,39 @@ impl StageView {
             StageSideId::Unstaged => line,
             StageSideId::Staged => self.unstaged.file_diff().map_or(line, |u| u.old_to_new(line)),
         })
+    }
+
+    /// The selected hunk, or the lines from the first picked to the last,
+    /// to ask an agent about.
+    pub fn agent_hunk(&self) -> Option<AgentHunk> {
+        let diff = self.active().file_diff()?;
+        let (first, last) = if self.line_mode {
+            let anchor = self.anchor.unwrap_or(self.cursor);
+            (anchor.min(self.cursor), anchor.max(self.cursor))
+        } else {
+            let len = diff.hunks.get(self.hunk)?.lines.len();
+            ((self.hunk, 0), (self.hunk, len.saturating_sub(1)))
+        };
+        let picks: Vec<_> = (first.0..=last.0)
+            .filter_map(|h| {
+                let hunk = diff.hunks.get(h)?;
+                let from = if h == first.0 { first.1 } else { 0 };
+                let to = if h == last.0 {
+                    last.1
+                } else {
+                    hunk.lines.len().saturating_sub(1)
+                };
+                Some((hunk, from, to))
+            })
+            .collect();
+        if picks.is_empty() {
+            return None;
+        }
+        let source = match self.side {
+            StageSideId::Unstaged => "the unstaged changes (the working tree against the index)",
+            StageSideId::Staged => "the staged changes (the index against HEAD)",
+        };
+        Some(AgentHunk::new(&self.entry.path, source.into(), &picks))
     }
 
     /// Moves the selection to the next or previous hunk, or changed line.

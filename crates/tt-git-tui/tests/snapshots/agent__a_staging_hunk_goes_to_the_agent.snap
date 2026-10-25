@@ -1,0 +1,34 @@
+---
+source: crates/tt-git-tui/tests/agent.rs
+expression: t.screen()
+---
+╭[4] Stage f.txt · hunks───────────────────────────────────────────────────────────────────────────────────────────────╮
+│▌Unstaged  2 hunks                                                                                                    │
+│@@ -1,5 +1,5 @@                                                                                                       │
+│ 1                                                                                                                    │
+│-2                                                                                                                    │
+│+two                                                                                                                  │
+│ 3                                                                                                                    │
+│ 4                                                                                                                    │
+│ 5                                                                                                                    │
+│@@ -11,5 +11,5 @@                                                                                                     │
+│ 11                                                                                                                   │
+│ 12                    ╭ Ask an agent about f.txt lines 11-15 ────────────────────────────────╮                       │
+│ 13                    │Custom message · Explain change · Review change                       │                       │
+│-14                    │█                                                                     │                       │
+│+fourteen              │type what you want the agent to do                                    │                       │
+│ 15                    │                                                                      │                       │
+│                       │enter start · tab ready-made actions · esc cancel                     │                       │
+│                       ╰──────────────────────────────────────────────────────────────────────╯                       │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│ Staged  no changes                                                                                                   │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+space stage/unstage  tab unstaged/staged  a hunks/lines  v select range  d discard  c commit  ? help  q quit
