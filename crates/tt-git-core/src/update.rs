@@ -226,6 +226,9 @@ fn installer_command(script: &Path, tag: &str, dir: &Path) -> Command {
     let mut cmd = Command::new(shell());
     if cfg!(windows) {
         cmd.args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]);
+        // Started from PowerShell 7, this holds its module paths, and Windows
+        // PowerShell can then fail to load its own built-in modules.
+        cmd.env_remove("PSModulePath");
     }
     cmd.arg(script)
         .env("TTGIT_VERSION", tag)

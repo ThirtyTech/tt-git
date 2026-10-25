@@ -56,10 +56,15 @@ try {
     $line = Get-Content (Join-Path $tmp 'SHA256SUMS.txt') | Where-Object { $_ -match " $([regex]::Escape("$name.zip"))$" }
     if (-not $line) { Fail "no checksum for $name.zip" }
     $expected = ($line -split '\s+')[0]
-    $actual = (Get-FileHash $zip -Algorithm SHA256).Hash
+    # .NET rather than Get-FileHash and Expand-Archive: those come from modules
+    # that may not load, such as when PowerShell 7's PSModulePath is inherited.
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($zip)
+    try { $actual = [BitConverter]::ToString($sha.ComputeHash($stream)) -replace '-', '' } finally { $stream.Dispose(); $sha.Dispose() }
     if ($expected -ne $actual) { Fail "checksum mismatch for $name.zip" }
 
-    Expand-Archive $zip -DestinationPath $tmp
+    [void][Reflection.Assembly]::LoadWithPartialName('System.IO.Compression.FileSystem')
+    [IO.Compression.ZipFile]::ExtractToDirectory($zip, $tmp)
     New-Item -ItemType Directory -Force $installDir | Out-Null
 
     # A running exe can't be overwritten but can be renamed. Remove unused
