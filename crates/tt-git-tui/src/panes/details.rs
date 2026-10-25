@@ -29,6 +29,8 @@ pub enum DetailsSubject {
     /// A commit as a list of changed files beside the selected file's diff.
     CommitFiles(String),
     File(String),
+    /// A folder's changes, from the status pane's tree; the path ends in `/`.
+    Folder(String),
     /// One file's changes, staged and unstaged by hunk or line.
     Stage(String),
     /// A stash, by its commit.
@@ -329,7 +331,10 @@ impl DetailsPane {
             return view.edit_target();
         }
         match self.subject.as_ref().ok_or_else(nothing)? {
-            DetailsSubject::Text(_) | DetailsSubject::Stage(_) | DetailsSubject::Blame(_) => Err(nothing()),
+            DetailsSubject::Text(_)
+            | DetailsSubject::Stage(_)
+            | DetailsSubject::Blame(_)
+            | DetailsSubject::Folder(_) => Err(nothing()),
             DetailsSubject::File(path) => {
                 // An untracked file is shown whole, one `+` line per line
                 // under a `new file` heading.

@@ -1,0 +1,12 @@
+---
+source: crates/tt-git-tui/tests/status.rs
+expression: "t.pane_lines(PaneId::Status).join(\"\\n\")"
+---
+▾ docs/guide/
+  ?? intro.md
+▾ src/
+  ▾ ui/
+     M view.rs
+  ?? lib.rs
+   M main.rs
+?? README.md

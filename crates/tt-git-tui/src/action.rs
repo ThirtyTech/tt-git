@@ -94,6 +94,12 @@ pub enum Action {
     CommitSelected(String),
     /// The status pane selection moved to this file.
     FileSelected(StatusEntry),
+    /// The status pane selection moved to this folder in its tree, holding
+    /// `entries`.
+    FolderSelected {
+        folder: String,
+        entries: Vec<StatusEntry>,
+    },
     /// The file watcher saw changes.
     RepoChanged {
         refs: bool,

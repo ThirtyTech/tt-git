@@ -1,5 +1,8 @@
+use std::collections::{BTreeMap, HashSet};
+
 use ratatui::Frame;
 use ratatui::layout::Rect;
+use ratatui::style::Style;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Paragraph;
 use tt_git_core::{DiscardKind, IgnoreTarget, StashScope, Status, StatusEntry, ignore_pattern};
@@ -23,7 +26,108 @@ pub struct StatusPane {
     folder: Option<String>,
     /// The entries shown: all of them, or those `folder` keeps.
     shown: Vec<StatusEntry>,
+    /// List `shown` as a folder tree rather than by full path.
+    tree: bool,
+    /// Folders in the tree (ending in `/`) whose contents are hidden.
+    collapsed: HashSet<String>,
+    /// What's listed, one per line: every shown entry, or the tree's rows.
+    rows: Vec<Row>,
     cursor: Cursor,
+}
+
+/// One line of the list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Row {
+    /// `shown[index]`, `depth` folders in.
+    File { index: usize, depth: usize },
+    /// A folder in the tree. `path` ends in `/`; `name` is what's drawn,
+    /// several folders deep when a folder holds only one folder.
+    Folder { path: String, name: String, depth: usize },
+}
+
+/// What a row is, to find it again after the rows are rebuilt.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum RowKey {
+    File(String),
+    Folder(String),
+}
+
+/// A folder's contents, for building the tree.
+#[derive(Debug, Default)]
+struct Dir {
+    dirs: BTreeMap<String, Dir>,
+    /// The name each file is listed by, with its index into the entries.
+    files: Vec<(String, usize)>,
+}
+
+/// The name `e` is listed by in the tree: the last part of its path. An
+/// untracked folder keeps its `/`.
+fn file_name(e: &StatusEntry) -> String {
+    let trimmed = e.path.trim_end_matches('/');
+    let name = trimmed.rsplit_once('/').map_or(trimmed, |(_, n)| n);
+    if e.path.ends_with('/') {
+        format!("{name}/")
+    } else {
+        name.to_string()
+    }
+}
+
+impl Dir {
+    /// `entries` filed by folder. An untracked folder (`path` ending in `/`)
+    /// is listed as a file in its parent.
+    fn of(entries: &[StatusEntry]) -> Self {
+        let mut root = Dir::default();
+        for (i, e) in entries.iter().enumerate() {
+            let mut dir = &mut root;
+            if let Some((dirs, _)) = e.path.trim_end_matches('/').rsplit_once('/') {
+                for part in dirs.split('/') {
+                    dir = dir.dirs.entry(part.to_string()).or_default();
+                }
+            }
+            dir.files.push((file_name(e), i));
+        }
+        root
+    }
+
+    /// The rows under this folder (at `prefix`, `depth` in): folders first,
+    /// then files, each by name. Collapsed folders' contents are left out.
+    fn rows(&self, prefix: &str, depth: usize, collapsed: &HashSet<String>, out: &mut Vec<Row>) {
+        for (name, dir) in &self.dirs {
+            let mut name = name.clone();
+            let mut dir = dir;
+            // A folder holding only one folder shares its row.
+            while dir.files.is_empty() && dir.dirs.len() == 1 {
+                let (child, inner) = dir.dirs.iter().next().expect("one folder");
+                name = format!("{name}/{child}");
+                dir = inner;
+            }
+            let path = format!("{prefix}{name}/");
+            let open = !collapsed.contains(&path);
+            out.push(Row::Folder {
+                path: path.clone(),
+                name,
+                depth,
+            });
+            if open {
+                dir.rows(&path, depth + 1, collapsed, out);
+            }
+        }
+        let mut files = self.files.clone();
+        files.sort();
+        out.extend(files.into_iter().map(|(_, index)| Row::File { index, depth }));
+    }
+
+    /// Every folder row's path, as if all were open.
+    fn folders(&self) -> Vec<String> {
+        let mut rows = Vec::new();
+        self.rows("", 0, &HashSet::new(), &mut rows);
+        rows.into_iter()
+            .filter_map(|r| match r {
+                Row::Folder { path, .. } => Some(path),
+                Row::File { .. } => None,
+            })
+            .collect()
+    }
 }
 
 /// Whether `e` is under `folder`, or is a rename from or to it.
@@ -57,11 +161,32 @@ impl StatusPane {
         if self.folder != folder {
             self.folder = folder;
             self.cursor = Cursor::default();
-            self.reshow();
+            self.refilter();
+            self.layout(None);
+        }
+    }
+
+    /// Whether the files are listed as a folder tree.
+    pub fn tree(&self) -> bool {
+        self.tree
+    }
+
+    /// Lists the files as a folder tree, or by full path.
+    pub fn set_tree(&mut self, tree: bool) {
+        if self.tree != tree {
+            self.tree = tree;
+            self.rebuild();
         }
     }
 
     fn reshow(&mut self) {
+        let key = self.selected_key();
+        self.refilter();
+        self.layout(key);
+    }
+
+    /// Picks the entries to show from the status.
+    fn refilter(&mut self) {
         let all = self.all_entries();
         self.shown = match &self.folder {
             Some(f) => all
@@ -71,8 +196,75 @@ impl StatusPane {
                 .collect(),
             None => all.to_vec(),
         };
-        let len = self.shown.len();
-        self.cursor.clamp(len);
+    }
+
+    /// Lays the rows out again, keeping the selection on the same file or
+    /// folder.
+    fn rebuild(&mut self) {
+        let key = self.selected_key();
+        self.layout(key);
+    }
+
+    /// Builds the rows from `shown` and selects `key` in them.
+    fn layout(&mut self, key: Option<RowKey>) {
+        self.rows = if self.tree {
+            let mut rows = Vec::new();
+            Dir::of(&self.shown).rows("", 0, &self.collapsed, &mut rows);
+            rows
+        } else {
+            (0..self.shown.len())
+                .map(|index| Row::File { index, depth: 0 })
+                .collect()
+        };
+        self.reselect(key);
+    }
+
+    fn key(&self, row: &Row) -> RowKey {
+        match row {
+            Row::File { index, .. } => RowKey::File(self.shown[*index].path.clone()),
+            Row::Folder { path, .. } => RowKey::Folder(path.clone()),
+        }
+    }
+
+    fn selected_key(&self) -> Option<RowKey> {
+        self.rows.get(self.cursor.selected).map(|r| self.key(r))
+    }
+
+    /// Selects the row `key` names, or the collapsed folder it's in, or
+    /// failing both, whatever row is at the old position.
+    fn reselect(&mut self, key: Option<RowKey>) {
+        if let Some(key) = key {
+            let path = match &key {
+                RowKey::File(p) | RowKey::Folder(p) => p.as_str(),
+            };
+            let found = self.rows.iter().position(|r| self.key(r) == key).or_else(|| {
+                self.rows.iter().rposition(|r| match r {
+                    Row::Folder { path: f, .. } => self.collapsed.contains(f) && path.starts_with(f.as_str()),
+                    Row::File { .. } => false,
+                })
+            });
+            if let Some(i) = found {
+                self.cursor.selected = i;
+            }
+        }
+        self.cursor.clamp(self.rows.len());
+    }
+
+    /// Collapses or expands the folder `path`.
+    fn toggle_collapsed(&mut self, path: &str) {
+        if !self.collapsed.remove(path) {
+            self.collapsed.insert(path.to_string());
+        }
+        self.rebuild();
+    }
+
+    /// Collapses every folder in the tree, or expands them all.
+    fn collapse_all(&mut self, collapse: bool) {
+        self.collapsed.clear();
+        if collapse {
+            self.collapsed.extend(Dir::of(&self.shown).folders());
+        }
+        self.rebuild();
     }
 
     /// The entries listed: every one, or those in the folder.
@@ -83,6 +275,20 @@ impl StatusPane {
     /// Every changed file, including any hidden outside the folder.
     pub fn all_entries(&self) -> &[StatusEntry] {
         self.status.as_ref().map_or(&[], |s| s.entries.as_slice())
+    }
+
+    /// The text of each row as drawn (without colors), for tests.
+    pub fn row_texts(&self) -> Vec<String> {
+        self.rows
+            .iter()
+            .map(|r| {
+                self.row_line(r, usize::MAX, &Theme::default())
+                    .spans
+                    .iter()
+                    .map(|s| s.content.as_ref())
+                    .collect()
+            })
+            .collect()
     }
 
     /// How many changed files the folder hides, and how many of those
@@ -97,23 +303,68 @@ impl StatusPane {
         (n, staged)
     }
 
+    /// The selected file; `None` when nothing is, or a folder is.
     pub fn selected(&self) -> Option<&StatusEntry> {
-        self.entries().get(self.cursor.selected)
+        match self.rows.get(self.cursor.selected)? {
+            Row::File { index, .. } => self.shown.get(*index),
+            Row::Folder { .. } => None,
+        }
     }
 
-    /// Tells the app which file is selected so the details pane can show its diff.
+    /// The selected folder in the tree (ending in `/`).
+    pub fn selected_folder(&self) -> Option<&str> {
+        match self.rows.get(self.cursor.selected)? {
+            Row::Folder { path, .. } => Some(path),
+            Row::File { .. } => None,
+        }
+    }
+
+    /// The shown entries under `folder`.
+    pub fn entries_in(&self, folder: &str) -> Vec<StatusEntry> {
+        self.shown.iter().filter(|e| in_folder(e, folder)).cloned().collect()
+    }
+
+    /// Moves to the file above (`up`) or below the selected row, past any
+    /// folders. Returns whether there was one.
+    pub fn step_file(&mut self, up: bool) -> bool {
+        let at = self.cursor.selected.min(self.rows.len());
+        let is_file = |r: &Row| matches!(r, Row::File { .. });
+        let found = if up {
+            self.rows[..at].iter().rposition(is_file)
+        } else {
+            self.rows.iter().skip(at + 1).position(is_file).map(|i| at + 1 + i)
+        };
+        if let Some(i) = found {
+            self.cursor.selected = i;
+        }
+        found.is_some()
+    }
+
+    /// Tells the app which file or folder is selected so the details pane
+    /// can show its diff.
     pub fn announce(&self, ctx: &Ctx) {
         if let Some(e) = self.selected() {
             ctx.emit(Action::FileSelected(e.clone()));
+        } else if let Some(folder) = self.selected_folder() {
+            ctx.emit(Action::FolderSelected {
+                folder: folder.to_string(),
+                entries: self.entries_in(folder),
+            });
         }
     }
 
     /// Asks where to ignore the selected file, or the folder it's in.
-    fn ignore_picker(e: &StatusEntry) -> Modal {
+    fn ignore_file_picker(e: &StatusEntry) -> Modal {
         let mut paths = vec![(e.path.clone(), false)];
         if let Some((dir, _)) = e.path.rsplit_once('/') {
             paths.push((format!("{dir}/"), true));
         }
+        Self::ignore_picker(&e.path, paths)
+    }
+
+    /// Asks where to ignore each of `paths` (with whether it's a folder),
+    /// titled after `what`.
+    fn ignore_picker(what: &str, paths: Vec<(String, bool)>) -> Modal {
         let mut items = Vec::new();
         for (path, dir) in paths {
             let pattern = ignore_pattern(&path, dir);
@@ -132,7 +383,40 @@ impl StatusPane {
                 });
             }
         }
-        Modal::picker(format!("Ignore {}", e.path), items, 0)
+        Modal::picker(format!("Ignore {what}"), items, 0)
+    }
+
+    /// `space`, `d` or `i` on a folder in the tree: acts on everything
+    /// under it.
+    fn on_folder(&self, cmd: Command, folder: String, ctx: &Ctx) {
+        let entries = self.entries_in(&folder);
+        match cmd {
+            Command::StageToggle => {
+                if entries.iter().any(StatusEntry::has_unstaged) {
+                    ctx.emit(Action::Run(GitOp::StageAll { folder: Some(folder) }));
+                } else if entries.iter().any(StatusEntry::has_staged) {
+                    ctx.emit(Action::Run(GitOp::UnstageAll { folder: Some(folder) }));
+                }
+            }
+            Command::Discard => {
+                if let Some(op) = self.status.as_ref().and_then(|s| s.in_progress) {
+                    ctx.emit(Action::Notify(format!(
+                        "a {} is in progress: X aborts it, d on a file discards that file",
+                        op.command()
+                    )));
+                } else {
+                    ctx.emit(Action::OpenModal(Modal::discard_all(
+                        DiscardCounts::of(&entries),
+                        Some(folder),
+                    )));
+                }
+            }
+            Command::Ignore => {
+                let picker = Self::ignore_picker(&folder, vec![(folder.clone(), true)]);
+                ctx.emit(Action::OpenModal(picker));
+            }
+            _ => {}
+        }
     }
 
     /// Whether anything is staged, in or out of the folder: a commit takes
@@ -174,6 +458,57 @@ impl StatusPane {
         }
         s
     }
+
+    /// One row as drawn: a file's status code and path (its name alone in
+    /// the tree), or a folder's open/closed marker and name.
+    fn row_line(&self, row: &Row, width: usize, theme: &Theme) -> Line<'static> {
+        match row {
+            Row::File { index, depth } => {
+                let e = &self.shown[*index];
+                let indent = "  ".repeat(*depth);
+                let name = if self.tree { file_name(e) } else { e.path.clone() };
+                let path = match &e.orig_path {
+                    Some(orig) => format!("{orig} → {name}"),
+                    None => name,
+                };
+                let room = width.saturating_sub(indent.len() + 3);
+                Line::from(vec![
+                    Span::raw(indent),
+                    Span::styled(e.short_code(), code_style([e], theme)),
+                    Span::raw(" "),
+                    Span::raw(truncate(&path, room)),
+                ])
+            }
+            Row::Folder { path, name, depth } => {
+                let indent = "  ".repeat(*depth);
+                let marker = if self.collapsed.contains(path) { "▸ " } else { "▾ " };
+                let style = code_style(self.shown.iter().filter(|e| in_folder(e, path)), theme);
+                let room = width.saturating_sub(indent.len() + 2);
+                Line::from(vec![
+                    Span::raw(indent),
+                    Span::styled(marker, style),
+                    Span::styled(truncate(&format!("{name}/"), room), style),
+                ])
+            }
+        }
+    }
+}
+
+/// The color of a file's status code, or of a folder holding `entries`:
+/// conflicted, all staged, or with something left to stage.
+fn code_style<'a>(entries: impl IntoIterator<Item = &'a StatusEntry>, theme: &Theme) -> Style {
+    let (mut conflicted, mut unstaged) = (false, false);
+    for e in entries {
+        conflicted |= e.is_conflicted();
+        unstaged |= !e.has_staged() || e.has_unstaged();
+    }
+    if conflicted {
+        theme.error
+    } else if unstaged {
+        theme.diff_del
+    } else {
+        theme.diff_add
+    }
 }
 
 impl Component for StatusPane {
@@ -182,11 +517,31 @@ impl Component for StatusPane {
     }
 
     fn on_command(&mut self, cmd: Command, ctx: &Ctx) -> EventState {
-        if self.cursor.apply(cmd, self.entries().len()) {
+        if self.cursor.apply(cmd, self.rows.len()) {
             self.announce(ctx);
             return EventState::Consumed;
         }
+        if let Some(folder) = self.selected_folder().map(str::to_string) {
+            match cmd {
+                Command::OpenStaging => {
+                    self.toggle_collapsed(&folder);
+                    return EventState::Consumed;
+                }
+                Command::StageToggle | Command::Discard | Command::Ignore => {
+                    self.on_folder(cmd, folder, ctx);
+                    return EventState::Consumed;
+                }
+                _ => {}
+            }
+        }
         match cmd {
+            Command::CollapseAll | Command::ExpandAll if self.tree => {
+                self.collapse_all(cmd == Command::CollapseAll);
+                self.announce(ctx);
+            }
+            Command::CollapseAll | Command::ExpandAll => {
+                ctx.emit(Action::Notify("folders fold in the tree view (` shows it)".into()));
+            }
             Command::Continue | Command::Abort => {
                 let Some(op) = self.status.as_ref().and_then(|s| s.in_progress) else {
                     ctx.emit(Action::Notify("no merge, rebase or cherry-pick in progress".into()));
@@ -286,7 +641,7 @@ impl Component for StatusPane {
                 let Some(e) = self.selected() else {
                     return EventState::NotConsumed;
                 };
-                ctx.emit(Action::OpenModal(Self::ignore_picker(e)));
+                ctx.emit(Action::OpenModal(Self::ignore_file_picker(e)));
             }
             Command::StageToggle | Command::Discard => {
                 let Some(e) = self.selected() else {
@@ -321,7 +676,7 @@ impl Component for StatusPane {
     fn on_click(&mut self, row: usize, ctx: &Ctx) {
         // The conflict banner takes the first row while an operation is in progress.
         let banner = usize::from(self.status.as_ref().is_some_and(|s| s.in_progress.is_some()));
-        if row >= banner && self.cursor.click(row - banner, self.entries().len()) {
+        if row >= banner && self.cursor.click(row - banner, self.rows.len()) {
             self.announce(ctx);
         }
     }
@@ -338,6 +693,9 @@ impl Component for StatusPane {
             Command::Stash,
             Command::OpenInEditor,
             Command::Blame,
+            Command::ToggleTree,
+            Command::CollapseAll,
+            Command::ExpandAll,
             Command::FilterFolder,
             Command::Continue,
             Command::Abort,
@@ -370,28 +728,11 @@ impl Component for StatusPane {
         let height = inner.height as usize;
         self.cursor.scroll_into_view(height);
         let width = inner.width as usize;
-        let entries = self.entries();
-        let start = self.cursor.offset.min(entries.len());
-        let end = (start + height).min(entries.len());
+        let start = self.cursor.offset.min(self.rows.len());
+        let end = (start + height).min(self.rows.len());
         let lines: Vec<Line> = (start..end)
             .map(|i| {
-                let e = &entries[i];
-                let code_style = if e.is_conflicted() {
-                    theme.error
-                } else if e.has_staged() && !e.has_unstaged() {
-                    theme.diff_add
-                } else {
-                    theme.diff_del
-                };
-                let path = match &e.orig_path {
-                    Some(orig) => format!("{orig} → {}", e.path),
-                    None => e.path.clone(),
-                };
-                let line = Line::from(vec![
-                    Span::styled(e.short_code(), code_style),
-                    Span::raw(" "),
-                    Span::raw(truncate(&path, width.saturating_sub(3))),
-                ]);
+                let line = self.row_line(&self.rows[i], width, theme);
                 if i == self.cursor.selected {
                     line.patch_style(if focused {
                         theme.selected
