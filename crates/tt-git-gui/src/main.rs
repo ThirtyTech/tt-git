@@ -72,6 +72,13 @@ fn main() -> Result<()> {
         Err(e) => return Err(e).wrap_err("opening repository"),
     };
     let no_plugins = args.no_plugins;
+    // Plugins call `$TTGIT_BIN_PATH <subcommand>`; the GUI has none, so
+    // they get the TUI's `tt-git`.
+    let bin_path = if no_plugins {
+        None
+    } else {
+        tt_git_gui::tt_git_bin::find()
+    };
     // Each repository, and each one opened later, gets its own files laid
     // over the global config.
     let new_app = move |repo: Repo| -> Result<_, String> {
@@ -89,7 +96,7 @@ fn main() -> Result<()> {
         if !no_plugins {
             app.enable_plugins(PluginOptions {
                 dirs: PluginDirs::from_env(),
-                bin_path: None,
+                bin_path: bin_path.clone(),
                 socket: true,
                 extra_env: Vec::new(),
             });

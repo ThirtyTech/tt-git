@@ -34,6 +34,7 @@ pub mod terminal;
 pub mod testing;
 pub mod text;
 pub mod theme;
+pub mod tt_git_bin;
 pub mod ui;
 pub mod window_state;
 pub mod windows;
