@@ -278,6 +278,23 @@ mod tests {
     }
 
     #[gpui::test]
+    fn a_key_typed_at_once_lands_in_the_dialog_the_last_one_opened(cx: &mut TestAppContext) {
+        let sb = sandbox();
+        let mut gui = Gui::open(cx, &sb);
+        // `n` opens the new-branch prompt through an action; `x` follows
+        // before any task runs, as fast typing does.
+        for key in ["n", "x"] {
+            let combo = key.parse().unwrap();
+            gui.model.update(&mut gui.cx, |model, cx| model.key(combo, cx));
+        }
+        let input = gui.read(|app| match app.modal() {
+            Some(tt_git_app::modal::Modal::Prompt { input, .. }) => Some(input.clone()),
+            _ => None,
+        });
+        assert_eq!(input.as_deref(), Some("x"), "x went to the prompt, not the graph");
+    }
+
+    #[gpui::test]
     fn keys_reach_the_keymap(cx: &mut TestAppContext) {
         let sb = sandbox();
         let mut gui = Gui::open(cx, &sb);

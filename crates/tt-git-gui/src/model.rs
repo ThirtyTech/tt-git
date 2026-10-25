@@ -2,7 +2,10 @@
 //! the TUI's runner does: feeds it its actions and ticks, and carries out
 //! what it asks of the front end (redraw, copy, start an editor, quit).
 
+use std::cell::RefCell;
+use std::future::poll_fn;
 use std::process::Stdio;
+use std::rc::Rc;
 
 use gpui::{ClipboardItem, Context, EventEmitter, Task};
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -28,6 +31,9 @@ pub enum AppEvent {
 /// observers when the app says the screen may have changed.
 pub struct AppModel {
     app: App,
+    /// The app's action channel. Shared with the task that waits on it, which
+    /// borrows it only while polling, so input can apply what's queued at once.
+    rx: Rc<RefCell<UnboundedReceiver<Action>>>,
     quit_sent: bool,
     _actions: Task<()>,
     _ticks: Task<()>,
@@ -39,21 +45,17 @@ impl AppModel {
     /// Takes over `app` and its action channel `rx`, set up as
     /// `tt-git/src/main.rs` sets it up (config, themes, plugins), and starts
     /// it: its jobs run on the tokio runtime from [`crate::gpui_tokio`].
-    pub fn new(app: App, mut rx: UnboundedReceiver<Action>, cx: &mut Context<Self>) -> Self {
+    pub fn new(app: App, rx: UnboundedReceiver<Action>, cx: &mut Context<Self>) -> Self {
         let mut app = app;
         app.set_runtime(Tokio::handle(cx));
         app.start();
+        let rx = Rc::new(RefCell::new(rx));
+        let waiting = rx.clone();
         let actions = cx.spawn(async move |this, cx| {
-            while let Some(first) = rx.recv().await {
-                // Apply everything already queued before paying for a redraw.
-                let mut batch = vec![first];
-                while let Ok(action) = rx.try_recv() {
-                    batch.push(action);
-                }
+            while let Some(first) = poll_fn(|task| waiting.borrow_mut().poll_recv(task)).await {
+                // `after_input` applies the rest of what's queued.
                 let applied = this.update(cx, |model, cx| {
-                    for action in batch {
-                        model.app.update(action);
-                    }
+                    model.app.update(first);
                     model.after_input(cx);
                 });
                 if applied.is_err() {
@@ -71,6 +73,7 @@ impl AppModel {
         });
         let mut model = Self {
             app,
+            rx,
             quit_sent: false,
             _actions: actions,
             _ticks: ticks,
@@ -117,9 +120,17 @@ impl AppModel {
         self.after_input(cx);
     }
 
-    /// Carries out what the app asked for, and redraws if it may look
-    /// different.
+    /// Applies the actions already queued, as the TUI's runner does after
+    /// every input (so a key that opens a dialog has opened it before the
+    /// next key arrives), then carries out what the app asked for, and
+    /// redraws if it may look different.
     fn after_input(&mut self, cx: &mut Context<Self>) {
+        loop {
+            let Ok(action) = self.rx.borrow_mut().try_recv() else {
+                break;
+            };
+            self.app.update(action);
+        }
         if self.app.should_quit() {
             if !self.quit_sent {
                 self.quit_sent = true;
