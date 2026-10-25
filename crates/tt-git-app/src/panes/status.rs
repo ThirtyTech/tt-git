@@ -652,6 +652,13 @@ impl Component for StatusPane {
         }
     }
 
+    /// As enter does: a file's staging view, or a folder folded or unfolded.
+    fn double_click(&self, row: usize) -> Option<Command> {
+        let banner = usize::from(self.status.as_ref().is_some_and(|s| s.in_progress.is_some()));
+        let on_row = row >= banner && self.cursor.offset + row - banner < self.rows.len();
+        on_row.then_some(Command::OpenStaging)
+    }
+
     fn commands(&self) -> &[Command] {
         // Folding every folder only means something in the tree.
         if self.tree {

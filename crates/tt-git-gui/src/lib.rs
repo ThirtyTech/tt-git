@@ -16,6 +16,7 @@ use gpui::{App, AppContext, KeyBinding, NoAction, WindowHandle, WindowOptions};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tt_git_app::Action;
 
+pub mod context_menu;
 pub mod dialogs;
 pub mod font;
 pub mod frame;

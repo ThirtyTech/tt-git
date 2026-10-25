@@ -164,7 +164,7 @@ pub fn build(app: &tt_git_app::App) -> Vec<MenuSpec> {
         },
         MenuSpec {
             name: pane_menu_name(context).into(),
-            items: app.pane_commands().iter().map(|c| item(*c)).collect(),
+            items: app.focused_commands().iter().map(|c| item(*c)).collect(),
         },
     ]
 }

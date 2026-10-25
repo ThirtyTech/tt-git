@@ -25,7 +25,8 @@ here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
 | `src/keys.rs` | GPUI's `Keystroke` as tt-git's `KeyCombo`. tt-git's keymap resolves every key, text input included. There is no GPUI action per command. |
 | `src/theme.rs` | `GuiTheme`: tt-git's colors as `Hsla`, every `StyleRole` as a `HighlightStyle`, and gpui-component's theme set to match. |
 | `src/font.rs` | `MonoFont`: the monospace font and its cell size. |
-| `src/layout.rs` | The `[layout]` tree as resizable splits. |
+| `src/layout.rs` | The `[layout]` tree as resizable splits. Dragging a handle resizes them; each split keeps its sizes for the session, by its place and what it shows (`split_sizes` reads them). |
+| `src/context_menu.rs` | The right-click menu every `PaneFrame` has: the focused pane's commands with their keys (`App::pane_commands`), each run as its key would. |
 | `src/ui.rs` | `Ui`, what every view draws with, and `Measures`. |
 | `src/frame.rs`, `src/rows.rs`, `src/text.rs`, `src/overlay.rs` | The building blocks (below). |
 | `src/help_bar.rs` | The help bar. |
@@ -118,10 +119,24 @@ target dir.
   `.child(...)` for the body. It measures itself as `frame_id(pane)` (that's
   what the shell reports) and its body as `body_id(pane)`. A click or wheel
   that nothing inside handles goes to the app as on the border, which
-  focuses the pane.
+  focuses the pane. More slots:
+  - `.title_right(spans)`: spans pushed to the right end of the title line
+    (blame's date and recency). The title is cut short before them.
+    `title_cols(ui, pane)` is the columns the title line had after `[n] `
+    last frame (it's measured as `title_id(pane)`), to fit both: the
+    details pane picks its right part with `view::details::fit_title_right`.
+  - `.on_title_click(|col| ...)`: what a click on column `col` of the title
+    (after `[n] `) is for the app, or `None`. The column comes from where
+    the text was laid out (GPUI's `TextLayout`), so it's exact whatever the
+    font. The branches tabs use it.
+  - `.bottom(left, right)`: a line along the bottom, under the body, for
+    what the TUI writes on a pane's bottom border (the branches pane's
+    conflicts and worktree sizes). Not drawn while both are empty.
+  - A right-click menu (`context_menu.rs`), on every pane.
 - **`StyledRows`** (`rows.rs`): a list of one-line rows filling its parent.
   `StyledRows::new(ui, id, pane, rows)` measures itself as `id`, sends a
-  click on line `n` as `MouseKind::Click` at body row `n`, and the wheel as
+  click on line `n` as `MouseKind::Click` at body row `n` (a right click as
+  `MouseKind::RightClick`, before the pane's menu opens), and the wheel as
   scroll steps. `.first_body_row(k)` when the pane draws `k` lines above the
   list; `.on_target(|line| ...)` for a list that is a part of its own
   (`PanePart::FileRow(line)` for the details file list).
@@ -390,3 +405,21 @@ bundle, which packaging adds.
   terminal editors; closing their window does.
 - Wayland and macOS show no app icon until packaging installs a
   `tt-git.desktop` and builds an app bundle.
+- Split sizes last for the session only; nothing saves them yet.
+
+## The mouse
+
+The app does what the mouse means, for both front ends; a front end only
+says what the pointer was over (`MouseTarget`, with a `PanePart` for parts
+of a pane with clicks of their own: a branches tab, a details file row, the
+diff, a staging row).
+
+- **Double click**: the app spots two clicks on the same row and runs the
+  pane's `Component::double_click` command, what `enter` does on it.
+- **Right click**: the GUI sends `MouseKind::RightClick` (the TUI leaves the
+  right button to the terminal), which focuses the pane and picks the row as
+  a click does, never half of a double click. Then gpui-component's context
+  menu opens with `App::pane_commands`. A list that takes the right click
+  calls `window.prevent_default()` rather than stopping the event, so the
+  frame doesn't send it again and the menu still opens. While the menu has
+  the focus, the shell sends the app no keys.

@@ -15,7 +15,7 @@ use tt_git_core::patch::LineKind;
 use super::code::code_spans;
 use super::{StyleRole, TextSpan};
 use crate::panes::stage::{Row, SIDE_BY_SIDE_WIDTH};
-use crate::panes::{DetailsPane, StageSideId, StageView};
+use crate::panes::{StageSideId, StageView};
 use crate::syntax::{self, Tokens};
 use crate::widgets::truncate;
 
@@ -172,20 +172,6 @@ fn code<'a>(body: Cow<'a, str>, tokens: &Tokens, width: usize, pad: bool) -> Vec
     }
 }
 
-/// The details pane's title while it stages a file: the staging view's own,
-/// what `esc` goes back to, and whether the details are loading, as the
-/// TUI's details pane titles it.
-pub fn pane_title(details: &DetailsPane) -> Option<String> {
-    let mut title = details.stage()?.title();
-    if let Some(trail) = &details.trail {
-        title.push_str(&format!("  ‹ {trail}"));
-    }
-    if details.loading {
-        title.push_str(" loading…");
-    }
-    Some(title)
-}
-
 #[cfg(test)]
 mod tests {
     use tt_git_core::patch::FileDiff;
@@ -195,6 +181,7 @@ mod tests {
     use crate::component::EventState;
     use crate::jobs::Ctx;
     use crate::keymap::Command;
+    use crate::panes::DetailsPane;
     use crate::syntax::Class;
 
     fn entry(path: &str) -> StatusEntry {
@@ -236,6 +223,33 @@ mod tests {
 
     fn text(row: &StageRow) -> String {
         row.spans.iter().map(|s| s.text.as_ref()).collect()
+    }
+
+    #[test]
+    fn a_click_picks_the_hunk_or_line_under_it() {
+        let mut v = view("f.txt", Ok(two_hunks("f.txt")), Ok(two_hunks("f.txt")));
+        v.set_viewport(StageSideId::Unstaged, 10);
+        // Rows: @@, -a, +a, x, @@, y, +b.
+        assert!(v.click(StageSideId::Unstaged, 5));
+        assert_eq!(v.selected_hunk(), 1);
+        assert!(!v.click(StageSideId::Unstaged, 7), "past the last row");
+        assert_eq!(v.selected_hunk(), 1);
+        // The other side becomes active.
+        assert!(v.click(StageSideId::Staged, 0));
+        assert_eq!((v.side(), v.selected_hunk()), (StageSideId::Staged, 0));
+        // Lines: on a heading or an unchanged line, the nearest change below,
+        // else above.
+        v.on_command(Command::ToggleLineMode, &ctx());
+        v.click(StageSideId::Staged, 4);
+        assert!(v.picked((1, 1)), "the heading picks +b");
+        v.click(StageSideId::Staged, 3);
+        assert!(v.picked((0, 1)), "x, after the hunk's changes, picks +a");
+        v.click(StageSideId::Staged, 1);
+        assert!(v.picked((0, 0)) && !v.picked((0, 1)));
+        // A range being picked stretches to the click.
+        v.on_command(Command::SelectRange, &ctx());
+        v.click(StageSideId::Staged, 2);
+        assert!(v.picked((0, 0)) && v.picked((0, 1)));
     }
 
     #[test]
@@ -405,11 +419,10 @@ mod tests {
     #[test]
     fn the_pane_title_says_what_esc_goes_back_to() {
         let mut details = DetailsPane::default();
-        assert_eq!(pane_title(&details), None);
         details.request_stage(entry("f.txt"));
-        assert_eq!(pane_title(&details).unwrap(), "Stage f.txt · hunks loading…");
+        assert_eq!(details.frame_title(), "Stage f.txt · hunks loading…");
         details.set_stage_diffs(entry("f.txt"), Ok(two_hunks("f.txt")), none(), Default::default());
         details.trail = Some("Status".into());
-        assert_eq!(pane_title(&details).unwrap(), "Stage f.txt · hunks  ‹ Status");
+        assert_eq!(details.frame_title(), "Stage f.txt · hunks  ‹ Status");
     }
 }

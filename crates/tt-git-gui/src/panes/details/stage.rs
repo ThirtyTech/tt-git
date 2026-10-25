@@ -5,13 +5,14 @@
 //! with nothing in it shrunk to its title along the bottom.
 //!
 //! Every key works through the keymap as in the TUI. The mouse does what
-//! it does there too: a click focuses the pane, and the wheel moves the
-//! selection on the active side.
+//! it does there too: a click on a row picks its hunk or line (on either
+//! side), and the wheel moves the selection on the active side.
 
 use gpui::{AnyElement, Div, IntoElement, ParentElement, Styled, div};
+use tt_git_app::mouse::{MouseTarget, PanePart};
 use tt_git_app::panes::{PaneId, StageSideId, StageView};
 use tt_git_app::view::StyleRole;
-use tt_git_app::view::stage::{StageLayout, pane_title};
+use tt_git_app::view::stage::StageLayout;
 
 use crate::frame::{PaneFrame, body_id};
 use crate::panes::PaneCx;
@@ -35,7 +36,7 @@ pub fn rows_id(id: StageSideId) -> &'static str {
 pub fn render(cx: &mut PaneCx) -> AnyElement {
     let (ui, focused) = (cx.ui, cx.focused);
     let details = cx.app.details_mut();
-    let frame = PaneFrame::new(ui, PaneId::Details, focused).title(pane_title(details).unwrap_or_default());
+    let frame = PaneFrame::new(ui, PaneId::Details, focused).title(details.frame_title());
     let Some(stage) = details.stage_mut() else {
         return frame.into_any_element();
     };
@@ -103,7 +104,13 @@ fn side(ui: &Ui, stage: &mut StageView, id: StageSideId, focused: bool, title_ro
         div()
             .flex_1()
             .min_h_0()
-            .child(StyledRows::new(ui, rows_id(id), PaneId::Details, rows).first_body_row(title_row + 1)),
+            .child(
+                StyledRows::new(ui, rows_id(id), PaneId::Details, rows).on_target(move |line| MouseTarget::Pane {
+                    pane: PaneId::Details,
+                    body_row: Some(title_row + 1 + line),
+                    part: Some(PanePart::StageRow { side: id, row: line }),
+                }),
+            ),
     )
 }
 
@@ -230,11 +237,36 @@ mod tests {
         gui.cx.simulate_event(wheel(3.));
         gui.wait_idle();
         assert_eq!(stage(&gui, StageView::selected_hunk), 0);
-        // A click on a row keeps the pane focused and changes nothing.
-        gui.cx.simulate_click(rows.center(), Modifiers::default());
+    }
+
+    #[gpui::test]
+    fn a_click_picks_a_hunk_or_a_line(cx: &mut TestAppContext) {
+        let sb = six_hunks();
+        let mut gui = Gui::open(cx, &sb);
+        open(&mut gui);
+        let (rows, line_height) = gui.shell.read_with(&gui.cx, |shell, _| {
+            let ui = shell.ui();
+            (ui.measures.get(UNSTAGED).expect("rows drawn"), ui.font.line_height)
+        });
+        let at = |line: usize| point(rows.left() + px(30.), rows.top() + line_height * (line as f32 + 0.5));
+        // Each hunk is its heading and 8 lines: line 9 is the second's heading.
+        gui.cx.simulate_click(at(9), Modifiers::default());
         gui.wait_idle();
         assert_eq!(gui.read(|app| app.focus()), PaneId::Details);
-        assert_eq!(stage(&gui, StageView::selected_hunk), 0);
+        assert_eq!(stage(&gui, StageView::selected_hunk), 1);
+        // In line mode, a click on the hunk's heading picks its first change.
+        gui.press("a");
+        gui.cx.simulate_click(at(18), Modifiers::default());
+        gui.wait_idle();
+        assert_eq!(stage(&gui, StageView::selected_hunk), 2);
+        assert!(
+            stage(&gui, |s| s.picked((2, 3)) && !s.picked((2, 4))),
+            "the deleted line"
+        );
+        // And on a changed line, that line.
+        gui.cx.simulate_click(at(23), Modifiers::default());
+        gui.wait_idle();
+        assert!(stage(&gui, |s| s.picked((2, 4)) && !s.picked((2, 3))), "the added line");
     }
 
     #[gpui::test]

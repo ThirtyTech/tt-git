@@ -1224,6 +1224,19 @@ impl Component for BranchesPane {
         }
     }
 
+    /// As enter does: check the branch or tag out, show the stash, open
+    /// the worktree.
+    fn double_click(&self, row: usize) -> Option<Command> {
+        if self.cursor().offset + row >= self.visible.len() {
+            return None;
+        }
+        Some(match self.tab {
+            BranchTab::Stash => Command::ExpandDetails,
+            BranchTab::Worktrees => Command::OpenWorktree,
+            _ => Command::Checkout,
+        })
+    }
+
     fn on_click_part(&mut self, part: PanePart, ctx: &Ctx) -> bool {
         let PanePart::Tab(tab) = part else {
             return false;

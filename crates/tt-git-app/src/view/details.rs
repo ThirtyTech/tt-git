@@ -78,10 +78,24 @@ impl FilesLayout {
     }
 }
 
+/// The first of `options` (from [`DetailsPane::title_right`]) that fits
+/// at the right of a title taking `used` columns, with `room` columns in
+/// all for both.
+pub fn fit_title_right(
+    options: Vec<Vec<TextSpan<'static>>>,
+    used: usize,
+    room: usize,
+) -> Option<Vec<TextSpan<'static>>> {
+    let width = |o: &[TextSpan]| o.iter().map(|s| s.text.width()).sum::<usize>();
+    options.into_iter().find(|o| used + width(o) <= room)
+}
+
 impl DetailsPane {
-    /// The pane's title, after `[n] `: what it shows, what `esc` goes back
-    /// to, blame's position, the search, and whether it's loading. Blame's
-    /// date and recency go at the right, separately.
+    /// The pane's title, after `[n] `, in every view: what it shows (the
+    /// commit, the staging view, the blame), what `esc` goes back to,
+    /// blame's position and a count being typed, the search, and whether
+    /// it's loading. Blame's date and recency go at the right, separately
+    /// ([`title_right`](Self::title_right)).
     pub fn frame_title(&self) -> String {
         let view_title =
             (self.stage.as_ref().map(StageView::title)).or_else(|| self.blame.as_ref().map(BlameView::title));
@@ -114,6 +128,13 @@ impl DetailsPane {
             title.push_str(" loading…");
         }
         title
+    }
+
+    /// What can go at the right of the title, best first (blame's date and
+    /// whether it's the latest version, then that alone): the front end
+    /// shows the first that fits, with [`fit_title_right`].
+    pub fn title_right(&self) -> Vec<Vec<TextSpan<'static>>> {
+        self.blame.as_ref().map(BlameView::title_right).unwrap_or_default()
     }
 
     /// What the pane says instead of its body when there's nothing to show.
@@ -623,5 +644,24 @@ mod tests {
             "{}",
             pane.frame_title()
         );
+        assert!(pane.title_right().is_empty(), "only blame has a right side");
+    }
+
+    #[test]
+    fn the_right_of_the_title_is_the_first_option_that_fits() {
+        let options = || {
+            vec![
+                vec![TextSpan::plain(" changed long ago · latest ")],
+                vec![TextSpan::plain(" latest ")],
+            ]
+        };
+        let text = |o: Option<Vec<TextSpan>>| o.map(|o| o.iter().map(|s| s.text.to_string()).collect::<String>());
+        assert_eq!(
+            text(fit_title_right(options(), 10, 60)).unwrap(),
+            " changed long ago · latest "
+        );
+        assert_eq!(text(fit_title_right(options(), 10, 30)).unwrap(), " latest ");
+        assert_eq!(text(fit_title_right(options(), 10, 17)), None);
+        assert_eq!(text(fit_title_right(options(), 10, 18)).unwrap(), " latest ");
     }
 }

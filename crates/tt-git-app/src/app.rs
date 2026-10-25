@@ -31,9 +31,11 @@ use crate::watcher::RepoWatcher;
 
 mod agent;
 mod editor_pane;
+mod pane_commands;
 mod panes;
 mod plugins;
 mod themes;
+pub use pane_commands::PaneCommand;
 pub use panes::PaneRequest;
 pub use plugins::PluginOptions;
 
@@ -503,7 +505,7 @@ impl App {
     }
 
     /// The focused pane's commands, in the order its help popup lists them.
-    pub fn pane_commands(&self) -> &[Command] {
+    pub fn focused_commands(&self) -> &[Command] {
         self.focused().commands()
     }
 
@@ -705,7 +707,7 @@ impl App {
     /// while [`wants_mouse`](Self::wants_mouse).
     pub fn handle_mouse(&mut self, m: MouseInput) {
         // Only these do anything; any-motion capture also reports every move.
-        if matches!(m.kind, MouseKind::Click | MouseKind::ScrollDown | MouseKind::ScrollUp) {
+        if m.kind != MouseKind::Other {
             self.dirty = true;
         }
         self.mouse(m);
@@ -732,15 +734,16 @@ impl App {
             return;
         };
         if pane == PaneId::Details && self.has_split_pane() {
-            if m.kind == MouseKind::Click {
+            if matches!(m.kind, MouseKind::Click | MouseKind::RightClick) {
                 self.focus = PaneId::Details;
             }
             return;
         }
         let ctx = self.ctx.clone();
         match m.kind {
-            MouseKind::Click => {
-                if pane == PaneId::Details && m.ctrl {
+            MouseKind::Click | MouseKind::RightClick => {
+                let right = m.kind == MouseKind::RightClick;
+                if pane == PaneId::Details && m.ctrl && !right {
                     if let Some(row) = body_row {
                         self.ctrl_click_details(row);
                     }
@@ -758,15 +761,14 @@ impl App {
                     self.refresh_details(false);
                 }
                 let double = match row {
-                    Some(row) => self.is_double_click(pane, row),
-                    None => {
+                    Some(row) if !right => self.is_double_click(pane, row),
+                    _ => {
                         self.last_click = None;
                         false
                     }
                 };
-                if double && pane == PaneId::Graph && row.is_some_and(|r| self.graph.has_commit_at_row(r)) {
-                    // As enter does: the commit fullscreen, files beside the diff.
-                    self.update(Action::Command(Command::ExpandDetails));
+                if double && let Some(cmd) = row.and_then(|r| self.pane_mut(pane).double_click(r)) {
+                    self.update(Action::Command(cmd));
                 }
             }
             MouseKind::ScrollDown | MouseKind::ScrollUp => {

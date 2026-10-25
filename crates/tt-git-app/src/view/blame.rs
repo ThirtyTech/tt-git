@@ -293,31 +293,6 @@ impl BlameView {
             (None, None) => Vec::new(),
         }
     }
-
-    /// The details pane's title while blaming, after `[n] `: the file and
-    /// version, what `esc` goes back to (`trail`, until `[` steps back), the
-    /// position, a count being typed, the search, and `loading…`.
-    pub fn pane_title(&self, trail: Option<&str>) -> String {
-        let mut title = self.title();
-        if let Some(trail) = trail
-            && self.depth() == 1
-        {
-            title.push_str(&format!("  ‹ {trail}"));
-        }
-        if let Some(position) = self.position() {
-            title.push_str(&format!(" {position}"));
-        }
-        if let Some(count) = self.count() {
-            title.push_str(&format!(" go to {count}…"));
-        }
-        if let Some(search) = self.search_title() {
-            title.push_str(&search);
-        }
-        if self.loading() {
-            title.push_str(" loading…");
-        }
-        title
-    }
 }
 
 #[cfg(test)]
@@ -530,16 +505,20 @@ mod tests {
     #[test]
     fn the_title_says_where_and_how_new() {
         let (view, _ctx) = view();
-        assert_eq!(
-            view.pane_title(Some("Status")),
-            "Blame a.rs at working tree  ‹ Status 1/4"
-        );
         let right = view.title_right();
         assert_eq!(right.len(), 2);
         assert!(text(&right[0]).starts_with(" changed "), "{}", text(&right[0]));
         assert!(text(&right[0]).ends_with(" + uncommitted changes · latest "));
         assert_eq!(text(&right[1]), " latest ");
         assert_eq!(right[1][1].role, StyleRole::BlameLatest);
+        // The details pane titles it.
+        let mut details = crate::panes::DetailsPane::default();
+        details.blame = Some(view);
+        details.trail = Some("Status".into());
+        assert_eq!(details.frame_title(), "Blame a.rs at working tree  ‹ Status 1/4");
+        assert_eq!(details.title_right(), right);
+        details.trail = None;
+        assert_eq!(details.frame_title(), "Blame a.rs at working tree 1/4");
     }
 
     #[test]

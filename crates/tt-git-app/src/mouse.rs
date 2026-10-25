@@ -3,7 +3,7 @@
 //! which pane, row or part of a popup it was.
 
 use crate::filter::FilterTab;
-use crate::panes::{BranchTab, PaneId};
+use crate::panes::{BranchTab, PaneId, StageSideId};
 
 /// A mouse event over something the front end has hit-tested.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -18,6 +18,11 @@ pub struct MouseInput {
 pub enum MouseKind {
     /// The left button went down.
     Click,
+    /// The right button went down: picks what's under it as a click does
+    /// (never the second of a double click), before a context menu of
+    /// [`App::pane_commands`](crate::App::pane_commands) opens. The TUI
+    /// leaves the right button to the terminal.
+    RightClick,
     ScrollUp,
     ScrollDown,
     /// Anything else: a move, a release, another button.
@@ -51,6 +56,9 @@ pub enum PanePart {
     FileRow(usize),
     /// The diff beside or below the details pane's file list.
     Diff,
+    /// The `row`-th line on screen of a staging side's rows, under the
+    /// side's title.
+    StageRow { side: StageSideId, row: usize },
 }
 
 /// Where in (or outside) the filter panel the mouse was.

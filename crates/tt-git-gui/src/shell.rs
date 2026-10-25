@@ -99,7 +99,8 @@ impl Shell {
     }
 
     fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
-        // C1: an open menu (menus::bar) has the keys.
+        // An open menu (menus::bar) or context menu has the keys: the app
+        // waits until it closes.
         if !self.focus.is_focused(window) {
             return;
         }

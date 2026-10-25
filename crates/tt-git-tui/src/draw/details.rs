@@ -6,43 +6,26 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
-use super::blame::{draw_blame, recency};
+use super::blame::draw_blame;
 use super::graph::span;
 use super::stage::draw_stage;
 use super::{Draw, Hits, pane_block};
-use crate::panes::{BlameView, DetailsPane, PaneId};
+use crate::panes::{DetailsPane, PaneId};
 use crate::tui_theme::Theme;
 use crate::view::TextSpan;
-use crate::view::details::TextRow;
+use crate::view::details::{TextRow, fit_title_right};
 
 impl Draw for DetailsPane {
     fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme, hits: &mut Hits) {
         let title = self.frame_title();
         // A blame's date and whether it's the latest version go at the
         // right, where there's room: the date goes first when there isn't.
-        let changed = self.blame.as_ref().and_then(BlameView::changed);
-        let recency = self.blame.as_ref().and_then(|v| recency(v, theme));
         let used = Line::raw(format!("[{}] {title}", PaneId::Details.number())).width() + 4;
+        let right = fit_title_right(self.title_right(), used, area.width as usize);
         let mut block = pane_block(PaneId::Details, title, focused, theme);
-        let mut options: Vec<Vec<Span>> = Vec::new();
-        match (changed, recency) {
-            (Some(changed), Some(recency)) => {
-                options.push(vec![
-                    Span::styled(format!(" {changed} · "), theme.date),
-                    recency.clone(),
-                    Span::raw(" "),
-                ]);
-                options.push(vec![Span::raw(" "), recency, Span::raw(" ")]);
-            }
-            (Some(changed), None) => options.push(vec![Span::styled(format!(" {changed} "), theme.date)]),
-            (None, Some(recency)) => options.push(vec![Span::raw(" "), recency, Span::raw(" ")]),
-            (None, None) => {}
-        }
-        if let Some(right) = options
-            .into_iter()
-            .find(|o| used + Line::from(o.clone()).width() <= area.width as usize)
-        {
-            block = block.title_top(Line::from(right).right_aligned());
+        if let Some(right) = right {
+            let spans: Vec<Span> = right.into_iter().map(|s| span(s, theme)).collect();
+            block = block.title_top(Line::from(spans).right_aligned());
         }
         let inner = block.inner(area);
         frame.render_widget(block, area);
@@ -53,7 +36,7 @@ impl Draw for DetailsPane {
             return;
         }
         if let Some(view) = &mut self.stage {
-            draw_stage(view, frame, inner, focused, theme);
+            draw_stage(view, frame, inner, focused, theme, hits);
         } else if let Some(view) = &mut self.blame {
             draw_blame(view, frame, inner, focused, theme);
         } else if self.files.is_some() {

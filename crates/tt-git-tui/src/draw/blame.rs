@@ -3,20 +3,13 @@
 
 use ratatui::Frame;
 use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::text::{Line, Span};
+use ratatui::text::Line;
 use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 
 use super::graph::span;
 use crate::panes::BlameView;
 use crate::tui_theme::Theme;
 use crate::view::TextSpan;
-
-/// Whether the version shown is the newest, for the title: `latest`,
-/// or how many commits have changed the file since, in a color that
-/// stands out. `None` until it's loaded.
-pub fn recency(view: &BlameView, theme: &Theme) -> Option<Span<'static>> {
-    view.recency_span().map(|s| span(s, theme))
-}
 
 pub fn draw_blame(view: &mut BlameView, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
     let commit_rows = view.commit_rows(area.height as usize) as u16;

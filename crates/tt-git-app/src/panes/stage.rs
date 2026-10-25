@@ -459,6 +459,41 @@ impl StageView {
         self.applying = true;
     }
 
+    /// A click on the `row`-th line on screen of side `id`'s rows (under its
+    /// title): makes that side active and picks the hunk the row is in, or
+    /// in line mode the changed line (on a heading or an unchanged line, the
+    /// hunk's nearest change below it, else above). A range being picked
+    /// stretches to it. Returns whether the row was one of the side's.
+    pub fn click(&mut self, id: StageSideId, row: usize) -> bool {
+        let view = self.view(id);
+        let Some(&at) = view.rows.get(view.offset + row) else {
+            return false;
+        };
+        if id != self.side {
+            if !view.has_content() {
+                return false;
+            }
+            self.side = id;
+            self.anchor = None;
+        }
+        let (h, l) = match at {
+            Row::Heading(h) => (h, 0),
+            Row::Line(h, l) => (h, l),
+        };
+        if self.line_mode {
+            let changes: Vec<Pos> = self.active().changes().into_iter().filter(|p| p.0 == h).collect();
+            let Some(&pick) = changes.iter().find(|p| p.1 >= l).or(changes.last()) else {
+                return true;
+            };
+            self.cursor = pick;
+        } else {
+            self.hunk = h;
+        }
+        // What was clicked is on screen already: don't scroll to it.
+        self.follow = false;
+        true
+    }
+
     /// The front end shows `rows` lines of side `id`'s diff: keeps what's
     /// picked on the active side among them, and pages by them. Call
     /// before drawing.

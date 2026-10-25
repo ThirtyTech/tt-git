@@ -172,8 +172,99 @@ fn double_clicking_a_commit_opens_its_files() {
     assert_eq!(t.app().details().subject(), Some(&DetailsSubject::CommitFiles(oid)));
     t.press("esc");
     assert_eq!(t.app().zoom(), Zoom::Off);
+}
 
-    // Only the graph opens anything.
-    t.click_pane_row(PaneId::Status, 0).click_pane_row(PaneId::Status, 0);
+#[test]
+fn double_clicking_does_what_enter_does() {
+    let sb = repo();
+    let mut t = TestDriver::new(&sb);
+    // A file: its staging view.
+    t.click_pane_row(PaneId::Status, 1).click_pane_row(PaneId::Status, 1);
+    t.wait_idle();
+    assert_eq!(
+        t.app().details().subject(),
+        Some(&DetailsSubject::Stage("y.txt".into()))
+    );
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    t.press("esc");
+    // Nothing below the last file.
+    t.click_pane_row(PaneId::Status, 30).click_pane_row(PaneId::Status, 30);
     assert_eq!(t.app().zoom(), Zoom::Off);
+
+    // A branch: checked out.
+    let row = t.app().branches().visible().position(|b| b.name == "alpha").unwrap() as u16;
+    t.click_pane_row(PaneId::Branches, row)
+        .click_pane_row(PaneId::Branches, row);
+    t.wait_idle();
+    assert_eq!(sb.git(&["branch", "--show-current"]).trim(), "alpha");
+}
+
+#[test]
+fn double_clicking_a_folder_folds_it() {
+    let sb = Sandbox::new();
+    sb.commit("first");
+    sb.write("src/a.txt", "a").write("src/b.txt", "b");
+    let mut t = TestDriver::new(&sb);
+    t.press("2");
+    t.press("`");
+    let rows = |t: &TestDriver| {
+        t.pane_lines(PaneId::Status)
+            .iter()
+            .filter(|l| l.contains(".txt"))
+            .count()
+    };
+    assert_eq!(rows(&t), 2, "{:#?}", t.pane_lines(PaneId::Status));
+    t.press("g");
+    assert!(t.app().status().selected_folder().is_some(), "the folder is first");
+    t.click_pane_row(PaneId::Status, 0).click_pane_row(PaneId::Status, 0);
+    assert_eq!(rows(&t), 0, "folded: {:#?}", t.pane_lines(PaneId::Status));
+    t.click_pane_row(PaneId::Status, 0).click_pane_row(PaneId::Status, 0);
+    assert_eq!(rows(&t), 2, "unfolded");
+}
+
+#[test]
+fn the_focused_pane_lists_its_commands_with_their_keys() {
+    let sb = repo();
+    let mut t = TestDriver::new(&sb);
+    let commands = |t: &TestDriver| -> Vec<(String, String)> {
+        t.app().pane_commands().into_iter().map(|c| (c.label, c.key)).collect()
+    };
+    let graph = commands(&t);
+    assert!(graph.contains(&("Checkout".into(), "o".into())), "{graph:#?}");
+    assert!(graph.contains(&("Cherry-pick".into(), "C".into())), "{graph:#?}");
+    t.press("2");
+    let status = commands(&t);
+    assert!(
+        status.contains(&("Stage/unstage".into(), "space".into())),
+        "{status:#?}"
+    );
+    assert!(!status.iter().any(|(l, _)| l == "Cherry-pick"));
+    // Nothing while a popup is open.
+    t.press("?");
+    assert!(commands(&t).is_empty());
+}
+
+#[test]
+fn a_right_click_picks_the_row_but_never_makes_a_double_click() {
+    use tt_git_tui::mouse::{MouseInput, MouseKind, MouseTarget};
+    let sb = repo();
+    let mut t = TestDriver::new(&sb);
+    t.press("2");
+    let right = |t: &mut TestDriver, row| {
+        t.app_mut().handle_mouse(MouseInput {
+            kind: MouseKind::RightClick,
+            ctrl: false,
+            target: MouseTarget::Pane {
+                pane: PaneId::Graph,
+                body_row: Some(row),
+                part: None,
+            },
+        })
+    };
+    right(&mut t, 4);
+    assert_eq!(t.app().focus(), PaneId::Graph);
+    assert_eq!(t.app().graph().selected_index(), 4);
+    right(&mut t, 4);
+    t.click_pane_row(PaneId::Graph, 4);
+    assert_eq!(t.app().zoom(), Zoom::Off, "no double click");
 }

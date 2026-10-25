@@ -598,6 +598,12 @@ impl BlameView {
     }
 
     /// Selects the line on visible row `row` of the code.
+    /// Whether the `row`-th line on screen is one of the file's.
+    pub fn has_line_at_row(&self, row: usize) -> bool {
+        let level = self.level();
+        row < level.cursor.height && level.cursor.offset + row < level.len()
+    }
+
     pub fn click(&mut self, row: usize, ctx: &Ctx) {
         let len = self.level().len();
         let level = self.level_mut();
