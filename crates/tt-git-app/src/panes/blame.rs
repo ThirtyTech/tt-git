@@ -165,6 +165,12 @@ impl Level {
         Some((&blame.commits[line.commit], &blame.paths[line.path], line.orig_line))
     }
 
+    /// The load id, for tests that hand the view its blame.
+    #[cfg(test)]
+    pub(crate) fn id_for_tests(&self) -> u64 {
+        self.id
+    }
+
     /// The selected line's row on screen as of the last draw.
     fn row(&self) -> usize {
         self.cursor.selected.saturating_sub(self.cursor.offset)
