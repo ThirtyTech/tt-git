@@ -1,6 +1,8 @@
 //! Screen geometry the front end reports: where it drew each pane. Units
 //! are the front end's own: terminal cells for the TUI, logical pixels for
-//! the GUI. Code that reads a size as cells is marked `GUI:`.
+//! the GUI. A pane's PTY size comes from a rect through
+//! [`view::terminal::pty_size`](crate::view::terminal::pty_size) and the
+//! front end's cell size (1×1 in the TUI).
 
 /// A rectangle: its top-left corner and its size.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]

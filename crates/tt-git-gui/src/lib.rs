@@ -33,7 +33,6 @@ pub mod layout;
 pub mod model;
 pub mod overlay;
 pub mod panes;
-mod placeholder;
 pub mod rows;
 pub mod shell;
 pub mod terminal;

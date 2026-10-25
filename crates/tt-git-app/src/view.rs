@@ -3,9 +3,8 @@
 //! each [`StyleRole`] looks from the theme
 //! ([`Theme::role`](crate::theme::Theme::role) gives the theme's choice).
 //!
-//! So far only the graph has one ([`graph`]). Each area ported to the GUI
-//! fills in its own module here; they're declared already so no port has
-//! to edit this file.
+//! Each area has its own module: [`graph`], [`status`], [`branches`],
+//! [`details`], [`stage`], [`blame`], [`dialogs`] and [`terminal`].
 
 use std::borrow::Cow;
 

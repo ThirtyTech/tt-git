@@ -8476,7 +8476,6 @@ dependencies = [
  "tt-git-plugin",
  "tt-git-testkit",
  "unicode-width",
- "vt100 0.17.0",
 ]
 
 [[package]]

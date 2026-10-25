@@ -17,7 +17,6 @@ tt-git-core.workspace = true
 tt-git-graph.workspace = true
 tt-git-plugin.workspace = true
 unicode-width = "0.2"
-vt100 = "0.17.0"
 
 [dev-dependencies]
 insta.workspace = true
