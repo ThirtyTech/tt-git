@@ -52,10 +52,14 @@ impl AppModel {
         app.set_runtime(Tokio::handle(cx));
         app.enable_open_repository();
         app.enable_ui_zoom();
+        app.enable_ui_fonts();
         // The install scripts behind `tt-git update` only know the TUI's
         // archives, not the app's packages.
         app.disable_self_update();
         app.start();
+        if let Some(family) = crate::font::missing(cx) {
+            app.ui_font_missing(&family, crate::font::default_family(cx));
+        }
         let rx = Rc::new(RefCell::new(rx));
         let waiting = rx.clone();
         let actions = cx.spawn(async move |this, cx| {
@@ -152,6 +156,16 @@ impl AppModel {
             // Every window redraws at the new zoom (`Shell` watches it).
             let percent = crate::zoom::step(step, cx);
             self.app.ui_zoomed(percent);
+        }
+        if self.app.take_font_picker() {
+            let current = crate::font::ui_font(cx).family;
+            let fonts = crate::font::choices(cx);
+            self.app
+                .open_font_picker(fonts, current.as_deref(), crate::font::default_family(cx));
+        }
+        if let Some(family) = self.app.take_font_pick() {
+            // Every window redraws in it (`Shell` watches it).
+            crate::font::set_family(family, cx);
         }
         if let Some(text) = self.app.take_clipboard() {
             cx.write_to_clipboard(ClipboardItem::new_string(text));

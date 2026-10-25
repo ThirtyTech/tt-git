@@ -482,6 +482,9 @@ impl App {
         if self.zooms() {
             items.extend(super::ZOOM_COMMANDS.iter().map(|c| builtin(*c)));
         }
+        if self.chooses_fonts() {
+            items.push(builtin(Command::Font));
+        }
         items
     }
 

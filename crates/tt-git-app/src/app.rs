@@ -31,10 +31,12 @@ use crate::watcher::RepoWatcher;
 
 mod agent;
 mod editor_pane;
+mod fonts;
 mod pane_commands;
 mod panes;
 mod plugins;
 mod themes;
+pub use fonts::FontChoice;
 pub use pane_commands::PaneCommand;
 pub use panes::PaneRequest;
 pub use plugins::PluginOptions;
@@ -279,6 +281,12 @@ pub struct App {
     zooms: bool,
     /// A zoom command ran, for the front end to take.
     zoom_wanted: Option<ZoomStep>,
+    /// The front end can draw in any font (the desktop app).
+    chooses_fonts: bool,
+    /// [`Command::Font`] ran, for the front end to take.
+    font_picker_wanted: bool,
+    /// The font picked in the picker, for the front end to take.
+    font_picked: Option<Option<String>>,
     /// `tt-git update` can update this front end. Not the desktop app,
     /// which updates from its own download.
     self_updates: bool,
@@ -394,6 +402,9 @@ impl App {
             opens_repos: false,
             zooms: false,
             zoom_wanted: None,
+            chooses_fonts: false,
+            font_picker_wanted: false,
+            font_picked: None,
             open_repo_wanted: false,
             self_updates: true,
             watcher: None,
@@ -943,6 +954,10 @@ impl App {
                 self.modal = None;
                 self.pick_theme(name);
             }
+            ModalOutcome::Font(family) => {
+                self.modal = None;
+                self.pick_font(family);
+            }
             ModalOutcome::Next(modal) => self.modal = Some(*modal),
             ModalOutcome::PluginAction(action) => {
                 self.modal = None;
@@ -991,10 +1006,12 @@ impl App {
     fn all_help_rows(&self) -> Vec<(String, &'static str)> {
         let context = self.focused().context();
         let zoom: &[Command] = if self.zooms { ZOOM_COMMANDS } else { &[] };
-        let sections: [(Context, &[Command]); 3] = [
+        let font: &[Command] = if self.chooses_fonts { &[Command::Font] } else { &[] };
+        let sections: [(Context, &[Command]); 4] = [
             (context, self.focused().commands()),
             (Context::Global, ALL_GLOBAL),
             (Context::Global, zoom),
+            (Context::Global, font),
         ];
         let mut rows = Vec::new();
         for (ctx, cmds) in sections {
@@ -1012,10 +1029,12 @@ impl App {
     pub fn all_help_row_count(&self) -> usize {
         let context = self.focused().context();
         let zoom: &[Command] = if self.zooms { ZOOM_COMMANDS } else { &[] };
-        let sections: [(Context, &[Command]); 3] = [
+        let font: &[Command] = if self.chooses_fonts { &[Command::Font] } else { &[] };
+        let sections: [(Context, &[Command]); 4] = [
             (context, self.focused().commands()),
             (Context::Global, ALL_GLOBAL),
             (Context::Global, zoom),
+            (Context::Global, font),
         ];
         sections
             .iter()
@@ -1530,6 +1549,17 @@ impl App {
     /// keeping the rest of the file. `None` when there's no config file to
     /// save to (tests); the error names the file.
     fn save_setting(&self, table: &str, key: &str, value: &str) -> Option<Result<std::path::PathBuf, String>> {
+        self.edit_config(|text| crate::config::set_in_table(text, table, key, value))
+    }
+
+    /// Takes `key` out of `[table]` in config.toml, as
+    /// [`save_setting`](Self::save_setting) sets it.
+    fn remove_setting(&self, table: &str, key: &str) -> Option<Result<std::path::PathBuf, String>> {
+        self.edit_config(|text| crate::config::remove_in_table(text, table, key))
+    }
+
+    /// Rewrites config.toml (empty if there's none yet) with `edit`.
+    fn edit_config(&self, edit: impl FnOnce(&str) -> String) -> Option<Result<std::path::PathBuf, String>> {
         let path = self.themes.as_ref().and_then(|t| t.config_path.clone())?;
         let saved = match std::fs::read_to_string(&path) {
             Ok(text) => Ok(text),
@@ -1540,7 +1570,7 @@ impl App {
             if let Some(dir) = path.parent() {
                 std::fs::create_dir_all(dir)?;
             }
-            std::fs::write(&path, crate::config::set_in_table(&text, table, key, value))
+            std::fs::write(&path, edit(&text))
         });
         Some(match saved {
             Ok(()) => Ok(path),
@@ -2850,6 +2880,10 @@ impl App {
             }
             Command::ZoomIn | Command::ZoomOut | Command::ResetZoom => {
                 self.notice = Some("zooming needs the desktop app: use your terminal's font size".into());
+            }
+            Command::Font if self.chooses_fonts => self.font_picker_wanted = true,
+            Command::Font => {
+                self.notice = Some("choosing a font needs the desktop app: use your terminal's font".into());
             }
             _ => {
                 let ctx = self.ctx.clone();

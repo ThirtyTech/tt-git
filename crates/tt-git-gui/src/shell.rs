@@ -33,6 +33,27 @@ pub const MAIN: &str = "main";
 /// What ctrl+wheel movement adds up under, until it makes a zoom step.
 const ZOOM_WHEEL: &str = "zoom-wheel";
 
+/// What the window's font is made from: when any of it changes, the font
+/// is measured again.
+#[derive(Debug, Clone, PartialEq)]
+struct FontKey {
+    zoom: u16,
+    font: crate::font::UiFont,
+    /// The family the font picker has highlighted while it's open
+    /// (`Some(None)` for the default).
+    preview: Option<Option<String>>,
+}
+
+impl FontKey {
+    fn now(model: &Entity<AppModel>, cx: &App) -> Self {
+        Self {
+            zoom: crate::zoom::percent(cx),
+            font: crate::font::ui_font(cx),
+            preview: model.read(cx).app().font_preview().map(|f| f.map(str::to_string)),
+        }
+    }
+}
+
 /// The window's root view, around an [`AppModel`].
 pub struct Shell {
     model: Entity<AppModel>,
@@ -40,8 +61,8 @@ pub struct Shell {
     focus: FocusHandle,
     /// The window title last set.
     title: String,
-    /// The [zoom](crate::zoom) `ui.font` is at.
-    zoom: u16,
+    /// What `ui.font` was made from.
+    font_key: FontKey,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -80,7 +101,9 @@ impl Shell {
             // C1: the active window's menus are the app's.
             cx.observe_window_activation(window, |_, _, cx| cx.notify()),
             cx.observe_global::<crate::zoom::UiZoom>(|_, cx| cx.notify()),
+            cx.observe_global::<crate::font::UiFont>(|_, cx| cx.notify()),
         ];
+        let font_key = FontKey::now(&model, cx);
         ask_before_closing(&model, window, cx);
         // Where it opened counts too, if it's never moved.
         crate::window_state::remember_window(window, cx);
@@ -94,7 +117,7 @@ impl Shell {
             model,
             focus,
             title: String::new(),
-            zoom: crate::zoom::percent(cx),
+            font_key,
             _subscriptions: subscriptions,
         }
     }
@@ -133,15 +156,19 @@ impl Shell {
             .update(cx, |m, cx| m.send(Action::Command(Command::About), cx));
     }
 
-    /// Picks up a new [zoom](crate::zoom): the font at its size, and
-    /// gpui-component's theme to match.
-    fn sync_zoom(&mut self, cx: &mut Context<Self>) {
-        let zoom = crate::zoom::percent(cx);
-        if zoom != self.zoom {
-            self.zoom = zoom;
-            let font = MonoFont::new(cx);
+    /// Picks up a new [zoom](crate::zoom), [font](crate::font::UiFont) or
+    /// font the picker is previewing: the font to match, and
+    /// gpui-component's theme with it.
+    fn sync_font(&mut self, cx: &mut Context<Self>) {
+        let key = FontKey::now(&self.model, cx);
+        if key != self.font_key {
+            let font = match &key.preview {
+                Some(family) => MonoFont::with_family(family.as_deref(), cx),
+                None => MonoFont::new(cx),
+            };
             self.ui.theme.apply_to_components(&font, cx);
             self.ui.font = Rc::new(font);
+            self.font_key = key;
         }
     }
 
@@ -205,7 +232,7 @@ impl Focusable for Shell {
 impl Render for Shell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_theme(cx);
-        self.sync_zoom(cx);
+        self.sync_font(cx);
         let ui = self.ui.clone();
         ui.measures.begin_frame();
         let title = self.model.read(cx).app().terminal_title();
