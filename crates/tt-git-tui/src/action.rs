@@ -2,7 +2,7 @@
 
 use tt_git_core::{
     BaseBranches, BranchDeletes, BranchEntry, BranchHistory, Checkout, CheckoutPlan, Commit, CommitFile, GitRef,
-    GoneBranches, Head, NoStep, StageSide, Stash, Status, StatusEntry, UndoStep, Worktree,
+    GoneBranches, Head, NoStep, ResetPlan, StageSide, Stash, Status, StatusEntry, UndoStep, Worktree,
 };
 use tt_git_plugin::runtime::CommandLog;
 use tt_git_plugin::socket::Call;
@@ -130,6 +130,18 @@ pub enum Action {
     /// Check out `plan`, offering to stash first if there are uncommitted
     /// changes.
     Checkout(CheckoutPlan),
+    /// Reset the current branch to `target` (a commit, branch or tag),
+    /// shown as `display`: works out what it would lose, then asks how.
+    Reset {
+        target: String,
+        display: String,
+    },
+    /// What resetting to `target` would lose was worked out (or the error).
+    ResetPlanned {
+        target: String,
+        display: String,
+        plan: Result<ResetPlan, String>,
+    },
     /// The next undo step was worked out (or why there's none,
     /// or the error reading the reflog).
     UndoPlanned(Result<Result<UndoStep, NoStep>, String>),

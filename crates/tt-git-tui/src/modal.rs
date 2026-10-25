@@ -8,8 +8,8 @@ use ratatui::style::Modifier;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tt_git_core::{
-    CheckoutPlan, DiscardKind, DiscardScope, IgnoreTarget, InProgress, LogFilter, PatchOp, StashScope, StatusEntry,
-    UndoStep, message_regex,
+    CheckoutPlan, DiscardKind, DiscardScope, IgnoreTarget, InProgress, LogFilter, PatchOp, ResetMode, StashScope,
+    StatusEntry, UndoStep, message_regex,
 };
 
 use crate::agent::{AgentAction, AgentRequest};
@@ -135,6 +135,13 @@ pub enum GitOp {
         oid: String,
         summary: String,
         mainline: Option<usize>,
+    },
+    /// `git reset --<mode> <target>` on the current branch; `display` is
+    /// the target as the user picked it (a branch, tag or short commit).
+    Reset {
+        target: String,
+        display: String,
+        mode: ResetMode,
     },
     Continue(InProgress),
     Abort(InProgress),
@@ -272,6 +279,7 @@ impl GitOp {
             GitOp::Revert {
                 oid, mainline: Some(n), ..
             } => format!("revert {} -m {n}", &oid[..oid.len().min(7)]),
+            GitOp::Reset { display, mode, .. } => format!("reset --{} {display}", mode.name()),
             GitOp::Continue(op) => format!("{} --continue", op.command()),
             GitOp::Abort(op) => format!("{} --abort", op.command()),
             GitOp::StashPush { scope, .. } => match scope {
@@ -427,6 +435,9 @@ pub enum PaletteTarget {
     Op(GitOp),
     /// A color theme, by name.
     Theme(String),
+    /// Another dialog, such as a confirm before something that can't be
+    /// taken back.
+    Modal(Box<Modal>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -566,6 +577,8 @@ pub enum ModalOutcome {
     Agent(AgentRequest),
     /// Keep this color theme.
     Theme(String),
+    /// Close this modal and open that one.
+    Next(Box<Modal>),
 }
 
 impl Modal {
@@ -710,6 +723,7 @@ impl Modal {
                                 PaletteTarget::PluginPane(p, e) => ModalOutcome::PluginPane(p.clone(), e.clone()),
                                 PaletteTarget::Op(op) => ModalOutcome::Run(op.clone()),
                                 PaletteTarget::Theme(name) => ModalOutcome::Theme(name.clone()),
+                                PaletteTarget::Modal(modal) => ModalOutcome::Next(modal.clone()),
                             },
                             None => ModalOutcome::Open,
                         };

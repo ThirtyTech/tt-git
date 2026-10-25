@@ -34,6 +34,10 @@ pub enum UndoTarget {
     /// leaving the index and working tree alone: undoing a commit puts its
     /// changes back, staged.
     SoftReset(String),
+    /// Move the current branch (or detached HEAD) here with `reset --mixed`,
+    /// leaving the working tree alone: undoing a mixed reset matches the
+    /// index to the commit again.
+    MixedReset(String),
     /// Undo a rebase of `branch` started while HEAD was elsewhere: switch
     /// back to `back` (a [`Branch`](Self::Branch) or [`Detach`](Self::Detach)),
     /// then move `branch` from `rebased` back to `before`. With `before`
@@ -49,20 +53,26 @@ pub enum UndoTarget {
 impl UndoTarget {
     /// Whether the step switches branches rather than moving the current one.
     pub fn is_switch(&self) -> bool {
-        !matches!(self, UndoTarget::Reset(_) | UndoTarget::SoftReset(_))
+        !matches!(
+            self,
+            UndoTarget::Reset(_) | UndoTarget::SoftReset(_) | UndoTarget::MixedReset(_)
+        )
     }
 
     /// Whether the step rewrites files in the working tree, and so has to
-    /// ask about uncommitted changes first. A soft reset never does.
+    /// ask about uncommitted changes first. A soft or mixed reset never does.
     pub fn touches_worktree(&self) -> bool {
-        !matches!(self, UndoTarget::SoftReset(_))
+        !matches!(self, UndoTarget::SoftReset(_) | UndoTarget::MixedReset(_))
     }
 
     /// The target for messages: a branch name or a short commit.
     pub fn display(&self) -> String {
         match self {
             UndoTarget::Branch(name) => name.clone(),
-            UndoTarget::Detach(oid) | UndoTarget::Reset(oid) | UndoTarget::SoftReset(oid) => short(oid).to_string(),
+            UndoTarget::Detach(oid)
+            | UndoTarget::Reset(oid)
+            | UndoTarget::SoftReset(oid)
+            | UndoTarget::MixedReset(oid) => short(oid).to_string(),
             UndoTarget::LeaveRebase { back, .. } => back.display(),
         }
     }
@@ -283,7 +293,8 @@ impl<'a> Action<'a> {
     fn what(&self, elsewhere: bool) -> String {
         match &self.change {
             Change::Checkout { to, .. } => format!("checkout of {}", short_name(to)),
-            Change::Move { subject } => subject.to_string(),
+            // tt-git's own resets name their mode, and git adds this.
+            Change::Move { subject } => subject.strip_suffix(": updating HEAD").unwrap_or(subject).to_string(),
             Change::Rebase { onto, branch, .. } => {
                 let mut what = "rebase".to_string();
                 if let Some(branch) = branch.filter(|_| elsewhere) {
@@ -396,8 +407,11 @@ fn undo_target(action: &Action<'_>, elsewhere: Option<Elsewhere<'_>>, refs: &imp
     }
     match action.change {
         Change::Checkout { from: name, .. } => back(name, action.from),
-        Change::Move { subject } if is_own_commit(subject) => {
+        Change::Move { subject } if is_own_commit(subject) || subject.starts_with("reset --soft ") => {
             action.from.map(|from| UndoTarget::SoftReset(from.to_string()))
+        }
+        Change::Move { subject } if subject.starts_with("reset --mixed ") => {
+            action.from.map(|from| UndoTarget::MixedReset(from.to_string()))
         }
         _ => action.from.map(|from| UndoTarget::Reset(from.to_string())),
     }
@@ -414,7 +428,7 @@ fn short(oid: &str) -> &str {
 }
 
 /// A checkout's from/to for display: full commit ids shortened.
-fn short_name(name: &str) -> &str {
+pub(crate) fn short_name(name: &str) -> &str {
     if name.len() == 40 && name.bytes().all(|b| b.is_ascii_hexdigit()) {
         short(name)
     } else {
@@ -648,6 +662,36 @@ mod tests {
             assert_eq!(undo.target, kind("c3"), "{subject}");
             assert_eq!(undo.what, subject);
         }
+    }
+
+    #[test]
+    fn a_reset_is_undone_in_its_own_mode() {
+        for (subject, target, what) in [
+            (
+                "reset --soft main: updating HEAD",
+                UndoTarget::SoftReset("c3".into()),
+                "reset --soft main",
+            ),
+            (
+                "reset --mixed b2: updating HEAD",
+                UndoTarget::MixedReset("c3".into()),
+                "reset --mixed b2",
+            ),
+            (
+                "reset --hard a1: updating HEAD",
+                UndoTarget::Reset("c3".into()),
+                "reset --hard a1",
+            ),
+        ] {
+            let mut story = BASE.to_vec();
+            story.push(("z9", subject));
+            let entries = log(&story);
+            let undo = plan(&entries, &Refs, "z9", "main").unwrap();
+            assert_eq!(undo.target, target, "{subject}");
+            assert_eq!(undo.what, what);
+            assert!(!undo.target.is_switch());
+        }
+        assert!(!UndoTarget::MixedReset("c3".into()).touches_worktree());
     }
 
     #[test]
