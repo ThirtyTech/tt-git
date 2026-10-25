@@ -294,7 +294,7 @@ fn slash_filters_commits_by_message() {
     // first: ^feat, ^docs, ^fix. tab fills in the first; enter applies it.
     t.press("tab").press("enter");
     assert_eq!(summaries(&t), ["feat: Alice's feature", "feat(graph): Add a thing"]);
-    assert!(t.pane_title(PaneId::Graph).contains("Graph [all · message /^feat]"));
+    assert!(t.pane_title(PaneId::Graph).contains("Graph [all · subject /^feat]"));
     insta::assert_snapshot!("message_filter_applied", t.screen());
 
     // / again starts from the pattern; tab steps on to the next preset.
@@ -308,7 +308,7 @@ fn slash_filters_commits_by_message() {
     assert_eq!(summaries(&t), ["feat: Alice's feature"]);
     assert!(
         t.pane_title(PaneId::Graph)
-            .contains("Graph [all · author Alice · message /^feat]")
+            .contains("Graph [all · author Alice · subject /^feat]")
     );
 
     // esc clears every part.
@@ -337,6 +337,39 @@ fn message_filter_refuses_an_invalid_regex() {
 }
 
 #[test]
+fn ctrl_t_searches_the_whole_message_or_the_diff() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "plain\n", "feat: Add a thing\n\nFixes #12 along the way.");
+    sb.commit_file("b.txt", "fn needle() {}\n", "fix: Mend it");
+    sb.commit_file("c.txt", "c\n", "docs: Describe #12");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
+
+    t.press("/").type_text("^fixes #12").press("ctrl+t");
+    insta::assert_snapshot!("message_filter_whole_message", t.screen());
+    t.press("enter");
+    assert_eq!(summaries(&t), ["feat: Add a thing"]);
+    assert!(
+        t.pane_title(PaneId::Graph)
+            .contains("Graph [all · message /^fixes #12]")
+    );
+
+    // / opens on the choice the filter uses; ctrl+t moves on to the diff.
+    t.press("/").press("ctrl+u").type_text("needle").press("ctrl+t");
+    insta::assert_snapshot!("message_filter_diff", t.screen());
+    t.press("enter");
+    assert_eq!(summaries(&t), ["fix: Mend it"]);
+    assert!(t.pane_title(PaneId::Graph).contains("Graph [all · diff /needle]"));
+
+    // And round to the subject again.
+    t.press("/")
+        .press("ctrl+u")
+        .type_text("#12")
+        .press("ctrl+t")
+        .press("enter");
+    assert_eq!(summaries(&t), ["docs: Describe #12"]);
+}
+
+#[test]
 fn message_presets_come_from_config() {
     let sb = conventional();
     let mut config = Config::default();
@@ -351,7 +384,11 @@ fn no_presets_without_subject_prefixes() {
     let sb = two_authors();
     let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
     t.press("/");
-    assert!(t.screen().contains("enter filter · esc cancel"), "{}", t.screen());
+    assert!(
+        t.screen().contains("enter filter · ctrl+t search in · esc cancel"),
+        "{}",
+        t.screen()
+    );
     t.press("tab");
     let Some(Modal::Prompt { input, .. }) = t.app().modal() else {
         panic!("prompt closed")

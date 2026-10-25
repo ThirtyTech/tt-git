@@ -2,7 +2,7 @@
 source: crates/tt-git-tui/tests/graph_filter.rs
 expression: t.screen()
 ---
-╭[1] Graph [all · message /^feat] 1/2──────────────────────────────────────────────────────────────╮
+╭[1] Graph [all · subject /^feat] 1/2──────────────────────────────────────────────────────────────╮
 │●  feat: Alice's feature                                             Alice             23h 3628208│
 │●  feat(graph): Add a thing                                          Test User         23h 4d302f6│
 │                                                                                                  │

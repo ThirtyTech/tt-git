@@ -640,7 +640,7 @@ impl GraphPane {
                 t.push_str(&format!(" · {what} {path}"));
             }
             if let Some(message) = &self.filter.message {
-                t.push_str(&format!(" · message /{message}"));
+                t.push_str(&format!(" · {} /{message}", self.filter.search_in.label()));
             }
         }
         t.push(']');
