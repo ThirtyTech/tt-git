@@ -446,8 +446,8 @@ impl DetailsPane {
         let picks = [(hunk, 0, hunk.lines.len().saturating_sub(1))];
         let short = |oid: &str| oid.chars().take(7).collect::<String>();
         Some(Ok(match subject {
-            DetailsSubject::File(path) => {
-                // The file's diff is in staged and unstaged sections.
+            DetailsSubject::File(path) | DetailsSubject::Folder(path) => {
+                // The file's (or folder's) diff is in staged and unstaged sections.
                 let staged = self.lines[..found.rows.start]
                     .iter()
                     .rev()
