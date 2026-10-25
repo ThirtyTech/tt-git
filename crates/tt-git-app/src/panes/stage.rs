@@ -24,7 +24,8 @@ pub enum StageSideId {
 }
 
 impl StageSideId {
-    fn other(self) -> Self {
+    /// The other side.
+    pub fn other(self) -> Self {
         match self {
             StageSideId::Unstaged => StageSideId::Staged,
             StageSideId::Staged => StageSideId::Unstaged,
