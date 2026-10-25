@@ -2613,6 +2613,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "tt-git-app"
+version = "0.9.0"
+dependencies = [
+ "notify-debouncer-mini",
+ "portable-pty",
+ "regex",
+ "serde",
+ "serde_json",
+ "syntect",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "toml",
+ "tracing",
+ "tt-git-core",
+ "tt-git-graph",
+ "tt-git-plugin",
+ "tt-git-testkit",
+ "two-face",
+ "unicode-width",
+ "vt100 0.17.0",
+]
+
+[[package]]
 name = "tt-git-core"
 version = "0.9.0"
 dependencies = [
@@ -2676,23 +2700,15 @@ dependencies = [
  "crossterm",
  "futures",
  "insta",
- "notify-debouncer-mini",
- "portable-pty",
  "ratatui",
- "regex",
- "serde",
- "serde_json",
- "syntect",
  "tempfile",
- "thiserror 2.0.21",
  "tokio",
- "toml",
  "tracing",
+ "tt-git-app",
  "tt-git-core",
  "tt-git-graph",
  "tt-git-plugin",
  "tt-git-testkit",
- "two-face",
  "unicode-width",
  "vt100 0.17.0",
 ]

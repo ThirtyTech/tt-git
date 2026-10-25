@@ -1,0 +1,34 @@
+[package]
+name = "tt-git-app"
+description = "tt-git's app state and logic, shared by its front ends"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+# No ratatui or crossterm: drawing and terminal input belong to the front
+# ends (tests/front_end_free.rs checks).
+[dependencies]
+notify-debouncer-mini = "0.7.0"
+portable-pty = "0.9.0"
+regex.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+syntect.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+tt-git-core.workspace = true
+tt-git-graph.workspace = true
+tt-git-plugin.workspace = true
+two-face.workspace = true
+unicode-width = "0.2"
+vt100 = "0.17.0"
+
+[dev-dependencies]
+tempfile.workspace = true
+tt-git-testkit.workspace = true
+
+[lints]
+workspace = true

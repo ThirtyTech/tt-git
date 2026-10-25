@@ -119,7 +119,7 @@ fn start_detached(launch: &EditorLaunch) -> Result<Option<i32>, String> {
     // Reap it when it exits.
     let _ = std::thread::Builder::new()
         .name("tt-git-editor".into())
-        .stack_size(crate::IO_THREAD_STACK)
+        .stack_size(tt_git_app::IO_THREAD_STACK)
         .spawn(move || child.wait());
     Ok(None)
 }
