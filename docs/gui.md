@@ -46,7 +46,8 @@ Things that work differently from the TUI, on purpose:
   scroll offset and the view model returns only the rows on screen. The
   GUI doesn't scroll lists itself: the wheel becomes `MouseKind::ScrollUp`
   and `ScrollDown` (one per 3 lines of movement) and the app scrolls.
-- **One window per repository.** "Open repository" (in the palette, from
+- **One window per repository.** "Open repository" (in the palette and the
+  Repository menu, from
   `Command::OpenRepository`, which only a front end that calls
   `App::enable_open_repository` offers) opens another in a window of its
   own. Opening another worktree still replaces the window, as the TUI
