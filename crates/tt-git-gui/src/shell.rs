@@ -16,6 +16,7 @@ use tt_git_app::keymap::Command;
 use tt_git_app::layout::{Placed, Split};
 use tt_git_app::panes::PaneId;
 
+use crate::dialogs::about;
 use crate::dialogs::{self, DialogCx};
 use crate::font::MonoFont;
 use crate::frame::frame_id;
@@ -42,6 +43,8 @@ pub struct Shell {
     title: String,
     /// The [zoom](crate::zoom) `ui.font` is at.
     zoom: u16,
+    /// Whether the [About dialog](about) is open.
+    about: bool,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -95,6 +98,7 @@ impl Shell {
             focus,
             title: String::new(),
             zoom: crate::zoom::percent(cx),
+            about: false,
             _subscriptions: subscriptions,
         }
     }
@@ -114,6 +118,14 @@ impl Shell {
         if !self.focus.is_focused(window) {
             return;
         }
+        // The About dialog has the keys while it's open.
+        if self.about {
+            cx.stop_propagation();
+            if about::closes(&event.keystroke.key) {
+                self.close_about(cx);
+            }
+            return;
+        }
         if let Some(key) = keys::key_combo(&event.keystroke, event.prefer_character_input) {
             cx.stop_propagation();
             self.model.update(cx, |m, cx| m.key(key, cx));
@@ -126,9 +138,15 @@ impl Shell {
         self.model.update(cx, |m, cx| m.send(Action::Command(action.0), cx));
     }
 
-    /// C1: the app menu's About.
-    fn about(&mut self, _: &About, window: &mut Window, cx: &mut Context<Self>) {
-        menus::about(window, cx);
+    /// C1: the app menu's About opens the About dialog.
+    fn about(&mut self, _: &About, _: &mut Window, cx: &mut Context<Self>) {
+        self.about = true;
+        cx.notify();
+    }
+
+    fn close_about(&mut self, cx: &mut Context<Self>) {
+        self.about = false;
+        cx.notify();
     }
 
     /// Picks up a new [zoom](crate::zoom): the font at its size, and
@@ -212,9 +230,10 @@ impl Render for Shell {
             self.title = title;
         }
 
-        let (main, help, overlays, shown, menu_specs) = self.model.update(cx, |model, _| {
+        let about_open = self.about;
+        let (main, help, mut overlays, shown, menu_specs) = self.model.update(cx, |model, _| {
             let app = model.app_mut();
-            let menu_specs = menus::build(app);
+            let menu_specs = menus::build(app, about_open);
             app.begin_frame();
             let focus = app.focus();
             let placed = layout::placed(app);
@@ -246,6 +265,13 @@ impl Render for Shell {
             overlays.extend(dialogs::error(&mut cx));
             (main, help, overlays, shown, menu_specs)
         });
+        if about_open {
+            let shell = cx.entity().downgrade();
+            let close: about::Close = Rc::new(move |_, cx| {
+                let _ = shell.update(cx, |shell, cx| shell.close_about(cx));
+            });
+            overlays.push(about::render(&ui, close));
+        }
         // C1: the menus, native for the active window and drawn in its
         // title bar.
         let id = window.window_handle().window_id();

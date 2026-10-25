@@ -11,6 +11,7 @@
 //! | `discard_all.rs` | `Modal::DiscardAll` |
 //! | `filter.rs` | `Modal::Filter`: the graph's filter panel |
 //! | `error.rs` | the error popup |
+//! | `about.rs` | the About dialog, which the shell opens (the app has no `Modal` for it) |
 //!
 //! Each returns an element laid over the main area (it's inside a
 //! `.relative()` container the size of the area under the help bar).
@@ -21,6 +22,7 @@ use tt_git_app::modal::Modal;
 
 use crate::ui::Ui;
 
+pub mod about;
 pub mod confirm;
 pub mod discard_all;
 pub mod error;

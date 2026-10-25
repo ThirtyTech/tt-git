@@ -1,19 +1,20 @@
 ---
-// An annotated screenshot from src/assets/screens/, made by `pnpm screens`.
+// A screenshot from src/assets/screens/: an annotated `.webp` made by
+// `pnpm screens`, or a `gui-*.png` captured from the desktop app's window.
 // The image is served as rendered (no re-encoding), so text stays crisp;
-// clicking it opens the full 1920×1080 image.
+// clicking it opens it full size.
 import type { ImageMetadata } from 'astro';
 
 interface Props {
-	/** File name in src/assets/screens/, without `.webp`. */
+	/** File name in src/assets/screens/, without `.webp` or `.png`. */
 	name: string;
 	alt: string;
 	caption?: string;
 }
 
-const images = import.meta.glob<{ default: ImageMetadata }>('../assets/screens/*.webp', { eager: true });
+const images = import.meta.glob<{ default: ImageMetadata }>('../assets/screens/*.{webp,png}', { eager: true });
 const { name, alt, caption } = Astro.props;
-const image = images[`../assets/screens/${name}.webp`]?.default;
+const image = (images[`../assets/screens/${name}.webp`] ?? images[`../assets/screens/${name}.png`])?.default;
 if (!image) throw new Error(`No screenshot named "${name}" in src/assets/screens/`);
 ---
 

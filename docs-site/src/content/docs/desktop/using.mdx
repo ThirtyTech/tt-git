@@ -4,6 +4,7 @@ description: "What the desktop app does that the terminal app doesn't: menus, ri
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/Screenshot.astro';
 
 The desktop app works like the [terminal app](/getting-started/tour/), with
 the same panes and keys. This page covers what's different.
@@ -19,7 +20,7 @@ item does exactly what pressing its key does.
 
 | Menu | Holds |
 |---|---|
-| **tt-git** | *About tt-git* (the version), *Theme*, *Plugin logs* and *Quit* |
+| **tt-git** | *About tt-git* (see [About](#about)), *Theme*, *Plugin logs* and *Quit* |
 | **Repository** | *Fetch*, *Prune gone*, *Pull*, *Push*, *Refresh*; *Continue merge/rebase*, *Abort merge/rebase*, *Undo*; *Ask agent*; *Open repository* |
 | **View** | Focus *Graph*, *Status*, *Branches* or *Details*; *Next pane*, *Prev pane*; *Zoom*; *Zoom in*, *Zoom out*, *Reset zoom*; *Commands* (the [palette](/git/palette/)) and *Help* |
 | The focused pane | Named after it (**Graph**, **Status**, **Branches**, **Details**, **Stage**, **Blame**, **Stash** or **Worktrees**): that pane's commands, the ones the [help popup](/getting-started/navigation/#getting-help) lists first |
@@ -43,6 +44,20 @@ While a dialog, the help popup or an error is open, the command items are
 greyed out, since a key would go to that instead. *About tt-git* and *Quit*
 always work. *Quit* closes every window; <kbd>q</kbd> closes only the window
 you press it in.
+
+### About
+
+*About tt-git* opens a dialog with the tt-git icon, the version, the
+developer, and links to the [GitHub repository](https://github.com/thirtytech/tt-git)
+and to [GPUI](https://gpui.rs/), the toolkit the app is drawn with. Click a
+link to open it in your browser. The dialog also points to the
+[terminal app](/getting-started/tour/), `tt-git`, which works the same way.
+
+<Screenshot name="gui-about" alt="The About tt-git dialog over the graph on Windows: the tt-git icon, the version, the developer, a link to github.com/thirtytech/tt-git, a line about the terminal app, and a link to gpui.rs" />
+
+<kbd>esc</kbd>, <kbd>enter</kbd>, <kbd>q</kbd>, <kbd>space</kbd> or a click
+outside the dialog closes it. Other keys do nothing while it's open, and
+the menus' command items are greyed out.
 
 ## Right-click menus
 
