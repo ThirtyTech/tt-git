@@ -6,7 +6,9 @@
 # <bin-dir> holds release builds of tt-git-gui and tt-git, <tag> is the
 # release tag (v0.9.0) and <platform> the release's name for the target
 # (macos-arm64). Writes tt-git-gui-<tag>-<platform>.dmg in the current
-# directory, holding tt-git.app and a link to /Applications. tt-git sits in
+# directory, holding tt-git.app and a link to /Applications over a
+# background (dmg.py, which needs python3 and network access for pip to
+# fetch dmg-requirements.txt). tt-git sits in
 # tt-git.app/Contents/MacOS next to tt-git-gui, where the GUI looks for the
 # binary it gives plugins as TTGIT_BIN_PATH.
 #
@@ -98,10 +100,13 @@ fi
 "${sign[@]}" "$app"
 codesign --verify --strict --verbose=2 "$app"
 
-# The disk image: the app and a link to drag it onto.
-ln -s /Applications "$stage/dmg/Applications"
+# The disk image: the app and a link to drag it onto, laid out over
+# dmg-background.png by dmg.py with the pinned dmgbuild.
+python3 -m venv "$stage/venv"
+"$stage/venv/bin/pip" install --quiet --disable-pip-version-check --require-hashes \
+    -r "$here/dmg-requirements.txt"
 rm -f "$name.dmg"
-hdiutil create -volname "tt-git" -srcfolder "$stage/dmg" -fs HFS+ -format UDZO -ov "$name.dmg"
+"$stage/venv/bin/python" "$here/dmg.py" "$app" "$name.dmg"
 
 if [ "$identity" != "-" ]; then
     codesign --force --timestamp --sign "$identity" "$name.dmg"

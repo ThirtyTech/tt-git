@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 660 420" width="660" height="420">
+  <!-- The .dmg window's background, after the Windows installer's sidebar
+       (../windows/sidebar.svg, whose icon, wordmark and footer paths it
+       reuses). 660x420 points, the window's size in package.sh. Finder
+       draws the icons on top, centred at (190, 205) and (470, 205), and
+       always draws their names in black on a picture background, hence
+       the light tags under them. Rendered to dmg-background.png and
+       dmg-background@2x.png. -->
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#11151C" />
+      <stop offset="60%" stop-color="#0B0E13" />
+      <stop offset="100%" stop-color="#07090C" />
+    </linearGradient>
+    <radialGradient id="glowTop" cx="22%" cy="10%" r="60%">
+      <stop offset="0%" stop-color="#4BC0EB" stop-opacity="0.14" />
+      <stop offset="100%" stop-color="#4BC0EB" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="glowMerge" cx="78%" cy="85%" r="55%">
+      <stop offset="0%" stop-color="#7BD938" stop-opacity="0.09" />
+      <stop offset="55%" stop-color="#4BC0EB" stop-opacity="0.05" />
+      <stop offset="100%" stop-color="#090B0E" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="iconGlow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#4BC0EB" stop-opacity="0.16" />
+      <stop offset="100%" stop-color="#4BC0EB" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="card" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#141A23" stop-opacity="0.85" />
+      <stop offset="100%" stop-color="#0B0F15" stop-opacity="0.85" />
+    </linearGradient>
+    <linearGradient id="lane" gradientUnits="userSpaceOnUse" x1="268" y1="0" x2="392" y2="0">
+      <stop offset="0%" stop-color="#006698" />
+      <stop offset="100%" stop-color="#4BC0EB" />
+    </linearGradient>
+    <linearGradient id="ttCyan" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#4BC0EB" />
+      <stop offset="55%" stop-color="#006698" />
+      <stop offset="100%" stop-color="#171312" />
+    </linearGradient>
+    <linearGradient id="ttGrey" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#A8A8A7" />
+      <stop offset="65%" stop-color="#6E6E6D" />
+      <stop offset="100%" stop-color="#23201F" />
+    </linearGradient>
+    <linearGradient id="coreGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#4BC0EB" />
+      <stop offset="100%" stop-color="#7BD938" />
+    </linearGradient>
+    <linearGradient id="tileBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#141923" />
+      <stop offset="100%" stop-color="#090B0E" />
+    </linearGradient>
+  </defs>
+
+  <rect width="660" height="420" fill="url(#bg)" />
+  <rect width="660" height="420" fill="url(#glowTop)" />
+  <rect width="660" height="420" fill="url(#glowMerge)" />
+
+  <!-- Faint commit graph along the bottom edge -->
+  <g opacity="0.35" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 40 398 L 250 398 L 278 382 L 420 382 L 448 398 L 620 398" stroke="#006698" stroke-width="2.5" />
+    <path d="M 130 398 L 158 410 L 330 410 L 358 398" stroke="#929291" stroke-width="2.5" />
+    <circle cx="130" cy="398" r="4" fill="#090B0E" stroke="#4BC0EB" stroke-width="2" />
+    <circle cx="244" cy="410" r="4" fill="#090B0E" stroke="#929291" stroke-width="2" />
+    <circle cx="350" cy="382" r="4" fill="#090B0E" stroke="#4BC0EB" stroke-width="2" />
+    <circle cx="530" cy="398" r="4" fill="#090B0E" stroke="#7BD938" stroke-width="2" />
+  </g>
+
+  <!-- The card -->
+  <rect x="28" y="24" width="604" height="344" rx="18" fill="url(#card)" stroke="#263040" stroke-width="1.2" />
+  <line x1="48" y1="94" x2="612" y2="94" stroke="#1E2633" stroke-width="1" />
+
+  <!-- Header: the app icon and the wordmark, and THIRTYTECH on the right -->
+  <g transform="translate(46, 41) scale(0.07)">
+    <rect x="24" y="24" width="464" height="464" rx="108" fill="url(#tileBg)" stroke="#263040" stroke-width="6" />
+    <polygon points="256,112 381,184 256,256 131,184" fill="#1C2433" opacity="0.5" />
+    <polygon points="131,184 256,256 256,400 131,328" fill="#131924" opacity="0.7" />
+    <polygon points="256,256 381,184 381,328 256,400" fill="#0B0F17" opacity="0.8" />
+    <path d="M 232 68 L 96 146 L 96 276" fill="none" stroke="url(#ttGrey)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="114" cy="342" r="14" fill="#929291" />
+    <circle cx="164" cy="382" r="14" fill="#929291" />
+    <path d="M 416 236 L 416 366 L 256 456 L 214 432" fill="none" stroke="url(#ttCyan)" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" />
+    <circle cx="312" cy="92" r="14" fill="#4BC0EB" />
+    <circle cx="372" cy="128" r="14" fill="#4BC0EB" />
+    <path d="M 148 194 L 256 256 L 256 388" fill="none" stroke="#929291" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M 196 166 L 148 194 L 148 258" fill="none" stroke="#929291" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M 364 194 L 256 256" fill="none" stroke="#4BC0EB" stroke-width="20" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M 316 166 L 364 194 L 364 258" fill="none" stroke="#4BC0EB" stroke-width="16" stroke-linecap="round" stroke-linejoin="round" />
+    <line x1="256" y1="124" x2="256" y2="256" stroke="#4BC0EB" stroke-width="20" stroke-linecap="round" />
+    <circle cx="256" cy="256" r="30" fill="#090B0E" stroke="url(#coreGlow)" stroke-width="13" />
+    <circle cx="256" cy="256" r="11" fill="#4BC0EB" />
+    <circle cx="256" cy="124" r="16" fill="#090B0E" stroke="#4BC0EB" stroke-width="9" />
+    <circle cx="148" cy="194" r="16" fill="#090B0E" stroke="#929291" stroke-width="9" />
+    <circle cx="364" cy="194" r="16" fill="#090B0E" stroke="#4BC0EB" stroke-width="9" />
+    <circle cx="256" cy="388" r="16" fill="#090B0E" stroke="#929291" stroke-width="9" />
+  </g>
+  <g transform="translate(26.05, -53.4) scale(0.6)">
+  <path d="M114.66 202Q111.82 202 110.22 200.42Q108.61 198.83 108.61 196.06L108.61 186.27L103.25 186.27L103.25 182.2L108.61 182.2L108.61 176.62L113.15 176.62L113.15 182.2L120.74 182.2L120.74 186.27L113.15 186.27L113.15 196.06Q113.15 197.93 114.98 197.93L120.38 197.93L120.38 202Z M135.26 202Q132.42 202 130.82 200.42Q129.21 198.83 129.21 196.06L129.21 186.27L123.85 186.27L123.85 182.2L129.21 182.2L129.21 176.62L133.75 176.62L133.75 182.2L141.34 182.2L141.34 186.27L133.75 186.27L133.75 196.06Q133.75 197.93 135.58 197.93L140.98 197.93L140.98 202Z M168.97 208.48L168.97 204.74L174.84 204.74Q176.35 204.74 177.11 204Q177.86 203.26 177.86 201.89L177.86 200.42L177.94 196.71L177.86 196.71Q177.65 198.44 176.53 199.48Q175.09 200.85 172.68 200.85Q169.66 200.85 167.88 198.8Q166.09 196.74 166.09 193.25L166.09 189.4Q166.09 185.94 167.88 183.89Q169.66 181.84 172.68 181.84Q175.09 181.84 176.53 183.17Q177.65 184.25 177.86 185.98L177.94 185.98L177.83 182.2L182.33 182.2L182.33 202Q182.33 204.99 180.35 206.74Q178.37 208.48 174.91 208.48ZM174.19 196.96Q175.92 196.96 176.88 195.94Q177.83 194.91 177.83 193.07L177.83 189.62Q177.83 187.78 176.88 186.76Q175.92 185.73 174.19 185.73Q172.46 185.73 171.53 186.74Q170.59 187.74 170.59 189.62L170.59 193.07Q170.59 194.94 171.53 195.95Q172.46 196.96 174.19 196.96Z M186.84 202L186.84 197.9L193.75 197.9L193.75 186.27L187.74 186.27L187.74 182.2L198.07 182.2L198.07 197.9L204.19 197.9L204.19 202ZM195.55 178.89Q194.18 178.89 193.39 178.19Q192.6 177.48 192.6 176.3Q192.6 175.11 193.39 174.41Q194.18 173.7 195.55 173.7Q196.92 173.7 197.71 174.41Q198.5 175.11 198.5 176.3Q198.5 177.48 197.71 178.19Q196.92 178.89 195.55 178.89Z M217.66 202Q214.82 202 213.22 200.42Q211.61 198.83 211.61 196.06L211.61 186.27L206.25 186.27L206.25 182.2L211.61 182.2L211.61 176.62L216.15 176.62L216.15 182.2L223.74 182.2L223.74 186.27L216.15 186.27L216.15 196.06Q216.15 197.93 217.98 197.93L223.38 197.93L223.38 202Z" fill="#FFFFFF" />
+  <path d="M147.94 192.21L147.94 188.03L159.46 188.03L159.46 192.21Z" fill="#4BC0EB" />
+  </g>
+  <g transform="translate(408.32, -537.8)">
+  <path d="M130.18 602L130.18 594.54L127.88 594.54L127.88 593.59L133.52 593.59L133.52 594.54L131.22 594.54L131.22 602Z M135.72 602L135.72 593.61L136.75 593.61L136.75 597.19L139.45 597.19L139.45 593.61L140.48 593.61L140.48 602L139.45 602L139.45 598.14L136.75 598.14L136.75 602Z M143.26 602L143.26 601.06L144.97 601.06L144.97 594.55L143.26 594.55L143.26 593.61L147.74 593.61L147.74 594.55L146.03 594.55L146.03 601.06L147.74 601.06L147.74 602Z M150.51 602L150.51 593.61L153.11 593.61Q153.85 593.61 154.42 593.91Q154.98 594.21 155.29 594.76Q155.6 595.3 155.6 596.02Q155.6 596.87 155.16 597.48Q154.72 598.09 153.96 598.32L155.72 602L154.5 602L152.89 598.43L151.54 598.43L151.54 602ZM151.54 597.5L153.11 597.5Q153.75 597.5 154.14 597.1Q154.53 596.69 154.53 596.02Q154.53 595.34 154.14 594.94Q153.75 594.54 153.11 594.54L151.54 594.54Z M159.78 602L159.78 594.54L157.48 594.54L157.48 593.59L163.12 593.59L163.12 594.54L160.82 594.54L160.82 602Z M167.18 602L167.18 598.86L164.65 593.61L165.72 593.61L167.39 597.05Q167.53 597.34 167.61 597.55Q167.69 597.75 167.71 597.84Q167.73 597.75 167.82 597.55Q167.91 597.34 168.05 597.05L169.68 593.61L170.75 593.61L168.22 598.86L168.22 602Z M174.58 602L174.58 594.54L172.28 594.54L172.28 593.59L177.92 593.59L177.92 594.54L175.62 594.54L175.62 602Z M180.2 602L180.2 593.61L185.03 593.61L185.03 594.55L181.22 594.55L181.22 597.15L184.63 597.15L184.63 598.08L181.22 598.08L181.22 601.06L185.03 601.06L185.03 602Z M189.95 602.12Q189.19 602.12 188.63 601.83Q188.07 601.54 187.77 601Q187.46 600.45 187.46 599.7L187.46 595.91Q187.46 595.15 187.77 594.61Q188.07 594.07 188.63 593.78Q189.19 593.49 189.95 593.49Q190.71 593.49 191.26 593.79Q191.81 594.08 192.11 594.62Q192.41 595.16 192.41 595.91L191.37 595.91Q191.37 595.19 191 594.81Q190.62 594.42 189.95 594.42Q189.27 594.42 188.89 594.8Q188.5 595.18 188.5 595.89L188.5 599.7Q188.5 600.41 188.89 600.79Q189.27 601.18 189.95 601.18Q190.62 601.18 191 600.79Q191.37 600.41 191.37 599.7L192.41 599.7Q192.41 600.44 192.11 600.99Q191.81 601.53 191.26 601.83Q190.71 602.12 189.95 602.12Z M194.92 602L194.92 593.61L195.95 593.61L195.95 597.19L198.65 597.19L198.65 593.61L199.68 593.61L199.68 602L198.65 602L198.65 598.14L195.95 598.14L195.95 602Z" fill="#6E7785" />
+  </g>
+
+  <!-- Behind the app's icon -->
+  <circle cx="190" cy="205" r="96" fill="url(#iconGlow)" />
+
+  <!-- The arrow, drawn as a branch lane with commits on it -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="268" y1="205" x2="388" y2="205" stroke="url(#lane)" stroke-width="4" />
+    <path d="M 376 195 L 390 205 L 376 215" stroke="#4BC0EB" stroke-width="4" />
+    <circle cx="292" cy="205" r="7" fill="#090B0E" stroke="url(#coreGlow)" stroke-width="3" />
+    <circle cx="292" cy="205" r="2.6" fill="#7BD938" stroke="none" />
+    <circle cx="334" cy="205" r="5.5" fill="#090B0E" stroke="#4BC0EB" stroke-width="2.6" />
+  </g>
+
+  <!-- Tags for Finder's black icon names -->
+  <rect x="134" y="277" width="112" height="22" rx="11" fill="#DCE5EE" />
+  <rect x="414" y="277" width="112" height="22" rx="11" fill="#DCE5EE" />
+
+  <text x="330" y="340" text-anchor="middle" font-family="Inter, sans-serif" font-size="13" fill="#8B95A5">Drag tt-git to Applications to install it.</text>
+</svg>
