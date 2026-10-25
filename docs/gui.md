@@ -347,7 +347,8 @@ they run on every OS.
 
 The menus list tt-git's commands; the keymap stays the only place keys
 are bound. `menus::build(app)` makes them from the app as it is: tt-git
-(About, Theme, Plugin logs, Update tt-git, Quit), Repository, View, and a
+(About, Theme, Plugin logs, Quit; Update tt-git only where the app
+`self_updates()`, which the GUI turns off), Repository, View, and a
 menu named after the focused pane's key context with its `commands()`
 (the help popup's first section). Each item shows the key
 `display_key_text` gives in the focused context, so a rebind shows.
@@ -375,8 +376,10 @@ The window's title bar is always drawn by the app (`TitleBar` moves the
 window and, under client-side decorations such as GNOME on Wayland, draws
 its controls), with the title in it. The icon: on X11 through
 `WindowOptions::icon`, on Windows as the executable's icon resource
-(`build.rs`); Wayland and macOS take it from a `.desktop` file and the app
-bundle, which packaging adds.
+(`build.rs`); Wayland and macOS take it from the packages
+(`packaging/`): on Wayland from `share/applications/tt-git.desktop` and
+the hicolor icons in the Linux tarball and AppImage (the file name is the
+`app_id`, `tt-git`), on macOS from `tt-git.app/Contents/Resources/tt-git.icns`.
 
 ## Gotchas
 
@@ -403,8 +406,9 @@ bundle, which packaging adds.
   with neither, plugins get none.
 - Quit (the menu's, or cmd+Q on macOS) doesn't ask about running
   terminal editors; closing their window does.
-- Wayland and macOS show no app icon until packaging installs a
-  `tt-git.desktop` and builds an app bundle.
+- Wayland and macOS show no app icon when run from a cargo build: the
+  icon comes with the packages (`tt-git.desktop` and the hicolor icons,
+  `tt-git.app`'s `tt-git.icns`).
 - Split sizes last for the session only; nothing saves them yet.
 
 ## The mouse

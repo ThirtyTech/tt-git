@@ -19,7 +19,7 @@ item does exactly what pressing its key does.
 
 | Menu | Holds |
 |---|---|
-| **tt-git** | *About tt-git* (the version), *Theme*, *Plugin logs*, *Update tt-git* and *Quit* |
+| **tt-git** | *About tt-git* (the version), *Theme*, *Plugin logs* and *Quit* |
 | **Repository** | *Fetch*, *Prune gone*, *Pull*, *Push*, *Refresh*; *Continue merge/rebase*, *Abort merge/rebase*, *Undo*; *Ask agent*; *Open repository* |
 | **View** | Focus *Graph*, *Status*, *Branches* or *Details*; *Next pane*, *Prev pane*; *Zoom*; *Commands* (the [palette](/git/palette/)) and *Help* |
 | The focused pane | Named after it (**Graph**, **Status**, **Branches**, **Details**, **Stage**, **Blame**, **Stash** or **Worktrees**): that pane's commands, the ones the [help popup](/getting-started/navigation/#getting-help) lists first |
@@ -147,13 +147,13 @@ there, as in the terminal app.
   stops every window's terminal editor without asking. Closing a window
   asks.
 - **No app icon on Wayland and macOS without the packaged files.** The icon
-  comes from `tt-git.desktop` on Wayland and from `tt-git.app` on macOS, so
-  a build from source shows none. Windows and X11 always show it.
+  comes from `tt-git.desktop` and its icons on Wayland and from `tt-git.app`
+  on macOS, which the release downloads include, so a build from source
+  shows none. Windows and X11 always show it.
 - **Pane sizes aren't saved.** Dragged split sizes last until the window
   closes.
-- **_Update tt-git_ doesn't update the desktop app.** It stops with an error
-  popup: *can't update tt-git: … tt-git-gui isn't named tt-git, so the
-  install script wouldn't replace it*. Download the new release instead.
+- **No updates from inside the app.** Download the new release to update
+  it; see [Updating](/desktop/install/#updating).
 - **A closed window's API socket keeps listening** until the app quits.
 
 <Aside type="tip">

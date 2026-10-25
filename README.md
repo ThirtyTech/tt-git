@@ -79,7 +79,8 @@ download an archive from
 [Releases](https://github.com/ThirtyTech/tt-git/releases).
 
 To update later, run `tt-git update` (or *Update tt-git* in the command
-palette). `tt-git update --check` only checks.
+palette). `tt-git update --check` only checks. The desktop app updates from
+its own download instead.
 
 To build from source:
 
@@ -94,8 +95,10 @@ tt-git            # in a repository, or: tt-git path/to/repo
 with [GPUI](https://gpui.rs/). It has the same panes, keys, config and
 plugins as the terminal app, plus menus that show each command's key,
 right-click menus, panes you resize by dragging, and a window per
-repository. It comes in the same release archives as `tt-git` (keep `tt-git`
-installed next to it: plugins use it). See
+repository. It's a separate download on each release: a `.dmg` for macOS,
+an installer or a zip for Windows x64, and a tarball or an AppImage for
+Linux, each with `tt-git` beside the app (plugins use it). It doesn't update
+itself: download the new release. See
 [The desktop app](https://thirtytech.github.io/tt-git/desktop/) for
 installing it and what's different.
 
