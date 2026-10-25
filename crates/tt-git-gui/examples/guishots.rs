@@ -100,6 +100,8 @@ fn shoot(out: PathBuf) {
         Shot::keys("staging", &["2", "j", "j", "j", "enter"]),
         Shot::keys("palette", &[":", "text:sta"]),
         Shot::keys("help", &["?"]),
+        Shot::keys("help-about", &["?", "tab"]),
+        Shot::keys("about", &[":", "text:about", "enter"]),
         Shot {
             name: "light",
             config: || Config {

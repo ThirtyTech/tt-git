@@ -77,8 +77,12 @@ over the images before committing them.
 
 ### The desktop app
 
-`docshots` drives the terminal app only, so the desktop app's images
-(`src/assets/screens/gui-*.png`) are captures of its real window. Build
+`docshots` drives the terminal app only. The desktop app's images
+(`src/assets/screens/gui-*-<os>.webp`) come from the `guishots` example in
+`tt-git-gui`, which opens the real app on the same mock repository and saves
+each window: `pnpm screens:gui:capture`, then `pnpm screens:gui` (see
+[docs/gui.md](../docs/gui.md)). A view it can't reach, such as a native OS
+dialog (`src/assets/screens/gui-*.png`), is a capture of the real window. Build
 `tt-git-gui`, run it with `--no-plugins` and its own `TTGIT_CONFIG_DIR` and
 `TTGIT_STATE_DIR` on a scratch repository (a few commits and branches,
 never a repository you work in), resize the window to 1400×860, open what

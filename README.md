@@ -116,8 +116,8 @@ tt-git-gui                               # in a repository, or: tt-git-gui path/
 
 ## Keys
 
-Press `?` for the keys of the focused pane (type to search them, `esc` to
-close), or `:` (or `ctrl+p`) for the
+Press `?` for the keys of the focused pane (type to search them, `tab` for
+About, `esc` to close), or `:` (or `ctrl+p`) for the
 command palette, which lists built-in commands and plugin actions.
 
 | Where | Key | Does |

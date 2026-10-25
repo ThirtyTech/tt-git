@@ -723,12 +723,18 @@ export const shots = [
 		callouts: [{ target: { find: '> merge' }, text: 'Typing **narrows** the list', markerSide: 'left' }],
 	},
 	{
+		name: 'help-about',
+		capture: 'help-about',
+		view: { region: { box: 'Keybindings', h: 15 } },
+		callouts: [{ target: { find: 'Keys · About' }, text: '**tab** switches to About', markerSide: 'left' }],
+	},
+	{
 		name: 'about',
 		capture: 'about',
 		view: { region: { box: 'About tt-git' } },
 		callouts: [
 			{ target: { find: 'Source: https://github.com/thirtytech/tt-git' }, text: 'Plain text: **most terminals** open links on click', markerSide: 'left' },
-			{ target: { find: 'Prefer a window? Run `tt-git-gui` for the desktop app.' }, text: 'The **desktop app**, for a window instead', markerSide: 'left' },
+			{ target: { find: 'Prefer a window? Install the desktop app:' }, text: 'Where to get the **desktop app**', markerSide: 'left' },
 		],
 	},
 
