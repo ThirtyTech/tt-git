@@ -25,6 +25,8 @@ pub enum AppEvent {
     Quit,
     /// "Open repository" ran: ask which.
     OpenRepository,
+    /// "Update tt-git" ran: check for updates as the app menu does.
+    CheckForUpdates,
 }
 
 /// tt-git's [`App`] as a GPUI entity. Input goes in through
@@ -54,8 +56,8 @@ impl AppModel {
         app.enable_ui_zoom();
         app.enable_ui_fonts();
         // The install scripts behind `tt-git update` only know the TUI's
-        // archives, not the app's packages.
-        app.disable_self_update();
+        // archives: the app updates itself (crate::update).
+        app.delegate_self_update();
         app.start();
         if let Some(family) = crate::font::missing(cx) {
             app.ui_font_missing(&family, crate::font::default_family(cx));
@@ -151,6 +153,9 @@ impl AppModel {
         }
         if self.app.take_open_repository() {
             cx.emit(AppEvent::OpenRepository);
+        }
+        if self.app.take_self_update() {
+            cx.emit(AppEvent::CheckForUpdates);
         }
         if let Some(step) = self.app.take_ui_zoom() {
             // Every window redraws at the new zoom (`Shell` watches it).

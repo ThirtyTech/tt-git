@@ -28,7 +28,7 @@ The list depends on which pane is focused. In order, it shows:
 3. **Plugin panes**, as *Open &lt;title&gt;*.
 4. **Common commands** that aren't already listed: [*Ask agent*](/git/agents/), continue or abort a merge
    or rebase, [undo](/git/undo/), pull, push, refresh, switch the graph between all and current
-   branch, focus a pane, zoom, *Theme*, *Plugin logs*, *Update tt-git* (not in the desktop app), *About* and help.
+   branch, focus a pane, zoom, *Theme*, *Plugin logs*, *Update tt-git*, *About* and help.
 5. In the [desktop app](/desktop/) only, *Open repository*, then *Zoom in*,
    *Zoom out*, *Reset zoom* and *Font*, last. *Open repository* opens another
    repository in a window of its own; see
@@ -64,10 +64,10 @@ shows a spinner beside *update tt-git to v0.4.0*, with each line the install
 script prints next to it. When it's done it reads *✓
 installed tt-git v0.4.0; restart tt-git to use it*. If the check or the install
 fails (no network, say), an error popup shows why, with the script's output.
-The [desktop app](/desktop/) leaves *Update tt-git* out of its palette and
-menus, since the install script doesn't know its downloads. Run from a key,
-it says *update the desktop app by downloading the latest release* with the
-address. See [Updating the desktop app](/desktop/install/#updating).
+In the [desktop app](/desktop/), *Update tt-git* does what **Check for
+Updates…** in its tt-git menu does: it asks in a dialog, downloads the app's
+own release, and restarts every window. See
+[Updating the desktop app](/desktop/install/#updating).
 
 It does the same as [`tt-git update`](/reference/cli/#tt-git-update), and
 refuses in the same cases, such as a tt-git run from a cargo build.

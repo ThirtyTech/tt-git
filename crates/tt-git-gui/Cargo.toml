@@ -20,6 +20,9 @@ clap.workspace = true
 color-eyre.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# Checks a downloaded update against the release's SHA256SUMS.txt.
+sha2 = "0.10"
+thiserror.workspace = true
 # The window icon on X11 (`WindowOptions::icon`), decoded from assets/icon.png.
 image = { version = "0.25", default-features = false, features = ["png"] }
 # rt-multi-thread for the runtime `gpui_tokio` starts.

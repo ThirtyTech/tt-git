@@ -52,6 +52,7 @@ placement = "auto"              # "auto" (herdr tab inside herdr, else the detai
 zoom = 100                      # how big everything is drawn, in percent (50–300); ctrl+= / ctrl+- / ctrl+0 in the app save it here. Global config file only
 # font = "JetBrains Mono"       # the font everything is drawn in; unset: the OS's usual monospace font. Picking one in the app (Font) saves it here. Global config file only
 font_size = 13                  # the font size at 100% zoom, in pixels (6–72). Global config file only
+check_for_updates = true        # look for a new release once a day and say so in the help bar. Global config file only
 ```
 
 ## Themes

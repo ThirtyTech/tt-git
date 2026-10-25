@@ -287,9 +287,13 @@ pub struct App {
     font_picker_wanted: bool,
     /// The font picked in the picker, for the front end to take.
     font_picked: Option<Option<String>>,
-    /// `tt-git update` can update this front end. Not the desktop app,
-    /// which updates from its own download.
-    self_updates: bool,
+    /// The front end updates itself (the desktop app, from its own
+    /// download), so [`Command::SelfUpdate`] is handed to it rather than
+    /// running `tt-git update`.
+    delegates_update: bool,
+    /// [`Command::SelfUpdate`] ran, for a front end that
+    /// [delegates](Self::delegate_self_update) it to take.
+    self_update_wanted: bool,
     watcher: Option<RepoWatcher>,
     plugins: Option<plugins::PluginState>,
     panes: Vec<crate::pty_pane::PtyPane>,
@@ -406,7 +410,8 @@ impl App {
             font_picker_wanted: false,
             font_picked: None,
             open_repo_wanted: false,
-            self_updates: true,
+            delegates_update: false,
+            self_update_wanted: false,
             watcher: None,
             plugins: None,
             panes: Vec::new(),
@@ -482,15 +487,17 @@ impl App {
         self.opens_repos
     }
 
-    /// Says `tt-git update` can't update this front end (the desktop app,
-    /// whose packages the install scripts don't know): [`Command::SelfUpdate`]
-    /// leaves the palette and only says where to get the new release.
-    pub fn disable_self_update(&mut self) {
-        self.self_updates = false;
+    /// Says the front end updates itself (the desktop app, whose packages
+    /// `tt-git update`'s install scripts don't know): [`Command::SelfUpdate`]
+    /// then asks it to, through [`take_self_update`](Self::take_self_update).
+    pub fn delegate_self_update(&mut self) {
+        self.delegates_update = true;
     }
 
-    pub fn self_updates(&self) -> bool {
-        self.self_updates
+    /// Whether [`Command::SelfUpdate`] ran since the last call, in a front
+    /// end that [delegates](Self::delegate_self_update) it.
+    pub fn take_self_update(&mut self) -> bool {
+        std::mem::take(&mut self.self_update_wanted)
     }
 
     /// Says the front end can zoom, which offers [`ZOOM_COMMANDS`] in the
@@ -2845,13 +2852,8 @@ impl App {
             Command::PluginLogs => self.show_plugin_logs(),
             Command::Theme => self.open_theme_picker(),
             Command::About => self.modal = Some(Modal::About),
-            Command::SelfUpdate if self.self_updates => self.check_update(),
-            Command::SelfUpdate => {
-                self.notice = Some(format!(
-                    "update the desktop app by downloading the latest release: https://github.com/{}/releases/latest",
-                    tt_git_core::update::REPO
-                ));
-            }
+            Command::SelfUpdate if self.delegates_update => self.self_update_wanted = true,
+            Command::SelfUpdate => self.check_update(),
             Command::OpenLink if self.focus == PaneId::Details => self.open_link(),
             Command::ToggleFiles if self.focus == PaneId::Details => self.toggle_files(),
             Command::NewerCommit | Command::OlderCommit | Command::PrevFile | Command::NextFile

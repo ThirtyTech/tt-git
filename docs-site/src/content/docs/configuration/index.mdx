@@ -79,6 +79,7 @@ placement = "auto"   # a herdr tab inside herdr, else in place of details
 zoom = 100           # desktop app only: how big everything is drawn, in percent
 # font = "JetBrains Mono"  # desktop app only: unset is the system's usual monospace font
 font_size = 13       # desktop app only: the font size at 100% zoom, in pixels
+check_for_updates = true  # desktop app only: look for a new release once a day
 ```
 
 Two more tables, `[layout]` and `[keys]`, have pages of their own:
@@ -215,6 +216,7 @@ Settings for the [desktop app](/desktop/). The terminal app ignores them.
 | `zoom` | `100` | How big the desktop app draws everything, in percent: text, spacing, menus and dialogs together, as a browser zooms. From `50` to `300`; a value outside that is taken as the nearest end. [Zooming](/desktop/using/#zoom) in the app saves the new value here. Only the global config file sets it, for every window; a repository's own file can't. |
 | `font` | unset | The font the desktop app draws everything in, by family name, such as `"JetBrains Mono"`. Unset is the system's usual monospace font (Cascadia Mono or Consolas on Windows, SF Mono or Menlo on macOS, Noto Sans Mono, Liberation Mono or DejaVu Sans Mono on Linux). [Picking a font](/desktop/using/#font) in the app saves it here. A font that isn't installed falls back to the usual one, and the help bar says so. Global config file only. |
 | `font_size` | `13` | The desktop app's font size at 100% zoom, in pixels, from `6` to `72`; a value outside that is taken as the nearest end. The [zoom](/desktop/using/#zoom) scales it. Global config file only. |
+| `check_for_updates` | `true` | Look for a new tt-git release once a day and say in the help bar when there is one. `false` stops it; *Check for Updates…* still works. See [Updating](/desktop/install/#updating). Read from the global config file when the app starts. |
 
 ## Per-repository config
 

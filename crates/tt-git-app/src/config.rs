@@ -113,6 +113,9 @@ pub struct UiConfig {
     pub font: Option<String>,
     /// The font size at 100% zoom, in pixels.
     pub font_size: f32,
+    /// Look for a new tt-git release in the background, once a day, and
+    /// say in the help bar when there is one.
+    pub check_for_updates: bool,
 }
 
 impl Default for UiConfig {
@@ -121,6 +124,7 @@ impl Default for UiConfig {
             zoom: DEFAULT_ZOOM,
             font: None,
             font_size: DEFAULT_FONT_SIZE,
+            check_for_updates: true,
         }
     }
 }

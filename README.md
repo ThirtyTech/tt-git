@@ -79,8 +79,8 @@ download an archive from
 [Releases](https://github.com/ThirtyTech/tt-git/releases).
 
 To update later, run `tt-git update` (or *Update tt-git* in the command
-palette). `tt-git update --check` only checks. The desktop app updates from
-its own download instead.
+palette). `tt-git update --check` only checks. The desktop app updates
+itself instead: *Check for Updates…* in its tt-git menu.
 
 To build from source:
 
