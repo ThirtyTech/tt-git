@@ -26,6 +26,9 @@ lanes = true                    # draw the lanes at startup; L in the graph togg
 filter_to_cwd = false           # started in a subfolder, show only its commits and Status files (. toggles; --filter-to-cwd / --no-filter-to-cwd override)
 # message_presets = ["^feat", "^fix"]  # regexes tab steps through in the / message filter; unset, the repo's 8 most used subject prefixes
 
+[status]
+tree = false                    # list changed files as a folder tree at startup; ` toggles it and saves it here
+
 [branches]
 unmerged_exclude = ["archive"]  # hide unmerged branches whose name contains any of these
 safe_branches = ["master", "main", "production", "prod"]  # never list these on the merged/unmerged tabs
@@ -245,6 +248,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |
 | `next_tab`, `prev_tab` | `]` `}`, `[` `{` (steps the branches pane's tabs) | graph |
 | `stage_toggle`, `open_staging`, `stage_all`, `discard`, `discard_all`, `ignore`, `commit`, `amend`, `stash`, `continue`, `abort` | `space`, `enter`, `a`, `d`, `D`, `i`, `c`, `A`, `s`, `C`, `X` | status |
+| `toggle_tree`, `collapse_all`, `expand_all` | `` ` ``, `-`, `=` | status |
 | `stash_pop`, `stash_apply`, `stash_drop`, `new_branch`, `expand_details`, `next_tab`, `prev_tab`, `filter` | `space`, `a`, `d`, `n`, `enter`, `]` `}`, `[` `{`, `/` | stash |
 | `open_worktree`, `remove_worktree`, `new_branch`, `copy`, `next_tab`, `prev_tab`, `filter` | `enter`/`space`, `d`, `n`, `c`, `]` `}`, `[` `{`, `/` | worktrees |
 | `stage_toggle`, `switch_side`, `toggle_line_mode`, `select_range`, `discard`, `commit`, `close_details` | `space`, `tab`, `a`, `v`, `d`, `c`, `esc` | stage |

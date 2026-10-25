@@ -253,6 +253,12 @@ pub enum Command {
     OpenStaging,
     StageToggle,
     StageAll,
+    /// Shows Status as a folder tree or a flat list.
+    ToggleTree,
+    /// Collapses every folder in the Status tree.
+    CollapseAll,
+    /// Expands every folder in the Status tree.
+    ExpandAll,
     SwitchSide,
     ToggleLineMode,
     SelectRange,
@@ -355,6 +361,9 @@ impl Command {
             Command::ToggleLineMode => "hunks/lines",
             Command::SelectRange => "select range",
             Command::StageAll => "stage all",
+            Command::ToggleTree => "tree/flat",
+            Command::CollapseAll => "collapse all",
+            Command::ExpandAll => "expand all",
             Command::Discard => "discard",
             Command::DiscardAll => "discard all",
             Command::Ignore => "ignore file",
@@ -540,6 +549,9 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Status, Command::OpenInEditor, &["e"]),
     (Context::Status, Command::Blame, &["b"]),
     (Context::Status, Command::FilterFolder, &["."]),
+    (Context::Status, Command::ToggleTree, &["`"]),
+    (Context::Status, Command::CollapseAll, &["-"]),
+    (Context::Status, Command::ExpandAll, &["="]),
     (Context::Graph, Command::ToggleScope, &["a"]),
     (Context::Graph, Command::ToggleDates, &["t"]),
     (Context::Graph, Command::ToggleLanes, &["L"]),

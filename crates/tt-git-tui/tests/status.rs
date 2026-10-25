@@ -340,3 +340,263 @@ fn ignore_a_tracked_file_asks_to_stop_tracking_it() {
         vec![("D ".into(), "local.env".into()), ("??".into(), ".gitignore".into())]
     );
 }
+
+/// A config with the status tree on, and details always on screen.
+fn tree_config() -> Config {
+    Config::parse(
+        r#"
+        [status]
+        tree = true
+        [layout]
+        split = "columns"
+        children = [
+          { split = "rows", children = [{ pane = "status" }, { pane = "branches" }] },
+          { split = "rows", children = [{ pane = "graph" }, { pane = "details" }] },
+        ]
+        "#,
+    )
+    .unwrap()
+}
+
+/// Changes in nested folders: `src/` holds files and `src/ui/`, and
+/// `docs/guide/` holds one file under a folder with nothing else.
+fn tree_sandbox() -> Sandbox {
+    let sb = Sandbox::new();
+    sb.commit_file("src/main.rs", "fn main() {}\n", "base");
+    sb.commit_file("src/ui/view.rs", "view\n", "ui");
+    sb.write("src/main.rs", "fn main() { run(); }\n");
+    sb.write("src/ui/view.rs", "view 2\n");
+    sb.write("src/lib.rs", "pub fn run() {}\n");
+    sb.write("docs/guide/intro.md", "hi\n");
+    sb.write("README.md", "readme\n");
+    sb
+}
+
+fn rows(t: &TestDriver) -> Vec<String> {
+    t.app().status().row_texts()
+}
+
+/// Selects the row whose text, trimmed, is `text`.
+fn select_row(t: &mut TestDriver, text: &str) {
+    t.press("2").press("g");
+    let idx = rows(t)
+        .iter()
+        .position(|r| r.trim() == text)
+        .unwrap_or_else(|| panic!("{text} not in {:?}", rows(t)));
+    for _ in 0..idx {
+        t.press("j");
+    }
+}
+
+#[test]
+fn tree_lists_files_under_their_folders() {
+    let sb = tree_sandbox();
+    let mut t = TestDriver::with_config(tree_config(), &sb);
+    t.press("2");
+    assert_eq!(
+        rows(&t),
+        vec![
+            "▾ docs/guide/",
+            "  ?? intro.md",
+            "▾ src/",
+            "  ▾ ui/",
+            "     M view.rs",
+            "  ?? lib.rs",
+            "   M main.rs",
+            "?? README.md",
+        ]
+    );
+    insta::assert_snapshot!(t.pane_lines(PaneId::Status).join("\n"));
+}
+
+#[test]
+fn backtick_switches_between_tree_and_flat() {
+    let sb = tree_sandbox();
+    let mut t = TestDriver::new(&sb);
+    t.press("2");
+    assert!(!t.app().status().tree());
+    select_file(&mut t, "src/lib.rs");
+    t.press("`");
+    assert!(t.app().status().tree());
+    assert!(t.app().notice().unwrap_or_default().contains("status as a tree"));
+    // The same file stays selected.
+    assert_eq!(t.app().status().selected().unwrap().path, "src/lib.rs");
+    t.press("`");
+    assert!(!t.app().status().tree());
+    assert_eq!(rows(&t)[0], " M src/main.rs");
+    assert_eq!(t.app().status().selected().unwrap().path, "src/lib.rs");
+}
+
+#[test]
+fn enter_folds_a_folder_and_dash_and_equals_fold_them_all() {
+    let sb = tree_sandbox();
+    let mut t = TestDriver::with_config(tree_config(), &sb);
+    select_row(&mut t, "▾ src/");
+    t.press("enter");
+    assert!(t.app().details().stage().is_none(), "enter on a folder doesn't stage");
+    assert_eq!(
+        rows(&t),
+        vec!["▾ docs/guide/", "  ?? intro.md", "▸ src/", "?? README.md"]
+    );
+    assert_eq!(t.app().status().selected_folder(), Some("src/"));
+    t.press("enter");
+    assert_eq!(rows(&t).len(), 8);
+
+    // From a file inside, collapsing all lands on its top folder.
+    select_row(&mut t, "M view.rs");
+    t.press("-");
+    assert_eq!(rows(&t), vec!["▸ docs/guide/", "▸ src/", "?? README.md"]);
+    assert_eq!(t.app().status().selected_folder(), Some("src/"));
+    t.press("=");
+    assert_eq!(rows(&t).len(), 8);
+
+    // In the flat list there's nothing to fold.
+    t.press("`").press("-");
+    assert!(t.app().notice().unwrap_or_default().contains("tree view"));
+}
+
+#[test]
+fn space_on_a_folder_stages_and_unstages_everything_under_it() {
+    let sb = tree_sandbox();
+    let mut t = TestDriver::with_config(tree_config(), &sb);
+    select_row(&mut t, "▾ src/");
+    t.press("space");
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    let mut staged = codes(&t);
+    staged.sort_by(|a, b| a.1.cmp(&b.1));
+    let want: Vec<(String, String)> = [
+        ("??", "README.md"),
+        ("??", "docs/guide/intro.md"),
+        ("A ", "src/lib.rs"),
+        ("M ", "src/main.rs"),
+        ("M ", "src/ui/view.rs"),
+    ]
+    .map(|(c, p)| (c.into(), p.into()))
+    .into();
+    assert_eq!(staged, want);
+    assert_eq!(t.app().status().selected_folder(), Some("src/"));
+
+    // Nothing left to stage under it: space unstages it all.
+    t.press("space");
+    let mut unstaged = codes(&t);
+    unstaged.sort_by(|a, b| a.1.cmp(&b.1));
+    let want: Vec<(String, String)> = [
+        ("??", "README.md"),
+        ("??", "docs/guide/intro.md"),
+        ("??", "src/lib.rs"),
+        (" M", "src/main.rs"),
+        (" M", "src/ui/view.rs"),
+    ]
+    .map(|(c, p)| (c.into(), p.into()))
+    .into();
+    assert_eq!(unstaged, want);
+}
+
+#[test]
+fn d_on_a_folder_discards_only_under_it() {
+    let sb = tree_sandbox();
+    let mut t = TestDriver::with_config(tree_config(), &sb);
+    select_row(&mut t, "▾ ui/");
+    t.press("d");
+    let screen = t.screen();
+    assert!(screen.contains("src/ui/"), "{screen}");
+    t.press("y");
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(
+        std::fs::read_to_string(sb.path().join("src/ui/view.rs")).unwrap(),
+        "view\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(sb.path().join("src/main.rs")).unwrap(),
+        "fn main() { run(); }\n"
+    );
+}
+
+#[test]
+fn i_on_a_folder_ignores_the_folder() {
+    let sb = tree_sandbox();
+    let mut t = TestDriver::with_config(tree_config(), &sb);
+    select_row(&mut t, "▾ docs/guide/");
+    t.press("i");
+    let screen = t.screen();
+    assert!(screen.contains("Add /docs/guide/ to .gitignore"), "{screen}");
+    assert!(screen.contains("Add /docs/guide/ to .git/info/exclude"), "{screen}");
+    t.press("enter");
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(
+        std::fs::read_to_string(sb.path().join(".gitignore")).unwrap(),
+        "/docs/guide/\n"
+    );
+    assert!(!codes(&t).iter().any(|(_, p)| p.starts_with("docs/")));
+}
+
+#[test]
+fn a_folder_shows_its_diff_in_details() {
+    let sb = tree_sandbox();
+    let mut t = TestDriver::with_config(tree_config(), &sb);
+    select_row(&mut t, "▾ src/");
+    assert_eq!(
+        t.app().details().subject(),
+        Some(&DetailsSubject::Folder("src/".into()))
+    );
+    t.assert_pane_contains(PaneId::Details, "+fn main() { run(); }");
+    t.assert_pane_contains(PaneId::Details, "+view 2");
+    t.assert_pane_contains(PaneId::Details, "src/lib.rs");
+    assert!(t.pane_title(PaneId::Details).contains("Diff src/"));
+    // e and b need a file.
+    t.press("b");
+    assert!(t.app().notice().unwrap_or_default().contains("no file"));
+}
+
+#[test]
+fn stepping_files_from_details_skips_folders() {
+    let sb = tree_sandbox();
+    let mut t = TestDriver::with_config(tree_config(), &sb);
+    select_row(&mut t, "?? intro.md");
+    t.press("enter");
+    assert!(t.app().details().stage().is_some());
+    t.press("]");
+    assert_eq!(t.app().status().selected().unwrap().path, "src/ui/view.rs");
+    t.press("[");
+    assert_eq!(t.app().status().selected().unwrap().path, "docs/guide/intro.md");
+}
+
+#[test]
+fn a_folder_diff_follows_staging_it() {
+    let sb = tree_sandbox();
+    let mut t = TestDriver::with_config(tree_config(), &sb);
+    select_row(&mut t, "▾ ui/");
+    t.assert_pane_contains(PaneId::Details, "── unstaged ──");
+    t.press("space");
+    t.assert_pane_contains(PaneId::Details, "── staged ──");
+    assert!(
+        !t.pane_lines(PaneId::Details)
+            .iter()
+            .any(|l| l.contains("── unstaged ──")),
+        "{:?}",
+        t.pane_lines(PaneId::Details)
+    );
+}
+
+#[test]
+fn the_tree_or_flat_choice_is_saved_to_config() {
+    let sb = tree_sandbox();
+    let config_file = sb.root().join("tt-config").join("config.toml");
+    let mut t = TestDriver::new(&sb);
+    t.app_mut().enable_themes(tt_git_tui::themes::ThemeOptions {
+        dirs: Default::default(),
+        config_path: Some(config_file.clone()),
+    });
+    t.press("2").press("`");
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(
+        std::fs::read_to_string(&config_file).unwrap(),
+        "[status]\ntree = true\n"
+    );
+    assert!(Config::load(&config_file).unwrap().status.tree);
+    t.press("`");
+    assert_eq!(
+        std::fs::read_to_string(&config_file).unwrap(),
+        "[status]\ntree = false\n"
+    );
+}

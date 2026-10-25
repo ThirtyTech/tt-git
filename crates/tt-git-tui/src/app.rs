@@ -124,6 +124,11 @@ enum DetailsLoad {
     File(StatusEntry),
     Stage(StatusEntry),
     Stash(Stash),
+    /// A folder in the status tree, with its changed files.
+    Folder {
+        folder: String,
+        entries: Vec<StatusEntry>,
+    },
 }
 
 impl DetailsLoad {
@@ -134,6 +139,7 @@ impl DetailsLoad {
             DetailsLoad::File(entry) => DetailsSubject::File(entry.path.clone()),
             DetailsLoad::Stage(entry) => DetailsSubject::Stage(entry.path.clone()),
             DetailsLoad::Stash(stash) => DetailsSubject::Stash(stash.oid.clone()),
+            DetailsLoad::Folder { folder, .. } => DetailsSubject::Folder(folder.clone()),
         }
     }
 
@@ -145,6 +151,7 @@ impl DetailsLoad {
             DetailsLoad::File(_) => 2,
             DetailsLoad::Stage(_) => 3,
             DetailsLoad::Stash(_) => 4,
+            DetailsLoad::Folder { .. } => 5,
         }
     }
 }
@@ -277,7 +284,7 @@ pub struct App {
     /// even if that load is running), started once details is on screen.
     details_wanted: Option<(DetailsLoad, bool)>,
     /// Details loads by [`DetailsLoad::kind`].
-    details_jobs: [LatestJob<DetailsLoad>; 5],
+    details_jobs: [LatestJob<DetailsLoad>; 6],
     /// Diffs for the details files view.
     file_diff_job: LatestJob<(String, CommitFile)>,
     /// Branch histories for the graph's focused branch.
@@ -313,6 +320,7 @@ impl App {
         graph.dates = config.graph.dates;
         graph.lanes = config.graph.lanes;
         let mut status = StatusPane::new(repo.name());
+        status.set_tree(config.status.tree);
         if config.graph.filter_to_cwd
             && let Some(folder) = repo.start_prefix()
         {
@@ -967,6 +975,10 @@ impl App {
             // status changes; an announced file doesn't replace it.
             Action::FileSelected(entry) if self.details.stage().is_none() => self.show_file(entry, false),
             Action::FileSelected(_) => {}
+            Action::FolderSelected { folder, entries } if self.details.stage().is_none() => {
+                self.show_folder(folder, entries, false)
+            }
+            Action::FolderSelected { .. } => {}
             Action::RepoChanged { refs, status } => {
                 if refs {
                     self.load_refs();
@@ -1013,6 +1025,10 @@ impl App {
                     DetailsSubject::Stash(oid) => {
                         self.details_finished(4, |l| matches!(l, DetailsLoad::Stash(s) if s.oid == oid))
                     }
+                    DetailsSubject::Folder(path) => self.details_finished(
+                        5,
+                        |l| matches!(l, DetailsLoad::Folder { folder, .. } if *folder == path),
+                    ),
                     _ => {}
                 }
             }
@@ -1262,6 +1278,38 @@ impl App {
         self.status.set_folder(folder);
         if self.focus == PaneId::Status {
             self.status.announce(&self.ctx);
+        }
+    }
+
+    /// `` ` `` in Status: lists the files as a folder tree or flat, and
+    /// saves the choice as `status.tree` in config.toml.
+    fn toggle_status_tree(&mut self) {
+        let tree = !self.status.tree();
+        self.status.set_tree(tree);
+        self.config.status.tree = tree;
+        self.status.announce(&self.ctx);
+        let view = if tree { "tree" } else { "flat list" };
+        let Some(path) = self.themes.as_ref().and_then(|t| t.config_path.clone()) else {
+            self.notice = Some(format!("status as a {view}"));
+            return;
+        };
+        let saved = match std::fs::read_to_string(&path) {
+            Ok(text) => Ok(text),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+            Err(e) => Err(e),
+        }
+        .and_then(|text| {
+            if let Some(dir) = path.parent() {
+                std::fs::create_dir_all(dir)?;
+            }
+            std::fs::write(
+                &path,
+                crate::config::set_in_table(&text, "status", "tree", &tree.to_string()),
+            )
+        });
+        match saved {
+            Ok(()) => self.notice = Some(format!("status as a {view}, saved to {}", path.display())),
+            Err(e) => self.error = Some(format!("couldn't save the status view to {}: {e}", path.display())),
         }
     }
 
@@ -1932,6 +1980,9 @@ impl App {
             PaneId::Status => {
                 if let Some(entry) = self.status.selected().cloned() {
                     self.show_file(entry, force);
+                } else if let Some(folder) = self.status.selected_folder().map(str::to_string) {
+                    let entries = self.status.entries_in(&folder);
+                    self.show_folder(folder, entries, force);
                 } else if force {
                     self.details.clear();
                 }
@@ -1957,6 +2008,15 @@ impl App {
         }
         self.details.request(subject, format!("Diff {}", entry.path));
         self.want_details(DetailsLoad::File(entry), force);
+    }
+
+    fn show_folder(&mut self, folder: String, entries: Vec<StatusEntry>, force: bool) {
+        let subject = DetailsSubject::Folder(folder.clone());
+        if !force && self.details.subject() == Some(&subject) {
+            return;
+        }
+        self.details.request(subject, format!("Diff {folder}"));
+        self.want_details(DetailsLoad::Folder { folder, entries }, force);
     }
 
     fn show_stash(&mut self, stash: Stash) {
@@ -2128,6 +2188,7 @@ impl App {
             DetailsLoad::File(entry) => loaders::load_file_diff(repo, entry, highlight),
             DetailsLoad::Stage(entry) => loaders::load_stage_diffs(repo, entry, highlight),
             DetailsLoad::Stash(stash) => loaders::load_stash_details(repo, stash, highlight),
+            DetailsLoad::Folder { folder, entries } => loaders::load_folder_diff(repo, folder, entries, highlight),
         });
         self.details_jobs[kind].started(load, done);
     }
@@ -2332,11 +2393,15 @@ impl App {
                     self.show_stash(next);
                 }
             }
-            Some(DetailsSubject::File(path) | DetailsSubject::Stage(path)) => {
-                if self.status.selected().is_none_or(|e| e.path != path) {
+            Some(DetailsSubject::File(path) | DetailsSubject::Stage(path) | DetailsSubject::Folder(path)) => {
+                let selected = self.status.selected().map(|e| e.path.as_str());
+                if selected.or(self.status.selected_folder()) != Some(path.as_str()) {
                     return;
                 }
-                self.status.on_command(step, &ctx);
+                // Steps file to file, past the tree's folders.
+                if !self.status.step_file(step == Command::MoveUp) {
+                    return;
+                }
                 let Some(next) = self.status.selected().cloned() else {
                     return;
                 };
@@ -2448,7 +2513,11 @@ impl App {
             {
                 self.set_graph_filter(LogFilter::default())
             }
-            Command::OpenStaging if self.focus == PaneId::Status => self.open_staging(),
+            // On a folder in the tree, enter folds it instead.
+            Command::OpenStaging if self.focus == PaneId::Status && self.status.selected_folder().is_none() => {
+                self.open_staging()
+            }
+            Command::ToggleTree if self.focus == PaneId::Status => self.toggle_status_tree(),
             // esc in a view opened on top of another goes back to it.
             Command::CloseDetails if self.focus == PaneId::Details && !self.back.is_empty() => self.go_back(),
             Command::Blame if self.focus == PaneId::Status => self.blame_status_file(),

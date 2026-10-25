@@ -570,6 +570,38 @@ impl Repo {
         }
         Ok(out)
     }
+
+    /// Diff of a folder for the details pane: the staged and unstaged
+    /// changes under `folder` (ending in `/`), then the untracked files
+    /// among `entries` (its changed files) by name.
+    pub fn folder_diff(&self, folder: &str, entries: &[crate::model::StatusEntry]) -> Result<String> {
+        let spec = literal(folder);
+        let mut out = String::new();
+        let section = |out: &mut String, title: &str, body: &str| {
+            if !out.is_empty() {
+                out.push('\n');
+            }
+            out.push_str(&format!("── {title} ──\n"));
+            out.push_str(body);
+        };
+        if entries.iter().any(|e| e.has_staged()) {
+            let diff = self.git().run(&["diff", "--cached", "-M", "--", &spec])?;
+            section(&mut out, "staged", &String::from_utf8_lossy(&diff.stdout));
+        }
+        if entries.iter().any(|e| e.has_unstaged() && !e.is_untracked()) {
+            let diff = self.git().run(&["diff", "--", &spec])?;
+            section(&mut out, "unstaged", &String::from_utf8_lossy(&diff.stdout));
+        }
+        let untracked: String = entries
+            .iter()
+            .filter(|e| e.is_untracked())
+            .map(|e| format!("{}\n", e.path))
+            .collect();
+        if !untracked.is_empty() {
+            section(&mut out, "untracked", &untracked);
+        }
+        Ok(out)
+    }
 }
 
 /// What applying a partial patch of one file does.

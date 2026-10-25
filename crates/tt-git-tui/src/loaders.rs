@@ -602,6 +602,21 @@ pub fn load_file_diff(repo: Repo, entry: tt_git_core::StatusEntry, highlight: bo
     }
 }
 
+/// The changes under `folder` (its changed files `entries`), for the
+/// details pane.
+pub fn load_folder_diff(repo: Repo, folder: String, entries: Vec<tt_git_core::StatusEntry>, highlight: bool) -> Action {
+    let text = match repo.folder_diff(&folder, &entries) {
+        Ok(t) if t.trim().is_empty() => format!("{folder}: no textual changes"),
+        Ok(t) => cap_lines(t),
+        Err(e) => format!("could not diff {folder}: {e}"),
+    };
+    Action::DetailsLoaded {
+        subject: DetailsSubject::Folder(folder),
+        syntax: diff_syntax(&text, highlight),
+        text,
+    }
+}
+
 /// What a stash holds, for the details pane.
 pub fn load_stash_details(repo: Repo, stash: tt_git_core::Stash, highlight: bool) -> Action {
     let text = match repo.stash_details(&stash) {

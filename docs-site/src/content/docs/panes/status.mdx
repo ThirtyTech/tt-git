@@ -1,6 +1,6 @@
 ---
 title: Status
-description: "The status pane: changed files, staging, committing, discarding, ignoring and stashing."
+description: "The status pane: changed files as a list or a folder tree, staging, committing, discarding, ignoring and stashing."
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -37,6 +37,48 @@ The code is colored so you can tell at a glance what's left to do:
 
 Untracked files are listed one by one, even inside new folders. With nothing changed, the pane says
 `working tree clean`.
+
+## The folder tree
+
+Press <kbd>&#96;</kbd> to list the files as a tree grouped by folder, like lazygit's file tree, and
+again to go back to one row per path. tt-git saves your choice as [`tree`](/configuration/#status)
+under `[status]` in your `config.toml`, so the next start opens the same way. The flat list is the
+default.
+
+<Screenshot name="status-tree" alt="The status pane as a folder tree: src/ open with api/, components/, hooks/ and styles/ under it, each file listed by name" />
+
+```text
+▾ docs/guide/
+  ?? intro.md
+▾ src/
+  ▾ ui/
+     M view.rs
+  ?? lib.rs
+   M main.rs
+?? README.md
+```
+
+Folders come first, then files, each sorted by name. A folder that holds only another folder shares
+its row, as `docs/guide/` does above. A folder's marker and name are colored like a file's code:
+green when everything under it is staged, red when something isn't, the error color when it holds
+a conflict.
+
+| Key | Does on a folder |
+|---|---|
+| <kbd>enter</kbd> | Folds the folder (`▸`), or opens it again (`▾`) |
+| <kbd>space</kbd> | Stages everything under it: `git add -A -- src/`. If it's all staged already, unstages it all |
+| <kbd>d</kbd> | Opens the [**Discard all**](#discarding-everything) dialog for just that folder, titled **Discard all in src/** |
+| <kbd>i</kbd> | [Ignores](#ignoring-a-file) the folder: **Add /src/ to .gitignore** or **.git/info/exclude** |
+
+<Screenshot name="status-tree-discard" alt="The Discard all in src/styles/ dialog, keeping everything outside src/styles/" />
+
+<kbd>-</kbd> folds every folder and <kbd>=</kbd> opens them all. Folding a folder with the selected
+file inside moves the selection to the folder. On a file, every key works as it does in the flat
+list. <kbd>e</kbd> and <kbd>b</kbd> need a file, so on a folder they say there's no file to open or
+blame. In the flat list, <kbd>-</kbd> and <kbd>=</kbd> say that folders fold in the tree view.
+
+With a folder selected, [details](#other-panes-and-details) shows the folder's diff: its staged
+changes, then its unstaged ones, then its untracked files by name.
 
 ## The title
 
@@ -80,6 +122,9 @@ While the list is narrowed:
 | <kbd>space</kbd> | Stages the selected file if it has unstaged changes, otherwise unstages it |
 | <kbd>a</kbd> | Stages everything, or unstages everything if it's all staged already |
 | <kbd>enter</kbd> | Opens the file's changes fullscreen, to stage part of it |
+
+In the [folder tree](#the-folder-tree), <kbd>space</kbd> on a folder stages or unstages everything
+under it.
 
 Staging a conflicted file marks it resolved. Unstaging works before your first commit too.
 
@@ -271,7 +316,7 @@ With the status pane focused, details follows the selected file and shows its di
 first, then unstaged. In the default layout details shares the bottom row with status, so you see
 this when you give details a pane of its own in the [layout](/configuration/layout/). Most of the
 time <kbd>enter</kbd> into the [staging view](/panes/staging/) is the better way to read a file's
-changes.
+changes. On a folder in the [tree](#the-folder-tree), details shows everything changed under it.
 
 <Aside>
   The status pane refreshes by itself when files change on disk or when you stage from another
@@ -282,18 +327,20 @@ changes.
 
 | Key | Does |
 |---|---|
-| <kbd>j</kbd> <kbd>k</kbd> <kbd>↓</kbd> <kbd>↑</kbd> | Next / previous file |
-| <kbd>space</kbd> | Stage / unstage the file |
-| <kbd>enter</kbd> | Stage by hunk or line |
+| <kbd>j</kbd> <kbd>k</kbd> <kbd>↓</kbd> <kbd>↑</kbd> | Next / previous file (or folder, in the tree) |
+| <kbd>space</kbd> | Stage / unstage the file, or everything in the folder |
+| <kbd>enter</kbd> | Stage by hunk or line; on a folder, fold or open it |
 | <kbd>a</kbd> | Stage all (or unstage all) |
-| <kbd>d</kbd> | Discard changes to the file (asks first) |
+| <kbd>d</kbd> | Discard changes to the file, or in the folder (asks first) |
 | <kbd>D</kbd> | Discard all: everything, unstaged changes, or untracked files (asks first) |
-| <kbd>i</kbd> | Ignore the file or its folder (`.gitignore` or `.git/info/exclude`) |
+| <kbd>i</kbd> | Ignore the file or its folder (`.gitignore` or `.git/info/exclude`), or the selected folder |
 | <kbd>c</kbd> | Commit what's staged |
 | <kbd>A</kbd> | Amend the last commit, keeping its message |
 | <kbd>s</kbd> | Stash |
 | <kbd>e</kbd> | Open the file in your editor at its first change |
 | <kbd>b</kbd> | [Blame](/panes/blame/) the file |
 | <kbd>.</kbd> | List only the files in the folder tt-git was started in, and back |
+| <kbd>&#96;</kbd> | List the files as a [folder tree](#the-folder-tree), or flat (saved to `config.toml`) |
+| <kbd>-</kbd> <kbd>=</kbd> | Fold every folder in the tree / open them all |
 | <kbd>C</kbd> | Continue a merge, rebase, cherry-pick or revert |
 | <kbd>X</kbd> | Abort it (asks first) |

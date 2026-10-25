@@ -382,7 +382,7 @@ files git leaves behind (`rebase-merge/`, `rebase-apply/`, `MERGE_HEAD`,
 | Stage | `git add -- <path>` |
 | Unstage | `git restore --staged -- <path>`, or `git rm --cached` before the first commit, when there's no `HEAD` |
 | Stage all / unstage all | `git add -A` / `git reset -q` (`git rm --cached -r .` before the first commit) |
-| Stage all / unstage all, [narrowed to a folder](/panes/status/#narrowing-to-a-folder) | `git add -A -- :(literal)<folder>` / `git reset -q -- :(literal)<folder>` (`git rm --cached -r -q --ignore-unmatch -- :(literal)<folder>` before the first commit) |
+| Stage all / unstage all, [narrowed to a folder](/panes/status/#narrowing-to-a-folder), or <kbd>space</kbd> on a folder in the [tree](/panes/status/#the-folder-tree) | `git add -A -- :(literal)<folder>` / `git reset -q -- :(literal)<folder>` (`git rm --cached -r -q --ignore-unmatch -- :(literal)<folder>` before the first commit) |
 | Discard an untracked file | Deletes it |
 | Discard a new file | `git rm -f` |
 | Discard a rename | Undone on both paths |
@@ -391,9 +391,10 @@ files git leaves behind (`rebase-merge/`, `rebase-apply/`, `MERGE_HEAD`,
 | Discard all: unstaged | `git restore --worktree -- .`, skipped when `git diff --quiet` finds nothing to restore |
 | Discard all: unstaged + untracked | The same restore, then `git clean -fd -q` |
 | Discard all: untracked | `git clean -fd -q` |
-| Discard all, narrowed to a folder | The same steps limited to `-- :(literal)<folder>`, except that **Everything** runs `git restore --source=HEAD --staged --worktree` there in place of `git reset --hard` (`git rm --cached -r` before the first commit), then `git clean -fd -q` |
+| Discard all, narrowed to a folder, or <kbd>d</kbd> on a folder in the tree | The same steps limited to `-- :(literal)<folder>`, except that **Everything** runs `git restore --source=HEAD --staged --worktree` there in place of `git reset --hard` (`git rm --cached -r` before the first commit), then `git clean -fd -q` |
 | Ignore | Appends `/<path>` (`/<folder>/` for a folder) to the root `.gitignore`, or to the file `git rev-parse --git-path info/exclude` names. `git ls-files -z -- :(literal)<path>` checks whether it's tracked first |
 | Ignore a tracked path | The same, then `git rm --cached -r -q -- :(literal)<path>` |
+| A folder's diff in details, from the tree | `git diff --cached -M -- :(literal)<folder>`, then `git diff -- :(literal)<folder>`, each only when something under it is staged or unstaged; its untracked files are listed by name |
 | Commit | `git commit -F -`, with the message on stdin, so multi-line messages and ones starting with `-` are safe |
 | Amend | `git commit --amend --no-edit` |
 | Continue a merge | `git commit --no-edit` |

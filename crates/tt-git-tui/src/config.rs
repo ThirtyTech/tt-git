@@ -26,10 +26,19 @@ pub struct Config {
     pub keys: KeysConfig,
     pub layout: Layout,
     pub graph: GraphConfig,
+    pub status: StatusConfig,
     pub branches: BranchesConfig,
     pub plugins: PluginsConfig,
     pub editor: EditorConfig,
     pub agent: AgentConfig,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct StatusConfig {
+    /// List the changed files as a folder tree at startup (`` ` `` toggles
+    /// it and saves the choice here).
+    pub tree: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -81,6 +90,7 @@ impl Default for Config {
             keys: KeysConfig::default(),
             layout: Layout::default(),
             graph: GraphConfig::default(),
+            status: StatusConfig::default(),
             branches: BranchesConfig::default(),
             plugins: PluginsConfig::default(),
             editor: EditorConfig::default(),
@@ -297,6 +307,52 @@ pub fn set_top_level(text: &str, key: &str, value: &str) -> String {
     out
 }
 
+/// `text` (a config.toml) with `key` in table `[table]` set to the TOML
+/// value `value`: its line replaced if the table has one, otherwise a line
+/// added at the end of the table, or the table added at the end of the file.
+/// Everything else, comments included, is left as it was.
+pub fn set_in_table(text: &str, table: &str, key: &str, value: &str) -> String {
+    let line = format!("{key} = {value}");
+    let header = format!("[{table}]");
+    let mut lines: Vec<&str> = text.lines().collect();
+    let is_header = |l: &str| l.trim_start().starts_with('[');
+    let is_key = |l: &str| {
+        l.trim_start()
+            .strip_prefix(key)
+            .is_some_and(|rest| rest.trim_start().starts_with('='))
+    };
+    match lines.iter().position(|l| l.trim() == header) {
+        Some(start) => {
+            let end = lines[start + 1..]
+                .iter()
+                .position(|l| is_header(l))
+                .map_or(lines.len(), |i| start + 1 + i);
+            match lines[start + 1..end].iter().position(|l| is_key(l)) {
+                Some(at) => lines[start + 1 + at] = &line,
+                None => {
+                    // After the table's last non-blank line.
+                    let at = lines[start + 1..end]
+                        .iter()
+                        .rposition(|l| !l.trim().is_empty())
+                        .map_or(start + 1, |i| start + 2 + i);
+                    lines.insert(at, &line);
+                }
+            }
+        }
+        None => {
+            if lines.last().is_some_and(|l| !l.trim().is_empty()) {
+                lines.push("");
+            }
+            lines.push(&header);
+            lines.push(&line);
+        }
+    }
+    let eol = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut out = lines.join(eol);
+    out.push_str(eol);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -347,6 +403,30 @@ mod tests {
         );
         let cfg = Config::parse(&set_top_level("[graph]\nmax_lanes = 4\n", "theme", "\"nord\"")).unwrap();
         assert_eq!(cfg.theme.as_deref(), Some("nord"));
+    }
+
+    #[test]
+    fn set_in_table_keeps_the_rest() {
+        assert_eq!(set_in_table("", "status", "tree", "true"), "[status]\ntree = true\n");
+        // A new table goes at the end, after a blank line.
+        assert_eq!(
+            set_in_table("mouse = false\n", "status", "tree", "true"),
+            "mouse = false\n\n[status]\ntree = true\n"
+        );
+        // Replaced in its own table only; `tree_x` isn't `tree`.
+        let text = "tree = 1\n[status]\ntree_x = 2\ntree = false # mine\n\n[graph]\ntree = 3\n";
+        assert_eq!(
+            set_in_table(text, "status", "tree", "true"),
+            "tree = 1\n[status]\ntree_x = 2\ntree = true\n\n[graph]\ntree = 3\n"
+        );
+        // Added after the table's last line, before the blank one.
+        assert_eq!(
+            set_in_table("[status]\n# note\n\n[graph]\n", "status", "tree", "true"),
+            "[status]\n# note\ntree = true\n\n[graph]\n"
+        );
+        let text = set_in_table("[graph]\r\nmax_lanes = 4\r\n", "status", "tree", "true");
+        assert_eq!(text, "[graph]\r\nmax_lanes = 4\r\n\r\n[status]\r\ntree = true\r\n");
+        assert!(Config::parse(&text).unwrap().status.tree);
     }
 
     /// A global file, a repo root and a git dir in a temp dir, each file

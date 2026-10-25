@@ -434,6 +434,32 @@ fn file_diffs() {
     assert_eq!(new, "new file new.txt\n+hello\n+world\n");
 }
 
+#[test]
+fn folder_diffs() {
+    let sb = Sandbox::new();
+    sb.commit_file("src/a.txt", "one\n", "base");
+    sb.commit_file("other.txt", "x\n", "other");
+    sb.write("src/a.txt", "two\n");
+    sb.git(&["add", "src/a.txt"]);
+    sb.write("src/a.txt", "three\n");
+    sb.write("src/new.txt", "hello\n");
+    sb.write("other.txt", "y\n");
+    let repo = open(&sb);
+    let entries: Vec<StatusEntry> = repo
+        .status()
+        .unwrap()
+        .entries
+        .into_iter()
+        .filter(|e| e.path.starts_with("src/"))
+        .collect();
+
+    let diff = repo.folder_diff("src/", &entries).unwrap();
+    assert!(diff.contains("── staged ──") && diff.contains("+two"), "{diff}");
+    assert!(diff.contains("── unstaged ──") && diff.contains("+three"), "{diff}");
+    assert!(diff.ends_with("── untracked ──\nsrc/new.txt\n"), "{diff}");
+    assert!(!diff.contains("other.txt"), "{diff}");
+}
+
 fn conflicting_branches(sb: &Sandbox) {
     sb.commit_file("f.txt", "base\n", "base");
     sb.checkout_new("other");
