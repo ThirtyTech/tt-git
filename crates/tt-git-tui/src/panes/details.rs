@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::Range;
 use std::sync::Arc;
 
 use ratatui::Frame;
@@ -18,9 +19,10 @@ use crate::component::{Component, EventState};
 use crate::editor::EditTarget;
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context, KeyCombo};
+use crate::search::{LineSearch, SearchKey};
 use crate::syntax::{HunkTokens, LineTokens, Tokens};
 use crate::theme::Theme;
-use crate::widgets::{Cursor, code_spans, split_lines, truncate};
+use crate::widgets::{Cursor, marked_code_spans, split_lines, truncate};
 
 /// What the details pane is showing.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -82,6 +84,11 @@ pub struct DetailsPane {
     blame: Option<BlameView>,
     /// What `esc` goes back to, shown after the title.
     trail: Option<String>,
+    /// A search of the text, typed after `/`. It stays when the text
+    /// changes, and finds its matches in the new text.
+    search: LineSearch,
+    /// The match `n` and `N` went to last, picked out in the text.
+    found: Option<usize>,
 }
 
 /// Everything the details pane shows, put aside to come back to.
@@ -190,6 +197,7 @@ impl DetailsPane {
             self.syntax = Arc::new(syntax);
             self.loading = false;
             self.files = None;
+            self.find_matches();
         }
     }
 
@@ -221,6 +229,7 @@ impl DetailsPane {
             focus,
             ..FilesView::default()
         });
+        self.find_matches();
         self.show_selected_file(ctx);
     }
 
@@ -283,6 +292,8 @@ impl DetailsPane {
             self.lines = lines.clone();
             self.syntax = syntax.clone();
             self.cursor.offset = 0;
+            self.search.find(lines.iter().map(String::as_str));
+            self.found = None;
             // The line blame came from: mark it, a third of the way down.
             if let Some((_, line)) = view.focus.take_if(|(p, _)| *p == path)
                 && let Some(row) = diff_text_row_of_line(&lines, line)
@@ -312,6 +323,44 @@ impl DetailsPane {
                     file: file.clone(),
                 });
             }
+        }
+        self.find_matches();
+    }
+
+    /// Works out which lines of the text match the search, afresh.
+    fn find_matches(&mut self) {
+        self.search.find(self.lines.iter().map(String::as_str));
+        self.found = None;
+    }
+
+    /// Picks out match `row`, scrolling it a third of the way down if it's
+    /// out of view.
+    fn show_match(&mut self, row: usize) {
+        self.found = Some(row);
+        let height = self.cursor.height.max(1);
+        let offset = &mut self.cursor.offset;
+        if row < *offset || row >= *offset + height {
+            let last_page = self.lines.len().saturating_sub(height);
+            *offset = row.saturating_sub(height / 3).min(last_page);
+        }
+    }
+
+    /// Goes to the next match, or the one before: after the one gone to
+    /// last if it's in view, otherwise from the top of the view.
+    fn next_match(&mut self, forward: bool, ctx: &Ctx) {
+        let (top, height) = (self.cursor.offset, self.cursor.height.max(1));
+        let at = match self.found.filter(|&f| (top..top + height).contains(&f)) {
+            Some(found) => found,
+            None if forward => {
+                if let Some(&first) = self.search.lines().iter().find(|&&l| l >= top) {
+                    return self.show_match(first);
+                }
+                top
+            }
+            None => top,
+        };
+        if let Some(row) = self.search.step(at, forward, ctx) {
+            self.show_match(row);
         }
     }
 
@@ -473,6 +522,7 @@ impl DetailsPane {
         self.stage = stage;
         self.blame = blame;
         self.trail = trail;
+        self.find_matches();
         if let Some(view) = &mut self.blame {
             view.reload_missing(ctx);
         }
@@ -567,7 +617,7 @@ impl DetailsPane {
         .areas(body);
         let header: Vec<Line> = view.header[..header_rows]
             .iter()
-            .map(|l| style_line(l, None, 0, theme))
+            .map(|l| style_line(l, None, 0, &[], theme))
             .collect();
         frame.render_widget(Paragraph::new(header), header_area);
         let rule = "─".repeat(rule_area.width as usize);
@@ -597,16 +647,19 @@ impl DetailsPane {
             .map(|row| {
                 let text = &self.lines[row];
                 let tokens = self.syntax.get(row).and_then(Option::as_ref);
+                let found = self.search.ranges(text);
                 match mark {
                     Some((at, line)) if at == row => {
                         let note = format!("◂ line {line} in blame ");
                         let pad = (area.width as usize).saturating_sub(text.width() + note.width());
-                        let mut marked = style_line(text, tokens, 0, theme);
+                        let mut marked = style_line(text, tokens, 0, &found, theme);
                         marked.spans.push(Span::raw(" ".repeat(pad)));
                         marked.spans.push(Span::styled(note, theme.help_text));
                         marked.patch_style(theme.selected)
                     }
-                    _ => style_line(text, tokens, area.width as usize, theme),
+                    _ if self.found == Some(row) => style_line(text, tokens, area.width as usize, &found, theme)
+                        .patch_style(theme.selected_unfocused),
+                    _ => style_line(text, tokens, area.width as usize, &found, theme),
                 }
             })
             .collect();
@@ -659,8 +712,15 @@ fn state_style(state: FileState, theme: &Theme) -> Style {
 
 /// A line of diff or `git show` output. A hunk line with `tokens` is in
 /// code colors, an added or deleted one on a tinted background (padded out
-/// to `width` columns) with its `+` or `-` in the usual green or red.
-fn style_line<'a>(line: &'a str, tokens: Option<&Tokens>, width: usize, theme: &Theme) -> Line<'a> {
+/// to `width` columns) with its `+` or `-` in the usual green or red. The
+/// byte ranges `found` are a search's matches.
+fn style_line<'a>(
+    line: &'a str,
+    tokens: Option<&Tokens>,
+    width: usize,
+    found: &[Range<usize>],
+    theme: &Theme,
+) -> Line<'a> {
     if let Some(tokens) = tokens
         && let Some(code) = line.get(1..)
     {
@@ -669,8 +729,30 @@ fn style_line<'a>(line: &'a str, tokens: Option<&Tokens>, width: usize, theme: &
             Some(b'-') => (theme.diff_del, theme.diff_del_line),
             _ => (Style::new(), Style::new()),
         };
-        let mut spans = vec![Span::styled(&line[..1], sign)];
-        spans.extend(code_spans(code, Some(tokens), Style::new(), theme, usize::MAX, false));
+        let sign_found = found.first().is_some_and(|m| m.start == 0);
+        let mut spans = vec![Span::styled(
+            &line[..1],
+            if sign_found {
+                sign.patch(theme.search_match)
+            } else {
+                sign
+            },
+        )];
+        // The matches in the code, after the sign.
+        let in_code: Vec<Range<usize>> = found
+            .iter()
+            .filter(|m| m.end > 1)
+            .map(|m| m.start.max(1) - 1..m.end - 1)
+            .collect();
+        spans.extend(marked_code_spans(
+            code,
+            Some(tokens),
+            Style::new(),
+            theme,
+            usize::MAX,
+            false,
+            &in_code,
+        ));
         let pad = width.saturating_sub(line.width());
         if pad > 0 && back != Style::new() {
             spans.push(Span::raw(" ".repeat(pad)));
@@ -690,7 +772,7 @@ fn style_line<'a>(line: &'a str, tokens: Option<&Tokens>, width: usize, theme: &
     } else {
         Style::new()
     };
-    Line::from(Span::styled(line, style))
+    Line::from(marked_code_spans(line, None, style, theme, usize::MAX, false, found))
 }
 
 impl Component for DetailsPane {
@@ -711,12 +793,24 @@ impl Component for DetailsPane {
         if let Some(view) = &mut self.blame {
             return view.on_command(cmd, ctx);
         }
-        if cmd == Command::OpenInEditor {
-            ctx.emit(match self.edit_target() {
-                Ok(target) => Action::OpenInEditor(target),
-                Err(why) => Action::Notify(why),
-            });
-            return EventState::Consumed;
+        match cmd {
+            Command::OpenInEditor => {
+                ctx.emit(match self.edit_target() {
+                    Ok(target) => Action::OpenInEditor(target),
+                    Err(why) => Action::Notify(why),
+                });
+                return EventState::Consumed;
+            }
+            Command::Search => {
+                self.search = LineSearch::start(self.cursor.offset);
+                self.found = None;
+                return EventState::Consumed;
+            }
+            Command::SearchNext | Command::SearchPrev => {
+                self.next_match(cmd == Command::SearchNext, ctx);
+                return EventState::Consumed;
+            }
+            _ => {}
         }
         // In the files view, line movement picks a file and paging scrolls its diff.
         if let Some(view) = &mut self.files
@@ -740,14 +834,33 @@ impl Component for DetailsPane {
         self.stage.is_none() && self.blame.as_mut().is_some_and(|view| view.on_key(key))
     }
 
-    /// In blame, while a search is typed.
+    /// While a search is typed, in blame or here.
     fn wants_text_input(&self) -> bool {
-        self.stage.is_none() && self.blame.as_ref().is_some_and(BlameView::searching)
+        self.stage.is_none() && self.blame.as_ref().map_or(self.search.typing(), BlameView::searching)
     }
 
+    /// Each change to the search goes to its first match from where it
+    /// started, or back there when nothing matches.
     fn on_text_key(&mut self, key: KeyCombo, ctx: &Ctx) {
         if let Some(view) = &mut self.blame {
             view.on_search_key(key, ctx);
+            return;
+        }
+        match self.search.on_key(key, ctx) {
+            SearchKey::Changed => {
+                self.find_matches();
+                let to = self.search.landing();
+                if self.search.lines().is_empty() {
+                    self.cursor.offset = to;
+                } else {
+                    self.show_match(to);
+                }
+            }
+            SearchKey::Cancelled(origin) => {
+                self.found = None;
+                self.cursor.offset = origin;
+            }
+            SearchKey::Done => {}
         }
     }
 
@@ -830,6 +943,9 @@ impl Component for DetailsPane {
             Command::ToggleFiles,
             Command::NewerCommit,
             Command::OlderCommit,
+            Command::Search,
+            Command::SearchNext,
+            Command::SearchPrev,
             Command::CloseDetails,
         ]
     }
@@ -867,7 +983,12 @@ impl Component for DetailsPane {
         if let Some(count) = self.blame.as_ref().and_then(BlameView::count) {
             title.push_str(&format!(" go to {count}…"));
         }
-        if let Some(search) = self.blame.as_ref().and_then(BlameView::search_title) {
+        let search = match &self.blame {
+            Some(view) => view.search_title(),
+            None if self.stage.is_none() => self.search.title(self.found, !self.loading),
+            None => None,
+        };
+        if let Some(search) = search {
             title.push_str(&search);
         }
         if self.loading || self.blame.as_ref().is_some_and(BlameView::loading) {

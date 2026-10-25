@@ -1,0 +1,34 @@
+---
+source: crates/tt-git-tui/tests/details_search.rs
+expression: t.screen()
+---
+╭[4] Commit 5d55791 files /needle█ 1/3─────────────────────────────────────────────────────────────╮
+│Files (2)          │ add hay                                                                      │
+│A long.txt         │ 5d55791 · Test User <test@example.com> · 2024-01-01 00:01                    │
+│A short.txt        │ ─────────────────────────────────────────────────────────────────────────────│
+│                   │ diff --git a/long.txt b/long.txt                                             │
+│                   │ new file mode 100644                                                         │
+│                   │ index 0000000..c79ccab                                                       │
+│                   │ --- /dev/null                                                                │
+│                   │ +++ b/long.txt                                                               │
+│                   │ @@ -0,0 +1,60 @@                                                             │
+│                   │ +hay 1                                                                       │
+│                   │ +hay 2                                                                       │
+│                   │ +hay 3                                                                       │
+│                   │ +hay 4                                                                       │
+│                   │ +hay 5                                                                       │
+│                   │ +hay 6                                                                       │
+│                   │ +hay 7                                                                       │
+│                   │ +hay 8                                                                       │
+│                   │ +hay 9                                                                       │
+│                   │ +needle 10                                                                   │
+│                   │ +hay 11                                                                      │
+│                   │ +hay 12                                                                      │
+│                   │ +hay 13                                                                      │
+│                   │ +hay 14                                                                      │
+│                   │ +hay 15                                                                      │
+│                   │ +hay 16                                                                      │
+│                   │ +hay 17                                                                      │
+│                   │ +hay 18                                                                      │
+╰──────────────────────────────────────────────────────────────────────────────────────────────────╯
+pgdn page down  pgup page up  o open link  e edit file  b blame  tab next pane  ? help  q quit

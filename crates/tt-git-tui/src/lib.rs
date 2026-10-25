@@ -15,6 +15,7 @@ pub mod modal;
 pub mod panes;
 pub mod pty_pane;
 pub mod runner;
+pub mod search;
 pub mod syntax;
 pub mod theme;
 pub mod themes;
