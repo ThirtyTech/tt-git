@@ -12,7 +12,7 @@ use tt_git_app::keymap::{KeyCode, KeyCombo};
 use tt_git_app::view::StyleRole;
 use tt_git_app::view::dialogs::DialogLook;
 use tt_git_app::view::dialogs::about::{
-    ABOUT_DEVELOPER, ABOUT_HINT, ABOUT_TAGLINE, ABOUT_TITLE, REPO_URL, about_heading,
+    ABOUT_DEVELOPER, ABOUT_HINT, ABOUT_TAGLINE, ABOUT_TITLE, REPO_URL, TUI_INSTALL_URL, about_heading,
 };
 
 use super::prompt::{blank, dialog_box, layer, title};
@@ -27,6 +27,9 @@ pub const REPO_LINK: &str = "dialog:about:repo";
 
 /// The id the GPUI link is measured as.
 pub const GPUI_LINK: &str = "dialog:about:gpui";
+
+/// The id the terminal app's install link is measured as.
+pub const TUI_LINK: &str = "dialog:about:tui";
 
 /// The UI framework the app is drawn with.
 pub const GPUI_URL: &str = "https://gpui.rs/";
@@ -87,14 +90,19 @@ pub fn content(ui: &Ui) -> Div {
                 .child("Source: ")
                 .child(link(ui, REPO_LINK, "github.com/thirtytech/tt-git", REPO_URL)),
         )
-        .child(blank(ui))
-        .child(line("Prefer the terminal? Run `tt-git` for the TUI.".into()))
         .child(
             div()
                 .flex()
                 .child("Built with GPUI: ")
                 .child(link(ui, GPUI_LINK, "gpui.rs", GPUI_URL)),
         )
+        .child(blank(ui))
+        .child(div().flex().child("Prefer the terminal? ").child(link(
+            ui,
+            TUI_LINK,
+            "Install the terminal app",
+            TUI_INSTALL_URL,
+        )))
 }
 
 /// `text`, underlined, that opens `url` in the system browser when clicked.
@@ -178,6 +186,10 @@ mod tests {
         let gpui_link = drawn(&gui, GPUI_LINK).expect("the GPUI link");
         click(&mut gui, gpui_link.center());
         assert_eq!(gui.cx.opened_url().as_deref(), Some(GPUI_URL));
+
+        let tui_link = drawn(&gui, TUI_LINK).expect("the terminal app's install link");
+        click(&mut gui, tui_link.center());
+        assert_eq!(gui.cx.opened_url().as_deref(), Some(TUI_INSTALL_URL));
     }
 
     #[gpui::test]

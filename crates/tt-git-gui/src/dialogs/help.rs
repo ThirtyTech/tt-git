@@ -61,7 +61,7 @@ mod tests {
         let mut gui = Gui::open(cx, &sb);
         gui.keystrokes("?");
         assert!(gui.read(|app| app.shows_help()));
-        assert_eq!(drawn_cols(&gui, ID), 50);
+        assert_eq!(drawn_cols(&gui, ID), 58);
         let before = drawn(&gui, ID).unwrap();
         let all = gui.read(|app| app.help_view().rows.len());
 

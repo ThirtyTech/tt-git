@@ -101,7 +101,7 @@ impl App {
             .collect();
         HelpView {
             version: concat!("tt-git ", env!("CARGO_PKG_VERSION")).into(),
-            width: 50,
+            width: 58,
             height: self.all_help_row_count() + 5,
             tabs,
             tab,
@@ -139,7 +139,7 @@ mod tests {
         app.handle_key(KeyCombo::char('?'));
         assert!(app.shows_help());
         let view = app.help_view();
-        assert_eq!(view.width, 50);
+        assert_eq!(view.width, 58);
         assert_eq!(view.height, app.all_help_row_count() + 5);
         assert_eq!(view.tab, HelpTab::Keys);
         assert_eq!(line_text(&view.tabs), "Keys · About   tab switch");

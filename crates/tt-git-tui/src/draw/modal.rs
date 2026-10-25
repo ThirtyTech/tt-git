@@ -6,6 +6,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph, Wrap};
+use unicode_width::UnicodeWidthStr;
 
 use super::centered;
 use super::filter::draw_filter;
@@ -14,7 +15,9 @@ use crate::app::App;
 use crate::modal::Modal;
 use crate::tui_theme::Theme;
 use crate::view::TextSpan;
-use crate::view::dialogs::about::{ABOUT_DEVELOPER, ABOUT_HINT, ABOUT_TAGLINE, ABOUT_TITLE, REPO_URL, about_heading};
+use crate::view::dialogs::about::{
+    ABOUT_DEVELOPER, ABOUT_HINT, ABOUT_TAGLINE, ABOUT_TITLE, GUI_INSTALL_URL, REPO_URL, about_heading,
+};
 use crate::view::dialogs::{HELP_TITLE, HelpTab, ListRow, PaletteView, error_view, line_text};
 
 pub fn draw_modal(modal: &Modal, frame: &mut Frame, area: Rect, theme: &Theme) {
@@ -130,8 +133,13 @@ pub(super) fn draw_error_popup(frame: &mut Frame, area: Rect, msg: &str, theme: 
     frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block), popup);
 }
 
-/// The About dialog's width in columns, the border included.
+/// The About dialog's width in columns, the border included. The keys
+/// popup, whose About tab shows the same lines, is as wide.
 const ABOUT_WIDTH: u16 = 58;
+
+/// The columns About's text has, inside the border and a column of
+/// padding each side.
+const ABOUT_TEXT_WIDTH: usize = ABOUT_WIDTH as usize - 4;
 
 /// Ratatui, which the terminal app is drawn with.
 pub const RATATUI_URL: &str = "https://ratatui.rs/";
@@ -158,22 +166,39 @@ fn about_lines(theme: &Theme) -> Vec<Line<'static>> {
         Line::raw(""),
         Line::styled(about_heading(), theme.title_focused).centered(),
     ];
-    // The tagline over two lines, broken after its comma.
+    // Broken into lines here rather than by the paragraph, so the dialog
+    // knows how tall it is.
     lines.extend(
-        ABOUT_TAGLINE
-            .split_inclusive(", ")
-            .map(|part| Line::styled(part.trim_end(), theme.muted).centered()),
+        word_wrap(ABOUT_TAGLINE, ABOUT_TEXT_WIDTH)
+            .into_iter()
+            .map(|part| Line::styled(part, theme.muted).centered()),
     );
     lines.extend([
         Line::raw(""),
         Line::raw(ABOUT_DEVELOPER),
         Line::from(vec![Span::raw("Source: "), Span::styled(REPO_URL, theme.help_key)]),
-        Line::raw(""),
-        Line::raw("Prefer a window? Run `tt-git-gui` for the desktop app."),
         Line::from(vec![
             Span::raw("Built with Ratatui: "),
             Span::styled(RATATUI_URL, theme.help_key),
         ]),
+        Line::raw(""),
+        Line::raw("Prefer a window? Install the desktop app:"),
+        Line::styled(GUI_INSTALL_URL, theme.help_key),
     ]);
+    lines
+}
+
+/// `text` in lines of at most `width` columns, broken between words.
+fn word_wrap(text: &str, width: usize) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for word in text.split_whitespace() {
+        match lines.last_mut() {
+            Some(line) if line.width() + 1 + word.width() <= width => {
+                line.push(' ');
+                line.push_str(word);
+            }
+            _ => lines.push(word.to_string()),
+        }
+    }
     lines
 }
