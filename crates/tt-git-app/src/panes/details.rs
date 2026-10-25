@@ -861,6 +861,12 @@ impl Component for DetailsPane {
         }
     }
 
+    /// In blame, as enter does: the line's commit.
+    fn double_click(&self, row: usize) -> Option<Command> {
+        let view = self.blame.as_ref().filter(|_| self.stage.is_none())?;
+        view.has_line_at_row(row).then_some(Command::OpenCommit)
+    }
+
     /// In the files view, a click on a file shows its diff; staging, a
     /// click on a row picks its hunk or line.
     fn on_click_part(&mut self, part: PanePart, ctx: &Ctx) -> bool {

@@ -50,6 +50,13 @@ pub trait Component {
     /// A click on the `row`-th visible line of the pane's body.
     fn on_click(&mut self, _row: usize, _ctx: &Ctx) {}
 
+    /// What a double click on the `row`-th visible line of the pane's body
+    /// runs, after the first click picked it: the command `enter` runs on
+    /// it, when there's something there.
+    fn double_click(&self, _row: usize) -> Option<Command> {
+        None
+    }
+
     /// A click on `part` of the pane, tried before [`on_click`](Self::on_click)
     /// for panes with more than one list, or tabs in their title. Returns
     /// whether it was handled.

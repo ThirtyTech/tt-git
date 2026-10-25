@@ -108,6 +108,37 @@ mod tests {
     }
 
     #[gpui::test]
+    fn a_double_click_folds_a_folder_and_stages_a_file(cx: &mut TestAppContext) {
+        let sb = Sandbox::new();
+        sb.commit_file("a.txt", "a", "first");
+        sb.write("a.txt", "changed");
+        sb.write("src/new.rs", "new");
+        let mut gui = Gui::open(cx, &sb);
+        gui.press_all(&["2", "`"]);
+        assert_eq!(shown(&mut gui), ["▾ src/", "  ?? new.rs", " M a.txt"]);
+        let (list, line_height) = gui.shell.read_with(&gui.cx, |shell, _| {
+            let ui = shell.ui();
+            (ui.measures.get(ROWS).expect("drawn"), ui.font.line_height)
+        });
+        let row = |n: usize| gpui::point(list.left() + gpui::px(20.), list.top() + line_height * (n as f32 + 0.5));
+        let double = |gui: &mut Gui, n: usize| {
+            for _ in 0..2 {
+                gui.cx.simulate_click(row(n), gpui::Modifiers::none());
+                gui.wait_idle();
+            }
+        };
+        double(&mut gui, 0);
+        assert_eq!(shown(&mut gui), ["▸ src/", " M a.txt"], "folded");
+        double(&mut gui, 1);
+        assert_eq!(
+            gui.read(|app| app.details().stage().map(|s| s.path().to_string()))
+                .as_deref(),
+            Some("a.txt"),
+            "staging the file, as enter does"
+        );
+    }
+
+    #[gpui::test]
     fn the_folder_filter_narrows_the_list(cx: &mut TestAppContext) {
         let sb = Sandbox::new();
         sb.commit_file("a.txt", "a", "first");

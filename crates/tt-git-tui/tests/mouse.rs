@@ -172,8 +172,52 @@ fn double_clicking_a_commit_opens_its_files() {
     assert_eq!(t.app().details().subject(), Some(&DetailsSubject::CommitFiles(oid)));
     t.press("esc");
     assert_eq!(t.app().zoom(), Zoom::Off);
+}
 
-    // Only the graph opens anything.
-    t.click_pane_row(PaneId::Status, 0).click_pane_row(PaneId::Status, 0);
+#[test]
+fn double_clicking_does_what_enter_does() {
+    let sb = repo();
+    let mut t = TestDriver::new(&sb);
+    // A file: its staging view.
+    t.click_pane_row(PaneId::Status, 1).click_pane_row(PaneId::Status, 1);
+    t.wait_idle();
+    assert_eq!(
+        t.app().details().subject(),
+        Some(&DetailsSubject::Stage("y.txt".into()))
+    );
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    t.press("esc");
+    // Nothing below the last file.
+    t.click_pane_row(PaneId::Status, 30).click_pane_row(PaneId::Status, 30);
     assert_eq!(t.app().zoom(), Zoom::Off);
+
+    // A branch: checked out.
+    let row = t.app().branches().visible().position(|b| b.name == "alpha").unwrap() as u16;
+    t.click_pane_row(PaneId::Branches, row)
+        .click_pane_row(PaneId::Branches, row);
+    t.wait_idle();
+    assert_eq!(sb.git(&["branch", "--show-current"]).trim(), "alpha");
+}
+
+#[test]
+fn double_clicking_a_folder_folds_it() {
+    let sb = Sandbox::new();
+    sb.commit("first");
+    sb.write("src/a.txt", "a").write("src/b.txt", "b");
+    let mut t = TestDriver::new(&sb);
+    t.press("2");
+    t.press("`");
+    let rows = |t: &TestDriver| {
+        t.pane_lines(PaneId::Status)
+            .iter()
+            .filter(|l| l.contains(".txt"))
+            .count()
+    };
+    assert_eq!(rows(&t), 2, "{:#?}", t.pane_lines(PaneId::Status));
+    t.press("g");
+    assert!(t.app().status().selected_folder().is_some(), "the folder is first");
+    t.click_pane_row(PaneId::Status, 0).click_pane_row(PaneId::Status, 0);
+    assert_eq!(rows(&t), 0, "folded: {:#?}", t.pane_lines(PaneId::Status));
+    t.click_pane_row(PaneId::Status, 0).click_pane_row(PaneId::Status, 0);
+    assert_eq!(rows(&t), 2, "unfolded");
 }

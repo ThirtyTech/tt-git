@@ -857,6 +857,11 @@ impl Component for GraphPane {
         }
     }
 
+    /// As enter does: the commit fullscreen, files beside the diff.
+    fn double_click(&self, row: usize) -> Option<Command> {
+        self.has_commit_at_row(row).then_some(Command::ExpandDetails)
+    }
+
     fn commands(&self) -> &[Command] {
         &[
             Command::ExpandDetails,

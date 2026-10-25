@@ -736,9 +736,8 @@ impl App {
                         false
                     }
                 };
-                if double && pane == PaneId::Graph && row.is_some_and(|r| self.graph.has_commit_at_row(r)) {
-                    // As enter does: the commit fullscreen, files beside the diff.
-                    self.update(Action::Command(Command::ExpandDetails));
+                if double && let Some(cmd) = row.and_then(|r| self.pane_mut(pane).double_click(r)) {
+                    self.update(Action::Command(cmd));
                 }
             }
             MouseKind::ScrollDown | MouseKind::ScrollUp => {
