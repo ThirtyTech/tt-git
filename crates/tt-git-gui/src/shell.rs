@@ -2,11 +2,12 @@
 //! does (the panes in their layout, the help bar, then what opens over
 //! them), sends it the keys, and reports where the panes went.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use gpui::{
     AnyElement, App, Bounds, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyDownEvent,
-    ParentElement, Pixels, Render, Styled, Subscription, Window, canvas, div,
+    ParentElement, Pixels, PromptLevel, Render, Styled, Subscription, Window, canvas, div,
 };
 use tt_git_app::Action;
 use tt_git_app::geom::Rect;
@@ -48,18 +49,32 @@ impl Shell {
                 AppEvent::Quit => {
                     // Opening another worktree quits the app and starts a
                     // new one there.
-                    if let Some(repo) = model.update(cx, |m, _| m.app_mut().take_reopen()) {
-                        crate::reopen(repo, cx);
+                    if let Some(repo) = model.update(cx, |m, _| m.app_mut().take_reopen())
+                        && let Err(e) = crate::windows::open_repo(repo, cx)
+                    {
+                        tracing::error!("{e}");
                     }
                     window.remove_window();
                 }
+                AppEvent::OpenRepository => {
+                    let model = model.downgrade();
+                    crate::windows::pick_repos(cx, move |result, cx| {
+                        if let Err(e) = result {
+                            let _ = model.update(cx, |m, cx| m.send(tt_git_app::Action::Error(e), cx));
+                        }
+                    });
+                }
             }),
-            cx.observe_window_bounds(window, |shell, _, cx| {
+            cx.observe_window_bounds(window, |shell, window, cx| {
+                crate::window_state::remember_window(window, cx);
                 shell.model.update(cx, |m, cx| m.resized(cx));
             }),
             // C1: the active window's menus are the app's.
             cx.observe_window_activation(window, |_, _, cx| cx.notify()),
         ];
+        ask_before_closing(&model, window, cx);
+        // Where it opened counts too, if it's never moved.
+        crate::window_state::remember_window(window, cx);
         Self {
             ui: Ui {
                 theme: Rc::new(theme),
@@ -116,6 +131,45 @@ impl Shell {
         }
     }
 }
+
+/// Closing the window while a terminal editor runs in it (which would
+/// end the editor and lose what it hasn't saved) asks first.
+fn ask_before_closing(model: &Entity<AppModel>, window: &mut Window, cx: &mut Context<Shell>) {
+    let model = model.downgrade();
+    let asking = Rc::new(Cell::new(false));
+    window.on_window_should_close(cx, move |window, cx| {
+        let Some(model) = model.upgrade() else {
+            return true;
+        };
+        if !model.read(cx).app().editor_running() {
+            return true;
+        }
+        if asking.replace(true) {
+            return false;
+        }
+        let answer = window.prompt(
+            PromptLevel::Warning,
+            "An editor is still running",
+            Some("Closing the window stops it, and anything it hasn't saved is lost."),
+            &[CLOSE, "Cancel"],
+            cx,
+        );
+        let (asking, handle) = (asking.clone(), window.window_handle());
+        cx.spawn(async move |cx| {
+            let close = answer.await == Ok(0);
+            asking.set(false);
+            if close {
+                tracing::info!("closing the window with its editor running");
+                let _ = handle.update(cx, |_, window, _| window.remove_window());
+            }
+        })
+        .detach();
+        false
+    });
+}
+
+/// The button that closes the window anyway.
+pub const CLOSE: &str = "Close";
 
 impl Focusable for Shell {
     fn focus_handle(&self, _: &App) -> FocusHandle {

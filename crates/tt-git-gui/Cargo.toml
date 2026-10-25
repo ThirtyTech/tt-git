@@ -18,6 +18,8 @@ path = "src/main.rs"
 gpui = { package = "gpui-kit", version = "=0.8.0" }
 clap.workspace = true
 color-eyre.workspace = true
+serde.workspace = true
+serde_json.workspace = true
 # The window icon on X11 (`WindowOptions::icon`), decoded from assets/icon.png.
 image = { version = "0.25", default-features = false, features = ["png"] }
 # rt-multi-thread for the runtime `gpui_tokio` starts.
@@ -36,6 +38,7 @@ embed-resource = "3"
 
 [dev-dependencies]
 gpui = { package = "gpui-kit", version = "=0.8.0", features = ["test-support"] }
+tempfile.workspace = true
 tt-git-testkit.workspace = true
 
 [lints]

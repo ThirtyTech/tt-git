@@ -54,21 +54,33 @@ fn main() -> Result<()> {
     } else {
         None
     };
+    let named = args.path.is_some();
     let repo_path = match args.path {
         Some(p) => p,
         None => std::env::current_dir().wrap_err("reading current directory")?,
     };
+    // Outside a repository, the start window asks which to open (saying
+    // why, when the folder was named on the command line).
+    let mut not_a_repo = None;
     let repo = match Repo::discover(&repo_path, &GitCli::new(&repo_path)) {
-        Ok(repo) => repo,
+        Ok(repo) => Some(repo),
         Err(e @ GitError::NotARepo(_)) => {
-            eprintln!("tt-git-gui: {e}");
-            std::process::exit(1);
+            tracing::info!("{e}: showing the start window");
+            not_a_repo = named.then(|| e.to_string());
+            None
         }
         Err(e) => return Err(e).wrap_err("opening repository"),
     };
     let no_plugins = args.no_plugins;
-    // Each repository, and each worktree opened later, gets its own files
-    // laid over the global config.
+    // Plugins call `$TTGIT_BIN_PATH <subcommand>`; the GUI has none, so
+    // they get the TUI's `tt-git`.
+    let bin_path = if no_plugins {
+        None
+    } else {
+        tt_git_gui::tt_git_bin::find()
+    };
+    // Each repository, and each one opened later, gets its own files laid
+    // over the global config.
     let new_app = move |repo: Repo| -> Result<_, String> {
         let mut config = global
             .for_repo(repo.root(), repo.common_dir())
@@ -84,7 +96,7 @@ fn main() -> Result<()> {
         if !no_plugins {
             app.enable_plugins(PluginOptions {
                 dirs: PluginDirs::from_env(),
-                bin_path: None,
+                bin_path: bin_path.clone(),
                 socket: true,
                 extra_env: Vec::new(),
             });
@@ -93,18 +105,21 @@ fn main() -> Result<()> {
     };
     // Made before any window opens, so a bad config is reported on the
     // console.
-    let (app, rx) = new_app(repo).map_err(color_eyre::eyre::Report::msg)?;
+    let first = match repo {
+        Some(repo) => Some(new_app(repo).map_err(color_eyre::eyre::Report::msg)?),
+        None => None,
+    };
 
     gpui::application().run(move |cx| {
         tt_git_gui::init(cx);
+        tt_git_gui::window_state::install(tt_git_gui::window_state::default_path(), cx);
         tt_git_gui::set_launcher(Rc::new(new_app), cx);
-        cx.on_window_closed(|cx, _| {
-            if cx.windows().is_empty() {
-                cx.quit();
-            }
-        })
-        .detach();
-        if let Err(e) = tt_git_gui::open_window(app, rx, cx) {
+        tt_git_gui::windows::quit_when_last_closes(cx);
+        let opened = match first {
+            Some((app, rx)) => tt_git_gui::open_window(app, rx, cx).map(|_| ()),
+            None => tt_git_gui::start::open(not_a_repo, cx).map(|_| ()),
+        };
+        if let Err(e) = opened {
             eprintln!("tt-git-gui: couldn't open a window: {e}");
             cx.quit();
         }

@@ -23,6 +23,8 @@ use crate::gpui_tokio::Tokio;
 pub enum AppEvent {
     /// The app asked to quit: close the window.
     Quit,
+    /// "Open repository" ran: ask which.
+    OpenRepository,
 }
 
 /// tt-git's [`App`] as a GPUI entity. Input goes in through
@@ -48,6 +50,7 @@ impl AppModel {
     pub fn new(app: App, rx: UnboundedReceiver<Action>, cx: &mut Context<Self>) -> Self {
         let mut app = app;
         app.set_runtime(Tokio::handle(cx));
+        app.enable_open_repository();
         app.start();
         let rx = Rc::new(RefCell::new(rx));
         let waiting = rx.clone();
@@ -137,6 +140,9 @@ impl AppModel {
                 cx.emit(AppEvent::Quit);
             }
             return;
+        }
+        if self.app.take_open_repository() {
+            cx.emit(AppEvent::OpenRepository);
         }
         if let Some(text) = self.app.take_clipboard() {
             cx.write_to_clipboard(ClipboardItem::new_string(text));

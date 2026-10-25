@@ -11,16 +11,10 @@
 //!
 //! `docs/gui.md` says how to port an area.
 
-use std::path::PathBuf;
-use std::rc::Rc;
-
 use gpui::component::Root;
-use gpui::{
-    App, AppContext, Bounds, Global, KeyBinding, NoAction, WindowBounds, WindowHandle, WindowOptions, px, size,
-};
+use gpui::{App, AppContext, KeyBinding, NoAction, WindowHandle, WindowOptions};
 use tokio::sync::mpsc::UnboundedReceiver;
 use tt_git_app::Action;
-use tt_git_core::Repo;
 
 pub mod dialogs;
 pub mod font;
@@ -35,12 +29,18 @@ pub mod overlay;
 pub mod panes;
 pub mod rows;
 pub mod shell;
+pub mod start;
 pub mod terminal;
 #[cfg(test)]
 pub mod testing;
 pub mod text;
 pub mod theme;
+pub mod tt_git_bin;
 pub mod ui;
+pub mod window_state;
+pub mod windows;
+
+pub use windows::{NewApp, set_launcher};
 
 /// The key context of the window's content. tt-git's keymap resolves every
 /// key; GPUI key bindings that would take one first are switched off in it.
@@ -66,18 +66,19 @@ pub fn init(cx: &mut App) {
 
 /// Opens a window on `app`, which [`App::new`](tt_git_app::App::new) made
 /// along with `rx` and which is set up (themes, plugins) but not started.
+/// It goes where the last window was ([`window_state`]), moved along if
+/// other repository windows are open. [`windows::open_repo`] is the way in
+/// for a repository that may have a window already.
 pub fn open_window(
     app: tt_git_app::App,
     rx: UnboundedReceiver<Action>,
     cx: &mut App,
 ) -> gpui::Result<WindowHandle<Root>> {
     let title = app.terminal_title();
+    let root = app.repo().root().to_path_buf();
+    let open = windows::repo_windows(cx).len();
     let options = WindowOptions {
-        window_bounds: Some(WindowBounds::Windowed(Bounds::centered(
-            None,
-            size(px(1280.), px(800.)),
-            cx,
-        ))),
+        window_bounds: Some(window_state::next_bounds(open, cx)),
         // C1: the app draws the title bar, with the menus (menus::bar).
         titlebar: Some(menus::bar::titlebar_options(title)),
         app_owns_titlebar_drag: true,
@@ -86,45 +87,11 @@ pub fn open_window(
         ..Default::default()
     };
     let font = font::MonoFont::new(cx);
-    cx.open_window(options, |window, cx| {
+    let handle = cx.open_window(options, |window, cx| {
         let model = cx.new(|cx| model::AppModel::new(app, rx, cx));
         let shell = cx.new(|cx| shell::Shell::new(model, font, window, cx));
         cx.new(|cx| Root::new(shell, window, cx))
-    })
-}
-
-/// Makes the app for a repository: what `tt-git-gui`'s `main` does at
-/// startup, kept for when the app asks to open another worktree.
-pub type NewApp = dyn Fn(Repo) -> Result<(tt_git_app::App, UnboundedReceiver<Action>), String>;
-
-struct Launcher(Rc<NewApp>);
-
-impl Global for Launcher {}
-
-/// Remembers how to make the app for a repository, so opening another
-/// worktree opens it in a new window, as if tt-git had been started there.
-pub fn set_launcher(new_app: Rc<NewApp>, cx: &mut App) {
-    cx.set_global(Launcher(new_app));
-}
-
-/// Opens `repo` in a new window, with the launcher from [`set_launcher`].
-/// Called before the old window closes, so the app doesn't quit between.
-fn reopen(repo: Repo, cx: &mut App) {
-    let Some(launcher) = cx.try_global::<Launcher>().map(|l| l.0.clone()) else {
-        tracing::warn!("no launcher to open {}", repo.root().display());
-        return;
-    };
-    // So plugins start where tt-git is, as the TUI does.
-    if let Err(e) = std::env::set_current_dir(repo.root()) {
-        tracing::warn!("couldn't change to {}: {e}", repo.root().display());
-    }
-    let root: PathBuf = repo.root().to_path_buf();
-    match launcher(repo) {
-        Ok((app, rx)) => {
-            if let Err(e) = open_window(app, rx, cx) {
-                tracing::error!("couldn't open {}: {e}", root.display());
-            }
-        }
-        Err(e) => tracing::error!("couldn't open {}: {e}", root.display()),
-    }
+    })?;
+    windows::register(handle.into(), &root, cx);
+    Ok(handle)
 }
