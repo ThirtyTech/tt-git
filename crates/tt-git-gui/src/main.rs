@@ -110,7 +110,7 @@ fn main() -> Result<()> {
         None => None,
     };
 
-    gpui::application().run(move |cx| {
+    gpui::application().with_assets(tt_git_gui::Assets).run(move |cx| {
         tt_git_gui::init(cx);
         tt_git_gui::window_state::install(tt_git_gui::window_state::default_path(), cx);
         tt_git_gui::set_launcher(Rc::new(new_app), cx);
