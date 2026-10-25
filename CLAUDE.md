@@ -2,7 +2,8 @@
 
 A Rust/ratatui git TUI. Cargo workspace under `crates/`. Developer docs:
 README "Development", [docs/configuration.md](docs/configuration.md),
-[docs/plugins.md](docs/plugins.md), [docs/worktrees.md](docs/worktrees.md).
+[docs/plugins.md](docs/plugins.md), [docs/worktrees.md](docs/worktrees.md), and
+[docs/gui.md](docs/gui.md) for the desktop app (`tt-git-gui`).
 
 Every user-visible change also updates the doc site in `docs-site/`; see
 [AGENTS.md](AGENTS.md) for where each kind of change is documented.

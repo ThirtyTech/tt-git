@@ -27,6 +27,11 @@ pub enum UpdateError {
         .0.display()
     )]
     CargoBuild(PathBuf),
+    #[error(
+        "tt-git is part of the desktop app ({}); update the app from the release's download instead",
+        .0.display()
+    )]
+    AppBundle(PathBuf),
     #[error("couldn't run {program}: {source}")]
     Spawn {
         program: &'static str,
@@ -48,8 +53,10 @@ fn exit_detail(code: Option<i32>) -> String {
 
 /// The folder to install into: the running binary's own, so the copy that
 /// is actually run gets replaced. Refuses a binary the script wouldn't
-/// replace (another name) and a cargo build directory, so `cargo run` and
-/// tests never overwrite a build.
+/// replace (another name), a cargo build directory, so `cargo run` and
+/// tests never overwrite a build, and the copy inside the macOS app bundle
+/// (`tt-git.app/Contents/MacOS`), where replacing it would break the app's
+/// signature.
 pub fn install_dir(exe: &Path) -> Result<PathBuf, UpdateError> {
     let named_tt_git = exe.file_stem().is_some_and(|s| s == "tt-git");
     let dir = exe.parent().unwrap_or(Path::new("."));
@@ -60,12 +67,28 @@ pub fn install_dir(exe: &Path) -> Result<PathBuf, UpdateError> {
     if dir.join(".fingerprint").is_dir() {
         return Err(UpdateError::CargoBuild(dir.to_path_buf()));
     }
+    if let Some(app) = app_bundle(dir) {
+        return Err(UpdateError::AppBundle(app.to_path_buf()));
+    }
     Ok(dir.to_path_buf())
 }
 
-/// [`install_dir`] for the running binary.
+/// The `.app` bundle `dir` is the executables folder of, if it is one.
+fn app_bundle(dir: &Path) -> Option<&Path> {
+    let contents = dir.ends_with("Contents/MacOS").then(|| dir.parent()?.parent())??;
+    contents.extension().is_some_and(|e| e == "app").then_some(contents)
+}
+
+/// [`install_dir`] for the running binary. Symlinks are followed first, so
+/// a link on `PATH` to the app bundle's `tt-git` is refused too.
 pub fn current_install_dir() -> Result<PathBuf, UpdateError> {
-    install_dir(&std::env::current_exe().map_err(UpdateError::NoExe)?)
+    let exe = std::env::current_exe().map_err(UpdateError::NoExe)?;
+    let exe = if cfg!(target_os = "macos") {
+        exe.canonicalize().unwrap_or(exe)
+    } else {
+        exe
+    };
+    install_dir(&exe)
 }
 
 /// The tag of the latest release, such as `v0.4.0`. GitHub redirects
@@ -328,6 +351,18 @@ mod tests {
         let err = install_dir(&exe).unwrap_err();
         assert!(matches!(err, UpdateError::CargoBuild(_)));
         assert!(err.to_string().contains("cargo build directory"), "{err}");
+    }
+
+    #[test]
+    fn refuses_the_copy_in_the_app_bundle() {
+        let app = Path::new("/Applications/tt-git.app");
+        let err = install_dir(&app.join("Contents/MacOS/tt-git")).unwrap_err();
+        assert!(matches!(&err, UpdateError::AppBundle(p) if p == app), "{err}");
+        assert!(err.to_string().contains("desktop app"), "{err}");
+
+        // Only an .app's own Contents/MacOS.
+        let dir = Path::new("/opt/Contents/MacOS");
+        assert_eq!(install_dir(&dir.join("tt-git")).unwrap(), dir);
     }
 
     #[test]

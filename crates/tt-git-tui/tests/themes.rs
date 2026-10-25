@@ -49,7 +49,7 @@ fn themed(config: Config, sb: &Sandbox, d: &Dirs) -> TestDriver {
 }
 
 fn accent(t: &TestDriver) -> Option<Color> {
-    t.app().theme().border_focused.fg
+    t.app().theme().border_focused.fg.map(tt_git_tui::tui_theme::color)
 }
 
 #[test]

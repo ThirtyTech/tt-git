@@ -1,7 +1,6 @@
 //! The real terminal event loop.
 
 use std::process::Stdio;
-use std::time::Duration;
 
 use crossterm::clipboard::CopyToClipboard;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture, EventStream};
@@ -13,9 +12,10 @@ use tt_git_plugin::runtime::resolve_program;
 
 use crate::action::Action;
 use crate::app::App;
+use crate::draw::Screen;
 use crate::editor::EditorLaunch;
 
-pub const TICK: Duration = Duration::from_millis(250);
+pub use crate::app::TICK;
 
 /// Runs until the app asks to quit or input ends.
 pub async fn run(
@@ -25,14 +25,15 @@ pub async fn run(
 ) -> std::io::Result<()> {
     let mut events = EventStream::new();
     let mut ticker = tokio::time::interval(TICK);
+    let mut screen = Screen::default();
     app.start();
     app.take_redraw();
-    terminal.draw(|f| app.draw(f))?;
+    terminal.draw(|f| screen.draw(app, f))?;
     let mut size = terminal.size().ok();
     loop {
         tokio::select! {
             ev = events.next() => match ev {
-                Some(Ok(ev)) => app.handle_event(ev),
+                Some(Ok(ev)) => screen.handle_event(app, ev),
                 Some(Err(e)) => return Err(e),
                 None => break,
             },
@@ -70,7 +71,7 @@ pub async fn run(
         // here too, in case it came without a resize event.
         let now_size = terminal.size().ok();
         if app.take_redraw() || now_size != size {
-            terminal.draw(|f| app.draw(f))?;
+            terminal.draw(|f| screen.draw(app, f))?;
             size = now_size;
         }
     }
@@ -118,7 +119,7 @@ fn start_detached(launch: &EditorLaunch) -> Result<Option<i32>, String> {
     // Reap it when it exits.
     let _ = std::thread::Builder::new()
         .name("tt-git-editor".into())
-        .stack_size(crate::IO_THREAD_STACK)
+        .stack_size(tt_git_app::IO_THREAD_STACK)
         .spawn(move || child.wait());
     Ok(None)
 }

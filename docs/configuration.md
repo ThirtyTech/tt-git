@@ -47,6 +47,9 @@ placement = "auto"              # "auto" (herdr tab inside herdr, else the detai
 # system_prompt = "..."         # default: tt-git's own; "" for none
 # hunk_prompt = "..."           # asking about a diff hunk, after the system prompt; {file} {lines} {hunk} {source}
 # [[agent.actions]]             # replaces the built-in actions: name, prompt, description, when = "always" | "merging" | "hunk"
+
+[ui]                            # the desktop app's; the TUI ignores it
+zoom = 100                      # how big everything is drawn, in percent (50–300); ctrl+= / ctrl+- / ctrl+0 in the app save it here. Global config file only
 ```
 
 ## Themes
@@ -266,6 +269,8 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `plugin_logs` | (palette only) | global |
 | `theme` | (palette only) | global |
 | `self_update` | (palette only) | global |
+| `open_repository` | (palette and menu only; desktop app only, the TUI just says it needs the desktop app) | global |
+| `zoom_in`, `zoom_out`, `reset_zoom` | `ctrl+=` `ctrl++`, `ctrl+-`, `ctrl+0` (desktop app only, which also zooms with ctrl+wheel; the TUI just says they need the desktop app) | global |
 
 ### Plugin action bindings
 

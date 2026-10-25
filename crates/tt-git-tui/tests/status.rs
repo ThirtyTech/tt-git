@@ -373,7 +373,7 @@ fn tree_sandbox() -> Sandbox {
 }
 
 fn rows(t: &TestDriver) -> Vec<String> {
-    t.app().status().row_texts()
+    tt_git_tui::draw::status::row_texts(t.app().status())
 }
 
 /// Selects the row whose text, trimmed, is `text`.

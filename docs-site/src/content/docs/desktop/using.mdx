@@ -1,0 +1,194 @@
+---
+title: Menus, mouse and windows
+description: "What the desktop app does that the terminal app doesn't: menus, right-click menus, resizing panes, windows, editors, plugins, and what it can't do yet."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The desktop app works like the [terminal app](/getting-started/tour/), with
+the same panes and keys. This page covers what's different.
+
+## Menus
+
+{/* Screenshot: the Graph menu open from the title bar on Windows or Linux,
+    showing items with their keys. Name it `gui-menu`. */}
+
+The menus list tt-git's commands. Each item shows the key bound to it, so a
+key you've [rebound](/configuration/keys/) shows up there too. Choosing an
+item does exactly what pressing its key does.
+
+| Menu | Holds |
+|---|---|
+| **tt-git** | *About tt-git* (the version), *Theme*, *Plugin logs* and *Quit* |
+| **Repository** | *Fetch*, *Prune gone*, *Pull*, *Push*, *Refresh*; *Continue merge/rebase*, *Abort merge/rebase*, *Undo*; *Ask agent*; *Open repository* |
+| **View** | Focus *Graph*, *Status*, *Branches* or *Details*; *Next pane*, *Prev pane*; *Zoom*; *Zoom in*, *Zoom out*, *Reset zoom*; *Commands* (the [palette](/git/palette/)) and *Help* |
+| The focused pane | Named after it (**Graph**, **Status**, **Branches**, **Details**, **Stage**, **Blame**, **Stash** or **Worktrees**): that pane's commands, the ones the [help popup](/getting-started/navigation/#getting-help) lists first |
+
+The last menu follows the focus, so its name and items change as you move
+between panes.
+
+Where the menus are depends on the system:
+
+- **macOS**: in the menu bar at the top of the screen. The key follows each
+  item's name, like `Checkout  (o)`.
+- **Windows and Linux**: drawn in the window's own title bar, with the key
+  at the right of each item. While a menu is open, keys go to the menu; it
+  gives them back when it closes.
+
+The window's title bar starts with the tt-git icon (after the window
+buttons on macOS), then the menus on Windows and Linux, then the window's
+title.
+
+While a dialog, the help popup or an error is open, the command items are
+greyed out, since a key would go to that instead. *About tt-git* and *Quit*
+always work. *Quit* closes every window; <kbd>q</kbd> closes only the window
+you press it in.
+
+## Right-click menus
+
+{/* Screenshot: the right-click menu on a commit in the graph, listing
+    Checkout, New branch, Merge… with their keys. Name it `gui-context-menu`. */}
+
+Right-click a row in any pane. The click focuses the pane and selects the
+row, as a left click does, then a menu opens with what you can do there:
+the pane's commands that have a key, each with its key. Choose one, or move
+with <kbd>up</kbd> <kbd>down</kbd> and press <kbd>enter</kbd>.
+<kbd>esc</kbd> or a click elsewhere closes it.
+
+Plugin and agent panes have no right-click menu: their mouse belongs to the
+program running in them.
+
+## The mouse
+
+Everything the mouse does in the terminal app works here too: click to focus
+a pane and select a row, double-click a row to do what <kbd>enter</kbd> does,
+click a tab in the branches pane's title, a file in the changed-files view
+or a row in the [staging view](/panes/staging/), and scroll with the wheel.
+See [The mouse](/getting-started/navigation/#the-mouse). Setting
+`mouse = false` turns clicks and the wheel off in the desktop app as well.
+Holding <kbd>ctrl</kbd> while you turn the wheel [zooms](#zoom) instead of
+scrolling.
+
+### Resizing panes
+
+Drag the border between two panes to resize them. Each split keeps the
+sizes you dragged it to while the window is open, even when the screen
+shows something else for a while (details open, a pane [zoomed](/getting-started/navigation/#zoom)).
+The sizes aren't saved: a new window starts from the sizes in your
+[layout](/configuration/layout/).
+
+## Zoom
+
+Zoom makes everything bigger or smaller together, as a browser does: the
+text in the panes, the spacing, the menus and dialogs. The title bar keeps
+its height.
+
+| Key | Does |
+|---|---|
+| <kbd>ctrl+=</kbd> or <kbd>ctrl++</kbd> | Zoom in. |
+| <kbd>ctrl+-</kbd> | Zoom out. |
+| <kbd>ctrl+0</kbd> | Back to 100%. |
+| <kbd>ctrl</kbd>+wheel | Zoom in (wheel up) or out (wheel down). |
+
+They're in the **View** menu and the [palette](/git/palette/) too. Each step
+goes to the next of 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250
+and 300%, and the help bar says the new zoom, such as *zoom 110%*.
+
+The zoom is one setting for the whole app: every window follows it. It's
+saved as [`zoom` in `[ui]`](/configuration/#ui) in your global
+`config.toml`, so the app opens at the same size next time. You can set it
+there yourself, to any percent from 50 to 300.
+
+Not to be confused with *Zoom* (<kbd>+</kbd>), which shows one
+[pane fullscreen](/getting-started/navigation/#zoom).
+
+## Windows
+
+Each repository has a window of its own. *Open repository* (see
+[Opening another repository](/desktop/install/#opening-another-repository))
+opens another one, or brings its window forward if it's open already.
+
+[Opening a worktree](/git/worktrees/#opening-a-worktree) from the Worktrees
+tab replaces the window, as it replaces the screen in the terminal app: a
+window on the worktree opens and this one closes.
+
+### What it remembers
+
+The desktop app keeps a small file, `gui.json`, in the
+[state folder](/configuration/#logs) (next to the `logs` folder). It holds:
+
+- **Where the last window was**: its position and size, and whether it was
+  maximized or full screen. A new window opens there, moved down and to the
+  right if another window is open. If that display is gone, it opens on one
+  that's there.
+- **The repositories you opened last**, for the
+  [start window](/desktop/install/#the-start-window).
+
+On Wayland the compositor decides where windows go, so only the size and
+maximized or full screen come back.
+
+## Editing files
+
+<kbd>e</kbd> opens a file in your [editor](/configuration/#editor), as in
+the terminal app. An editor with a window of its own, such as VS Code,
+opens as usual.
+
+A terminal editor, such as vim or nano, has no terminal to take over, so it
+runs in a pane over the main area instead. The pane's title is the command
+it runs and says *quit &lt;editor&gt; to come back*. Every key goes to the
+editor. When you quit it, the pane closes and tt-git refreshes, as when you
+come back from the editor in the terminal app.
+
+The [pane release keys](/configuration/#plugins) (<kbd>ctrl+\\</kbd> and
+<kbd>f12</kbd>) don't leave the editor, since that would lose your edits.
+The first press says *&lt;editor&gt; is still running: quit it to come back,
+or press &lt;key&gt; again to stop it*. A second press in a row stops it, and
+the help bar says *stopped &lt;editor&gt;*.
+
+Closing the window while the editor runs asks first: *An editor is still
+running. Closing the window stops it, and anything it hasn't saved is
+lost.* Choose **Close** or **Cancel**.
+
+## Plugins
+
+[Plugins](/plugins/) load in every window, each with that window's
+repository and its own API socket. Their panes draw as terminals inside the
+window.
+
+Plugins talk to tt-git by running `$TTGIT_BIN_PATH` (see
+[Environment](/plugins/environment/)). The desktop app has no subcommands,
+so it points `TTGIT_BIN_PATH` at the `tt-git` binary: the one in the same
+folder as `tt-git-gui`, else the first on your `PATH`. Without either,
+plugins get no `TTGIT_BIN_PATH`, and the ones that call it fail.
+
+All the windows run in one process, which has one working directory: opening
+a repository changes it to that repository, so plugins started then start
+there, as in the terminal app.
+
+## Known gaps
+
+- **No input method (IME) composition yet.** Keys that compose a character
+  through an input method, as for Chinese, Japanese or Korean text, don't
+  work in prompts.
+- **The folder picker needs the desktop portal on Linux.** Without
+  `xdg-desktop-portal`, *Open repository* and *Open folder…* say they
+  couldn't show the folder picker. The start window can still open a recent
+  repository, but there's no way to type a path instead.
+- **Quitting doesn't ask about running editors.** *Quit* in the tt-git menu
+  stops every window's terminal editor without asking. Closing a window
+  asks.
+- **No app icon on Wayland and macOS without the packaged files.** The icon
+  comes from `tt-git.desktop` and its icons on Wayland and from `tt-git.app`
+  on macOS, which the release downloads include, so a build from source
+  shows none. Windows and X11 always show it.
+- **Pane sizes aren't saved.** Dragged split sizes last until the window
+  closes.
+- **No updates from inside the app.** Download the new release to update
+  it; see [Updating](/desktop/install/#updating).
+- **A closed window's API socket keeps listening** until the app quits.
+
+<Aside type="tip">
+	For the developer view of how the desktop app is built, see
+	[`docs/gui.md`](https://github.com/ThirtyTech/tt-git/blob/main/docs/gui.md)
+	in the repository.
+</Aside>

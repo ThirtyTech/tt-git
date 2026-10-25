@@ -19,7 +19,7 @@ use tt_git_core::{GitCli, Repo};
 use tt_git_tui::app::PluginOptions;
 use tt_git_tui::keymap::KeyCombo;
 use tt_git_tui::panes::PaneId;
-use tt_git_tui::{Action, App, Config};
+use tt_git_tui::{Action, App, Config, Screen};
 use unicode_width::UnicodeWidthStr;
 
 use crate::Sandbox;
@@ -33,6 +33,7 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(20);
 pub struct TestDriver {
     runtime: Runtime,
     app: App,
+    screen: Screen,
     rx: UnboundedReceiver<Action>,
     terminal: Terminal<TestBackend>,
 }
@@ -112,6 +113,7 @@ impl TestDriver {
         let (app, rx) = {
             let _guard = runtime.enter();
             let (mut app, rx) = App::new(config, repo, Arc::new(FixedClock(NOW))).expect("app starts");
+            app.set_runtime(runtime.handle().clone());
             if let Some(opts) = plugins {
                 app.enable_plugins(opts);
             }
@@ -122,6 +124,7 @@ impl TestDriver {
         let mut driver = Self {
             runtime,
             app,
+            screen: Screen::default(),
             rx,
             terminal,
         };
@@ -142,7 +145,7 @@ impl TestDriver {
         let combo: KeyCombo = key.parse().unwrap_or_else(|e| panic!("{e}"));
         {
             let _guard = self.runtime.enter();
-            self.app.handle_key(combo.to_event());
+            self.app.handle_key(combo);
         }
         self.wait_idle()
     }
@@ -156,7 +159,7 @@ impl TestDriver {
         let combo: KeyCombo = key.parse().unwrap_or_else(|e| panic!("{e}"));
         {
             let _guard = self.runtime.enter();
-            self.app.handle_key(combo.to_event());
+            self.app.handle_key(combo);
         }
         self.render();
         self
@@ -175,7 +178,7 @@ impl TestDriver {
         for c in text.chars() {
             {
                 let _guard = self.runtime.enter();
-                self.app.handle_key(KeyCombo::char(c).to_event());
+                self.app.handle_key(KeyCombo::char(c));
             }
             self.wait_idle();
         }
@@ -198,7 +201,7 @@ impl TestDriver {
         });
         {
             let _guard = self.runtime.enter();
-            self.app.handle_event(ev);
+            self.screen.handle_event(&mut self.app, ev);
         }
         self.wait_idle()
     }
@@ -259,9 +262,19 @@ impl TestDriver {
         });
         {
             let _guard = self.runtime.enter();
-            self.app.handle_event(ev);
+            self.screen.handle_event(&mut self.app, ev);
         }
         self.wait_idle()
+    }
+
+    /// Hands a terminal event to the app as the real terminal loop does,
+    /// hit-testing the mouse against the last frame.
+    pub fn event(&mut self, ev: crossterm::event::Event) -> &mut Self {
+        {
+            let _guard = self.runtime.enter();
+            self.screen.handle_event(&mut self.app, ev);
+        }
+        self
     }
 
     /// Sends an action as if a background job had produced it.
@@ -345,9 +358,9 @@ impl TestDriver {
     }
 
     pub fn render(&mut self) -> &Buffer {
-        let app = &mut self.app;
+        let (app, screen) = (&mut self.app, &mut self.screen);
         let _guard = self.runtime.enter();
-        self.terminal.draw(|f| app.draw(f)).expect("draw");
+        self.terminal.draw(|f| screen.draw(app, f)).expect("draw");
         self.terminal.backend().buffer()
     }
 
@@ -389,7 +402,7 @@ impl TestDriver {
             .app
             .pane_area(pane)
             .unwrap_or_else(|| panic!("{pane:?} was not drawn"));
-        let title_row = Rect { height: 1, ..area };
+        let title_row = Rect::new(area.x, area.y, area.width, 1);
         rows(self.buffer(), title_row).remove(0)
     }
 

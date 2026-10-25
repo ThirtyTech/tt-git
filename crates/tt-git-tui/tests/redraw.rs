@@ -10,10 +10,10 @@ use ratatui::backend::TestBackend;
 use tt_git_core::time::Clock;
 use tt_git_core::{Commit, GitCli, LogFilter, Repo};
 use tt_git_testkit::{Sandbox, TestDriver};
-use tt_git_tui::component::Component;
+use tt_git_tui::draw::{Draw, Hits};
 use tt_git_tui::jobs::Ctx;
 use tt_git_tui::panes::{GraphPane, GraphScope};
-use tt_git_tui::theme::Theme;
+use tt_git_tui::tui_theme::Theme;
 use tt_git_tui::{Action, loaders};
 
 #[test]
@@ -29,14 +29,14 @@ fn only_input_and_actions_that_change_things_redraw() {
         kind: KeyEventKind::Release,
         ..KeyEvent::new(KeyCode::Char('j'), KeyModifiers::NONE)
     };
-    t.app_mut().handle_event(Event::Key(release));
+    t.event(Event::Key(release));
     assert!(!t.app_mut().take_redraw(), "key release");
 
     for kind in [
         MouseEventKind::Moved,
         MouseEventKind::Up(crossterm::event::MouseButton::Left),
     ] {
-        t.app_mut().handle_event(Event::Mouse(MouseEvent {
+        t.event(Event::Mouse(MouseEvent {
             kind,
             column: 5,
             row: 5,
@@ -49,7 +49,7 @@ fn only_input_and_actions_that_change_things_redraw() {
     t.send(Action::Tick);
     assert!(!t.app_mut().take_redraw(), "tick");
 
-    t.app_mut().handle_event(Event::Resize(80, 20));
+    t.event(Event::Resize(80, 20));
     assert!(t.app_mut().take_redraw(), "resize");
 
     t.press("j");
@@ -98,7 +98,7 @@ fn graph_dates_go_stale_when_their_text_would_change() {
     let mut terminal = Terminal::new(TestBackend::new(100, 6)).unwrap();
     let mut draw = |graph: &mut GraphPane| {
         terminal
-            .draw(|f| graph.draw(f, f.area(), true, &Theme::default()))
+            .draw(|f| graph.draw(f, f.area(), true, &Theme::default(), &mut Hits::default()))
             .unwrap();
         let buf = terminal.backend().buffer();
         (0..buf.area.height)

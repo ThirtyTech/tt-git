@@ -41,6 +41,18 @@ tt-git --no-plugins          # without plugins, for example to rule one out
 cd apps/web && tt-git --filter-to-cwd   # just this project's commits and files
 ```
 
+## tt-git-gui
+
+```sh
+tt-git-gui [PATH] [--config FILE] [--no-plugins] [--filter-to-cwd | --no-filter-to-cwd]
+```
+
+Opens the [desktop app](/desktop/) on a repository. It takes the same
+arguments as `tt-git` and has no subcommands. Outside a repository, it opens
+the [start window](/desktop/install/#the-start-window) instead of exiting.
+It logs to `<state>/logs/tt-git-gui.log`. It doesn't update itself: see
+[Updating](/desktop/install/#updating).
+
 ## Commands that need a running tt-git
 
 Most subcommands talk to a running tt-git through its API socket. They find it
@@ -226,7 +238,9 @@ remove backups once those copies have exited.
 It needs `curl`, plus `sh` on Linux and macOS or Windows PowerShell on
 Windows. All three come with the operating system. It refuses a tt-git that
 was built with cargo and run from its `target` folder; build that one again
-instead.
+instead. On macOS it also refuses the `tt-git` inside the
+[desktop app](/desktop/install/#updating) (`tt-git.app/Contents/MacOS`),
+even run through a link: update the app from its download instead.
 
 ```sh
 tt-git update --check    # is there a newer release?

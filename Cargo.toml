@@ -10,6 +10,7 @@ rust-version = "1.89"
 repository = "https://github.com/thirtytech/tt-git"
 
 [workspace.dependencies]
+tt-git-app = { path = "crates/tt-git-app" }
 tt-git-core = { path = "crates/tt-git-core" }
 tt-git-graph = { path = "crates/tt-git-graph" }
 tt-git-plugin = { path = "crates/tt-git-plugin" }
@@ -67,7 +68,7 @@ opt-level = 2
 [profile.dev.package.insta]
 opt-level = 3
 
-# No `panic = "abort"`: `JobGuard` (tt-git-tui jobs.rs) relies on unwinding
+# No `panic = "abort"`: `JobGuard` (tt-git-app jobs.rs) relies on unwinding
 # to keep the in-flight job count right when a job panics.
 [profile.release]
 lto = "fat"

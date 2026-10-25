@@ -1,0 +1,14 @@
+[Desktop Entry]
+Type=Application
+Name=tt-git
+GenericName=Git Client
+Comment=Browse a git repository's history and work with its branches, stashes and changes
+# The file name (tt-git.desktop) is the app id tt-git-gui sets on Wayland,
+# which is how the compositor finds the icon.
+Exec=tt-git-gui %f
+Icon=tt-git
+Terminal=false
+Categories=Development;RevisionControl;
+Keywords=git;repository;commit;branch;
+StartupWMClass=tt-git
+StartupNotify=true

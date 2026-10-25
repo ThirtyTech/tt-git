@@ -64,6 +64,12 @@ Press <kbd>a</kbd> to switch to line mode, and <kbd>a</kbd> again to go back to 
   then <kbd>space</kbd> stages every changed line in it. <kbd>v</kbd> again ends the range without
   staging. Pressing <kbd>v</kbd> in hunk mode switches to line mode and starts a range.
 
+With the mouse, click a row to pick it. In hunk mode a click picks the hunk the row is in. In line
+mode it picks the changed line you clicked; on an `@@` line or an unchanged line it picks the hunk's
+nearest change below, or above when there's none below. A click while a range is started stretches
+the range to that line. A click on the other side makes it the active side. The wheel moves the
+selection.
+
 Lines you don't pick stay as they are. Staging an added line without the removed line next to it
 works the way you'd expect: the removed line stays in the file until you stage it too.
 
@@ -162,3 +168,4 @@ For how tt-git turns your selection into a patch git can apply, see
 | <kbd>A</kbd> | [Ask an AI agent](/git/agents/#asking-about-a-hunk) about the selection |
 | <kbd>]</kbd> <kbd>[</kbd> | Next / previous file in the status pane |
 | <kbd>esc</kbd> | Back to the status pane |
+| Click a row | Pick its hunk, or in line mode its changed line |

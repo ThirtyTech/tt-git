@@ -84,6 +84,14 @@ export default defineConfig({
 					],
 				},
 				{
+					label: 'Desktop app',
+					items: [
+						{ label: 'Overview', slug: 'desktop' },
+						{ label: 'Install and open', slug: 'desktop/install' },
+						{ label: 'Menus, mouse and windows', slug: 'desktop/using' },
+					],
+				},
+				{
 					label: 'Panes',
 					items: [
 						{ label: 'Graph', slug: 'panes/graph' },

@@ -74,6 +74,9 @@ pane_release_keys = ["ctrl+\\", "f12"]   # leave or close plugin panes
 command = "claude"   # the agent A starts
 placement = "auto"   # a herdr tab inside herdr, else in place of details
 # system_prompt = "" # unset: tt-git's own
+
+[ui]
+zoom = 100           # desktop app only: how big everything is drawn, in percent
 ```
 
 Two more tables, `[layout]` and `[keys]`, have pages of their own:
@@ -85,7 +88,7 @@ Themes have one too: [Themes](/configuration/themes/).
 | Setting | Default | What it does |
 |---|---|---|
 | `watch` | `true` | Watch the working tree and `.git`, and refresh when something changes outside tt-git. See [Refreshing](/git/refreshing/). With `false`, press <kbd>ctrl+r</kbd> to refresh. |
-| `mouse` | `true` | Click a pane or row to focus and select it (or a branches tab, a changed file, or a Filter graph entry), double-click a commit to open its files, scroll the pane under the pointer with the wheel, and <kbd>ctrl</kbd>+click links in the details pane. Turn it off to let your terminal handle the mouse (for example, to select text). |
+| `mouse` | `true` | Click a pane or row to focus and select it (or a branches tab, a changed file, or a Filter graph entry), double-click a row to do what <kbd>enter</kbd> does on it, scroll the pane under the pointer with the wheel, and <kbd>ctrl</kbd>+click links in the details pane. Turn it off to let your terminal handle the mouse (for example, to select text). In the [desktop app](/desktop/using/#the-mouse) it turns clicks and the wheel off too. |
 | `syntax` | `true` | Color code by language in diffs, the [staging view](/panes/staging/) and [blame](/panes/blame/), with added and removed lines on a green or red background. With `false`, code is plain, and diffs show added lines in green and removed lines in red. See [Code colors](/panes/details/#code-colors). |
 | `theme` | `"default"` | The color theme: one of the built-in themes such as `"tokyo-night"`, `"omarchy"` to follow Omarchy's current theme, `"omarchy:<name>"` for one of Omarchy's, or your own from `themes/<name>.toml`. *Theme* in the command palette picks one and saves it here. See [Themes](/configuration/themes/). |
 | `theme_background` | `false` | Paint the theme's background behind everything, instead of leaving the terminal's. See [The background](/configuration/themes/#the-background). |
@@ -201,6 +204,14 @@ description = "user-facing notes for this branch"
 prompt = "Write release notes for what {branch} adds since {base}:\n{log}"
 ```
 
+### `[ui]`
+
+Settings for the [desktop app](/desktop/). The terminal app ignores them.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `zoom` | `100` | How big the desktop app draws everything, in percent: text, spacing, menus and dialogs together, as a browser zooms. From `50` to `300`; a value outside that is taken as the nearest end. [Zooming](/desktop/using/#zoom) in the app saves the new value here. Only the global config file sets it, for every window; a repository's own file can't. |
+
 ## Per-repository config
 
 A repository can have settings of its own that override `config.toml`. They
@@ -266,7 +277,10 @@ The UI owns the terminal, so tt-git writes its log to a file:
 | `~/.local/state/tt-git` | Linux and macOS |
 | `%APPDATA%\tt-git` | Windows |
 
-Plugin state lives under the same directory, in `plugins/<id>/`.
+Plugin state lives under the same directory, in `plugins/<id>/`. The
+[desktop app](/desktop/) logs to `tt-git-gui.log` in the same `logs`
+folder, and keeps its window position and recent repositories in
+[`gui.json`](/desktop/using/#what-it-remembers) there.
 
 Set the level with `TTGIT_LOG`. It takes an
 [`EnvFilter`](https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html)

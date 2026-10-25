@@ -79,13 +79,32 @@ download an archive from
 [Releases](https://github.com/ThirtyTech/tt-git/releases).
 
 To update later, run `tt-git update` (or *Update tt-git* in the command
-palette). `tt-git update --check` only checks.
+palette). `tt-git update --check` only checks. The desktop app updates from
+its own download instead.
 
 To build from source:
 
 ```sh
 cargo install --path crates/tt-git
 tt-git            # in a repository, or: tt-git path/to/repo
+```
+
+### The desktop app
+
+`tt-git-gui` is tt-git as a desktop app for Windows, macOS and Linux, drawn
+with [GPUI](https://gpui.rs/). It has the same panes, keys, config and
+plugins as the terminal app, plus menus that show each command's key,
+right-click menus, panes you resize by dragging, and a window per
+repository. It's a separate download on each release: a `.dmg` for macOS,
+an installer or a zip for Windows x64, and a tarball or an AppImage for
+Linux, each with `tt-git` beside the app (plugins use it). It doesn't update
+itself: download the new release. See
+[The desktop app](https://thirtytech.github.io/tt-git/desktop/) for
+installing it and what's different.
+
+```sh
+cargo install --path crates/tt-git-gui   # from source
+tt-git-gui                               # in a repository, or: tt-git-gui path/to/repo
 ```
 
 ## Keys
@@ -105,6 +124,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `ctrl+r` | refresh |
 | | `:` `ctrl+p` | command palette |
 | | `q` | quit |
+| | `ctrl+=` `ctrl+-` `ctrl+0` | desktop app only: zoom everything in / out / back to 100% (saved as `[ui] zoom`) |
 | graph | `enter` | the commit fullscreen: changed files on the left, the selected file's diff on the right (`j`/`k` pick a file, `pgup`/`pgdn` scroll, `esc` or `space` back) |
 | | `space` | show / hide the commit's details (they replace the bottom row) |
 | | `shift+pgdn` `shift+pgup` | page the details down / up without leaving the graph |
@@ -190,7 +210,8 @@ command palette, which lists built-in commands and plugin actions.
 | | `esc` | back to where blame was opened from |
 
 The mouse also works: click a pane or row to focus and select it,
-double-click a commit to open its files fullscreen, click a tab in the
+double-click a row to do what `enter` does on it (open a commit's files
+fullscreen, stage a file, fold a folder, check out a branch), click a tab in the
 branches pane's title, a file in the changed-files view or an entry
 in the graph's filter popup, use the wheel to scroll the pane under the
 pointer, and `ctrl`+click a link in the details pane. Every binding can be changed; see
@@ -216,6 +237,8 @@ The full documentation is at <https://thirtytech.github.io/tt-git/>. For how eac
 - [How it works](https://thirtytech.github.io/tt-git/reference/how-it-works/): the git commands behind each
   pane
 - [Configuration](https://thirtytech.github.io/tt-git/configuration/): settings, keys and layout
+- [The desktop app](https://thirtytech.github.io/tt-git/desktop/): installing `tt-git-gui`, menus,
+  right-click menus, windows, and what it can't do yet
 - [Themes](https://thirtytech.github.io/tt-git/configuration/themes/): built-in themes, Omarchy's,
   and writing your own
 
@@ -384,6 +407,8 @@ those when you remove a test.
 | `tt-git-core` | git CLI runner, parsers, unified branch list, write operations |
 | `tt-git-graph` | lane layout for the commit graph (no git or UI dependencies) |
 | `tt-git-plugin` | manifest, registry, runtime, install/GC, NDJSON socket |
-| `tt-git-tui` | the ratatui app: panes, keymap, modals, PTY plugin panes |
+| `tt-git-app` | the app's state and logic, shared by front ends: panes, keymap, modals, jobs, PTY plugin panes (no ratatui or crossterm) |
+| `tt-git-tui` | the terminal front end: draws `tt-git-app` with ratatui and feeds it crossterm input |
+| `tt-git-gui` | the desktop front end and the `tt-git-gui` binary: draws `tt-git-app` with GPUI; see [docs/gui.md](docs/gui.md) |
 | `tt-git` | the binary and CLI |
 | `tt-git-testkit` | sandbox repos, the in-process `TestDriver`, plugin fixtures |

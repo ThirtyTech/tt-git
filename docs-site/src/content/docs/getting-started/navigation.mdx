@@ -52,18 +52,26 @@ With the graph zoomed, <kbd>space</kbd> opens details below it at full width.
 The mouse is on by default:
 
 - Click a pane to focus it, or a row to select it.
-- Double-click a commit in the graph to open it fullscreen with its changed
-  files beside the diff, as <kbd>enter</kbd> does.
+- Double-click a row to do what <kbd>enter</kbd> does on it: a commit in the
+  graph opens fullscreen with its changed files beside the diff, a file in
+  Status opens its staging view and a folder folds or unfolds, a branch or
+  tag is checked out, a stash is shown, a worktree opens, and a line in blame
+  opens its commit.
 - Click a tab's name in the branches pane's title (**Branches**, **Tags**,
   **Stash**, **Worktrees** and so on) to switch to it.
 - Click a file in the details pane's [changed-files view](/panes/details/#changed-files)
   to show its diff.
+- Click a row in the [staging view](/panes/staging/) to pick its hunk, or in
+  line mode its changed line.
 - Click an author or file in [Filter graph](/panes/graph/#filtering-by-author-or-file)
   to filter by it; a click outside the popup closes it.
 - Scroll the wheel to scroll the pane under the pointer, focused or not. Over
   the diff in the changed-files view, the wheel scrolls the diff.
 - <kbd>ctrl</kbd>+click a link in the details pane to open it with a plugin
   (see [Links](/panes/details/#links)).
+
+In the [desktop app](/desktop/using/#the-mouse) you can also right-click a row
+for a menu of its commands, and drag the borders between panes to resize them.
 
 Set `mouse = false` in your [configuration file](/configuration/) to turn it
 off, for example so your terminal's own text selection works without

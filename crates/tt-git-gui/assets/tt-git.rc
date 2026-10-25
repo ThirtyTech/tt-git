@@ -1,0 +1,2 @@
+// The window and taskbar icon on Windows. GPUI loads icon resource 1.
+1 ICON "icon.ico"
