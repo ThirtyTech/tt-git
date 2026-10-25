@@ -99,6 +99,7 @@ const VIEW: &[&[Command]] = &[
     ],
     &[Command::FocusNext, Command::FocusPrev],
     &[Command::Zoom],
+    &[Command::ZoomIn, Command::ZoomOut, Command::ResetZoom],
     &[Command::Palette, Command::Help],
 ];
 

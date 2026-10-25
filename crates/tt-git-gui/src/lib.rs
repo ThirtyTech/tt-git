@@ -8,6 +8,7 @@
 //! - [`frame::PaneFrame`], [`rows::StyledRows`], [`text::StyledLine`],
 //!   [`theme::GuiTheme`], [`font::MonoFont`] and [`ui::Ui`] are what they
 //!   draw with.
+//! - [`zoom`] is how big it all is.
 //!
 //! `docs/gui.md` says how to port an area.
 
@@ -40,6 +41,7 @@ pub mod tt_git_bin;
 pub mod ui;
 pub mod window_state;
 pub mod windows;
+pub mod zoom;
 
 pub use windows::{NewApp, set_launcher};
 

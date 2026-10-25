@@ -12,7 +12,7 @@ use tt_git_core::{
 
 use crate::action::{Action, RefsSnapshot};
 use crate::component::{Component, EventState};
-use crate::config::Config;
+use crate::config::{Config, ZoomStep};
 use crate::editor::{self, EditTarget, EditorLaunch};
 use crate::filter::FilterPanel;
 use crate::geom::Rect;
@@ -77,6 +77,10 @@ const ALL_GLOBAL: &[Command] = &[
     Command::Help,
     Command::Quit,
 ];
+
+/// Global commands listed in the help popup and the palette of a front end
+/// that zooms (see [`App::enable_ui_zoom`]).
+pub const ZOOM_COMMANDS: &[Command] = &[Command::ZoomIn, Command::ZoomOut, Command::ResetZoom];
 
 /// How often the front end sends [`Action::Tick`].
 pub const TICK: Duration = Duration::from_millis(250);
@@ -271,6 +275,10 @@ pub struct App {
     opens_repos: bool,
     /// [`Command::OpenRepository`] ran, for the front end to take.
     open_repo_wanted: bool,
+    /// The front end can zoom (the desktop app).
+    zooms: bool,
+    /// A zoom command ran, for the front end to take.
+    zoom_wanted: Option<ZoomStep>,
     /// `tt-git update` can update this front end. Not the desktop app,
     /// which updates from its own download.
     self_updates: bool,
@@ -384,6 +392,8 @@ impl App {
             worktree_sized: Vec::new(),
             reopen: None,
             opens_repos: false,
+            zooms: false,
+            zoom_wanted: None,
             open_repo_wanted: false,
             self_updates: true,
             watcher: None,
@@ -470,6 +480,37 @@ impl App {
 
     pub fn self_updates(&self) -> bool {
         self.self_updates
+    }
+
+    /// Says the front end can zoom, which offers [`ZOOM_COMMANDS`] in the
+    /// palette and the help popup.
+    pub fn enable_ui_zoom(&mut self) {
+        self.zooms = true;
+    }
+
+    pub fn zooms(&self) -> bool {
+        self.zooms
+    }
+
+    /// The zoom command that ran since the last call, if one did: the front
+    /// end works out the new zoom and reports it with
+    /// [`ui_zoomed`](Self::ui_zoomed).
+    pub fn take_ui_zoom(&mut self) -> Option<ZoomStep> {
+        self.zoom_wanted.take()
+    }
+
+    /// The front end zoomed to `percent`: says so, and saves it as
+    /// `ui.zoom` in config.toml when it changed.
+    pub fn ui_zoomed(&mut self, percent: u16) {
+        if percent == self.config.ui.zoom {
+            self.notice = Some(format!("zoom {percent}%"));
+            return;
+        }
+        self.config.ui.zoom = percent;
+        match self.save_setting("ui", "zoom", &percent.to_string()) {
+            Some(Err(e)) => self.error = Some(format!("couldn't save the zoom to {e}")),
+            _ => self.notice = Some(format!("zoom {percent}%")),
+        }
     }
 
     /// Whether [`Command::OpenRepository`] ran since the last call: the
@@ -949,8 +990,12 @@ impl App {
     /// (keys, label) for the focused pane's bound commands, then the global ones.
     fn all_help_rows(&self) -> Vec<(String, &'static str)> {
         let context = self.focused().context();
-        let sections: [(Context, &[Command]); 2] =
-            [(context, self.focused().commands()), (Context::Global, ALL_GLOBAL)];
+        let zoom: &[Command] = if self.zooms { ZOOM_COMMANDS } else { &[] };
+        let sections: [(Context, &[Command]); 3] = [
+            (context, self.focused().commands()),
+            (Context::Global, ALL_GLOBAL),
+            (Context::Global, zoom),
+        ];
         let mut rows = Vec::new();
         for (ctx, cmds) in sections {
             for cmd in cmds {
@@ -966,8 +1011,12 @@ impl App {
     /// How many rows the help popup has with nothing typed.
     pub fn all_help_row_count(&self) -> usize {
         let context = self.focused().context();
-        let sections: [(Context, &[Command]); 2] =
-            [(context, self.focused().commands()), (Context::Global, ALL_GLOBAL)];
+        let zoom: &[Command] = if self.zooms { ZOOM_COMMANDS } else { &[] };
+        let sections: [(Context, &[Command]); 3] = [
+            (context, self.focused().commands()),
+            (Context::Global, ALL_GLOBAL),
+            (Context::Global, zoom),
+        ];
         sections
             .iter()
             .map(|(ctx, cmds)| {
@@ -1470,10 +1519,18 @@ impl App {
         self.config.status.tree = tree;
         self.status.announce(&self.ctx);
         let view = if tree { "tree" } else { "flat list" };
-        let Some(path) = self.themes.as_ref().and_then(|t| t.config_path.clone()) else {
-            self.notice = Some(format!("status as a {view}"));
-            return;
-        };
+        match self.save_setting("status", "tree", &tree.to_string()) {
+            None => self.notice = Some(format!("status as a {view}")),
+            Some(Ok(path)) => self.notice = Some(format!("status as a {view}, saved to {}", path.display())),
+            Some(Err(e)) => self.error = Some(format!("couldn't save the status view to {e}")),
+        }
+    }
+
+    /// Sets `key` in `[table]` of config.toml to the TOML value `value`,
+    /// keeping the rest of the file. `None` when there's no config file to
+    /// save to (tests); the error names the file.
+    fn save_setting(&self, table: &str, key: &str, value: &str) -> Option<Result<std::path::PathBuf, String>> {
+        let path = self.themes.as_ref().and_then(|t| t.config_path.clone())?;
         let saved = match std::fs::read_to_string(&path) {
             Ok(text) => Ok(text),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
@@ -1483,15 +1540,12 @@ impl App {
             if let Some(dir) = path.parent() {
                 std::fs::create_dir_all(dir)?;
             }
-            std::fs::write(
-                &path,
-                crate::config::set_in_table(&text, "status", "tree", &tree.to_string()),
-            )
+            std::fs::write(&path, crate::config::set_in_table(&text, table, key, value))
         });
-        match saved {
-            Ok(()) => self.notice = Some(format!("status as a {view}, saved to {}", path.display())),
-            Err(e) => self.error = Some(format!("couldn't save the status view to {}: {e}", path.display())),
-        }
+        Some(match saved {
+            Ok(()) => Ok(path),
+            Err(e) => Err(format!("{}: {e}", path.display())),
+        })
     }
 
     /// Narrows the graph (keeping any author filter) and Status to the
@@ -2785,6 +2839,16 @@ impl App {
             Command::OpenRepository if self.opens_repos => self.open_repo_wanted = true,
             Command::OpenRepository => {
                 self.notice = Some("opening another repository needs the desktop app".into());
+            }
+            Command::ZoomIn | Command::ZoomOut | Command::ResetZoom if self.zooms => {
+                self.zoom_wanted = Some(match cmd {
+                    Command::ZoomIn => ZoomStep::In,
+                    Command::ZoomOut => ZoomStep::Out,
+                    _ => ZoomStep::Reset,
+                });
+            }
+            Command::ZoomIn | Command::ZoomOut | Command::ResetZoom => {
+                self.notice = Some("zooming needs the desktop app: use your terminal's font size".into());
             }
             _ => {
                 let ctx = self.ctx.clone();

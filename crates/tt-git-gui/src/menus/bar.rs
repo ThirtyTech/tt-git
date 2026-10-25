@@ -80,7 +80,8 @@ fn menu_button(ix: usize, menu: &MenuSpec, focus: &FocusHandle) -> impl IntoElem
 
 fn fill(mut menu: PopupMenu, items: &[ItemSpec], focus: &FocusHandle, cx: &mut Context<PopupMenu>) -> PopupMenu {
     let muted = cx.theme().muted_foreground;
-    menu = menu.action_context(focus.clone()).min_w(gpui::px(220.));
+    // 220 px at 100%, zoomed with the rem size.
+    menu = menu.action_context(focus.clone()).min_w(cx.theme().font_size * 13.75);
     for item in items {
         menu = match item {
             ItemSpec::Separator => menu.separator(),

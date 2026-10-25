@@ -478,6 +478,9 @@ impl App {
         if self.opens_repos() {
             items.push(builtin(Command::OpenRepository));
         }
+        if self.zooms() {
+            items.extend(super::ZOOM_COMMANDS.iter().map(|c| builtin(*c)));
+        }
         items
     }
 

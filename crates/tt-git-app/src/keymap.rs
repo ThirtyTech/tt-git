@@ -381,6 +381,11 @@ pub enum Command {
     /// Opens another repository in a window of its own. Only the desktop
     /// app offers it (see `App::enable_open_repository`).
     OpenRepository,
+    /// Draws everything bigger, as a browser zooms. Only the desktop app
+    /// offers the zoom commands (see `App::enable_ui_zoom`).
+    ZoomIn,
+    ZoomOut,
+    ResetZoom,
 }
 
 impl Command {
@@ -484,6 +489,9 @@ impl Command {
             Command::SearchPrev => "prev match",
             Command::Agent => "ask agent",
             Command::OpenRepository => "open repository",
+            Command::ZoomIn => "zoom in",
+            Command::ZoomOut => "zoom out",
+            Command::ResetZoom => "reset zoom",
         }
     }
 }
@@ -618,6 +626,9 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Global, Command::Push, &["P"]),
     (Context::Global, Command::Pull, &["p"]),
     (Context::Global, Command::Undo, &["z"]),
+    (Context::Global, Command::ZoomIn, &["ctrl+=", "ctrl++"]),
+    (Context::Global, Command::ZoomOut, &["ctrl+-"]),
+    (Context::Global, Command::ResetZoom, &["ctrl+0"]),
     (Context::Status, Command::StageToggle, &["space"]),
     (Context::Status, Command::OpenStaging, &["enter"]),
     (Context::Status, Command::StageAll, &["a"]),

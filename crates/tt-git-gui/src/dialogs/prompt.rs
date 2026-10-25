@@ -7,7 +7,7 @@
 //! What's typed reaches the modal through tt-git's keymap, as every key
 //! does; the cursor is the view model's block at the end of the input.
 
-use gpui::{AnyElement, Div, InteractiveElement, IntoElement, ParentElement, Styled, div, px};
+use gpui::{AnyElement, Div, InteractiveElement, IntoElement, ParentElement, Styled, div, rems};
 use tt_git_app::view::TextSpan;
 use tt_git_app::view::dialogs::{DialogLook, DialogView, ListRow};
 
@@ -58,13 +58,13 @@ pub fn dialog_box(ui: &Ui, id: &'static str, look: DialogLook, width: usize, tit
         .flex_none()
         // The padding takes the border's two columns; a little more so a
         // line exactly as wide as the inside doesn't wrap.
-        .w(font.cell_width * width as f32 + px(4.))
+        .w(font.cell_width * width as f32 + font.cell_width * 0.5)
         .max_w_full()
         .max_h_full()
         .overflow_hidden()
         .px(font.cell_width)
         .pb(font.line_height / 2.)
-        .rounded(px(6.))
+        .rounded(rems(0.375))
         .border_1()
         .border_color(theme.fg(look.border()))
         .bg(theme.background)

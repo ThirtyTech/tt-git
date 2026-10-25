@@ -31,6 +31,7 @@ pub struct Config {
     pub plugins: PluginsConfig,
     pub editor: EditorConfig,
     pub agent: AgentConfig,
+    pub ui: UiConfig,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -95,7 +96,66 @@ impl Default for Config {
             plugins: PluginsConfig::default(),
             editor: EditorConfig::default(),
             agent: AgentConfig::default(),
+            ui: UiConfig::default(),
         }
+    }
+}
+
+/// The desktop app's own settings. The TUI ignores them.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct UiConfig {
+    /// How big everything is drawn, in percent: text, spacing and widgets
+    /// together, as a browser zooms. Zooming in the app saves it here.
+    pub zoom: u16,
+}
+
+impl Default for UiConfig {
+    fn default() -> Self {
+        Self { zoom: DEFAULT_ZOOM }
+    }
+}
+
+impl UiConfig {
+    /// [`zoom`](Self::zoom), kept within [`ZOOM_LEVELS`].
+    pub fn zoom(&self) -> u16 {
+        clamp_zoom(self.zoom)
+    }
+}
+
+pub const DEFAULT_ZOOM: u16 = 100;
+
+/// The zoom levels zooming in and out steps through, in percent: a
+/// browser's, from 50 to 300.
+pub const ZOOM_LEVELS: &[u16] = &[50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300];
+
+/// A way to change the zoom.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ZoomStep {
+    In,
+    Out,
+    Reset,
+}
+
+/// `percent` within the smallest and largest of [`ZOOM_LEVELS`].
+pub fn clamp_zoom(percent: u16) -> u16 {
+    percent.clamp(ZOOM_LEVELS[0], ZOOM_LEVELS[ZOOM_LEVELS.len() - 1])
+}
+
+/// The zoom after `step` from `percent`: the next level up or down (from a
+/// zoom between levels, the nearest one that way), or the default. At the
+/// end of the levels it stays put.
+pub fn step_zoom(percent: u16, step: ZoomStep) -> u16 {
+    let percent = clamp_zoom(percent);
+    match step {
+        ZoomStep::In => ZOOM_LEVELS.iter().copied().find(|&z| z > percent).unwrap_or(percent),
+        ZoomStep::Out => ZOOM_LEVELS
+            .iter()
+            .rev()
+            .copied()
+            .find(|&z| z < percent)
+            .unwrap_or(percent),
+        ZoomStep::Reset => DEFAULT_ZOOM,
     }
 }
 
@@ -202,6 +262,12 @@ impl GlobalConfig {
             path: path.to_path_buf(),
             table,
         })
+    }
+
+    /// The global file's settings on their own, for what applies to the
+    /// whole app rather than one repository (the desktop app's `[ui]`).
+    pub fn config(&self) -> Result<Config, ConfigError> {
+        to_config(&self.path, self.table.clone())
     }
 
     /// The config for the repository at `root` with git directory
@@ -516,5 +582,72 @@ mod tests {
     fn missing_file_is_default() {
         let cfg = Config::load(Path::new("definitely/not/here.toml")).unwrap();
         assert_eq!(cfg.layout, Layout::default());
+    }
+
+    #[test]
+    fn ui_zoom_defaults_and_clamps() {
+        assert_eq!(Config::default().ui.zoom(), 100);
+        assert_eq!(
+            Config::parse(
+                "[ui]
+zoom = 125
+"
+            )
+            .unwrap()
+            .ui
+            .zoom(),
+            125
+        );
+        assert_eq!(
+            Config::parse(
+                "[ui]
+zoom = 10
+"
+            )
+            .unwrap()
+            .ui
+            .zoom(),
+            50
+        );
+        assert_eq!(
+            Config::parse(
+                "[ui]
+zoom = 900
+"
+            )
+            .unwrap()
+            .ui
+            .zoom(),
+            300
+        );
+    }
+
+    #[test]
+    fn zoom_steps_through_the_levels() {
+        assert_eq!(step_zoom(100, ZoomStep::In), 110);
+        assert_eq!(step_zoom(100, ZoomStep::Out), 90);
+        assert_eq!(step_zoom(115, ZoomStep::In), 125, "between levels, the next one up");
+        assert_eq!(step_zoom(115, ZoomStep::Out), 110);
+        assert_eq!(step_zoom(300, ZoomStep::In), 300);
+        assert_eq!(step_zoom(50, ZoomStep::Out), 50);
+        assert_eq!(step_zoom(175, ZoomStep::Reset), 100);
+    }
+
+    #[test]
+    fn global_config_alone() {
+        let (_dir, global) = layers(
+            Some(
+                "[ui]
+zoom = 150
+",
+            ),
+            Some(
+                "[ui]
+zoom = 80
+",
+            ),
+            None,
+        );
+        assert_eq!(global.config().unwrap().ui.zoom(), 150);
     }
 }

@@ -5,7 +5,7 @@ use std::rc::Rc;
 use gpui::component::menu::ContextMenuExt as _;
 use gpui::{
     AnyElement, App, Div, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, RenderOnce,
-    ScrollDelta, ScrollWheelEvent, SharedString, Styled, Window, div, prelude::FluentBuilder, px,
+    ScrollDelta, ScrollWheelEvent, SharedString, Styled, Window, div, prelude::FluentBuilder, rems,
 };
 use tt_git_app::mouse::{MouseInput, MouseKind, MouseTarget};
 use tt_git_app::panes::PaneId;
@@ -277,7 +277,7 @@ impl RenderOnce for PaneFrame {
             .flex_col()
             .overflow_hidden()
             .border_1()
-            .rounded(px(4.))
+            .rounded(rems(0.25))
             .border_color(theme.fg(border))
             .on_mouse_down(MouseButton::Left, click)
             .on_mouse_down(MouseButton::Right, right_click)

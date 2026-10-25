@@ -15,6 +15,7 @@ const FAMILIES: &[&str] = &["SF Mono", "Menlo"];
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 const FAMILIES: &[&str] = &["Noto Sans Mono", "Liberation Mono", "DejaVu Sans Mono"];
 
+/// The font size at 100% zoom.
 const SIZE: f32 = 13.;
 /// Line height over font size.
 const LINE_SPACING: f32 = 1.4;
@@ -32,7 +33,8 @@ pub struct MonoFont {
 
 impl MonoFont {
     /// The default font for this OS (the first of its families that's
-    /// installed), measured with the text system.
+    /// installed) at the app's [zoom](crate::zoom), measured with the text
+    /// system.
     pub fn new(cx: &App) -> Self {
         let installed = cx.text_system().all_font_names();
         let family = FAMILIES
@@ -41,7 +43,7 @@ impl MonoFont {
             .or(FAMILIES.last())
             .copied()
             .unwrap_or_default();
-        Self::measured(family.into(), px(SIZE), cx)
+        Self::measured(family.into(), px(SIZE * crate::zoom::scale(cx)), cx)
     }
 
     /// `family` at `size`, measured with the text system. A text system

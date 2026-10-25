@@ -9,7 +9,7 @@
 //! cell size, so it sizes a new pane's PTY from the pixel areas the shell
 //! reports.
 
-use gpui::{AnyElement, InteractiveElement, IntoElement, ParentElement, SharedString, Styled, div, px};
+use gpui::{AnyElement, InteractiveElement, IntoElement, ParentElement, SharedString, Styled, div, rems};
 use tt_git_app::App;
 use tt_git_app::panes::PaneId;
 use tt_git_app::pty_pane::PtyPane;
@@ -128,7 +128,7 @@ fn floating_box(ui: &Ui, pane: &mut PtyPane, focused: bool, hint: &str) -> gpui:
         .flex_col()
         .overflow_hidden()
         .border_1()
-        .rounded(px(4.))
+        .rounded(rems(0.25))
         .border_color(theme.fg(border))
         .bg(theme.background)
         .shadow_lg()

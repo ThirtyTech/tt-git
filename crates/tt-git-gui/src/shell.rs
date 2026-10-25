@@ -6,11 +6,13 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, Bounds, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyDownEvent,
-    ParentElement, Pixels, PromptLevel, Render, Styled, Subscription, Window, canvas, div,
+    AnyElement, App, Bounds, Context, DispatchPhase, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement,
+    KeyDownEvent, ParentElement, Pixels, PromptLevel, Render, ScrollDelta, ScrollWheelEvent, Styled, Subscription,
+    Window, canvas, div,
 };
 use tt_git_app::Action;
 use tt_git_app::geom::Rect;
+use tt_git_app::keymap::Command;
 use tt_git_app::layout::{Placed, Split};
 use tt_git_app::panes::PaneId;
 
@@ -20,12 +22,16 @@ use crate::frame::frame_id;
 use crate::menus::{self, About, RunCommand};
 use crate::model::{AppEvent, AppModel};
 use crate::panes::{self, PaneCx};
+use crate::rows::WHEEL_STEP_LINES;
 use crate::theme::GuiTheme;
 use crate::ui::{Measures, Ui};
 use crate::{CONTEXT, help_bar, keys, layout, terminal};
 
 /// The id the area under the help bar is measured as.
 pub const MAIN: &str = "main";
+
+/// What ctrl+wheel movement adds up under, until it makes a zoom step.
+const ZOOM_WHEEL: &str = "zoom-wheel";
 
 /// The window's root view, around an [`AppModel`].
 pub struct Shell {
@@ -34,6 +40,8 @@ pub struct Shell {
     focus: FocusHandle,
     /// The window title last set.
     title: String,
+    /// The [zoom](crate::zoom) `ui.font` is at.
+    zoom: u16,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -71,6 +79,7 @@ impl Shell {
             }),
             // C1: the active window's menus are the app's.
             cx.observe_window_activation(window, |_, _, cx| cx.notify()),
+            cx.observe_global::<crate::zoom::UiZoom>(|_, cx| cx.notify()),
         ];
         ask_before_closing(&model, window, cx);
         // Where it opened counts too, if it's never moved.
@@ -85,6 +94,7 @@ impl Shell {
             model,
             focus,
             title: String::new(),
+            zoom: crate::zoom::percent(cx),
             _subscriptions: subscriptions,
         }
     }
@@ -119,6 +129,18 @@ impl Shell {
     /// C1: the app menu's About.
     fn about(&mut self, _: &About, window: &mut Window, cx: &mut Context<Self>) {
         menus::about(window, cx);
+    }
+
+    /// Picks up a new [zoom](crate::zoom): the font at its size, and
+    /// gpui-component's theme to match.
+    fn sync_zoom(&mut self, cx: &mut Context<Self>) {
+        let zoom = crate::zoom::percent(cx);
+        if zoom != self.zoom {
+            self.zoom = zoom;
+            let font = MonoFont::new(cx);
+            self.ui.theme.apply_to_components(&font, cx);
+            self.ui.font = Rc::new(font);
+        }
     }
 
     /// Picks up a theme the app switched to (the theme picker, a theme
@@ -181,6 +203,7 @@ impl Focusable for Shell {
 impl Render for Shell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         self.sync_theme(cx);
+        self.sync_zoom(cx);
         let ui = self.ui.clone();
         ui.measures.begin_frame();
         let title = self.model.read(cx).app().terminal_title();
@@ -272,7 +295,37 @@ impl Render for Shell {
             // Last, so the panes have measured themselves by the time it
             // runs.
             .child(report)
+            .child(ctrl_wheel_zooms(&self.model, &ui))
     }
+}
+
+/// ctrl+wheel zooms, as in a browser, wherever the pointer is: it's taken
+/// before the panes see it, as the zoom keys would be.
+fn ctrl_wheel_zooms(model: &Entity<AppModel>, ui: &Ui) -> impl IntoElement + use<> {
+    let (model, ui) = (model.clone(), ui.clone());
+    canvas(
+        |_, _, _| {},
+        move |_, _, window, _| {
+            let (model, ui) = (model.clone(), ui.clone());
+            window.on_mouse_event(move |ev: &ScrollWheelEvent, phase, _, cx| {
+                if phase != DispatchPhase::Capture || !ev.modifiers.control {
+                    return;
+                }
+                cx.stop_propagation();
+                let lines = match ev.delta {
+                    ScrollDelta::Lines(d) => d.y,
+                    ScrollDelta::Pixels(d) => d.y / ui.font.line_height,
+                };
+                let steps = ui.measures.wheel_steps(&ZOOM_WHEEL.into(), lines, WHEEL_STEP_LINES);
+                let cmd = if steps > 0 { Command::ZoomIn } else { Command::ZoomOut };
+                for _ in 0..steps.unsigned_abs() {
+                    model.update(cx, |m, cx| m.send(Action::Command(cmd), cx));
+                }
+            });
+        },
+    )
+    .absolute()
+    .size_0()
 }
 
 /// Tells the app where this frame drew each pane, the main area, and

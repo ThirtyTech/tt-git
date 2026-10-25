@@ -51,6 +51,7 @@ impl AppModel {
         let mut app = app;
         app.set_runtime(Tokio::handle(cx));
         app.enable_open_repository();
+        app.enable_ui_zoom();
         // The install scripts behind `tt-git update` only know the TUI's
         // archives, not the app's packages.
         app.disable_self_update();
@@ -146,6 +147,11 @@ impl AppModel {
         }
         if self.app.take_open_repository() {
             cx.emit(AppEvent::OpenRepository);
+        }
+        if let Some(step) = self.app.take_ui_zoom() {
+            // Every window redraws at the new zoom (`Shell` watches it).
+            let percent = crate::zoom::step(step, cx);
+            self.app.ui_zoomed(percent);
         }
         if let Some(text) = self.app.take_clipboard() {
             cx.write_to_clipboard(ClipboardItem::new_string(text));

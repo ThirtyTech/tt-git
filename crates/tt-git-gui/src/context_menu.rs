@@ -14,7 +14,7 @@
 
 use gpui::component::ActiveTheme as _;
 use gpui::component::menu::{PopupMenu, PopupMenuItem};
-use gpui::{Context, IntoElement, ParentElement, Styled, Window, div, px};
+use gpui::{Context, IntoElement, ParentElement, Styled, Window, div, rems};
 use tt_git_app::Action;
 use tt_git_app::app::PaneCommand;
 use tt_git_app::keymap::Command;
@@ -31,9 +31,12 @@ pub fn builder(ui: Ui) -> impl Fn(PopupMenu, &mut Window, &mut Context<PopupMenu
             return menu;
         };
         let commands = model.read(cx).app().pane_commands();
+        // 220 px at 100%, zoomed with the rem size.
         commands
             .into_iter()
-            .fold(menu.min_w(px(220.)), |menu, command| menu.item(item(&ui, command)))
+            .fold(menu.min_w(cx.theme().font_size * 13.75), |menu, command| {
+                menu.item(item(&ui, command))
+            })
     }
 }
 
@@ -46,7 +49,7 @@ fn item(ui: &Ui, PaneCommand { command, label, key }: PaneCommand) -> PopupMenuI
             .flex()
             .flex_row()
             .justify_between()
-            .gap(px(24.))
+            .gap(rems(1.5))
             .child(label.clone())
             .child(div().text_color(cx.theme().muted_foreground).child(key.clone()))
             .into_any_element()

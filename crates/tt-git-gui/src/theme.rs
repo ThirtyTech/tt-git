@@ -127,7 +127,8 @@ impl GuiTheme {
     }
 
     /// Sets gpui-component's theme to match, so its components (resize
-    /// handles, scrollbars, and whatever the panes use) fit in.
+    /// handles, scrollbars, and whatever the panes use) fit in, at the
+    /// app's [zoom](crate::zoom).
     pub fn apply_to_components(&self, font: &MonoFont, cx: &mut App) {
         let mode = if self.is_dark() {
             ThemeMode::Dark
@@ -143,6 +144,7 @@ impl GuiTheme {
         let selection = self.bg(StyleRole::Selected).unwrap_or(accent.opacity(0.3));
         let error = self.fg(StyleRole::Error);
         let (background, foreground) = (self.background, self.foreground);
+        let scale = crate::zoom::scale(cx);
         ComponentTheme::update(cx, |t| {
             t.background = background;
             t.foreground = foreground;
@@ -161,6 +163,10 @@ impl GuiTheme {
             t.caret = accent;
             t.mono_font_family = font.family.clone();
             t.mono_font_size = font.size;
+            // The rem size, so gpui-component's sizes zoom with the font.
+            t.font_size = px(16.) * scale;
+            t.radius = px(6.) * scale;
+            t.radius_lg = px(8.) * scale;
         });
     }
 }
