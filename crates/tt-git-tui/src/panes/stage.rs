@@ -1,12 +1,7 @@
 //! Staging one file by hunk or by line: its unstaged and staged changes, one
 //! side active, with a hunk or a range of changed lines selected.
 
-use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::Style;
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph};
-use tt_git_core::patch::{FileDiff, LineKind};
+use tt_git_core::patch::FileDiff;
 use tt_git_core::{PatchOp, StageSide, StatusEntry};
 
 use crate::action::Action;
@@ -16,12 +11,10 @@ use crate::editor::EditTarget;
 use crate::jobs::Ctx;
 use crate::keymap::Command;
 use crate::modal::{GitOp, Modal};
-use crate::syntax::{self, HunkTokens};
-use crate::tui_theme::Theme;
-use crate::widgets::{code_spans, truncate};
+use crate::syntax::HunkTokens;
 
 /// Below this width the two sides stack instead of sitting side by side.
-const SIDE_BY_SIDE_WIDTH: u16 = 140;
+pub const SIDE_BY_SIDE_WIDTH: u16 = 140;
 
 /// Which of a file's changes are active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -38,7 +31,7 @@ impl StageSideId {
         }
     }
 
-    fn name(self) -> &'static str {
+    pub fn name(self) -> &'static str {
         match self {
             StageSideId::Unstaged => "Unstaged",
             StageSideId::Staged => "Staged",
@@ -51,18 +44,18 @@ type Pos = (usize, usize);
 
 /// One row drawn for a side: a hunk's `@@` heading or one of its lines.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Row {
+pub enum Row {
     Heading(usize),
     Line(usize, usize),
 }
 
 #[derive(Debug, Default)]
-struct SideView {
-    diff: Option<StageSide>,
+pub struct SideView {
+    pub diff: Option<StageSide>,
     /// The code in the diff's hunks.
-    syntax: HunkTokens,
-    rows: Vec<Row>,
-    offset: usize,
+    pub syntax: HunkTokens,
+    pub rows: Vec<Row>,
+    pub offset: usize,
     height: usize,
 }
 
@@ -89,7 +82,7 @@ impl SideView {
     }
 
     /// Something to show: hunks, or a reason there are none to pick.
-    fn has_content(&self) -> bool {
+    pub fn has_content(&self) -> bool {
         matches!(&self.diff, Some(Err(_))) || self.hunk_count() > 0
     }
 
@@ -118,12 +111,12 @@ impl SideView {
 #[derive(Debug)]
 pub struct StageView {
     entry: StatusEntry,
-    unstaged: SideView,
-    staged: SideView,
-    side: StageSideId,
+    pub unstaged: SideView,
+    pub staged: SideView,
+    pub side: StageSideId,
     /// Picking single lines rather than whole hunks.
-    line_mode: bool,
-    hunk: usize,
+    pub line_mode: bool,
+    pub hunk: usize,
     /// The line cursor, on a changed line, in line mode.
     cursor: Pos,
     /// The other end of a range of lines being picked.
@@ -177,7 +170,7 @@ impl StageView {
         self.unstaged.diff.is_some() && self.staged.diff.is_some()
     }
 
-    fn view(&self, side: StageSideId) -> &SideView {
+    pub fn view(&self, side: StageSideId) -> &SideView {
         match side {
             StageSideId::Unstaged => &self.unstaged,
             StageSideId::Staged => &self.staged,
@@ -239,7 +232,7 @@ impl StageView {
         }
     }
 
-    fn picked(&self, pos: Pos) -> bool {
+    pub fn picked(&self, pos: Pos) -> bool {
         if !self.line_mode {
             return pos.0 == self.hunk;
         }
@@ -484,128 +477,5 @@ impl StageView {
                 view.offset = last + 1 - rows;
             }
         }
-    }
-
-    pub fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
-        if !self.loaded() {
-            frame.render_widget(Paragraph::new("loading…").style(theme.muted), area);
-            return;
-        }
-        let (u, s) = (self.unstaged.has_content(), self.staged.has_content());
-        if !u && !s {
-            frame.render_widget(Paragraph::new("no changes").style(theme.muted), area);
-            return;
-        }
-        let (first, second) = if !u || !s {
-            // The empty side shrinks to its title along the bottom.
-            let [main, rest] = Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(area);
-            if u { (main, rest) } else { (rest, main) }
-        } else if area.width >= SIDE_BY_SIDE_WIDTH {
-            let [left, right] = Layout::horizontal([Constraint::Fill(1), Constraint::Fill(1)]).areas(area);
-            let block = Block::new().borders(Borders::RIGHT).border_style(theme.border);
-            let inner = block.inner(left);
-            frame.render_widget(block, left);
-            (
-                inner,
-                Rect {
-                    x: right.x + 1,
-                    width: right.width.saturating_sub(1),
-                    ..right
-                },
-            )
-        } else {
-            let [top, bottom] = Layout::vertical([Constraint::Fill(1), Constraint::Fill(1)]).areas(area);
-            (top, bottom)
-        };
-        self.draw_side(frame, StageSideId::Unstaged, first, focused, theme);
-        self.draw_side(frame, StageSideId::Staged, second, focused, theme);
-    }
-
-    fn draw_side(&mut self, frame: &mut Frame, id: StageSideId, area: Rect, focused: bool, theme: &Theme) {
-        if area.height == 0 {
-            return;
-        }
-        let active = id == self.side;
-        let [title_area, body] = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]).areas(area);
-        let side = self.view(id);
-        let summary = match &side.diff {
-            Some(Ok(d)) if d.is_empty() => "no changes".to_string(),
-            Some(Ok(d)) if d.hunks.len() == 1 => "1 hunk".to_string(),
-            Some(Ok(d)) => format!("{} hunks", d.hunks.len()),
-            _ => String::new(),
-        };
-        let title_style = match (active, focused) {
-            (true, true) => theme.title_focused,
-            (true, false) => theme.title,
-            _ => theme.muted,
-        };
-        let marker = if active { "▌" } else { " " };
-        let title = Line::from(vec![
-            Span::styled(format!("{marker}{}", id.name()), title_style),
-            Span::styled(format!("  {summary}"), theme.muted),
-        ]);
-        frame.render_widget(Paragraph::new(title), title_area);
-
-        if let Some(Err(why)) = &side.diff {
-            frame.render_widget(Paragraph::new(format!(" {why}")).style(theme.muted), body);
-            return;
-        }
-        let height = body.height as usize;
-        self.set_viewport(id, height);
-        let view = self.view(id);
-        let Some(diff) = view.diff.as_ref().and_then(|d| d.as_ref().ok()) else {
-            return;
-        };
-        let width = body.width as usize;
-        let highlight = if focused {
-            theme.selected
-        } else {
-            theme.selected_unfocused
-        };
-        let start = view.offset.min(view.rows.len());
-        let end = (start + height).min(view.rows.len());
-        let lines: Vec<Line> = view.rows[start..end]
-            .iter()
-            .map(|row| {
-                let (line, picked) = match *row {
-                    Row::Heading(h) => (
-                        Line::from(Span::styled(truncate(&diff.hunks[h].heading(), width), theme.diff_hunk)),
-                        !self.line_mode && h == self.hunk,
-                    ),
-                    Row::Line(h, l) => {
-                        let line = &diff.hunks[h].lines[l];
-                        let (prefix, style, back) = match line.kind {
-                            LineKind::Context => (" ", Style::new(), Style::new()),
-                            LineKind::Add => ("+", theme.diff_add, theme.diff_add_line),
-                            LineKind::Del => ("-", theme.diff_del, theme.diff_del_line),
-                        };
-                        let body = syntax::shown(&line.text);
-                        let picked = if self.line_mode {
-                            line.is_change() && self.picked((h, l))
-                        } else {
-                            h == self.hunk
-                        };
-                        let tokens = view.syntax.get(h).and_then(|t| t.get(l)).and_then(Option::as_ref);
-                        let line = match tokens {
-                            Some(tokens) if width > 0 => {
-                                let code =
-                                    code_spans(&body, Some(tokens), Style::new(), theme, width - 1, line.is_change());
-                                let mut spans = vec![Span::styled(prefix, style)];
-                                spans.extend(code.into_iter().map(|s| Span::styled(s.content.into_owned(), s.style)));
-                                Line::from(spans).style(back)
-                            }
-                            _ => Line::from(Span::styled(truncate(&format!("{prefix}{body}"), width), style)),
-                        };
-                        (line, picked)
-                    }
-                };
-                if active && picked {
-                    line.patch_style(highlight)
-                } else {
-                    line
-                }
-            })
-            .collect();
-        frame.render_widget(Paragraph::new(lines), body);
     }
 }

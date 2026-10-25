@@ -3,26 +3,18 @@
 
 use std::collections::HashSet;
 
-use ratatui::Frame;
-use ratatui::layout::{Position, Rect};
-use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Clear, Paragraph};
 use tt_git_core::LogFilter;
 use tt_git_core::branches::matches_filter;
-use unicode_width::UnicodeWidthStr;
 
 use crate::keymap::{KeyCode, KeyCombo, KeyModifiers};
 use crate::modal::ModalOutcome;
 use crate::mouse::{FilterSpot, MouseKind};
-use crate::tui_theme::Theme;
-use crate::widgets::{fit, truncate};
 
 /// Rows of choices shown at once.
-const ROWS: usize = 12;
+pub const ROWS: usize = 12;
 /// The row inside the border the choices start on, under the tabs, the
 /// input and a blank line.
-const FIRST_CHOICE_ROW: usize = 3;
+pub const FIRST_CHOICE_ROW: usize = 3;
 
 /// The panel's two lists, switched with `tab`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -41,7 +33,7 @@ impl FilterTab {
         }
     }
 
-    fn index(self) -> usize {
+    pub fn index(self) -> usize {
         self as usize
     }
 
@@ -115,13 +107,13 @@ pub fn author_name(ident: &str) -> &str {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-struct List {
+pub struct List {
     /// `None` while loading.
-    items: Option<Result<Vec<Choice>, String>>,
-    input: String,
+    pub items: Option<Result<Vec<Choice>, String>>,
+    pub input: String,
     /// Indices into `items` that match `input`, best first.
-    matches: Vec<usize>,
-    selected: usize,
+    pub matches: Vec<usize>,
+    pub selected: usize,
 }
 
 impl List {
@@ -159,7 +151,7 @@ impl List {
 
     /// The position in `matches` of the first choice shown, scrolled so
     /// the selection is in view.
-    fn first_shown(&self) -> usize {
+    pub fn first_shown(&self) -> usize {
         self.selected.saturating_sub(ROWS - 1)
     }
 
@@ -181,7 +173,7 @@ pub struct FilterPanel {
     current: LogFilter,
     /// The folder tt-git was started in, offered first on the file tab.
     folder: Option<String>,
-    tab: FilterTab,
+    pub tab: FilterTab,
     lists: [List; 2],
 }
 
@@ -231,7 +223,7 @@ impl FilterPanel {
         list.refilter();
     }
 
-    fn list(&self) -> &List {
+    pub fn list(&self) -> &List {
         &self.lists[self.tab.index()]
     }
 
@@ -322,147 +314,14 @@ impl FilterPanel {
         }
     }
 
-    /// What's at cell `pos` of the panel drawn in `area` (what
-    /// [`draw`](Self::draw) was given).
-    pub fn spot_at(&self, area: Rect, pos: Position) -> FilterSpot {
-        let popup = popup_area(area);
-        if !popup.contains(pos) {
-            return FilterSpot::Outside;
-        }
-        let inner = Block::bordered().inner(popup);
-        if !inner.contains(pos) {
-            return FilterSpot::Nothing;
-        }
-        let row = (pos.y - inner.y) as usize;
-        if row == 0 {
-            let mut x = inner.x;
-            let mut hit = FilterSpot::Nothing;
-            for tab in FilterTab::ALL {
-                if tab.index() > 0 {
-                    x += 3;
-                }
-                let width = self.tab_text(tab).width() as u16;
-                if (x..x + width).contains(&pos.x) {
-                    hit = FilterSpot::Tab(tab);
-                }
-                x += width;
-            }
-            return hit;
-        }
-        match row.checked_sub(FIRST_CHOICE_ROW) {
-            Some(shown) => FilterSpot::Choice(shown),
-            None => FilterSpot::Nothing,
-        }
-    }
-
     /// A tab's name and what the filter has for it now.
-    fn tab_text(&self, tab: FilterTab) -> String {
+    pub fn tab_text(&self, tab: FilterTab) -> String {
         let now = match (tab, tab.value(&self.current)) {
             (_, None) => "any",
             (FilterTab::Author, Some(ident)) => author_name(ident),
             (FilterTab::File, Some(path)) => path,
         };
         format!("{}: {now}", tab.label())
-    }
-
-    pub fn draw(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        let popup = popup_area(area);
-        frame.render_widget(Clear, popup);
-        let block = Block::bordered()
-            .border_type(BorderType::Rounded)
-            .border_style(theme.border_focused)
-            .title(Span::styled(" Filter graph ", theme.title_focused));
-        let inner_width = popup.width.saturating_sub(2) as usize;
-        let list = self.list();
-
-        let mut tabs = Vec::new();
-        for tab in FilterTab::ALL {
-            if !tabs.is_empty() {
-                tabs.push(Span::styled(" · ", theme.muted));
-            }
-            let style = if tab == self.tab {
-                theme.help_key.add_modifier(Modifier::UNDERLINED)
-            } else {
-                theme.muted
-            };
-            tabs.push(Span::styled(self.tab_text(tab), style));
-        }
-
-        let count = match &list.items {
-            Some(Ok(items)) => format!("{}/{}", list.matches.len(), items.len()),
-            _ => String::new(),
-        };
-        let input = truncate(&list.input, inner_width.saturating_sub(count.width() + 4));
-        let pad = inner_width.saturating_sub(input.width() + count.width() + 3);
-        let mut lines = vec![
-            Line::from(tabs),
-            Line::from(vec![
-                Span::styled("> ", theme.help_key),
-                Span::raw(input),
-                Span::styled("█", theme.help_key),
-                Span::raw(" ".repeat(pad)),
-                Span::styled(count, theme.muted),
-            ]),
-            Line::raw(""),
-        ];
-
-        match &list.items {
-            None => lines.push(Line::styled("loading…", theme.muted)),
-            Some(Err(e)) => lines.push(Line::styled(e.clone(), theme.error)),
-            Some(Ok(_)) if list.matches.is_empty() => {
-                let typed = list.input.trim();
-                let msg = if self.tab == FilterTab::File && !typed.is_empty() {
-                    format!("no matches · enter shows commits that changed {typed}")
-                } else {
-                    "no matches".into()
-                };
-                lines.push(Line::styled(msg, theme.muted));
-            }
-            Some(Ok(items)) => {
-                for (pos, &i) in list.matches.iter().enumerate().skip(list.first_shown()).take(ROWS) {
-                    let choice = &items[i];
-                    let hint_w = choice.hint.width();
-                    let label_w = inner_width.saturating_sub(hint_w + 1);
-                    let label_style = if choice.value.is_none() {
-                        theme.muted
-                    } else {
-                        Style::new()
-                    };
-                    let line = Line::from(vec![
-                        Span::styled(fit(&choice.label, label_w), label_style),
-                        Span::raw(" "),
-                        Span::styled(choice.hint.clone(), theme.muted),
-                    ]);
-                    lines.push(if pos == list.selected {
-                        line.patch_style(theme.selected)
-                    } else {
-                        line
-                    });
-                }
-            }
-        }
-
-        // Keep the hint on the last row.
-        let body_rows = popup.height.saturating_sub(2) as usize;
-        while lines.len() + 1 < body_rows {
-            lines.push(Line::raw(""));
-        }
-        lines.push(Line::styled(
-            "enter filter · tab author/file · ↑↓ pick · esc cancel",
-            theme.muted,
-        ));
-        frame.render_widget(Paragraph::new(lines).block(block), popup);
-    }
-}
-
-/// Where the panel goes in `area`: a fixed height, so it doesn't jump
-/// about while typing.
-fn popup_area(area: Rect) -> Rect {
-    let width = 70.min(area.width);
-    let height = (ROWS as u16 + 7).min(area.height);
-    Rect {
-        y: area.y + area.height.saturating_sub(height) / 4,
-        ..crate::app::centered(area, width, height)
     }
 }
 

@@ -19,7 +19,7 @@ use tt_git_core::{GitCli, Repo};
 use tt_git_tui::app::PluginOptions;
 use tt_git_tui::keymap::KeyCombo;
 use tt_git_tui::panes::PaneId;
-use tt_git_tui::{Action, App, Config};
+use tt_git_tui::{Action, App, Config, Screen};
 use unicode_width::UnicodeWidthStr;
 
 use crate::Sandbox;
@@ -33,6 +33,7 @@ const IDLE_TIMEOUT: Duration = Duration::from_secs(20);
 pub struct TestDriver {
     runtime: Runtime,
     app: App,
+    screen: Screen,
     rx: UnboundedReceiver<Action>,
     terminal: Terminal<TestBackend>,
 }
@@ -123,6 +124,7 @@ impl TestDriver {
         let mut driver = Self {
             runtime,
             app,
+            screen: Screen::default(),
             rx,
             terminal,
         };
@@ -199,7 +201,7 @@ impl TestDriver {
         });
         {
             let _guard = self.runtime.enter();
-            tt_git_tui::input::handle_event(&mut self.app, ev);
+            self.screen.handle_event(&mut self.app, ev);
         }
         self.wait_idle()
     }
@@ -260,9 +262,19 @@ impl TestDriver {
         });
         {
             let _guard = self.runtime.enter();
-            tt_git_tui::input::handle_event(&mut self.app, ev);
+            self.screen.handle_event(&mut self.app, ev);
         }
         self.wait_idle()
+    }
+
+    /// Hands a terminal event to the app as the real terminal loop does,
+    /// hit-testing the mouse against the last frame.
+    pub fn event(&mut self, ev: crossterm::event::Event) -> &mut Self {
+        {
+            let _guard = self.runtime.enter();
+            self.screen.handle_event(&mut self.app, ev);
+        }
+        self
     }
 
     /// Sends an action as if a background job had produced it.
@@ -346,9 +358,9 @@ impl TestDriver {
     }
 
     pub fn render(&mut self) -> &Buffer {
-        let app = &mut self.app;
+        let (app, screen) = (&mut self.app, &mut self.screen);
         let _guard = self.runtime.enter();
-        self.terminal.draw(|f| app.draw(f)).expect("draw");
+        self.terminal.draw(|f| screen.draw(app, f)).expect("draw");
         self.terminal.backend().buffer()
     }
 

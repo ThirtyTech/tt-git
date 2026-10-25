@@ -2,11 +2,6 @@
 
 use std::time::{Duration, Instant};
 
-use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout};
-use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, BorderType, Clear, Paragraph, Wrap};
 use tokio::sync::mpsc::{self, UnboundedReceiver};
 use tt_git_core::branches::matches_filter;
 use tt_git_core::time::SharedClock;
@@ -18,7 +13,6 @@ use tt_git_core::{
 use crate::action::{Action, RefsSnapshot};
 use crate::component::{Component, EventState};
 use crate::config::Config;
-use crate::convert;
 use crate::editor::{self, EditTarget, EditorLaunch};
 use crate::filter::FilterPanel;
 use crate::geom::Rect;
@@ -34,7 +28,6 @@ use crate::panes::{
 };
 use crate::theme::Theme;
 use crate::watcher::RepoWatcher;
-use crate::widgets::truncate_spans;
 
 mod agent;
 mod panes;
@@ -82,8 +75,11 @@ const ALL_GLOBAL: &[Command] = &[
     Command::Quit,
 ];
 
-/// Ticks of [`crate::runner::TICK`] in a second.
-const TICKS_PER_SEC: u64 = 1000 / crate::runner::TICK.as_millis() as u64;
+/// How often the front end sends [`Action::Tick`].
+pub const TICK: Duration = Duration::from_millis(250);
+
+/// Ticks of [`TICK`] in a second.
+const TICKS_PER_SEC: u64 = 1000 / TICK.as_millis() as u64;
 
 /// The spinner beside a running git operation, one frame per tick.
 const SPINNER: [&str; 10] = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
@@ -104,6 +100,19 @@ const MERGE_CHECK_BATCH: usize = 50;
 /// this many of the newest commits, so they follow the repo's current habits.
 const PRESET_COMMITS: usize = 1000;
 const PRESET_COUNT: usize = 8;
+
+/// A key hint in the help bar: the key, displayed, and what it does.
+pub type KeyHint<'a> = (&'a str, &'static str);
+
+/// How a piece of the help bar's status slot looks.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StatusLook {
+    Muted,
+    /// A fresh `✓` notice.
+    Success,
+    /// A git operation running.
+    Busy,
+}
 
 /// A git write in flight, shown in the help bar until it's done.
 #[derive(Debug)]
@@ -440,13 +449,6 @@ impl App {
         }
     }
 
-    fn view(&self) -> View {
-        View {
-            details: self.details_open,
-            wide: self.zoom == Zoom::Wide,
-        }
-    }
-
     pub fn repo(&self) -> &Repo {
         &self.repo
     }
@@ -529,6 +531,124 @@ impl App {
     /// last frame.
     pub fn main_area(&self) -> Rect {
         self.layout_rects.0
+    }
+
+    /// Starts a frame: call before drawing one. Times the notice from when
+    /// it's first shown.
+    pub fn begin_frame(&mut self) {
+        self.cursor_shown = false;
+        if self.notice != self.notice_drawn.0 {
+            self.notice_drawn = (self.notice.clone(), self.ticks);
+        }
+    }
+
+    /// Where the front end drew each pane this frame, the area under the
+    /// help bar they share, and where details goes (or would go once
+    /// opened, for sizing split plugin panes).
+    pub fn set_layout(&mut self, panes: Vec<(PaneId, Rect)>, main: Rect, details: Rect) {
+        self.pane_areas = panes;
+        self.layout_rects = (main, details);
+    }
+
+    /// The frame showed the terminal cursor (in a focused plugin pane), so
+    /// frames keep coming on ticks to place it.
+    pub fn set_cursor_shown(&mut self) {
+        self.cursor_shown = true;
+    }
+
+    /// The settings in effect.
+    pub fn config(&self) -> &Config {
+        &self.config
+    }
+
+    /// What the layout shows: details opened, graph and details wide.
+    pub fn view(&self) -> View {
+        View {
+            details: self.details_open,
+            wide: self.zoom == Zoom::Wide,
+        }
+    }
+
+    pub fn status_mut(&mut self) -> &mut StatusPane {
+        &mut self.status
+    }
+
+    pub fn branches_mut(&mut self) -> &mut BranchesPane {
+        &mut self.branches
+    }
+
+    pub fn graph_mut(&mut self) -> &mut GraphPane {
+        &mut self.graph
+    }
+
+    pub fn details_mut(&mut self) -> &mut DetailsPane {
+        &mut self.details
+    }
+
+    pub fn keymap(&self) -> &Keymap {
+        &self.keymap
+    }
+
+    /// Whether the help popup is open.
+    pub fn shows_help(&self) -> bool {
+        self.show_help
+    }
+
+    /// What's typed into the help popup to narrow its list.
+    pub fn help_query(&self) -> &str {
+        &self.help_query
+    }
+
+    /// What the help bar's slot on the right says, in pieces with how each
+    /// looks: the notice, then what git operations are running. Empty when
+    /// there's neither. While something runs, a notice shows beside it for
+    /// a moment, then only the operation is left.
+    pub fn help_status(&self) -> Vec<(String, StatusLook)> {
+        let mut parts = Vec::new();
+        if let Some(notice) = &self.notice
+            && (self.busy.is_empty() || self.notice_age() < NOTICE_HOLD)
+        {
+            let look = if notice.starts_with('✓') && self.notice_age() < SUCCESS_FADE {
+                StatusLook::Success
+            } else {
+                StatusLook::Muted
+            };
+            parts.push((notice.clone(), look));
+        }
+        if let Some(line) = self.busy_line() {
+            if !parts.is_empty() {
+                parts.push((" · ".into(), StatusLook::Muted));
+            }
+            parts.push((line, StatusLook::Busy));
+        }
+        if !parts.is_empty() {
+            parts.insert(0, (" │ ".into(), StatusLook::Muted));
+        }
+        parts
+    }
+
+    /// The help bar's key hints as (key, label): the focused pane's
+    /// commands, which show where they fit, and the global ones that always
+    /// show. A global whose key the pane uses for something else isn't
+    /// listed.
+    pub fn help_hints(&self) -> (Vec<KeyHint<'_>>, Vec<KeyHint<'_>>) {
+        let context = self.focused().context();
+        let hint = |cmd: &Command| {
+            self.keymap
+                .display_key_text(context, *cmd)
+                .map(|key| (key, self.focused().label(*cmd)))
+        };
+        let globals = GLOBAL_HELP
+            .iter()
+            .filter(|cmd| {
+                self.keymap
+                    .display_key(context, **cmd)
+                    .is_some_and(|key| self.keymap.lookup(context, key) == Some(**cmd))
+            })
+            .filter_map(hint)
+            .collect();
+        let pane = self.focused().commands().iter().filter_map(hint).collect();
+        (pane, globals)
     }
 
     /// A key press from the front end: [`handle_key`](Self::handle_key),
@@ -793,8 +913,8 @@ impl App {
         rows
     }
 
-    /// How many rows [`all_help_rows`](Self::all_help_rows) has.
-    fn all_help_row_count(&self) -> usize {
+    /// How many rows the help popup has with nothing typed.
+    pub fn all_help_row_count(&self) -> usize {
         let context = self.focused().context();
         let sections: [(Context, &[Command]); 2] =
             [(context, self.focused().commands()), (Context::Global, ALL_GLOBAL)];
@@ -2680,208 +2800,6 @@ impl App {
             PaneId::Details => &mut self.details,
         }
     }
-
-    pub fn draw(&mut self, frame: &mut Frame) {
-        self.cursor_shown = false;
-        if self.notice != self.notice_drawn.0 {
-            self.notice_drawn = (self.notice.clone(), self.ticks);
-        }
-        let [main, help] = Layout::vertical([Constraint::Fill(1), Constraint::Length(1)]).areas(frame.area());
-        let pane_areas = match self.zoom {
-            Zoom::Full(pane) => vec![(pane, main)],
-            _ => self.config.layout.place(main, self.view()),
-        };
-        // Where details would open, for sizing split plugin panes while it's closed.
-        let details_area = pane_areas
-            .iter()
-            .find(|(p, _)| *p == PaneId::Details)
-            .map(|(_, r)| *r)
-            .unwrap_or_else(|| {
-                let open = View {
-                    details: true,
-                    ..self.view()
-                };
-                let placed = self.config.layout.place(main, open);
-                placed
-                    .into_iter()
-                    .find(|(p, _)| *p == PaneId::Details)
-                    .map_or(main, |(_, r)| r)
-            });
-        self.pane_areas = pane_areas.iter().map(|(p, r)| (*p, convert::geom_rect(*r))).collect();
-        self.layout_rects = (convert::geom_rect(main), convert::geom_rect(details_area));
-        let focus = self.focus;
-        let theme = &crate::tui_theme::Theme::from(&self.theme);
-        for &(pane, area) in &pane_areas {
-            match pane {
-                PaneId::Status => self.status.draw(frame, area, focus == pane, theme),
-                PaneId::Branches => self.branches.draw(frame, area, focus == pane, theme),
-                PaneId::Graph => self.graph.draw(frame, area, focus == pane, theme),
-                PaneId::Details => {}
-            }
-        }
-        if self.pane_area(PaneId::Details).is_some() && !self.draw_split_pane(frame, details_area, theme) {
-            // Fullscreen has room for the file list beside the diff.
-            self.details.set_files_beside(self.zoom == Zoom::Full(PaneId::Details));
-            self.details.draw(frame, details_area, focus == PaneId::Details, theme);
-        }
-
-        self.draw_help_bar(frame, help, theme);
-        if self.show_help {
-            self.draw_help_popup(frame, main, theme);
-        }
-        self.draw_modal_panes(frame, main, details_area, theme);
-        if let Some(modal) = &self.modal {
-            modal.draw(frame, main, theme);
-        }
-        if let Some(err) = &self.error {
-            draw_error_popup(frame, main, err, theme);
-        }
-        if self.config.theme_background
-            && let (Some(bg), Some(fg)) = (theme.background, theme.foreground)
-        {
-            paint_background(frame, bg, fg);
-        }
-    }
-
-    fn draw_help_bar(&self, frame: &mut Frame, area: ratatui::layout::Rect, theme: &crate::tui_theme::Theme) {
-        use unicode_width::UnicodeWidthStr;
-
-        // The notice and any running git operation get their own
-        // right-aligned slot (up to half the width) so a long list of key
-        // hints can't push them off screen. While something runs, a notice
-        // shows beside it for a moment, then only the operation is left.
-        let mut keys_area = area;
-        let mut parts: Vec<(String, Style)> = Vec::new();
-        if let Some(notice) = &self.notice
-            && (self.busy.is_empty() || self.notice_age() < NOTICE_HOLD)
-        {
-            let style = if notice.starts_with('✓') && self.notice_age() < SUCCESS_FADE {
-                theme.diff_add
-            } else {
-                theme.muted
-            };
-            parts.push((notice.clone(), style));
-        }
-        if let Some(line) = self.busy_line() {
-            if !parts.is_empty() {
-                parts.push((" · ".into(), theme.muted));
-            }
-            parts.push((line, theme.help_key.add_modifier(Modifier::BOLD)));
-        }
-        if !parts.is_empty() {
-            parts.insert(0, (" │ ".into(), theme.muted));
-            let text: String = parts.iter().map(|(t, _)| t.as_str()).collect();
-            let width = (text.width() as u16).min(area.width / 2);
-            let [left, right] = Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]).areas(area);
-            keys_area = left;
-            frame.render_widget(Paragraph::new(truncate_spans(parts, width as usize)), right);
-        }
-
-        // Global hints always show; pane hints fill what's left, in order,
-        // skipping any that don't fit (the full list is under `?`).
-        let context = self.focused().context();
-        let hint = |cmd: &Command| {
-            self.keymap
-                .display_key_text(context, *cmd)
-                .map(|key| (key, self.focused().label(*cmd)))
-        };
-        // A global whose key the pane uses for something else isn't shown.
-        let globals: Vec<_> = GLOBAL_HELP
-            .iter()
-            .filter(|cmd| {
-                self.keymap
-                    .display_key(context, **cmd)
-                    .is_some_and(|key| self.keymap.lookup(context, key) == Some(**cmd))
-            })
-            .filter_map(hint)
-            .collect();
-        let width_of = |(k, l): &(&str, &str)| k.width() + 1 + l.width() + 2;
-        let mut budget = (keys_area.width as usize).saturating_sub(globals.iter().map(width_of).sum());
-        let mut items = Vec::new();
-        for item in self.focused().commands().iter().filter_map(hint) {
-            if width_of(&item) <= budget {
-                budget -= width_of(&item);
-                items.push(item);
-            }
-        }
-        items.extend(globals);
-        let mut spans = Vec::new();
-        for (key, label) in items {
-            if !spans.is_empty() {
-                spans.push(Span::raw("  "));
-            }
-            spans.push(Span::styled(key, theme.help_key));
-            spans.push(Span::styled(format!(" {label}"), theme.help_text));
-        }
-        frame.render_widget(Paragraph::new(Line::from(spans)), keys_area);
-    }
-
-    fn draw_help_popup(&self, frame: &mut Frame, area: ratatui::layout::Rect, theme: &crate::tui_theme::Theme) {
-        let search = if self.help_query.is_empty() {
-            Line::from(vec![
-                Span::styled("> ", theme.help_key),
-                Span::styled("type to search", theme.muted),
-            ])
-        } else {
-            Line::from(vec![
-                Span::styled("> ", theme.help_key),
-                Span::raw(self.help_query.clone()),
-                Span::styled("█", theme.help_key),
-            ])
-        };
-        let mut lines = vec![search];
-        let rows = self.help_rows();
-        if rows.is_empty() {
-            lines.push(Line::styled("no matching keys", theme.muted));
-        }
-        for (keys, label) in rows {
-            lines.push(Line::from(vec![
-                Span::styled(format!("{keys:>16}  "), theme.help_key),
-                Span::styled(label, theme.help_text),
-            ]));
-        }
-
-        // Size for the unfiltered list so the popup holds still while typing.
-        let popup = centered(area, 50, self.all_help_row_count() as u16 + 3);
-        frame.render_widget(Clear, popup);
-        let block = Block::bordered()
-            .border_type(BorderType::Rounded)
-            .border_style(theme.border_focused)
-            .title(Span::styled(" Keybindings ", theme.title_focused))
-            .title_top(Line::styled(concat!(" tt-git ", env!("CARGO_PKG_VERSION"), " "), theme.muted).right_aligned());
-        frame.render_widget(Paragraph::new(lines).block(block), popup);
-    }
-}
-
-/// Gives every cell left in the terminal's own colors the theme's instead.
-/// Done to the finished frame, so it also covers popups that cleared their
-/// area and plugin panes' default colors.
-fn paint_background(frame: &mut Frame, bg: ratatui::style::Color, fg: ratatui::style::Color) {
-    use ratatui::style::Color;
-    for cell in frame.buffer_mut().content.iter_mut() {
-        if cell.bg == Color::Reset {
-            cell.bg = bg;
-        }
-        if cell.fg == Color::Reset {
-            cell.fg = fg;
-        }
-    }
-}
-
-fn draw_error_popup(frame: &mut Frame, area: ratatui::layout::Rect, msg: &str, theme: &crate::tui_theme::Theme) {
-    let width = 70.min(area.width);
-    let inner_width = width.saturating_sub(2).max(1) as usize;
-    let text_lines: usize = msg
-        .lines()
-        .map(|l| l.chars().count().div_ceil(inner_width).max(1))
-        .sum();
-    let popup = centered(area, width, text_lines as u16 + 2);
-    frame.render_widget(Clear, popup);
-    let block = Block::bordered()
-        .border_type(BorderType::Rounded)
-        .border_style(theme.error)
-        .title(Span::styled(" Error ", theme.error));
-    frame.render_widget(Paragraph::new(msg).wrap(Wrap { trim: false }).block(block), popup);
 }
 
 /// A revision as a title shows it: a commit id shortened, keeping a `^`.
@@ -2943,15 +2861,4 @@ fn short_rev(rev: &str) -> String {
         base
     };
     format!("{short}{suffix}")
-}
-
-pub(crate) fn centered(area: ratatui::layout::Rect, width: u16, height: u16) -> ratatui::layout::Rect {
-    let width = width.min(area.width);
-    let height = height.min(area.height);
-    ratatui::layout::Rect {
-        x: area.x + (area.width - width) / 2,
-        y: area.y + (area.height - height) / 2,
-        width,
-        height,
-    }
 }

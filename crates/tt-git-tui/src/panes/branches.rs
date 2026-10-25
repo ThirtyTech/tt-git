@@ -1,31 +1,25 @@
-use ratatui::Frame;
-use ratatui::layout::{Position, Rect};
-use ratatui::style::{Modifier, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use tt_git_core::branches::{matches_filter, tags_newest_first};
-use tt_git_core::time::{SharedClock, relative};
+use tt_git_core::time::SharedClock;
 
-use tt_git_core::{BaseBranches, BranchEntry, BranchState, GitRef, RefKind, Stash, Worktree};
+use tt_git_core::{BaseBranches, BranchEntry, GitRef, RefKind, Stash, Worktree};
 use unicode_width::UnicodeWidthStr;
 
-use super::{BranchFocus, DrawnDates, PaneId, pane_block, title_x};
+use super::{BranchFocus, DrawnDates};
 use crate::action::Action;
 use crate::component::{Component, EventState};
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context, KeyCode, KeyCombo};
 use crate::modal::{GitOp, Modal, PaletteItem, PaletteTarget, PromptAction};
 use crate::mouse::PanePart;
-use crate::tui_theme::Theme;
-use crate::widgets::{Cursor, fit, fit_right, truncate};
+use crate::widgets::Cursor;
 
-const STATE_WIDTH: usize = 9;
-const DATE_WIDTH: usize = 4;
-const AUTHOR_WIDTH: usize = 14;
+pub const STATE_WIDTH: usize = 9;
+pub const DATE_WIDTH: usize = 4;
+pub const AUTHOR_WIDTH: usize = 14;
 /// Narrowest commit subject column worth showing in tag and merged/unmerged rows.
-const SUBJECT_MIN_WIDTH: usize = 12;
+pub const SUBJECT_MIN_WIDTH: usize = 12;
 /// Widest a plugin's decoration column gets.
 pub const DECORATION_WIDTH: usize = 10;
 
@@ -73,7 +67,7 @@ impl BranchTab {
     }
 
     /// The tabs that compare branches with the base branch.
-    fn compares(self) -> bool {
+    pub fn compares(self) -> bool {
         matches!(self, BranchTab::Unmerged | BranchTab::Merged)
     }
 }
@@ -82,18 +76,18 @@ impl BranchTab {
 /// and the branches merged and not merged into the base branch.
 #[derive(Debug)]
 pub struct BranchesPane {
-    clock: SharedClock,
+    pub clock: SharedClock,
     entries: Vec<BranchEntry>,
-    base: Option<BaseBranches>,
+    pub base: Option<BaseBranches>,
     /// Newest first.
-    tags: Vec<GitRef>,
+    pub tags: Vec<GitRef>,
     /// Newest first.
-    stashes: Vec<Stash>,
+    pub stashes: Vec<Stash>,
     /// The main worktree first.
-    worktrees: Vec<Worktree>,
+    pub worktrees: Vec<Worktree>,
     /// How each worktree is shown and filtered: its path from the current
     /// directory.
-    worktree_names: Vec<String>,
+    pub worktree_names: Vec<String>,
     /// Files with changes in each worktree, by path, once counted (`Err`
     /// when git couldn't tell).
     worktree_changes: HashMap<PathBuf, Result<usize, String>>,
@@ -103,20 +97,17 @@ pub struct BranchesPane {
     /// Bytes each worktree's folder takes, by path, once measured (`Err`
     /// when it couldn't be read).
     worktree_sizes: HashMap<PathBuf, Result<u64, String>>,
-    tab: BranchTab,
+    pub tab: BranchTab,
     /// Indices into the current tab's list that pass the filter.
-    visible: Vec<usize>,
-    filter: String,
-    editing_filter: bool,
+    pub visible: Vec<usize>,
+    pub filter: String,
+    pub editing_filter: bool,
     /// One per tab, so switching back returns to the same row.
     cursors: [Cursor; BranchTab::ALL.len()],
     dates: DrawnDates,
-    /// Where each tab's name was drawn in the title last frame: its row and
-    /// columns, for clicks.
-    tab_cells: Vec<(BranchTab, u16, std::ops::Range<u16>)>,
     /// Short text plugins put next to branches: by plugin id, then by
     /// branch name. Each plugin gets a column in the full list.
-    decorations: BTreeMap<String, HashMap<String, String>>,
+    pub decorations: BTreeMap<String, HashMap<String, String>>,
     /// The base branch's commit that `conflicts` were checked against.
     merge_base: Option<String>,
     /// The files merging each tip (by commit) into the base would leave in
@@ -152,14 +143,6 @@ impl BranchesPane {
         self.dates = dates;
     }
 
-    /// The tab drawn at screen cell `pos` in the last frame.
-    pub fn part_at(&self, pos: Position) -> Option<PanePart> {
-        self.tab_cells
-            .iter()
-            .find(|(_, y, xs)| *y == pos.y && xs.contains(&pos.x))
-            .map(|&(tab, ..)| PanePart::Tab(tab))
-    }
-
     pub fn new(clock: SharedClock) -> Self {
         Self {
             clock,
@@ -178,7 +161,6 @@ impl BranchesPane {
             editing_filter: false,
             cursors: [Cursor::default(); BranchTab::ALL.len()],
             dates: DrawnDates::default(),
-            tab_cells: Vec::new(),
             decorations: BTreeMap::new(),
             merge_base: None,
             conflicts: HashMap::new(),
@@ -211,7 +193,7 @@ impl BranchesPane {
 
     /// The decoration columns of the full list: each plugin with a value for
     /// a listed branch, and the widest of those values.
-    fn decoration_columns(&self) -> Vec<(&str, usize)> {
+    pub fn decoration_columns(&self) -> Vec<(&str, usize)> {
         self.decorations
             .iter()
             .filter_map(|(plugin, map)| {
@@ -435,7 +417,7 @@ impl BranchesPane {
     }
 
     /// `✗3` for a tip whose merge leaves 3 files in conflict.
-    fn conflict_mark(&self, tip: Option<&str>) -> String {
+    pub fn conflict_mark(&self, tip: Option<&str>) -> String {
         self.conflicts_of(tip)
             .map_or_else(String::new, |files| format!("✗{}", files.len()))
     }
@@ -453,7 +435,7 @@ impl BranchesPane {
 
     /// Width of the conflict column on the current tab: the widest mark in
     /// its list, 0 (no column) while nothing conflicts.
-    fn conflict_width(&self) -> usize {
+    pub fn conflict_width(&self) -> usize {
         if !matches!(self.tab, BranchTab::All | BranchTab::Unmerged) {
             return 0;
         }
@@ -465,7 +447,7 @@ impl BranchesPane {
 
     /// For the bottom border: the files the selected row's merge into the
     /// base would leave in conflict, as `✗ 2 conflicts with main: a, b`.
-    fn conflict_summary(&self) -> Option<String> {
+    pub fn conflict_summary(&self) -> Option<String> {
         let i = *self.visible.get(self.cursor().selected)?;
         let files = self.conflicts_of(self.row_tip(i))?;
         let base = &self.base.as_ref()?.base;
@@ -480,7 +462,7 @@ impl BranchesPane {
 
     /// What a worktree row says about its size: `…` until measured, nothing
     /// for one without a folder.
-    fn worktree_size(&self, wt: &Worktree) -> String {
+    pub fn worktree_size(&self, wt: &Worktree) -> String {
         if wt.bare || wt.prunable.is_some() {
             return String::new();
         }
@@ -494,7 +476,7 @@ impl BranchesPane {
     /// The disk space the worktrees take together, `…` until each one with
     /// a folder is measured. Nested ones aren't counted twice: the main
     /// worktree's size leaves them out.
-    fn worktrees_total(&self) -> String {
+    pub fn worktrees_total(&self) -> String {
         let mut total = 0;
         for path in self.countable_worktrees() {
             match self.worktree_sizes.get(&path) {
@@ -510,7 +492,7 @@ impl BranchesPane {
         &self.filter
     }
 
-    fn list(&self, tab: BranchTab) -> &[BranchEntry] {
+    pub fn list(&self, tab: BranchTab) -> &[BranchEntry] {
         match (tab, &self.base) {
             (BranchTab::All, _) => &self.entries,
             (BranchTab::Unmerged, Some(base)) => &base.unmerged,
@@ -540,7 +522,7 @@ impl BranchesPane {
     }
 
     /// How many rows `tab` has before filtering.
-    fn len(&self, tab: BranchTab) -> usize {
+    pub fn len(&self, tab: BranchTab) -> usize {
         match tab {
             BranchTab::Tags => self.tags.len(),
             BranchTab::Stash => self.stashes.len(),
@@ -568,7 +550,7 @@ impl BranchesPane {
         (self.cursor().selected < self.visible.len()).then(|| self.name_at(self.cursor().selected))
     }
 
-    fn cursor(&self) -> &Cursor {
+    pub fn cursor(&self) -> &Cursor {
         &self.cursors[self.tab.index()]
     }
 
@@ -608,7 +590,7 @@ impl BranchesPane {
 
     /// The Stash tab only shows while there are stashes, and the Worktrees
     /// tab while there's more than the main one (or while it's current).
-    fn shows_tab(&self, tab: BranchTab) -> bool {
+    pub fn shows_tab(&self, tab: BranchTab) -> bool {
         match tab {
             _ if tab == self.tab => true,
             BranchTab::Stash => !self.stashes.is_empty(),
@@ -844,23 +826,6 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
         EventState::Consumed
     }
 
-    /// A stash row: its name, message and age.
-    fn render_stash<'a>(&self, stash: &'a Stash, width: usize, theme: &Theme) -> Line<'a> {
-        let name = stash.name();
-        let message_width = width.saturating_sub(2 + name.width() + 1 + 1 + DATE_WIDTH);
-        Line::from(vec![
-            Span::raw("  "),
-            Span::styled(name, theme.sha),
-            Span::raw(" "),
-            Span::raw(fit(&stash.message, message_width)),
-            Span::raw(" "),
-            Span::styled(
-                fit_right(&relative(self.clock.now(), stash.date), DATE_WIDTH),
-                theme.date,
-            ),
-        ])
-    }
-
     /// Commands that act on the selected worktree.
     fn on_worktree_command(&self, cmd: Command, ctx: &Ctx) -> EventState {
         let Some(wt) = self.selected_worktree() else {
@@ -914,7 +879,7 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
     /// `↑n` for commits the base doesn't have, `✗n` for files merging it
     /// into the base would leave in conflict, and how many files have
     /// changes once that's counted.
-    fn worktree_state(&self, wt: &Worktree) -> String {
+    pub fn worktree_state(&self, wt: &Worktree) -> String {
         let mut parts = Vec::new();
         if wt.main {
             parts.push("main".to_string());
@@ -942,54 +907,6 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
             });
         }
         parts.join(" · ")
-    }
-
-    /// A worktree row: its path, what it has checked out and its state.
-    fn render_worktree<'a>(
-        &self,
-        i: usize,
-        name_width: usize,
-        state_width: usize,
-        size_width: usize,
-        width: usize,
-        theme: &Theme,
-    ) -> Line<'a> {
-        let wt = &self.worktrees[i];
-        let (marker, name_style) = if wt.current {
-            (Span::styled("* ", theme.label_local), theme.label_local)
-        } else {
-            (Span::raw("  "), Style::new())
-        };
-        let checked_out = match (&wt.branch, &wt.head) {
-            _ if wt.bare => "(bare)".to_string(),
-            (Some(branch), _) => branch.clone(),
-            (None, Some(oid)) => format!("(detached {})", &oid[..oid.len().min(7)]),
-            (None, None) => "(no commit)".to_string(),
-        };
-        let branch_style = if wt.branch.is_some() {
-            theme.label_local
-        } else {
-            theme.sha
-        };
-        let state = self.worktree_state(wt);
-        let state_style = if wt.prunable.is_some() || state.contains('✗') {
-            theme.error
-        } else if wt.locked.is_some() || state.ends_with("changed") || state.contains('↑') {
-            theme.label_tag
-        } else {
-            theme.muted
-        };
-        let branch_width = width.saturating_sub(2 + name_width + 1 + 1 + state_width + 1 + size_width);
-        Line::from(vec![
-            marker,
-            Span::styled(fit(&self.worktree_names[i], name_width), name_style),
-            Span::raw(" "),
-            Span::styled(fit(&checked_out, branch_width), branch_style),
-            Span::raw(" "),
-            Span::styled(fit_right(&state, state_width), state_style),
-            Span::raw(" "),
-            Span::styled(fit_right(&self.worktree_size(wt), size_width), theme.muted),
-        ])
     }
 
     /// Commands that act on the selected branch.
@@ -1106,176 +1023,10 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
         }
     }
 
-    fn name_style(entry: &BranchEntry, theme: &Theme) -> Style {
-        if entry.is_head {
-            theme.label_local
-        } else if entry.local.is_none() {
-            theme.label_remote
-        } else {
-            Style::new()
-        }
-    }
-
-    fn marker(entry: &BranchEntry, theme: &Theme) -> Span<'static> {
-        if entry.is_head {
-            Span::styled("* ", theme.label_local)
-        } else {
-            Span::raw("  ")
-        }
-    }
-
-    fn render_entry<'a>(
-        &self,
-        entry: &'a BranchEntry,
-        columns: &[(&str, usize)],
-        conflict_width: usize,
-        width: usize,
-        theme: &Theme,
-    ) -> Line<'a> {
-        let (state, state_style) = state_text(&entry.state(), theme);
-        let decorations: usize = columns.iter().map(|(_, w)| w + 1).sum();
-        let conflicts = if conflict_width > 0 { conflict_width + 1 } else { 0 };
-        let name_width = width.saturating_sub(2 + 1 + STATE_WIDTH + 1 + DATE_WIDTH + decorations + conflicts);
-        let mut spans = vec![
-            Self::marker(entry, theme),
-            Span::styled(fit(&entry.name, name_width), Self::name_style(entry, theme)),
-        ];
-        if conflict_width > 0 {
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(
-                fit(&self.conflict_mark(entry.target()), conflict_width),
-                theme.error,
-            ));
-        }
-        for (plugin, w) in columns {
-            let text = self.decorations[*plugin].get(&entry.name).map_or("", String::as_str);
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(fit(text, *w), theme.sha));
-        }
-        spans.extend([
-            Span::raw(" "),
-            Span::styled(fit(&state, STATE_WIDTH), state_style),
-            Span::raw(" "),
-            Span::styled(
-                fit_right(&relative(self.clock.now(), entry.activity), DATE_WIDTH),
-                theme.date,
-            ),
-        ]);
-        Line::from(spans)
-    }
-
-    /// A merged/unmerged row: name, tip subject, author and commit date,
-    /// like a `git branch -r --no-merged` alias prints them.
-    fn render_compared<'a>(
-        &'a self,
-        entry: &'a BranchEntry,
-        name_width: usize,
-        conflict_width: usize,
-        width: usize,
-        theme: &Theme,
-    ) -> Line<'a> {
-        let tip = BaseBranches::tip(entry);
-        let author = tip
-            .and_then(|t| self.base.as_ref()?.authors.get(&t.full_name))
-            .map_or("", String::as_str);
-        let mut spans = vec![
-            Self::marker(entry, theme),
-            Span::styled(fit(&entry.name, name_width), Self::name_style(entry, theme)),
-        ];
-        let mut used = 2 + name_width;
-        if conflict_width > 0 {
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(
-                fit(&self.conflict_mark(tip.map(|t| t.target.as_str())), conflict_width),
-                theme.error,
-            ));
-            used += 1 + conflict_width;
-        }
-        let rest = width.saturating_sub(used + 1 + DATE_WIDTH);
-        let mut author_width = AUTHOR_WIDTH.min(rest.saturating_sub(1));
-        let subject_width = rest.saturating_sub(author_width + 2);
-        if subject_width < SUBJECT_MIN_WIDTH {
-            author_width = rest.saturating_sub(1);
-        } else {
-            spans.push(Span::raw(" "));
-            spans.push(Span::raw(fit(tip.map_or("", |t| t.subject.as_str()), subject_width)));
-        }
-        if author_width > 0 {
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(fit(author, author_width), theme.muted));
-        }
-        spans.push(Span::raw(" "));
-        spans.push(Span::styled(
-            fit_right(&relative(self.clock.now(), entry.activity), DATE_WIDTH),
-            theme.date,
-        ));
-        Line::from(spans)
-    }
-
-    /// How far a tag is from the base: `↓12` when the base has moved on 12
-    /// commits, `↑3` for commits the base doesn't have, `✓` at its tip.
-    /// Only the newest tags are compared.
-    fn tag_distance(&self, tag: &GitRef, theme: &Theme) -> Option<(String, Style)> {
-        let d = self.base.as_ref()?.tags.get(&tag.full_name)?;
-        let state = if d.ahead == 0 && d.behind == 0 {
-            BranchState::InSync
-        } else {
-            BranchState::Diverged {
-                ahead: d.ahead,
-                behind: d.behind,
-            }
-        };
-        Some(state_text(&state, theme))
-    }
-
-    /// Width of the tag distance column: the widest of the compared tags.
-    fn tag_distance_width(&self, theme: &Theme) -> usize {
-        self.tags
-            .iter()
-            .filter_map(|t| self.tag_distance(t, theme))
-            .map(|(text, _)| text.width())
-            .max()
-            .unwrap_or(0)
-    }
-
-    /// A tag row: name, distance from the base, subject (the tag message's
-    /// for annotated tags, else the commit's) and date.
-    fn render_tag<'a>(
-        &self,
-        tag: &'a GitRef,
-        name_width: usize,
-        distance_width: usize,
-        width: usize,
-        theme: &Theme,
-    ) -> Line<'a> {
-        let mut spans = vec![
-            Span::raw("  "),
-            Span::styled(fit(&tag.short_name, name_width), theme.label_tag),
-        ];
-        let mut used = 2 + name_width;
-        if distance_width > 0 {
-            let (text, style) = self.tag_distance(tag, theme).unwrap_or_default();
-            spans.push(Span::raw(" "));
-            spans.push(Span::styled(fit(&text, distance_width), style));
-            used += 1 + distance_width;
-        }
-        let subject_width = width.saturating_sub(used + 1 + 1 + DATE_WIDTH);
-        if subject_width > 0 {
-            spans.push(Span::raw(" "));
-            spans.push(Span::raw(fit(&tag.subject, subject_width)));
-        }
-        spans.push(Span::raw(" "));
-        spans.push(Span::styled(
-            fit_right(&relative(self.clock.now(), tag.date), DATE_WIDTH),
-            theme.date,
-        ));
-        Line::from(spans)
-    }
-
     /// Name column width for tag and merged/unmerged rows: the longest name on
     /// screen, up to half the row if that leaves room for subjects, else
     /// everything but the author column.
-    fn compared_name_width(&self, rows: &[usize], width: usize) -> usize {
+    pub fn compared_name_width(&self, rows: &[usize], width: usize) -> usize {
         let room = width.saturating_sub(2 + 1 + DATE_WIDTH);
         let longest = rows.iter().map(|&i| self.row_name(i).width()).max().unwrap_or(0).max(8);
         let with_subject = longest.min(room / 2);
@@ -1286,49 +1037,7 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
         }
     }
 
-    /// `Branches 12 · Tags 3 · Unmerged 4 · Merged 9` with the current tab
-    /// underlined, then the base everywhere but the full list.
-    /// The title, and the columns each tab's name takes in it.
-    /// Without room for every tab's count (`counts` false), only the
-    /// current tab's is shown.
-    fn title(&self, theme: &Theme, counts: bool) -> (Line<'static>, Vec<(BranchTab, std::ops::Range<u16>)>) {
-        let mut spans = Vec::new();
-        let mut cells = Vec::new();
-        let mut x = 0;
-        for tab in BranchTab::ALL.into_iter().filter(|t| self.shows_tab(*t)) {
-            if !spans.is_empty() {
-                spans.push(Span::styled(" · ", theme.muted));
-                x += 3;
-            }
-            let count = if (tab.compares() && self.base.is_none()) || (!counts && tab != self.tab) {
-                String::new()
-            } else {
-                format!(" {}", self.len(tab))
-            };
-            let style = if tab == self.tab {
-                Style::new().add_modifier(Modifier::UNDERLINED)
-            } else {
-                theme.muted
-            };
-            let text = format!("{}{count}", tab.label());
-            let width = text.width() as u16;
-            cells.push((tab, x..x + width));
-            x += width;
-            spans.push(Span::styled(text, style));
-        }
-        if !matches!(self.tab, BranchTab::All | BranchTab::Stash | BranchTab::Worktrees)
-            && let Some(base) = &self.base
-        {
-            spans.push(Span::styled(format!(" ({})", base.base), theme.muted));
-        }
-        if self.editing_filter || !self.filter.is_empty() {
-            let cursor = if self.editing_filter { "█" } else { "" };
-            spans.push(Span::raw(format!(" /{}{cursor}", self.filter)));
-        }
-        (Line::from(spans), cells)
-    }
-
-    fn empty_message(&self) -> String {
+    pub fn empty_message(&self) -> String {
         let base = self.base.as_ref().map(|b| b.base.as_str());
         match (self.tab, base) {
             _ if self.len(self.tab) > 0 => "no matches".into(),
@@ -1414,30 +1123,6 @@ fn remove_modal(wt: &Worktree, name: &str) -> Result<Modal, String> {
             force: false,
         },
     ))
-}
-
-/// Short state badge and its style.
-fn state_text(state: &BranchState, theme: &Theme) -> (String, Style) {
-    match state {
-        BranchState::LocalOnly => ("local".into(), theme.muted),
-        BranchState::RemoteOnly { remotes } => (remotes.join(","), theme.label_remote),
-        BranchState::InSync => ("✓".into(), theme.diff_add),
-        BranchState::Diverged { ahead, behind } => {
-            let mut s = String::new();
-            if *ahead > 0 {
-                s.push_str(&format!("↑{ahead}"));
-            }
-            if *behind > 0 {
-                s.push_str(&format!("↓{behind}"));
-            }
-            (s, theme.label_tag)
-        }
-        BranchState::Gone => ("gone".into(), theme.error),
-        BranchState::Untracked { remotes, same_commit } => {
-            let sign = if *same_commit { "=" } else { "≠" };
-            (format!("{sign}{}", remotes.join(",")), theme.muted)
-        }
-    }
 }
 
 impl Component for BranchesPane {
@@ -1582,94 +1267,5 @@ impl Component for BranchesPane {
             }
             _ => {}
         }
-    }
-
-    fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
-        // Past the right corner the title is cut off.
-        let start = title_x(PaneId::Branches, area);
-        let end = area.right().saturating_sub(1);
-        let (mut title, mut cells) = self.title(theme, true);
-        if start as usize + title.width() > end as usize {
-            (title, cells) = self.title(theme, false);
-        }
-        self.tab_cells = cells
-            .into_iter()
-            .map(|(tab, xs)| (tab, area.y, (start + xs.start).min(end)..(start + xs.end).min(end)))
-            .filter(|(_, _, xs)| !xs.is_empty())
-            .collect();
-        let mut block = pane_block(PaneId::Branches, title, focused, theme);
-        let mut room = area.width.saturating_sub(2) as usize;
-        if self.tab == BranchTab::Worktrees {
-            let total = format!(" total {} ", self.worktrees_total());
-            room = room.saturating_sub(total.width() + 1);
-            block = block.title_bottom(Line::from(Span::styled(total, theme.muted)).right_aligned());
-        }
-        if let Some(summary) = self.conflict_summary()
-            && room > 4
-        {
-            let text = format!(" {} ", truncate(&summary, room - 2));
-            block = block.title_bottom(Line::from(Span::styled(text, theme.error)));
-        }
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-        let now = self.clock.now();
-        if self.visible.is_empty() {
-            self.note_drawn(now, 0..0);
-            frame.render_widget(Paragraph::new(self.empty_message()).style(theme.muted), inner);
-            return;
-        }
-        let height = inner.height as usize;
-        self.set_viewport(height);
-        let cursor = *self.cursor();
-        let start = cursor.offset.min(self.visible.len());
-        let end = (start + height).min(self.visible.len());
-        let width = inner.width as usize;
-        let list = self.list(self.tab);
-        let conflict_width = self.conflict_width();
-        let name_width = self.compared_name_width(
-            &self.visible[start..end],
-            width.saturating_sub(if conflict_width > 0 { conflict_width + 1 } else { 0 }),
-        );
-        // Only the tags tab draws distances (and it can list hundreds).
-        let distance_width = if matches!(self.tab, BranchTab::Tags) {
-            self.tag_distance_width(theme)
-        } else {
-            0
-        };
-        let (state_width, size_width) = if self.tab == BranchTab::Worktrees {
-            let widest =
-                |text: &dyn Fn(&Worktree) -> String| self.worktrees.iter().map(|w| text(w).width()).max().unwrap_or(0);
-            (widest(&|w| self.worktree_state(w)), widest(&|w| self.worktree_size(w)))
-        } else {
-            (0, 0)
-        };
-        let columns = if self.tab == BranchTab::All {
-            self.decoration_columns()
-        } else {
-            Vec::new()
-        };
-        let lines: Vec<Line> = (start..end)
-            .map(|pos| {
-                let i = self.visible[pos];
-                let line = match self.tab {
-                    BranchTab::All => self.render_entry(&list[i], &columns, conflict_width, width, theme),
-                    BranchTab::Tags => self.render_tag(&self.tags[i], name_width, distance_width, width, theme),
-                    BranchTab::Stash => self.render_stash(&self.stashes[i], width, theme),
-                    BranchTab::Worktrees => self.render_worktree(i, name_width, state_width, size_width, width, theme),
-                    _ => self.render_compared(&list[i], name_width, conflict_width, width, theme),
-                };
-                if pos == cursor.selected {
-                    line.patch_style(if focused {
-                        theme.selected
-                    } else {
-                        theme.selected_unfocused
-                    })
-                } else {
-                    line
-                }
-            })
-            .collect();
-        frame.render_widget(Paragraph::new(lines), inner);
-        self.note_drawn(now, start..end);
     }
 }

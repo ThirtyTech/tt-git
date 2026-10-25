@@ -1,12 +1,8 @@
 //! The pane abstraction.
 
-use ratatui::Frame;
-use ratatui::layout::Rect;
-
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context, KeyCombo};
 use crate::mouse::PanePart;
-use crate::tui_theme::Theme;
 
 /// Whether a component handled a command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -67,6 +63,4 @@ pub trait Component {
     fn on_scroll_part(&mut self, _part: PanePart, _down: bool, _ctx: &Ctx) -> bool {
         false
     }
-
-    fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme);
 }

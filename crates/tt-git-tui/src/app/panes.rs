@@ -1,8 +1,6 @@
 //! Plugin panes in the layout: overlays and popups float over everything
 //! and take all keys; split panes replace the details pane.
 
-use ratatui::Frame;
-use ratatui::layout::Rect;
 use serde_json::{Value, json};
 use tt_git_plugin::manifest::{Dimension, Placement};
 
@@ -10,7 +8,6 @@ use super::App;
 use crate::keymap::KeyCombo;
 use crate::panes::PaneId;
 use crate::pty_pane::{self, PtyPane};
-use crate::tui_theme::Theme;
 
 /// Optional overrides when opening a pane (from the API/CLI).
 #[derive(Debug, Clone, Default)]
@@ -89,6 +86,10 @@ impl App {
         &self.panes
     }
 
+    pub fn plugin_panes_mut(&mut self) -> &mut [PtyPane] {
+        &mut self.panes
+    }
+
     /// Screen text of a pane (tests, `plugin.pane.screen`).
     pub fn pane_screen(&self, id: pty_pane::PaneId) -> Option<String> {
         self.panes.iter().find(|p| p.id == id).map(PtyPane::screen_text)
@@ -98,11 +99,12 @@ impl App {
         self.panes.iter_mut().rev().find(|p| p.is_modal())
     }
 
-    fn split_pane(&mut self) -> Option<&mut PtyPane> {
+    /// The plugin pane split in place of details, if there is one.
+    pub fn split_pane(&mut self) -> Option<&mut PtyPane> {
         self.panes.iter_mut().find(|p| p.placement == Placement::Split)
     }
 
-    pub(super) fn has_split_pane(&self) -> bool {
+    pub fn has_split_pane(&self) -> bool {
         self.panes.iter().any(|p| p.placement == Placement::Split)
     }
 
@@ -168,30 +170,8 @@ impl App {
         }
     }
 
-    /// Draws the split pane into `details` if there is one. Returns whether it did.
-    pub(super) fn draw_split_pane(&mut self, frame: &mut Frame, details: Rect, theme: &Theme) -> bool {
-        let focused = self.focus == PaneId::Details;
-        let hint = self.release_hint();
-        let Some(pane) = self.split_pane() else {
-            return false;
-        };
-        let cursor = pane.draw(frame, details, focused, &hint, theme);
-        self.cursor_shown |= cursor;
-        true
-    }
-
-    pub(super) fn draw_modal_panes(&mut self, frame: &mut Frame, main: Rect, details: Rect, theme: &Theme) {
-        let hint = self.release_hint();
-        let top = self.panes.iter().rposition(|p| p.is_modal());
-        let mut cursor = false;
-        for (i, pane) in self.panes.iter_mut().enumerate().filter(|(_, p)| p.is_modal()) {
-            let area = pane.area(main, details);
-            cursor |= pane.draw(frame, area, Some(i) == top, &hint, theme);
-        }
-        self.cursor_shown |= cursor;
-    }
-
-    fn release_hint(&self) -> String {
+    /// The key that leaves a plugin pane, displayed.
+    pub fn release_hint(&self) -> String {
         self.release_keys.first().map(ToString::to_string).unwrap_or_default()
     }
 

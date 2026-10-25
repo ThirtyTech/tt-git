@@ -1,20 +1,13 @@
 use std::collections::{BTreeMap, HashSet};
 
-use ratatui::Frame;
-use ratatui::layout::Rect;
-use ratatui::style::Style;
-use ratatui::text::{Line, Span};
-use ratatui::widgets::Paragraph;
 use tt_git_core::{DiscardKind, IgnoreTarget, StashScope, Status, StatusEntry, ignore_pattern};
 
-use super::{PaneId, pane_block};
 use crate::action::Action;
 use crate::component::{Component, EventState};
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context};
 use crate::modal::{DiscardCounts, GitOp, Modal, PaletteItem, PaletteTarget, PromptAction};
-use crate::tui_theme::Theme;
-use crate::widgets::{Cursor, truncate};
+use crate::widgets::Cursor;
 
 /// Working tree status with a repo/branch summary in the title.
 #[derive(Debug, Default)]
@@ -37,7 +30,7 @@ pub struct StatusPane {
 
 /// One line of the list.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum Row {
+pub enum Row {
     /// `shown[index]`, `depth` folders in.
     File { index: usize, depth: usize },
     /// A folder in the tree. `path` ends in `/`; `name` is what's drawn,
@@ -62,7 +55,7 @@ struct Dir {
 
 /// The name `e` is listed by in the tree: the last part of its path. An
 /// untracked folder keeps its `/`.
-fn file_name(e: &StatusEntry) -> String {
+pub fn file_name(e: &StatusEntry) -> String {
     let trimmed = e.path.trim_end_matches('/');
     let name = trimmed.rsplit_once('/').map_or(trimmed, |(_, n)| n);
     if e.path.ends_with('/') {
@@ -131,7 +124,8 @@ impl Dir {
 }
 
 /// Whether `e` is under `folder`, or is a rename from or to it.
-fn in_folder(e: &StatusEntry, folder: &str) -> bool {
+/// Whether `e` is under `folder` (ending in `/`).
+pub fn in_folder(e: &StatusEntry, folder: &str) -> bool {
     e.path.starts_with(folder) || e.orig_path.as_deref().is_some_and(|p| p.starts_with(folder))
 }
 
@@ -272,6 +266,21 @@ impl StatusPane {
         &self.shown
     }
 
+    /// What's listed, one per line.
+    pub fn rows(&self) -> &[Row] {
+        &self.rows
+    }
+
+    /// The selected row and the first one shown.
+    pub fn cursor(&self) -> Cursor {
+        self.cursor
+    }
+
+    /// Whether the tree's folder `path` has its contents hidden.
+    pub fn is_collapsed(&self, path: &str) -> bool {
+        self.collapsed.contains(path)
+    }
+
     /// Every changed file, including any hidden outside the folder.
     pub fn all_entries(&self) -> &[StatusEntry] {
         self.status.as_ref().map_or(&[], |s| s.entries.as_slice())
@@ -282,20 +291,6 @@ impl StatusPane {
     /// pages by them. Call before drawing.
     pub fn set_viewport(&mut self, rows: usize) {
         self.cursor.scroll_into_view(rows);
-    }
-
-    /// The text of each row as drawn (without colors), for tests.
-    pub fn row_texts(&self) -> Vec<String> {
-        self.rows
-            .iter()
-            .map(|r| {
-                self.row_line(r, usize::MAX, &Theme::default())
-                    .spans
-                    .iter()
-                    .map(|s| s.content.as_ref())
-                    .collect()
-            })
-            .collect()
     }
 
     /// How many changed files the folder hides, and how many of those
@@ -464,57 +459,6 @@ impl StatusPane {
             }
         }
         s
-    }
-
-    /// One row as drawn: a file's status code and path (its name alone in
-    /// the tree), or a folder's open/closed marker and name.
-    fn row_line(&self, row: &Row, width: usize, theme: &Theme) -> Line<'static> {
-        match row {
-            Row::File { index, depth } => {
-                let e = &self.shown[*index];
-                let indent = "  ".repeat(*depth);
-                let name = if self.tree { file_name(e) } else { e.path.clone() };
-                let path = match &e.orig_path {
-                    Some(orig) => format!("{orig} → {name}"),
-                    None => name,
-                };
-                let room = width.saturating_sub(indent.len() + 3);
-                Line::from(vec![
-                    Span::raw(indent),
-                    Span::styled(e.short_code(), code_style([e], theme)),
-                    Span::raw(" "),
-                    Span::raw(truncate(&path, room)),
-                ])
-            }
-            Row::Folder { path, name, depth } => {
-                let indent = "  ".repeat(*depth);
-                let marker = if self.collapsed.contains(path) { "▸ " } else { "▾ " };
-                let style = code_style(self.shown.iter().filter(|e| in_folder(e, path)), theme);
-                let room = width.saturating_sub(indent.len() + 2);
-                Line::from(vec![
-                    Span::raw(indent),
-                    Span::styled(marker, style),
-                    Span::styled(truncate(&format!("{name}/"), room), style),
-                ])
-            }
-        }
-    }
-}
-
-/// The color of a file's status code, or of a folder holding `entries`:
-/// conflicted, all staged, or with something left to stage.
-fn code_style<'a>(entries: impl IntoIterator<Item = &'a StatusEntry>, theme: &Theme) -> Style {
-    let (mut conflicted, mut unstaged) = (false, false);
-    for e in entries {
-        conflicted |= e.is_conflicted();
-        unstaged |= !e.has_staged() || e.has_unstaged();
-    }
-    if conflicted {
-        theme.error
-    } else if unstaged {
-        theme.diff_del
-    } else {
-        theme.diff_add
     }
 }
 
@@ -715,50 +659,5 @@ impl Component for StatusPane {
         } else {
             &TREE_COMMANDS[..TREE_COMMANDS.len() - 2]
         }
-    }
-
-    fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
-        let block = pane_block(PaneId::Status, format!("Status: {}", self.summary()), focused, theme);
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-        if self.entries().is_empty() {
-            let msg = match (&self.status, &self.folder) {
-                (None, _) => "loading…".to_string(),
-                (Some(_), Some(f)) if !self.all_entries().is_empty() => format!("no changes in {f} (. shows all)"),
-                (Some(_), _) => "working tree clean".to_string(),
-            };
-            frame.render_widget(Paragraph::new(msg).style(theme.muted), inner);
-            return;
-        }
-        let mut inner = inner;
-        if let Some(op) = self.status.as_ref().and_then(|s| s.in_progress) {
-            let banner = format!("{}: stage fixes · C continue · X abort", op.label());
-            frame.render_widget(
-                Paragraph::new(truncate(&banner, inner.width as usize)).style(theme.label_tag),
-                Rect { height: 1, ..inner },
-            );
-            inner.y += 1;
-            inner.height = inner.height.saturating_sub(1);
-        }
-        let height = inner.height as usize;
-        self.set_viewport(height);
-        let width = inner.width as usize;
-        let start = self.cursor.offset.min(self.rows.len());
-        let end = (start + height).min(self.rows.len());
-        let lines: Vec<Line> = (start..end)
-            .map(|i| {
-                let line = self.row_line(&self.rows[i], width, theme);
-                if i == self.cursor.selected {
-                    line.patch_style(if focused {
-                        theme.selected
-                    } else {
-                        theme.selected_unfocused
-                    })
-                } else {
-                    line
-                }
-            })
-            .collect();
-        frame.render_widget(Paragraph::new(lines), inner);
     }
 }

@@ -6,12 +6,13 @@ use ratatui::layout::Position;
 
 use crate::app::App;
 use crate::convert;
+use crate::draw::{Hits, filter};
 use crate::modal::Modal;
-use crate::mouse::{MouseInput, MouseKind, MouseTarget};
+use crate::mouse::{MouseInput, MouseKind, MouseTarget, PanePart};
 use crate::panes::PaneId;
 
-/// Handles a terminal event.
-pub fn handle_event(app: &mut App, event: Event) {
+/// Handles a terminal event. `hits` is what the last frame drew.
+pub fn handle_event(app: &mut App, event: Event, hits: &Hits) {
     if let Event::Key(key) = &event {
         tracing::debug!(code = ?key.code, modifiers = ?key.modifiers, kind = ?key.kind, "key");
     }
@@ -19,7 +20,7 @@ pub fn handle_event(app: &mut App, event: Event) {
         // Windows reports releases too; only act on presses (and repeats).
         Event::Key(key) if key.kind != KeyEventKind::Release => app.key_pressed(convert::key_combo(&key)),
         Event::Mouse(m) if app.wants_mouse() => {
-            let input = mouse_input(app, &m);
+            let input = mouse_input(app, &m, hits);
             app.handle_mouse(input);
         }
         Event::Resize(..) => app.resized(),
@@ -28,7 +29,7 @@ pub fn handle_event(app: &mut App, event: Event) {
 }
 
 /// What a mouse event was over, from where things were drawn last frame.
-fn mouse_input(app: &App, m: &MouseEvent) -> MouseInput {
+fn mouse_input(app: &App, m: &MouseEvent, hits: &Hits) -> MouseInput {
     let kind = match m.kind {
         MouseEventKind::Down(MouseButton::Left) => MouseKind::Click,
         MouseEventKind::ScrollUp => MouseKind::ScrollUp,
@@ -38,23 +39,31 @@ fn mouse_input(app: &App, m: &MouseEvent) -> MouseInput {
     MouseInput {
         kind,
         ctrl: m.modifiers.contains(KeyModifiers::CONTROL),
-        target: target_at(app, Position::new(m.column, m.row)),
+        target: target_at(app, Position::new(m.column, m.row), hits),
     }
 }
 
-fn target_at(app: &App, pos: Position) -> MouseTarget {
+fn target_at(app: &App, pos: Position, hits: &Hits) -> MouseTarget {
     if app.error().is_none()
         && let Some(Modal::Filter(panel)) = app.modal()
     {
-        return MouseTarget::Filter(panel.spot_at(convert::rect(app.main_area()), pos));
+        return MouseTarget::Filter(filter::spot_at(panel, convert::rect(app.main_area()), pos));
     }
     let Some(&(pane, area)) = app.pane_areas().iter().find(|(_, r)| r.contains(pos.x, pos.y)) else {
         return MouseTarget::None;
     };
     let body_row = (pos.y > area.y && pos.y < area.bottom().saturating_sub(1)).then(|| (pos.y - area.y - 1) as usize);
     let part = match pane {
-        PaneId::Branches => app.branches().part_at(pos),
-        PaneId::Details => app.details().part_at(pos),
+        PaneId::Branches => hits
+            .tabs
+            .iter()
+            .find(|(_, y, xs)| *y == pos.y && xs.contains(&pos.x))
+            .map(|&(tab, ..)| PanePart::Tab(tab)),
+        PaneId::Details => match (hits.files, hits.diff) {
+            (Some(rows), _) if rows.contains(pos) => Some(PanePart::FileRow((pos.y - rows.y) as usize)),
+            (_, Some(diff)) if diff.contains(pos) => Some(PanePart::Diff),
+            _ => None,
+        },
         _ => None,
     };
     MouseTarget::Pane { pane, body_row, part }

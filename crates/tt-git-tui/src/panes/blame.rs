@@ -10,11 +10,6 @@
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use ratatui::Frame;
-use ratatui::layout::{Constraint, Layout, Rect};
-use ratatui::style::{Color, Style};
-use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, Paragraph, Wrap};
 use tt_git_core::time::{SharedClock, clock_time, relative};
 use tt_git_core::{Blame, BlameCommit, Recency, follow_line};
 
@@ -26,26 +21,25 @@ use crate::jobs::Ctx;
 use crate::keymap::{Command, KeyCode, KeyCombo, KeyModifiers};
 use crate::search::{LineSearch, SearchKey};
 use crate::syntax::LineTokens;
-use crate::tui_theme::Theme;
-use crate::widgets::{Cursor, expand_tabs, fit, fit_right, marked_code_spans};
+use crate::widgets::Cursor;
 
 /// Ids for blame loads, unique across views so a late result can't land
 /// in a view opened after it.
 static NEXT_LOAD: AtomicU64 = AtomicU64::new(1);
 
 /// Width of the author (who) column.
-const WHO_WIDTH: usize = 14;
+pub const WHO_WIDTH: usize = 14;
 /// Below this width the commit and summary (why) column is left out.
-const WHY_MIN_WIDTH: u16 = 100;
+pub const WHY_MIN_WIDTH: u16 = 100;
 /// The most rows the commit details take below the code.
-const COMMIT_ROWS: u16 = 10;
+pub const COMMIT_ROWS: u16 = 10;
 /// The largest count digits can type.
 const MAX_COUNT: usize = 9_999_999;
 
 /// One version of the file: the one opened, then one more for each `[`
 /// or `{`.
 #[derive(Debug)]
-struct Level {
+pub struct Level {
     id: u64,
     /// Which version this is, still to be found from another one's.
     step: Option<Step>,
@@ -55,19 +49,19 @@ struct Level {
     rev: Option<String>,
     /// How the title names `rev`: `working tree`, `HEAD`, `19373b2^`.
     label: String,
-    path: String,
-    blame: Option<Result<Blame, String>>,
+    pub path: String,
+    pub blame: Option<Result<Blame, String>>,
     /// When the file last changed in a commit, as of `rev`.
     changed: Option<i64>,
     /// How this version stands against `HEAD`'s.
-    recency: Option<Recency>,
+    pub recency: Option<Recency>,
     /// The code, line by line.
-    syntax: LineTokens,
+    pub syntax: LineTokens,
     /// Each commit's index into the theme's heat colors, by age.
-    heat: Vec<usize>,
+    pub heat: Vec<usize>,
     /// Each commit's index into the theme's author colors.
-    authors: Vec<usize>,
-    cursor: Cursor,
+    pub authors: Vec<usize>,
+    pub cursor: Cursor,
     /// The line (from 1) to select once the blame arrives, when there's no
     /// newer version to follow it from.
     want_line: u32,
@@ -150,11 +144,13 @@ impl Level {
         });
     }
 
-    fn blame(&self) -> Option<&Blame> {
+    pub fn blame(&self) -> Option<&Blame> {
         self.blame.as_ref()?.as_ref().ok()
     }
 
-    fn len(&self) -> usize {
+    /// How many lines the blame has; 0 until it's loaded.
+    #[allow(clippy::len_without_is_empty)]
+    pub fn len(&self) -> usize {
         self.blame().map_or(0, |b| b.lines.len())
     }
 
@@ -163,7 +159,7 @@ impl Level {
             .map_or_else(Vec::new, |b| b.lines.iter().map(|l| l.text.as_str()).collect())
     }
 
-    fn selected(&self) -> Option<(&BlameCommit, &str, u32)> {
+    pub fn selected(&self) -> Option<(&BlameCommit, &str, u32)> {
         let blame = self.blame()?;
         let line = blame.lines.get(self.cursor.selected)?;
         Some((&blame.commits[line.commit], &blame.paths[line.path], line.orig_line))
@@ -179,18 +175,18 @@ impl Level {
 #[derive(Debug)]
 pub struct BlameView {
     /// Newest first; the last is shown.
-    levels: Vec<Level>,
-    dates: DateStyle,
-    clock: SharedClock,
+    pub levels: Vec<Level>,
+    pub dates: DateStyle,
+    pub clock: SharedClock,
     /// The selected line's commit details show below the code.
-    show_commit: bool,
+    pub show_commit: bool,
     /// Commit messages below the subject line, by commit; `None` while loading.
-    messages: HashMap<String, Option<String>>,
+    pub messages: HashMap<String, Option<String>>,
     /// A count being typed, vim style.
     count: Option<usize>,
     /// The count for the command the last key resolves to.
     pending: Option<usize>,
-    search: LineSearch,
+    pub search: LineSearch,
 }
 
 impl BlameView {
@@ -219,7 +215,7 @@ impl BlameView {
         }
     }
 
-    fn level(&self) -> &Level {
+    pub fn level(&self) -> &Level {
         self.levels.last().expect("a blame view has a level")
     }
 
@@ -229,7 +225,7 @@ impl BlameView {
 
     /// The version on screen: the newest, or while an older one `[` asked
     /// for is loading, the one it steps back from.
-    fn shown(&self) -> usize {
+    pub fn shown(&self) -> usize {
         let last = self.levels.len() - 1;
         if self.levels[last].blame.is_some() {
             return last;
@@ -447,19 +443,6 @@ impl BlameView {
             text.push_str(" + uncommitted changes");
         }
         Some(text)
-    }
-
-    /// Whether the version shown is the newest, for the title: `latest`,
-    /// or how many commits have changed the file since, in a color that
-    /// stands out. `None` until it's loaded.
-    pub fn recency(&self, theme: &Theme) -> Option<Span<'static>> {
-        let (text, style) = match self.level().recency? {
-            Recency::Latest => ("latest".to_string(), theme.blame_latest),
-            Recency::Behind(1) => ("1 newer commit".to_string(), theme.blame_older),
-            Recency::Behind(n) => (format!("{n} newer commits"), theme.blame_older),
-            Recency::Elsewhere => ("not on HEAD".to_string(), theme.blame_older),
-        };
-        Some(Span::styled(text, style))
     }
 
     /// The selected line and how many there are, like `2/5`, once loaded.
@@ -699,189 +682,6 @@ impl BlameView {
         }
         level.cursor.scroll_into_view(rows);
     }
-
-    pub fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
-        let commit_rows = if self.show_commit && self.levels[self.shown()].len() > 0 {
-            COMMIT_ROWS.min(area.height / 2)
-        } else {
-            0
-        };
-        let [code_area, commit_area] =
-            Layout::vertical([Constraint::Fill(1), Constraint::Length(commit_rows)]).areas(area);
-        self.draw_lines(frame, code_area, focused, theme);
-        if commit_rows > 0 {
-            self.draw_commit(frame, commit_area, theme);
-        }
-    }
-
-    /// Each line, reading right to left from the code: when (age stripe and
-    /// date), who, and why (the commit and its summary, where its lines start).
-    fn draw_lines(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
-        let now = self.clock.now();
-        let dates = self.dates;
-        let clock = self.clock.clone();
-        let height = area.height as usize;
-        self.set_viewport(height);
-        let shown = self.shown();
-        let search = &self.search;
-        let level = &self.levels[shown];
-        match &level.blame {
-            None => {
-                frame.render_widget(Paragraph::new("loading…").style(theme.muted), area);
-                return;
-            }
-            Some(Err(e)) => {
-                let text = format!("could not blame {}: {e}", level.path);
-                frame.render_widget(Paragraph::new(text).style(theme.error).wrap(Wrap { trim: false }), area);
-                return;
-            }
-            Some(Ok(_)) => {}
-        }
-        let blame = level.blame().expect("checked above");
-        let selected = level.cursor.selected;
-        let selected_commit = blame.lines.get(selected).map(|l| l.commit);
-
-        let num_width = blame.lines.len().to_string().len().max(3);
-        let when_width = dates.width();
-        let summary_width = if area.width >= WHY_MIN_WIDTH {
-            (area.width as usize / 6).clamp(12, 30)
-        } else {
-            0
-        };
-        // " 1234567  summary" before the author.
-        let why_width = if summary_width > 0 {
-            1 + 7 + 2 + summary_width
-        } else {
-            0
-        };
-        let gutter = why_width + 1 + WHO_WIDTH + 1 + when_width + 1 + 1 + num_width + 1;
-        let code_width = (area.width as usize).saturating_sub(gutter);
-
-        let start = level.cursor.offset.min(blame.lines.len());
-        let end = (start + height).min(blame.lines.len());
-        let mut rows = Vec::with_capacity(end - start);
-        for i in start..end {
-            let line = &blame.lines[i];
-            let commit = &blame.commits[line.commit];
-            let uncommitted = commit.is_uncommitted();
-            let first = i == 0 || blame.lines[i - 1].commit != line.commit;
-            let mut spans = Vec::with_capacity(12);
-            if why_width > 0 {
-                if !first {
-                    spans.push(Span::raw(" ".repeat(why_width)));
-                } else if uncommitted {
-                    spans.push(Span::raw(" "));
-                    spans.push(Span::styled(fit("Not committed yet", why_width - 1), theme.diff_add));
-                } else {
-                    spans.push(Span::raw(" "));
-                    spans.push(Span::styled(fit(commit.short(), 7), theme.sha));
-                    spans.push(Span::raw("  "));
-                    spans.push(Span::styled(fit(&commit.summary, summary_width), theme.author));
-                }
-            }
-            spans.push(Span::raw(" "));
-            if uncommitted {
-                spans.push(Span::styled(fit_right("You", WHO_WIDTH), theme.blame_uncommitted));
-            } else {
-                let style = Style::new().fg(author_color(level.authors.get(line.commit).copied(), theme));
-                spans.push(Span::styled(fit_right(&commit.author, WHO_WIDTH), style));
-            }
-            spans.push(Span::raw(" "));
-            let when = match dates {
-                DateStyle::Relative => relative(now, commit.author_time),
-                DateStyle::Clock => clock_time(commit.author_time, clock.utc_offset(commit.author_time)),
-            };
-            spans.push(Span::styled(fit_right(&when, when_width), theme.date));
-            spans.push(Span::raw(" "));
-            let stripe = if uncommitted {
-                theme.blame_uncommitted
-            } else {
-                Style::new().fg(heat_color(level.heat.get(line.commit).copied(), theme))
-            };
-            spans.push(Span::styled("▌", stripe));
-            spans.push(Span::styled(format!("{:>num_width$}", i + 1), theme.muted));
-            spans.push(Span::raw(" "));
-            let tokens = level.syntax.get(i).and_then(Option::as_ref);
-            let text = expand_tabs(&line.text);
-            let marks = search.ranges(&text);
-            let code = marked_code_spans(&text, tokens, Style::new(), theme, code_width, true, &marks);
-            spans.extend(code.into_iter().map(|s| Span::styled(s.content.into_owned(), s.style)));
-            let row = Line::from(spans);
-            rows.push(if i == selected {
-                row.patch_style(if focused {
-                    theme.selected
-                } else {
-                    theme.selected_unfocused
-                })
-            } else if Some(line.commit) == selected_commit {
-                row.patch_style(theme.selected_unfocused)
-            } else {
-                row
-            });
-        }
-        frame.render_widget(Paragraph::new(rows), area);
-    }
-
-    /// The selected line's commit: subject, who and when, and its message.
-    fn draw_commit(&self, frame: &mut Frame, area: Rect, theme: &Theme) {
-        let level = &self.levels[self.shown()];
-        let Some((commit, _, _)) = level.selected() else { return };
-        let blame = level.blame().expect("a line is selected");
-        let index = blame.commits.iter().position(|c| c.oid == commit.oid).unwrap_or(0);
-        let count = blame.lines_from(index);
-        let title = if commit.is_uncommitted() {
-            "Not committed yet".to_string()
-        } else {
-            format!("Commit {}", commit.short())
-        };
-        let block = Block::new()
-            .borders(Borders::TOP)
-            .border_style(theme.border)
-            .title(Line::styled(title, theme.muted));
-        let inner = block.inner(area);
-        frame.render_widget(block, area);
-
-        let lines_here = |what: &str| {
-            let s = if count == 1 { "" } else { "s" };
-            format!("{count} line{s} in this file {what}")
-        };
-        let mut lines = Vec::new();
-        if commit.is_uncommitted() {
-            lines.push(Line::styled("Changed in the working tree", theme.diff_header));
-            lines.push(Line::styled(lines_here("aren't committed yet"), theme.author));
-        } else {
-            let when = format!(
-                "{} ({} ago)",
-                clock_time(commit.author_time, self.clock.utc_offset(commit.author_time)),
-                relative(self.clock.now(), commit.author_time)
-            );
-            lines.push(Line::styled(commit.summary.clone(), theme.diff_header));
-            lines.push(Line::from(vec![
-                Span::styled(commit.short().to_string(), theme.sha),
-                Span::styled(
-                    format!(
-                        " · {} <{}> · {when} · {}",
-                        commit.author,
-                        commit.author_mail,
-                        lines_here("come from it")
-                    ),
-                    theme.author,
-                ),
-            ]));
-            match self.messages.get(&commit.oid) {
-                Some(Some(body)) if !body.is_empty() => {
-                    lines.push(Line::raw(""));
-                    lines.extend(body.lines().map(|l| Line::raw(expand_tabs(l))));
-                }
-                Some(None) => {
-                    lines.push(Line::raw(""));
-                    lines.push(Line::styled("loading…", theme.muted));
-                }
-                _ => {}
-            }
-        }
-        frame.render_widget(Paragraph::new(lines), inner);
-    }
 }
 
 /// Each commit's heat bucket by age, newest 0: commits ranked by when they
@@ -908,11 +708,6 @@ fn heat(blame: &Blame) -> Vec<usize> {
             newer * buckets / times.len()
         })
         .collect()
-}
-
-fn heat_color(bucket: Option<usize>, theme: &Theme) -> Color {
-    let last = theme.blame_heat.len() - 1;
-    theme.blame_heat[bucket.unwrap_or(last).min(last)]
 }
 
 /// Each commit's index into the theme's author colors. Every author starts
@@ -957,10 +752,6 @@ fn author_slot(author: &str, slots: usize) -> usize {
         (h ^ u64::from(b)).wrapping_mul(0x0100_0000_01b3)
     });
     (hash % slots as u64) as usize
-}
-
-fn author_color(slot: Option<usize>, theme: &Theme) -> Color {
-    theme.blame_authors[slot.unwrap_or(0) % theme.blame_authors.len()]
 }
 
 #[cfg(test)]

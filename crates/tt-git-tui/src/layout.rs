@@ -12,8 +12,10 @@
 //!
 //! The details pane either has a leaf of its own (always shown) or opens in
 //! place of the one node marked `details = true`.
+//!
+//! [`Layout::resolve`] says which panes show and how the splits share the
+//! space; each front end turns that into areas on its screen.
 
-use ratatui::layout::{Constraint, Direction, Rect};
 use serde::Deserialize;
 
 use crate::panes::PaneId;
@@ -160,27 +162,33 @@ pub struct View {
     pub wide: bool,
 }
 
-/// A node with hidden panes pruned and sizes turned into fill weights.
-enum Placed {
+/// The layout tree with hidden panes pruned and sizes turned into fill
+/// weights: each child of a split takes its weight's share of the space.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Placed {
     Pane(PaneId),
     Split(Split, Vec<(u16, Placed)>),
 }
 
-impl Layout {
-    /// Where each visible pane goes inside `area`.
-    pub fn place(&self, area: Rect, view: View) -> Vec<(PaneId, Rect)> {
-        let mut out = Vec::new();
-        if let Some(placed) = resolve(&self.root, view) {
-            assign(&placed, area, &mut out);
+impl Placed {
+    fn contains(&self, pane: PaneId) -> bool {
+        match self {
+            Placed::Pane(p) => *p == pane,
+            Placed::Split(_, children) => children.iter().any(|(_, c)| c.contains(pane)),
         }
-        out
+    }
+}
+
+impl Layout {
+    /// The panes on screen in `view`, and how they share it; `None` when
+    /// none are.
+    pub fn resolve(&self, view: View) -> Option<Placed> {
+        resolve(&self.root, view)
     }
 
     /// Whether `pane` is on screen in `view`.
     pub fn shows(&self, pane: PaneId, view: View) -> bool {
-        self.place(Rect::new(0, 0, 100, 100), view)
-            .iter()
-            .any(|(p, _)| *p == pane)
+        self.resolve(view).is_some_and(|placed| placed.contains(pane))
     }
 }
 
@@ -207,66 +215,10 @@ fn resolve(node: &Node, view: View) -> Option<Placed> {
     }
 }
 
-fn assign(placed: &Placed, area: Rect, out: &mut Vec<(PaneId, Rect)>) {
-    match placed {
-        Placed::Pane(pane) => out.push((*pane, area)),
-        Placed::Split(split, children) => {
-            let direction = match split {
-                Split::Rows => Direction::Vertical,
-                Split::Columns => Direction::Horizontal,
-            };
-            let areas = ratatui::layout::Layout::default()
-                .direction(direction)
-                .constraints(children.iter().map(|(w, _)| Constraint::Fill(*w)))
-                .split(area);
-            for ((_, child), area) in children.iter().zip(areas.iter()) {
-                assign(child, *area, out);
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::config::Config;
-
-    const AREA: Rect = Rect::new(0, 0, 100, 40);
-
-    fn areas(layout: &Layout, view: View) -> Vec<(PaneId, Rect)> {
-        layout.place(AREA, view)
-    }
-
-    #[test]
-    fn default_puts_graph_over_status_and_branches() {
-        let placed = areas(&Layout::default(), View::default());
-        assert_eq!(
-            placed,
-            vec![
-                (PaneId::Graph, Rect::new(0, 0, 100, 28)),
-                (PaneId::Status, Rect::new(0, 28, 50, 12)),
-                (PaneId::Branches, Rect::new(50, 28, 50, 12)),
-            ]
-        );
-    }
-
-    #[test]
-    fn opened_details_replaces_its_host() {
-        let placed = areas(
-            &Layout::default(),
-            View {
-                details: true,
-                ..View::default()
-            },
-        );
-        assert_eq!(
-            placed,
-            vec![
-                (PaneId::Graph, Rect::new(0, 0, 100, 28)),
-                (PaneId::Details, Rect::new(0, 28, 100, 12)),
-            ]
-        );
-    }
 
     fn classic() -> Layout {
         Config::parse(
@@ -284,36 +236,23 @@ mod tests {
     }
 
     #[test]
-    fn details_leaf_is_always_shown() {
-        let panes: Vec<_> = areas(&classic(), View::default()).into_iter().map(|(p, _)| p).collect();
-        assert_eq!(
-            panes,
-            [PaneId::Status, PaneId::Branches, PaneId::Graph, PaneId::Details]
-        );
-    }
-
-    #[test]
-    fn wide_keeps_graph_and_details_at_full_width() {
-        let wide = View {
+    fn shows_what_the_view_leaves() {
+        let open = View {
             details: true,
-            wide: true,
+            ..View::default()
         };
-        for layout in [Layout::default(), classic()] {
-            let placed = areas(&layout, wide);
-            assert_eq!(placed.len(), 2, "{placed:?}");
-            assert_eq!(placed[0].0, PaneId::Graph);
-            assert_eq!(placed[1].0, PaneId::Details);
-            assert!(placed.iter().all(|(_, r)| r.x == 0 && r.width == 100), "{placed:?}");
-        }
-    }
-
-    #[test]
-    fn wide_with_details_closed_gives_the_graph_everything() {
         let wide = View {
             wide: true,
             ..View::default()
         };
-        assert_eq!(areas(&Layout::default(), wide), vec![(PaneId::Graph, AREA)]);
+        let default = Layout::default();
+        assert!(default.shows(PaneId::Status, View::default()));
+        assert!(!default.shows(PaneId::Details, View::default()));
+        assert!(default.shows(PaneId::Details, open));
+        assert!(!default.shows(PaneId::Status, open));
+        assert!(!default.shows(PaneId::Branches, wide));
+        assert!(default.shows(PaneId::Graph, wide));
+        assert!(classic().shows(PaneId::Details, View::default()));
     }
 
     fn parse_err(layout: &str) -> String {
