@@ -4,9 +4,10 @@
 //! [`Action`]. The tracker counts in-flight jobs so tests can wait until the
 //! app is idle instead of sleeping.
 
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, OnceLock};
 
+use tokio::runtime::Handle;
 use tokio::sync::mpsc::UnboundedSender;
 
 use crate::action::Action;
@@ -40,6 +41,8 @@ impl Drop for JobGuard {
 pub struct Ctx {
     tx: UnboundedSender<Action>,
     jobs: JobTracker,
+    /// The runtime jobs run on, shared by every clone once set.
+    runtime: Arc<OnceLock<Handle>>,
 }
 
 impl Ctx {
@@ -47,7 +50,16 @@ impl Ctx {
         Self {
             tx,
             jobs: JobTracker::default(),
+            runtime: Arc::default(),
         }
+    }
+
+    /// Runs jobs on `runtime` from now on, so they can be started from any
+    /// thread (a GUI's main thread isn't in a tokio runtime). Until then
+    /// they run on the runtime of the thread that starts them. Only the
+    /// first call counts.
+    pub fn set_runtime(&self, runtime: Handle) {
+        let _ = self.runtime.set(runtime);
     }
 
     pub fn jobs(&self) -> &JobTracker {
@@ -62,7 +74,7 @@ impl Ctx {
 
     /// Runs blocking work (git commands) on tokio's blocking pool and sends
     /// its resulting action back to the app. Must be called inside a tokio
-    /// runtime.
+    /// runtime unless [`set_runtime`](Self::set_runtime) gave it one.
     pub fn spawn<F>(&self, work: F)
     where
         F: FnOnce() -> Action + Send + 'static,
@@ -94,13 +106,17 @@ impl Ctx {
     {
         let guard = self.jobs.start();
         let ctx = self.clone();
-        tokio::task::spawn_blocking(move || {
+        let job = move || {
             let action = work(&ctx);
             // Send before the guard drops so an idle check never sees
             // "no jobs" while the result is still unsent.
             ctx.emit(action);
             drop(guard);
-        });
+        };
+        match self.runtime.get() {
+            Some(runtime) => drop(runtime.spawn_blocking(job)),
+            None => drop(tokio::task::spawn_blocking(job)),
+        }
     }
 }
 

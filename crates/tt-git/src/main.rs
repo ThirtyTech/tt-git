@@ -121,6 +121,7 @@ fn main() -> Result<()> {
         // Like lazygit's "<repo> - Lazygit": lets terminal multiplexers and
         // their plugins tell tt-git is running when the OS only reports the shell.
         let _ = crossterm::execute!(std::io::stdout(), crossterm::terminal::SetTitle(app.terminal_title()));
+        app.set_runtime(runtime.handle().clone());
         result = runtime.block_on(tt_git_tui::runner::run(&mut terminal, &mut app, &mut rx));
         let Some(repo) = app.take_reopen().filter(|_| result.is_ok()) else {
             break;

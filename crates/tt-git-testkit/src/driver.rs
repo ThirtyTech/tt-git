@@ -112,6 +112,7 @@ impl TestDriver {
         let (app, rx) = {
             let _guard = runtime.enter();
             let (mut app, rx) = App::new(config, repo, Arc::new(FixedClock(NOW))).expect("app starts");
+            app.set_runtime(runtime.handle().clone());
             if let Some(opts) = plugins {
                 app.enable_plugins(opts);
             }

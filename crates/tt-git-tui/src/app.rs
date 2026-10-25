@@ -391,6 +391,12 @@ impl App {
         Ok((app, rx))
     }
 
+    /// Runs background jobs on `runtime`, so the app can be driven from a
+    /// thread outside it. Call before [`start`](Self::start).
+    pub fn set_runtime(&self, runtime: tokio::runtime::Handle) {
+        self.ctx.set_runtime(runtime);
+    }
+
     /// Kicks off the initial loads and the file watcher.
     pub fn start(&mut self) {
         self.update(Action::Refresh);
