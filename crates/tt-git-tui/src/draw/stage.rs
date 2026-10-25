@@ -6,12 +6,13 @@ use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, Paragraph};
 
+use super::Hits;
 use crate::panes::{StageSideId, StageView};
 use crate::tui_theme::Theme;
 use crate::view::TextSpan;
 use crate::view::stage::StageLayout;
 
-pub fn draw_stage(stage: &mut StageView, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
+pub fn draw_stage(stage: &mut StageView, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme, hits: &mut Hits) {
     let (first, second) = match stage.layout(area.width as usize) {
         StageLayout::Message(msg) => {
             frame.render_widget(Paragraph::new(msg).style(theme.muted), area);
@@ -45,11 +46,19 @@ pub fn draw_stage(stage: &mut StageView, frame: &mut Frame, area: Rect, focused:
             (top, bottom)
         }
     };
-    draw_side(stage, frame, StageSideId::Unstaged, first, focused, theme);
-    draw_side(stage, frame, StageSideId::Staged, second, focused, theme);
+    draw_side(stage, frame, StageSideId::Unstaged, first, focused, theme, hits);
+    draw_side(stage, frame, StageSideId::Staged, second, focused, theme, hits);
 }
 
-fn draw_side(stage: &mut StageView, frame: &mut Frame, id: StageSideId, area: Rect, focused: bool, theme: &Theme) {
+fn draw_side(
+    stage: &mut StageView,
+    frame: &mut Frame,
+    id: StageSideId,
+    area: Rect,
+    focused: bool,
+    theme: &Theme,
+    hits: &mut Hits,
+) {
     if area.height == 0 {
         return;
     }
@@ -64,6 +73,9 @@ fn draw_side(stage: &mut StageView, frame: &mut Frame, id: StageSideId, area: Re
     }
     let height = body.height as usize;
     stage.set_viewport(id, height);
+    if height > 0 {
+        hits.stage.push((id, body));
+    }
     let highlight = if focused {
         theme.selected
     } else {

@@ -59,6 +59,15 @@ fn target_at(app: &App, pos: Position, hits: &Hits) -> MouseTarget {
             .iter()
             .find(|(_, y, xs)| *y == pos.y && xs.contains(&pos.x))
             .map(|&(tab, ..)| PanePart::Tab(tab)),
+        PaneId::Details if !hits.stage.is_empty() => {
+            hits.stage
+                .iter()
+                .find(|(_, rows)| rows.contains(pos))
+                .map(|&(side, rows)| PanePart::StageRow {
+                    side,
+                    row: (pos.y - rows.y) as usize,
+                })
+        }
         PaneId::Details => match (hits.files, hits.diff) {
             (Some(rows), _) if rows.contains(pos) => Some(PanePart::FileRow((pos.y - rows.y) as usize)),
             (_, Some(diff)) if diff.contains(pos) => Some(PanePart::Diff),

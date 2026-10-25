@@ -13,7 +13,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::app::{App, StatusLook, Zoom};
 use crate::convert;
 use crate::layout::View;
-use crate::panes::{BranchTab, PaneId};
+use crate::panes::{BranchTab, PaneId, StageSideId};
 use crate::tui_theme::Theme;
 use spans::truncate_spans;
 
@@ -225,6 +225,8 @@ pub struct Hits {
     pub files: Option<Rect>,
     /// The details files view's diff.
     pub diff: Option<Rect>,
+    /// Each staging side's rows, under its title.
+    pub stage: Vec<(StageSideId, Rect)>,
 }
 
 /// The column where a pane drawn in `area` starts its title text, after the

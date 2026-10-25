@@ -216,3 +216,26 @@ fn brackets_step_through_files_in_a_file_diff() {
     t.press("[").wait_idle();
     assert_eq!(t.app().details().subject(), Some(&DetailsSubject::File("a.txt".into())));
 }
+
+#[test]
+fn a_click_picks_a_hunk_or_a_line() {
+    let sb = two_hunks();
+    let mut t = TestDriver::new(&sb);
+    open(&mut t, "f.txt");
+    let selected = |t: &TestDriver| t.app().details().stage().unwrap().selected_hunk();
+    assert_eq!(selected(&t), 0);
+    // The second hunk's heading, wherever it was drawn.
+    t.click_text("@@ -11,");
+    assert_eq!(selected(&t), 1);
+    assert_eq!(t.app().focus(), PaneId::Details);
+    t.press("space");
+    assert!(index(&sb, "f.txt").contains("fourteen"), "the clicked hunk was staged");
+    assert!(!index(&sb, "f.txt").contains("two"));
+
+    // In line mode, on a changed line: that line.
+    t.press("a");
+    t.click_text("+two");
+    let stage = t.app().details().stage().unwrap();
+    assert!(stage.line_mode());
+    assert!(stage.picked((0, 2)) && !stage.picked((0, 1)), "the added line");
+}

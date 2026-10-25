@@ -36,7 +36,7 @@ impl Draw for DetailsPane {
             return;
         }
         if let Some(view) = &mut self.stage {
-            draw_stage(view, frame, inner, focused, theme);
+            draw_stage(view, frame, inner, focused, theme, hits);
         } else if let Some(view) = &mut self.blame {
             draw_blame(view, frame, inner, focused, theme);
         } else if self.files.is_some() {

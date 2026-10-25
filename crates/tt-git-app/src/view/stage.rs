@@ -226,6 +226,33 @@ mod tests {
     }
 
     #[test]
+    fn a_click_picks_the_hunk_or_line_under_it() {
+        let mut v = view("f.txt", Ok(two_hunks("f.txt")), Ok(two_hunks("f.txt")));
+        v.set_viewport(StageSideId::Unstaged, 10);
+        // Rows: @@, -a, +a, x, @@, y, +b.
+        assert!(v.click(StageSideId::Unstaged, 5));
+        assert_eq!(v.selected_hunk(), 1);
+        assert!(!v.click(StageSideId::Unstaged, 7), "past the last row");
+        assert_eq!(v.selected_hunk(), 1);
+        // The other side becomes active.
+        assert!(v.click(StageSideId::Staged, 0));
+        assert_eq!((v.side(), v.selected_hunk()), (StageSideId::Staged, 0));
+        // Lines: on a heading or an unchanged line, the nearest change below,
+        // else above.
+        v.on_command(Command::ToggleLineMode, &ctx());
+        v.click(StageSideId::Staged, 4);
+        assert!(v.picked((1, 1)), "the heading picks +b");
+        v.click(StageSideId::Staged, 3);
+        assert!(v.picked((0, 1)), "x, after the hunk's changes, picks +a");
+        v.click(StageSideId::Staged, 1);
+        assert!(v.picked((0, 0)) && !v.picked((0, 1)));
+        // A range being picked stretches to the click.
+        v.on_command(Command::SelectRange, &ctx());
+        v.click(StageSideId::Staged, 2);
+        assert!(v.picked((0, 0)) && v.picked((0, 1)));
+    }
+
+    #[test]
     fn says_so_while_loading_and_when_there_is_nothing() {
         assert_eq!(
             StageView::new(entry("f.txt")).layout(200),

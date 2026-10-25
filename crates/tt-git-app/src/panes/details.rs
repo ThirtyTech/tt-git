@@ -861,8 +861,15 @@ impl Component for DetailsPane {
         }
     }
 
-    /// In the files view, a click on a file shows its diff.
+    /// In the files view, a click on a file shows its diff; staging, a
+    /// click on a row picks its hunk or line.
     fn on_click_part(&mut self, part: PanePart, ctx: &Ctx) -> bool {
+        if let PanePart::StageRow { side, row } = part {
+            if let Some(view) = &mut self.stage {
+                view.click(side, row);
+            }
+            return true;
+        }
         if self.stage.is_some() || self.blame.is_some() {
             return false;
         }
