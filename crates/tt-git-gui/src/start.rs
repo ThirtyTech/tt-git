@@ -4,11 +4,11 @@
 
 use std::path::{Path, PathBuf};
 
-use gpui::component::Root;
+use gpui::component::{Root, TitleBar};
 use gpui::{
     App, AppContext, Bounds, Context, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyDownEvent,
-    MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, TitlebarOptions, Window, WindowBounds,
-    WindowHandle, WindowOptions, div, px, size,
+    MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, Window, WindowBounds, WindowHandle,
+    WindowOptions, div, px, size,
 };
 use tt_git_app::theme::Theme;
 use tt_git_app::view::StyleRole;
@@ -48,10 +48,9 @@ pub fn open(error: Option<String>, cx: &mut App) -> gpui::Result<WindowHandle<Ro
             size(px(SIZE.0), px(SIZE.1)),
             cx,
         ))),
-        titlebar: Some(TitlebarOptions {
-            title: Some("tt-git".into()),
-            ..Default::default()
-        }),
+        titlebar: Some(crate::menus::bar::titlebar_options("tt-git".into())),
+        app_owns_titlebar_drag: true,
+        icon: crate::menus::icon::window_icon(),
         app_id: Some("tt-git".into()),
         ..Default::default()
     };
@@ -197,20 +196,21 @@ impl Render for StartView {
             .recent
             .is_empty()
             .then(|| div().px_2().text_color(muted).child("No repositories opened yet."));
-        div()
-            .id("start")
-            .track_focus(&self.focus)
-            .on_key_down(cx.listener(Self::key_down))
-            .size_full()
+        // GNOME on Wayland draws no title bar, so the window draws its own
+        // (as the repository windows do, menus::bar).
+        let title_bar = TitleBar::new()
+            .bg(theme.background)
+            .border_color(theme.fg(StyleRole::Border))
+            .child(div().text_color(theme.fg(StyleRole::Title)).child("tt-git"))
+            .child(div());
+        let body = div()
+            .id("start-body")
+            .flex_1()
+            .min_h_0()
             .flex()
             .flex_col()
             .gap_3()
             .p_4()
-            .bg(theme.background)
-            .text_color(theme.foreground)
-            .font_family(self.font.family.clone())
-            .text_size(self.font.size)
-            .line_height(self.font.line_height)
             .child(
                 div()
                     .text_color(theme.fg(StyleRole::TitleFocused))
@@ -245,7 +245,21 @@ impl Render for StartView {
                 div()
                     .text_color(muted)
                     .child("enter open · ↑↓ pick · o browse · q close"),
-            )
+            );
+        div()
+            .id("start")
+            .track_focus(&self.focus)
+            .on_key_down(cx.listener(Self::key_down))
+            .size_full()
+            .flex()
+            .flex_col()
+            .bg(theme.background)
+            .text_color(theme.foreground)
+            .font_family(self.font.family.clone())
+            .text_size(self.font.size)
+            .line_height(self.font.line_height)
+            .child(title_bar)
+            .child(body)
     }
 }
 

@@ -233,6 +233,13 @@ pub fn install(path: PathBuf, cx: &mut App) {
         dirty: false,
         pending: None,
     });
+    // However the app ends (the last window closing, Quit), what's waiting
+    // is written.
+    cx.on_app_quit(|cx| {
+        flush(cx);
+        async {}
+    })
+    .detach();
 }
 
 /// `<state_dir>/gui.json`.

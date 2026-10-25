@@ -86,6 +86,7 @@ const REPOSITORY: &[&[Command]] = &[
     ],
     &[Command::Continue, Command::Abort, Command::Undo],
     &[Command::Agent],
+    &[Command::OpenRepository],
 ];
 
 /// Moving between panes and what the window shows.
