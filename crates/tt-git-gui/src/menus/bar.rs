@@ -33,7 +33,7 @@ pub fn titlebar_options(title: String) -> TitlebarOptions {
     }
 }
 
-/// The title bar: the menus (unless native), then the title.
+/// The title bar: the app icon, the menus (unless native), then the title.
 /// Picking an item gives the keys back to `focus`, the shell's handle, and
 /// sends it the item's action.
 pub fn title_bar(ui: &Ui, specs: &[MenuSpec], title: &str, focus: &FocusHandle) -> impl IntoElement {
@@ -47,11 +47,15 @@ pub fn title_bar(ui: &Ui, specs: &[MenuSpec], title: &str, focus: &FocusHandle) 
         .bg(theme.background)
         .border_color(theme.fg(StyleRole::Border))
         .child(
-            h_flex().gap_2().children(menus).child(
-                div()
-                    .text_color(theme.fg(StyleRole::Title))
-                    .child(SharedString::from(title.to_string())),
-            ),
+            h_flex()
+                .gap_2()
+                .children(super::icon::title_icon())
+                .children(menus)
+                .child(
+                    div()
+                        .text_color(theme.fg(StyleRole::Title))
+                        .child(SharedString::from(title.to_string())),
+                ),
         )
         // Keeps the title off the window controls.
         .child(div())
@@ -122,6 +126,21 @@ mod tests {
             .unwrap_or_else(|| panic!("{selector} drawn"));
         gui.cx.simulate_click(bounds.center(), Modifiers::none());
         gui.wait_idle();
+    }
+
+    #[gpui::test]
+    fn the_title_bar_starts_with_the_app_icon(cx: &mut TestAppContext) {
+        let sb = Sandbox::new();
+        sb.commit_file("a.txt", "a", "first");
+        let mut gui = Gui::open(cx, &sb);
+        gui.draw();
+        let icon = gui.cx.debug_bounds("title icon").expect("icon drawn");
+        assert_eq!(icon.size, gpui::size(gpui::px(16.), gpui::px(16.)));
+        assert!(icon.bottom() <= gpui::component::TITLE_BAR_HEIGHT, "{icon:?}");
+        if super::DRAWS_MENUS {
+            let menu = gui.cx.debug_bounds("menu tt-git").expect("menu drawn");
+            assert!(icon.right() <= menu.left(), "{icon:?} {menu:?}");
+        }
     }
 
     #[gpui::test]

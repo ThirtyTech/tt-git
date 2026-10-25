@@ -4,7 +4,7 @@
 
 use std::path::{Path, PathBuf};
 
-use gpui::component::{Root, TitleBar};
+use gpui::component::{Root, TitleBar, h_flex};
 use gpui::{
     App, AppContext, Bounds, Context, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyDownEvent,
     MouseButton, ParentElement, Render, StatefulInteractiveElement, Styled, Window, WindowBounds, WindowHandle,
@@ -201,7 +201,12 @@ impl Render for StartView {
         let title_bar = TitleBar::new()
             .bg(theme.background)
             .border_color(theme.fg(StyleRole::Border))
-            .child(div().text_color(theme.fg(StyleRole::Title)).child("tt-git"))
+            .child(
+                h_flex()
+                    .gap_2()
+                    .children(crate::menus::icon::title_icon())
+                    .child(div().text_color(theme.fg(StyleRole::Title)).child("tt-git")),
+            )
             .child(div());
         let body = div()
             .id("start-body")
@@ -273,5 +278,23 @@ fn display_path(path: &Path) -> String {
         Some(rest) if rest.as_os_str().is_empty() => "~".into(),
         Some(rest) => format!("~{}{}", std::path::MAIN_SEPARATOR, rest.display()),
         None => text,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::{TestAppContext, VisualTestContext};
+
+    #[gpui::test]
+    fn the_title_bar_starts_with_the_app_icon(cx: &mut TestAppContext) {
+        let window = cx.update(|cx| {
+            crate::init(cx);
+            super::open(None, cx).expect("start window opens")
+        });
+        let mut cx = VisualTestContext::from_window(window.into(), cx);
+        cx.run_until_parked();
+        let icon = cx.debug_bounds("title icon").expect("icon drawn");
+        assert_eq!(icon.size, gpui::size(gpui::px(16.), gpui::px(16.)));
+        assert!(icon.bottom() <= gpui::component::TITLE_BAR_HEIGHT, "{icon:?}");
     }
 }
