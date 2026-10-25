@@ -1,9 +1,19 @@
 //! The `[layout]` tree from config, solved the way the TUI's
 //! `draw/layout.rs` solves it (same [`View`] and [`Zoom`]), as nested flex
 //! containers with a resize handle between neighbours.
+//!
+//! Dragging a handle resizes the panes beside it. Each split keeps the
+//! sizes it was dragged to for as long as the window is open, even while
+//! the layout shows something else (details open, a pane zoomed): see
+//! [`KeptSplit`].
 
-use gpui::component::{ResizablePanelGroup, h_resizable, resizable_panel, v_resizable};
-use gpui::{AnyElement, Axis, IntoElement, ParentElement, Pixels, SharedString, Size, Styled, div, px};
+use std::collections::HashMap;
+
+use gpui::component::{ResizablePanel, ResizablePanelGroup, ResizableState, h_resizable, resizable_panel, v_resizable};
+use gpui::{
+    AnyElement, AppContext, Axis, Entity, Global, IntoElement, ParentElement, Pixels, RenderOnce, SharedString, Size,
+    Styled, Window, WindowId, div, px,
+};
 use tt_git_app::App;
 use tt_git_app::app::Zoom;
 use tt_git_app::layout::{Placed, Split, View};
@@ -67,10 +77,6 @@ fn node(placed: &Placed, size: Size<Pixels>, path: String, pane: &mut dyn FnMut(
                 Axis::Vertical => size.height,
             };
             let id = SharedString::from(format!("split{path}:{}", signature(placed)));
-            let group: ResizablePanelGroup = match axis {
-                Axis::Horizontal => h_resizable(id),
-                Axis::Vertical => v_resizable(id),
-            };
             let panels = children.iter().enumerate().map(|(i, (weight, child))| {
                 let share = length * (f32::from(*weight) / total as f32);
                 let child_size = match axis {
@@ -86,9 +92,68 @@ fn node(placed: &Placed, size: Size<Pixels>, path: String, pane: &mut dyn FnMut(
                 let element = node(child, child_size, format!("{path}.{i}"), pane);
                 resizable_panel().size(share.max(px(1.))).child(element)
             });
-            group.children(panels.collect::<Vec<_>>()).into_any_element()
+            KeptSplit {
+                id,
+                axis,
+                panels: panels.collect(),
+            }
+            .into_any_element()
         }
     }
+}
+
+/// A split whose sizes outlive its frames: its state is kept by window
+/// and id (the split's place and what it shows) in [`SplitStates`], where
+/// GPUI's own element state would be dropped as soon as a frame didn't
+/// draw it.
+#[derive(IntoElement)]
+struct KeptSplit {
+    id: SharedString,
+    axis: Axis,
+    panels: Vec<ResizablePanel>,
+}
+
+impl RenderOnce for KeptSplit {
+    fn render(self, window: &mut Window, cx: &mut gpui::App) -> impl IntoElement {
+        let state = split_state(window, &self.id, cx);
+        let group: ResizablePanelGroup = match self.axis {
+            Axis::Horizontal => h_resizable(self.id),
+            Axis::Vertical => v_resizable(self.id),
+        };
+        group.with_state(&state).children(self.panels)
+    }
+}
+
+/// Every split's sizes, by window and split id, for the session.
+#[derive(Default)]
+struct SplitStates(HashMap<(WindowId, SharedString), Entity<ResizableState>>);
+
+impl Global for SplitStates {}
+
+/// The state of split `id` in `window`, made the first time it's drawn.
+/// The window draws again whenever it changes (a drag), as it would for
+/// state GPUI keeps itself.
+fn split_state(window: &mut Window, id: &SharedString, cx: &mut gpui::App) -> Entity<ResizableState> {
+    let key = (window.window_handle().window_id(), id.clone());
+    if let Some(state) = cx.default_global::<SplitStates>().0.get(&key) {
+        return state.clone();
+    }
+    let state = cx.new(|_| ResizableState::default());
+    let handle = window.window_handle();
+    cx.observe(&state, move |_, cx| {
+        let _ = handle.update(cx, |_, window, _| window.refresh());
+    })
+    .detach();
+    cx.global_mut::<SplitStates>().0.insert(key, state.clone());
+    state
+}
+
+/// The sizes of the panes in split `id` of `window` along the split, as
+/// dragged or as first laid out; `None` before it's drawn.
+pub fn split_sizes(window: WindowId, id: &str, cx: &gpui::App) -> Option<Vec<Pixels>> {
+    let states = cx.try_global::<SplitStates>()?;
+    let state = states.0.get(&(window, SharedString::from(id.to_string())))?;
+    Some(state.read(cx).sizes().clone())
 }
 
 /// What a split shows, so its handles start over when that changes.
@@ -103,5 +168,70 @@ fn signature(placed: &Placed) -> String {
             let inner: Vec<String> = children.iter().map(|(w, c)| format!("{w}:{}", signature(c))).collect();
             format!("{kind}({})", inner.join(","))
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use gpui::{Modifiers, MouseButton, TestAppContext, point};
+    use tt_git_testkit::Sandbox;
+
+    use super::*;
+    use crate::testing::Gui;
+
+    fn width(gui: &Gui, pane: PaneId) -> u16 {
+        gui.read(|app| app.pane_area(pane).expect("drawn").width)
+    }
+
+    #[gpui::test]
+    fn dragging_a_handle_resizes_the_split_for_the_session(cx: &mut TestAppContext) {
+        let sb = Sandbox::new();
+        sb.commit_file("a.txt", "a", "first");
+        let mut gui = Gui::open(cx, &sb);
+        let status = gui.read(|app| app.pane_area(PaneId::Status).unwrap());
+        let before = status.width;
+        // The handle between status and branches, on the boundary.
+        let y = gpui::px(f32::from(status.y + status.height / 2));
+        let edge = gpui::px(f32::from(status.right()));
+        let cx = &mut gui.cx;
+        cx.simulate_mouse_move(point(edge, y), None, Modifiers::default());
+        cx.simulate_mouse_down(point(edge, y), MouseButton::Left, Modifiers::default());
+        cx.simulate_mouse_move(
+            point(edge + gpui::px(50.), y),
+            Some(MouseButton::Left),
+            Modifiers::default(),
+        );
+        cx.simulate_mouse_move(
+            point(edge + gpui::px(120.), y),
+            Some(MouseButton::Left),
+            Modifiers::default(),
+        );
+        cx.simulate_mouse_up(point(edge + gpui::px(120.), y), MouseButton::Left, Modifiers::default());
+        gui.wait_idle();
+        let after = width(&gui, PaneId::Status);
+        assert!(after >= before + 100, "status grew: {before} then {after}");
+
+        // Details takes their place, then gives it back: the drag is kept.
+        gui.press_all(&["1", "space"]);
+        assert!(gui.read(|app| app.pane_area(PaneId::Status).is_none()));
+        gui.press("space");
+        assert_eq!(width(&gui, PaneId::Status), after);
+        let window = gui.window.window_id();
+        let sizes = gui.cx.update(|_, cx| {
+            let placed = gui
+                .model
+                .read(cx)
+                .app()
+                .config()
+                .layout
+                .resolve(gui.model.read(cx).app().view());
+            let Some(Placed::Split(_, children)) = placed else {
+                panic!("a split")
+            };
+            let id = format!("split.1:{}", signature(&children[1].1));
+            split_sizes(window, &id, cx)
+        });
+        let sizes = sizes.expect("the split's sizes");
+        assert_eq!(sizes.len(), 2, "{sizes:?}");
     }
 }
