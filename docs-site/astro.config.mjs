@@ -104,6 +104,7 @@ export default defineConfig({
 						{ label: 'Command palette', slug: 'git/palette' },
 						{ label: 'Push, pull and fetch', slug: 'git/remotes' },
 						{ label: 'Merge, rebase, cherry-pick and revert', slug: 'git/merge-rebase' },
+						{ label: 'Reset', slug: 'git/reset' },
 						{ label: 'Undo', slug: 'git/undo' },
 						{ label: 'Worktrees', slug: 'git/worktrees' },
 						{ label: 'Agent actions', slug: 'git/agents' },

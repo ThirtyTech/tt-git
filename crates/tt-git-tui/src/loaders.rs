@@ -512,6 +512,7 @@ pub fn run_op(repo: Repo, op: GitOp) -> Action {
         GitOp::StashDrop { index } => repo.stash_drop(*index),
         GitOp::StashBranch { name, index } => repo.stash_branch(name, *index),
         GitOp::Undo { step, stash } => repo.apply_undo(step, *stash),
+        GitOp::Reset { target, mode, .. } => repo.reset(target, *mode),
         GitOp::RemoveWorktree { path, force, .. } => repo.remove_worktree(path, *force),
         GitOp::SelfUpdate { .. } => unreachable!("run by self_update"),
         GitOp::PruneGone => unreachable!("run by prune_gone"),
@@ -570,6 +571,14 @@ pub fn self_update(ctx: &Ctx, tag: String) -> Action {
         result,
         head: None,
     }
+}
+
+/// Works out what resetting to `target` would lose.
+pub fn plan_reset(repo: Repo, target: String, display: String) -> Action {
+    let plan = repo
+        .reset_plan(&target)
+        .map_err(|e| e.stderr().map(str::to_string).unwrap_or_else(|| e.to_string()));
+    Action::ResetPlanned { target, display, plan }
 }
 
 /// Works out the next undo step.

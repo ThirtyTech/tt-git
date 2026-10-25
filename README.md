@@ -118,6 +118,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `n` | new branch at the selected commit (`tab` in the dialog: create it in a worktree) |
 | | `T` | new tag at the selected commit (`tab` in the dialog: annotated, with a message) |
 | | `M` / `r` / `C` / `R` | merge into current / rebase current onto / cherry-pick (the whole range, if one is selected) / revert |
+| | `X` | reset the current branch to the selected commit: soft, mixed or hard (hard asks first, saying what's lost) |
 | | `v` | start or end a range of commits to cherry-pick (`esc` also ends it) |
 | | `c` | copy the commit hash |
 | | `A` | ask an AI agent about the commit, or start a ready-made action (explain branch, resolve conflicts…); opens in a herdr tab inside herdr, else in place of details |
@@ -134,6 +135,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `]` `[` | next / previous tab: all branches, tags, unmerged into the base branch, merged into it, stashes and worktrees (once there are any) |
 | | `b` | pick the base branch (default: the project's primary branch) |
 | | `M` / `r` | merge / rebase onto the selected branch |
+| | `X` | reset the current branch to the selected branch or tag (on the checked-out branch: to its remote branch) |
 | | `c` | copy the branch name |
 | status | `space` | stage / unstage the file |
 | | `enter` | open the file's changes fullscreen to stage them by hunk or line (below) |

@@ -721,6 +721,72 @@ impl Repo {
     }
 }
 
+/// How much of the index and working tree a reset matches to the commit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResetMode {
+    /// Only the branch moves; the changes it leaves behind are staged.
+    Soft,
+    /// The index matches the commit; the changes are left unstaged.
+    Mixed,
+    /// The index and working tree match the commit; uncommitted changes
+    /// to tracked files are thrown away.
+    Hard,
+}
+
+impl ResetMode {
+    /// `soft`, `mixed` or `hard`.
+    pub fn name(self) -> &'static str {
+        match self {
+            ResetMode::Soft => "soft",
+            ResetMode::Mixed => "mixed",
+            ResetMode::Hard => "hard",
+        }
+    }
+}
+
+/// What resetting to a commit would leave behind, for asking first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ResetPlan {
+    /// HEAD's branch, or `None` when detached.
+    pub branch: Option<String>,
+    /// Commits on HEAD that the target doesn't have: they leave the branch.
+    pub commits: usize,
+    /// Tracked files with uncommitted changes, staged or not: a hard reset
+    /// throws those changes away.
+    pub changed: usize,
+}
+
+impl Repo {
+    /// What resetting the current branch to `target` would leave behind.
+    pub fn reset_plan(&self, target: &str) -> Result<ResetPlan> {
+        let head = self.head()?;
+        if head.oid().is_none() {
+            return Err(GitError::Refused("Nothing to reset: there are no commits yet".into()));
+        }
+        let range = format!("{target}..HEAD");
+        let commits = self.git().run(&["rev-list", "--count", range.as_str(), "--"])?;
+        let changed = self.git().run(&["diff", "--name-only", "-z", "HEAD", "--"])?;
+        Ok(ResetPlan {
+            branch: head.branch().map(str::to_string),
+            commits: commits.stdout_str().trim().parse().unwrap_or(0),
+            changed: changed.stdout.split(|&b| b == 0).filter(|p| !p.is_empty()).count(),
+        })
+    }
+
+    /// `git reset --<mode> <target>`. The reflog entry names the mode
+    /// (`reset --hard main: updating HEAD`) so undo can reset back the
+    /// same way.
+    pub fn reset(&self, target: &str, mode: ResetMode) -> Result<String> {
+        let flag = format!("--{}", mode.name());
+        let action = format!("reset {flag} {}", undo::short_name(target));
+        self.git()
+            .clone()
+            .with_env([("GIT_REFLOG_ACTION", action)])
+            .run(&["reset", "-q", flag.as_str(), target, "--"])
+            .map(text)
+    }
+}
+
 /// Starts the error [`Repo::apply_undo`] returns when the step was taken but
 /// the changes stashed for it didn't go back cleanly.
 pub const UNDO_CHANGES_KEPT: &str = "Putting your changes back didn't go cleanly";
@@ -837,6 +903,9 @@ impl Repo {
                 .map(text),
             UndoTarget::SoftReset(oid) => marked(UNDO_MARK.to_string())
                 .run(&["reset", "--soft", oid.as_str()])
+                .map(text),
+            UndoTarget::MixedReset(oid) => marked(UNDO_MARK.to_string())
+                .run(&["reset", "-q", "--mixed", oid.as_str()])
                 .map(text),
             UndoTarget::Branch(name) => marked(switch_message(step, name))
                 .run(&["switch", name.as_str()])

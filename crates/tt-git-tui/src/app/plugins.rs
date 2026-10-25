@@ -387,7 +387,7 @@ impl App {
                 json!({ "branch": name, "start": format!("stash@{{{index}}}"), "worktree": null }),
             ),
             // HEAD moving is reported as `head.changed`.
-            GitOp::Abort(_) | GitOp::SetBaseBranch(_) | GitOp::Undo { .. } => return,
+            GitOp::Abort(_) | GitOp::SetBaseBranch(_) | GitOp::Undo { .. } | GitOp::Reset { .. } => return,
             // No event for ignore files yet.
             GitOp::Ignore { .. } => return,
             // Not about the repository.

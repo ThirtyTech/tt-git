@@ -19,7 +19,8 @@ command line.
 |---|---|
 | A checkout (switching branch, or detaching at a commit) | Switches back to the branch you were on. If that branch has been deleted since, or you were on a detached commit, `HEAD` goes back to that commit, detached. |
 | A commit or amend | Moves the branch back to the commit before it and gives you the commit's changes back, staged, as they were just before you committed. They show in the [status pane](/panes/status/). |
-| A merge, pull, cherry-pick, revert or reset | Moves the branch back to the commit before it, and the files with it. |
+| A merge, pull, cherry-pick, revert, or a reset from the command line | Moves the branch back to the commit before it, and the files with it. |
+| A [reset](/git/reset/) made in tt-git | Moves the branch back the same way it was reset. After a soft or mixed reset your files stay as they are, and nothing is left over; after a hard reset the commits and their files come back. Uncommitted changes a hard reset threw away don't. |
 | A rebase, including `git pull --rebase` | Moves the branch back to where it was before the rebase, in one step. |
 | A rebase of another branch, like `git rebase main feature` run on `main` | Switches back to the branch you ran it from, and moves the rebased branch back to where it was. |
 
@@ -44,8 +45,9 @@ commit they started from.
 
 ## Uncommitted changes
 
-Undoing a commit or amend never asks: it only moves the branch, and your
-files stay exactly as they are. Neither does anything else when the working
+Undoing a commit or amend, or a soft or mixed reset, never asks: it only
+moves the branch (and for a mixed reset, the index), and your files stay
+exactly as they are. Neither does anything else when the working
 tree is clean. If you have uncommitted changes, untracked files included,
 every other step asks first:
 

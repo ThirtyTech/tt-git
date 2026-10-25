@@ -1,6 +1,6 @@
 //! Undo against real git: the reflog markers, and each kind of step.
 
-use tt_git_core::{GitCli, NoStep, Repo, UNDO_CHANGES_KEPT, UndoStep, UndoTarget};
+use tt_git_core::{GitCli, NoStep, Repo, ResetMode, UNDO_CHANGES_KEPT, UndoStep, UndoTarget};
 use tt_git_testkit::Sandbox;
 
 fn open(sb: &Sandbox) -> Repo {
@@ -340,4 +340,80 @@ fn refuses_during_a_merge_and_before_the_first_commit() {
     let repo = open(&sb);
     assert!(repo.merge("feat").is_err());
     assert_eq!(step(&repo), Err(NoStep::InProgress(tt_git_core::InProgress::Merge)));
+}
+
+#[test]
+fn undoing_a_soft_reset_leaves_nothing_staged() {
+    let sb = Sandbox::new();
+    let one = sb.commit_file("a.txt", "1\n", "one");
+    let two = sb.commit_file("a.txt", "2\n", "two");
+    let repo = open(&sb);
+
+    repo.reset(&one, ResetMode::Soft).expect("reset");
+    assert_eq!(sb.rev_parse("HEAD"), one);
+    assert_eq!(sb.git(&["diff", "--cached", "--name-only"]), "a.txt");
+
+    let s = take(&repo);
+    assert_eq!(s.label(), format!("undo reset --soft {}", &one[..7]));
+    assert_eq!(s.target, UndoTarget::SoftReset(two.clone()));
+    assert_eq!(sb.rev_parse("HEAD"), two);
+    assert_eq!(sb.git(&["status", "--porcelain"]), "");
+}
+
+#[test]
+fn undoing_a_mixed_reset_leaves_a_clean_tree() {
+    let sb = Sandbox::new();
+    let one = sb.commit_file("a.txt", "1\n", "one");
+    let two = sb.commit_file("a.txt", "2\n", "two");
+    let repo = open(&sb);
+
+    repo.reset("main~1", ResetMode::Mixed).expect("reset");
+    assert_eq!(sb.rev_parse("HEAD"), one);
+    assert_eq!(sb.git(&["diff", "--name-only"]), "a.txt");
+    assert_eq!(sb.git(&["diff", "--cached", "--name-only"]), "");
+    assert_eq!(last_reflog_subject(&sb), "reset --mixed main~1: updating HEAD");
+
+    let s = step(&repo).expect("a step");
+    assert_eq!(s.target, UndoTarget::MixedReset(two.clone()));
+    // Its own changes are the ones in the tree: nothing to stash.
+    assert!(!s.target.touches_worktree());
+    repo.apply_undo(&s, false).expect("undo");
+    assert_eq!(sb.rev_parse("HEAD"), two);
+    assert_eq!(sb.git(&["status", "--porcelain"]), "");
+}
+
+#[test]
+fn a_hard_reset_says_what_it_loses_and_undo_brings_the_commits_back() {
+    let sb = Sandbox::new();
+    let one = sb.commit_file("a.txt", "1\n", "one");
+    sb.commit_file("a.txt", "2\n", "two");
+    let three = sb.commit_file("b.txt", "3\n", "three");
+    sb.write("a.txt", "dirty\n").write("new.txt", "untracked\n");
+    let repo = open(&sb);
+
+    let plan = repo.reset_plan(&one).expect("plan");
+    assert_eq!(plan.branch.as_deref(), Some("main"));
+    assert_eq!(plan.commits, 2);
+    // Untracked files aren't touched by a hard reset.
+    assert_eq!(plan.changed, 1);
+
+    repo.reset(&one, ResetMode::Hard).expect("reset");
+    assert_eq!(sb.rev_parse("HEAD"), one);
+    assert_eq!(read(&sb, "a.txt").as_deref(), Some("1\n"));
+    assert_eq!(read(&sb, "new.txt").as_deref(), Some("untracked\n"));
+    assert_eq!(read(&sb, "b.txt"), None);
+
+    let s = step(&repo).expect("a step");
+    assert_eq!(s.target, UndoTarget::Reset(three.clone()));
+    assert_eq!(s.label(), format!("undo reset --hard {}", &one[..7]));
+    repo.apply_undo(&s, false).expect("undo");
+    assert_eq!(sb.rev_parse("HEAD"), three);
+    assert_eq!(read(&sb, "b.txt").as_deref(), Some("3\n"));
+}
+
+#[test]
+fn nothing_to_reset_without_commits() {
+    let sb = Sandbox::new();
+    let repo = open(&sb);
+    assert!(repo.reset_plan("HEAD").is_err());
 }

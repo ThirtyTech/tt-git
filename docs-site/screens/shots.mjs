@@ -194,6 +194,26 @@ export const shots = [
 		],
 	},
 	{
+		name: 'graph-reset',
+		capture: 'graph-reset',
+		view: { region: { box: 'Reset feature' } },
+		callouts: [
+			{ target: { find: 'Soft: keep the changes, staged', w: 30 }, text: '**Soft** only moves the branch', markerSide: 'left' },
+			{ target: { find: 'Mixed: keep the changes, unstaged', w: 33 }, text: "**Mixed**, git's default, unstages them", markerSide: 'left' },
+			{ target: { find: 'Hard: throw the changes away', w: 28 }, text: '**Hard** asks again first', markerSide: 'left' },
+		],
+	},
+	{
+		name: 'graph-reset-hard',
+		capture: 'graph-reset-hard',
+		view: { region: { box: 'Hard reset' } },
+		callouts: [
+			{ target: { find: 'lost for good' }, text: "What **undo can't** bring back", markerSide: 'above' },
+			{ target: { find: '3 commits leave' }, text: 'What **z** can', markerSide: 'left' },
+			{ target: { find: 'y confirm · n/esc cancel' }, text: '**y** resets; n or esc backs out', markerSide: 'left' },
+		],
+	},
+	{
 		name: 'graph-cherry-pick-range',
 		capture: 'graph-cherry-pick-range',
 		view: { region: { cells: [0, 0, 190, 28] } },

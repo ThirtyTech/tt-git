@@ -901,6 +901,15 @@ impl Component for GraphPane {
                 }
                 EventState::Consumed
             }
+            Command::Reset => {
+                if let Some(c) = self.selected() {
+                    ctx.emit(Action::Reset {
+                        target: c.oid.to_string(),
+                        display: c.short_oid().to_string(),
+                    });
+                }
+                EventState::Consumed
+            }
             Command::NewBranch => {
                 if let Some(c) = self.selected() {
                     ctx.emit(Action::OpenModal(Modal::prompt(
@@ -950,6 +959,7 @@ impl Component for GraphPane {
             Command::Rebase,
             Command::CherryPick,
             Command::Revert,
+            Command::Reset,
             Command::SelectRange,
             Command::Filter,
             Command::FilterMessage,

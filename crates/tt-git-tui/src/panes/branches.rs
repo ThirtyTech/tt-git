@@ -658,6 +658,16 @@ impl BranchesPane {
             .unwrap_or_else(|| entry.name.clone())
     }
 
+    /// What resetting to `entry` resets to: the branch, or for the
+    /// checked-out one its remote branch; `None` if it has none.
+    fn reset_target(entry: &BranchEntry) -> Option<String> {
+        if entry.is_head {
+            entry.remotes.first().map(|r| r.short_name.clone())
+        } else {
+            Some(Self::start_ref(entry))
+        }
+    }
+
     fn delete_modal(entry: &BranchEntry) -> Option<Modal> {
         if let Some(local) = &entry.local {
             if entry.is_head {
@@ -758,6 +768,10 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
                 format!("Merge {name} into the current branch?"),
                 GitOp::Merge { target: name },
             ))),
+            Command::Reset => ctx.emit(Action::Reset {
+                target: name.clone(),
+                display: name,
+            }),
             Command::Rebase => ctx.emit(Action::OpenModal(Modal::confirm(
                 "Rebase",
                 format!("Rebase the current branch onto {name}?"),
@@ -989,6 +1003,13 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
                     ctx.emit(Action::OpenModal(modal));
                 }
             }
+            Command::Reset => match Self::reset_target(entry) {
+                Some(target) => ctx.emit(Action::Reset {
+                    target: target.clone(),
+                    display: target,
+                }),
+                None => ctx.emit(Action::Notify("that's the checked-out branch".into())),
+            },
             Command::DeleteBranch => match Self::delete_modal(entry) {
                 Some(modal) => ctx.emit(Action::OpenModal(modal)),
                 None => ctx.emit(Action::Notify("can't delete the checked-out branch".into())),
@@ -1445,6 +1466,7 @@ impl Component for BranchesPane {
                 Command::Filter,
                 Command::Merge,
                 Command::Rebase,
+                Command::Reset,
                 Command::Copy,
             ];
         }
@@ -1474,6 +1496,7 @@ impl Component for BranchesPane {
             Command::Filter,
             Command::Merge,
             Command::Rebase,
+            Command::Reset,
             Command::Copy,
         ]
     }

@@ -13,7 +13,7 @@ use tt_git_core::branches::matches_filter;
 use tt_git_core::time::SharedClock;
 use tt_git_core::{
     BranchDeletes, CheckoutPlan, CommitFile, FAST_FORWARD_UP_TO_DATE, FileState, GoneBranches, Head, IGNORE_TRACKED,
-    LogFilter, NoStep, Repo, Stash, StatusEntry, UNDO_CHANGES_KEPT, UndoStep, message_prefixes,
+    LogFilter, NoStep, Repo, ResetMode, ResetPlan, Stash, StatusEntry, UNDO_CHANGES_KEPT, UndoStep, message_prefixes,
 };
 
 use crate::action::{Action, RefsSnapshot};
@@ -25,7 +25,7 @@ use crate::jobs::{Ctx, JobTracker, LatestJob, Reload};
 use crate::keymap::{Command, Context, KeyCombo, Keymap, KeymapError};
 use crate::layout::View;
 use crate::loaders;
-use crate::modal::{GitOp, Modal, ModalOutcome, PromptAction};
+use crate::modal::{GitOp, Modal, ModalOutcome, PaletteItem, PaletteTarget, PromptAction};
 use crate::panes::{
     BlameView, BranchFocus, BranchTab, BranchesPane, DetailsPane, DetailsSubject, GraphPane, LoadToken, PaneId,
     SavedDetails, StatusPane,
@@ -714,6 +714,7 @@ impl App {
                 self.modal = None;
                 self.pick_theme(name);
             }
+            ModalOutcome::Next(modal) => self.modal = Some(*modal),
             ModalOutcome::PluginAction(action) => {
                 self.modal = None;
                 let _ = self.invoke_plugin_action(&action, "palette");
@@ -946,6 +947,11 @@ impl App {
             Action::Run(op) => self.run_op(op),
             Action::Checkout(plan) => self.checkout(plan),
             Action::UndoPlanned(planned) => self.undo_planned(planned),
+            Action::Reset { target, display } => {
+                let repo = self.repo.clone();
+                self.ctx.spawn(move || loaders::plan_reset(repo, target, display));
+            }
+            Action::ResetPlanned { target, display, plan } => self.reset_planned(target, display, plan),
             Action::UpdateChecked(latest) => self.update_checked(latest),
             Action::OpDone { op, result, head } => self.op_done(op, result, head),
             Action::GoneFound(result) => self.gone_found(result),
@@ -1595,6 +1601,61 @@ impl App {
         ));
     }
 
+    /// Asks how to reset to `target`: soft, mixed or hard. Hard asks again,
+    /// saying what it throws away.
+    fn reset_planned(&mut self, target: String, display: String, plan: Result<ResetPlan, String>) {
+        let plan = match plan {
+            Ok(plan) => plan,
+            Err(err) => {
+                self.notice = None;
+                self.error = Some(format!(
+                    "can't reset to {display}:
+{err}"
+                ));
+                return;
+            }
+        };
+        let branch = plan.branch.clone().unwrap_or_else(|| "HEAD".into());
+        let op = |mode| GitOp::Reset {
+            target: target.clone(),
+            display: display.clone(),
+            mode,
+        };
+        let undo = self
+            .keymap
+            .display_key_text(Context::Global, Command::Undo)
+            .map_or_else(|| "undo".to_string(), |key| format!("undo ({key})"));
+        let confirm = Modal::confirm(
+            "Hard reset",
+            hard_reset_message(&plan, &branch, &display, &undo),
+            op(ResetMode::Hard),
+        );
+        let item = |label: &str, hint: &str, target| PaletteItem {
+            label: label.into(),
+            hint: hint.into(),
+            target,
+        };
+        let items = vec![
+            item(
+                "Soft: keep the changes, staged",
+                "--soft",
+                PaletteTarget::Op(op(ResetMode::Soft)),
+            ),
+            item(
+                "Mixed: keep the changes, unstaged",
+                "--mixed",
+                PaletteTarget::Op(op(ResetMode::Mixed)),
+            ),
+            item(
+                "Hard: throw the changes away",
+                "--hard",
+                PaletteTarget::Modal(Box::new(confirm)),
+            ),
+        ];
+        // Mixed is git's default.
+        self.modal = Some(Modal::picker(format!("Reset {branch} to {display}"), items, 1));
+    }
+
     /// Looks up the latest tt-git release in the background, unless this
     /// binary can't be updated (a cargo build, say).
     fn check_update(&mut self) {
@@ -1787,6 +1848,7 @@ impl App {
                     | GitOp::Abort(_)
                     | GitOp::StashBranch { .. }
                     | GitOp::Undo { .. }
+                    | GitOp::Reset { .. }
             )
         {
             self.select_head = true;
@@ -2730,6 +2792,38 @@ fn draw_error_popup(frame: &mut Frame, area: Rect, msg: &str, theme: &Theme) {
 
 /// A revision as a title shows it: a commit id shortened, keeping a `^`.
 /// Branch names one per line, indented, the first ten of them.
+/// The hard reset confirm: what's thrown away for good, what `undo` (the
+/// undo key, for the message) can bring back, and what's left alone.
+fn hard_reset_message(plan: &ResetPlan, branch: &str, target: &str, undo: &str) -> String {
+    let mut lines = vec![format!(
+        "Reset {branch} to {target} and make the files match it (git reset --hard)?
+"
+    )];
+    lines.push(match plan.changed {
+        0 => "There are no uncommitted changes to lose.".to_string(),
+        n => format!(
+            "Uncommitted changes to {n} file{} are lost for good: {undo} can't bring them back.",
+            if n == 1 { "" } else { "s" }
+        ),
+    });
+    match plan.commits {
+        0 => {}
+        1 => lines.push(format!(
+            "1 commit leaves {branch}. {} brings it back.",
+            capitalize(undo)
+        )),
+        n => lines.push(format!(
+            "{n} commits leave {branch}. {} brings them back.",
+            capitalize(undo)
+        )),
+    }
+    lines.push("Untracked files are left alone.".into());
+    lines.join(
+        "
+",
+    )
+}
+
 fn name_list(names: &[String]) -> String {
     const SHOWN: usize = 10;
     let mut lines: Vec<_> = names.iter().take(SHOWN).map(|n| format!("  {n}")).collect();
