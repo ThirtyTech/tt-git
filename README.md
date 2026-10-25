@@ -107,6 +107,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `q` | quit |
 | graph | `enter` | the commit fullscreen: changed files on the left, the selected file's diff on the right (`j`/`k` pick a file, `pgup`/`pgdn` scroll, `esc` or `space` back) |
 | | `space` | show / hide the commit's details (they replace the bottom row) |
+| | `shift+pgdn` `shift+pgup` | page the details down / up without leaving the graph |
 | | `esc` | end a range; else hide details (with details hidden: clear the filter) |
 | | `a` | all branches ↔ current branch |
 | | `t` | dates as age (`3h`) ↔ local date and time (`2026-10-17 01:30 PM`) |

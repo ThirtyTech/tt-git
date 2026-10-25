@@ -236,6 +236,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `zoom` | `+` | global |
 | `expand_details` | `enter` | graph |
 | `toggle_details` | `space` | graph |
+| `details_page_down`, `details_page_up` | `shift+pagedown`, `shift+pageup` (pages details without focusing it) | graph |
 | `close_details` | `esc` (graph); `esc` `space` (details) | graph, details |
 | `move_up`, `move_down`, `page_up`, `page_down`, `top`, `bottom` | `k`/`↑`, `j`/`↓`, `ctrl+u`, `ctrl+d`, `g`, `G` | global |
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |
