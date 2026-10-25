@@ -6,6 +6,7 @@ use ratatui::style::{Color, Modifier, Style};
 use crate::style;
 use crate::syntax::Class;
 use crate::theme;
+use crate::view::StyleRole;
 
 pub fn color(c: style::Color) -> Color {
     use style::Color as C;
@@ -136,6 +137,23 @@ impl Theme {
         Style::new().fg(self.lanes[color as usize % self.lanes.len()])
     }
 
+    /// How text in `role` looks.
+    pub fn role(&self, role: StyleRole) -> Style {
+        match role {
+            StyleRole::Plain => Style::new(),
+            StyleRole::Muted => self.muted,
+            StyleRole::Lane(color) => self.lane(color),
+            StyleRole::LabelHead => self.label_head,
+            StyleRole::LabelDetached => self.label_detached,
+            StyleRole::LabelLocal => self.label_local,
+            StyleRole::LabelRemote => self.label_remote,
+            StyleRole::LabelTag => self.label_tag,
+            StyleRole::Author => self.author,
+            StyleRole::Date => self.date,
+            StyleRole::Sha => self.sha,
+        }
+    }
+
     /// How highlighted code of `class` looks.
     pub fn code(&self, class: Class) -> Style {
         let s = &self.syntax;
@@ -197,6 +215,33 @@ impl From<&theme::SyntaxStyles> for SyntaxStyles {
             link: style(s.link),
             strong: style(s.strong),
             emphasis: style(s.emphasis),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn roles_look_as_the_app_theme_says() {
+        let app = theme::Theme::default();
+        let tui = Theme::from(&app);
+        let mut roles = vec![
+            StyleRole::Plain,
+            StyleRole::Muted,
+            StyleRole::LabelHead,
+            StyleRole::LabelDetached,
+            StyleRole::LabelLocal,
+            StyleRole::LabelRemote,
+            StyleRole::LabelTag,
+            StyleRole::Author,
+            StyleRole::Date,
+            StyleRole::Sha,
+        ];
+        roles.extend((0..20).map(StyleRole::Lane));
+        for role in roles {
+            assert_eq!(tui.role(role), style(app.role(role)), "{role:?}");
         }
     }
 }

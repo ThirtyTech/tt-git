@@ -23,6 +23,7 @@ pub mod style;
 pub mod syntax;
 pub mod theme;
 pub mod themes;
+pub mod view;
 pub mod watcher;
 pub mod widgets;
 

@@ -4,6 +4,7 @@ use crate::style::{Color, Modifier, Style};
 
 use crate::syntax::Class;
 use crate::themes::Palette;
+use crate::view::StyleRole;
 
 #[derive(Debug, Clone)]
 pub struct Theme {
@@ -218,6 +219,23 @@ impl Theme {
 
     pub fn lane(&self, color: u8) -> Style {
         Style::new().fg(self.lanes[color as usize % self.lanes.len()])
+    }
+
+    /// How text in `role` looks.
+    pub fn role(&self, role: StyleRole) -> Style {
+        match role {
+            StyleRole::Plain => Style::new(),
+            StyleRole::Muted => self.muted,
+            StyleRole::Lane(color) => self.lane(color),
+            StyleRole::LabelHead => self.label_head,
+            StyleRole::LabelDetached => self.label_detached,
+            StyleRole::LabelLocal => self.label_local,
+            StyleRole::LabelRemote => self.label_remote,
+            StyleRole::LabelTag => self.label_tag,
+            StyleRole::Author => self.author,
+            StyleRole::Date => self.date,
+            StyleRole::Sha => self.sha,
+        }
     }
 
     /// How highlighted code of `class` looks.
