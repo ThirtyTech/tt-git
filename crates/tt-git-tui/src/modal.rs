@@ -14,7 +14,7 @@ use tt_git_core::{
 use crate::agent::{AgentAction, AgentHunk, AgentRequest};
 use crate::filter::FilterPanel;
 use crate::keymap::{Command, KeyCode, KeyCombo, KeyModifiers};
-use crate::theme::Theme;
+use crate::tui_theme::Theme;
 
 /// A git write operation, run as a background job.
 #[derive(Debug, Clone, PartialEq, Eq)]

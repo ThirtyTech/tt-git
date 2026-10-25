@@ -17,7 +17,7 @@ use crate::jobs::Ctx;
 use crate::keymap::Command;
 use crate::modal::{GitOp, Modal};
 use crate::syntax::{self, HunkTokens};
-use crate::theme::Theme;
+use crate::tui_theme::Theme;
 use crate::widgets::{code_spans, truncate};
 
 /// Below this width the two sides stack instead of sitting side by side.

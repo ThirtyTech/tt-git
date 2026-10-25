@@ -26,7 +26,7 @@ use crate::jobs::Ctx;
 use crate::keymap::{Command, KeyCode, KeyCombo, KeyModifiers};
 use crate::search::{LineSearch, SearchKey};
 use crate::syntax::LineTokens;
-use crate::theme::Theme;
+use crate::tui_theme::Theme;
 use crate::widgets::{Cursor, expand_tabs, fit, fit_right, marked_code_spans};
 
 /// Ids for blame loads, unique across views so a late result can't land
@@ -876,7 +876,7 @@ impl BlameView {
 /// Each commit's heat bucket by age, newest 0: commits ranked by when they
 /// were made and spread over the theme's heat colors.
 fn heat(blame: &Blame) -> Vec<usize> {
-    let buckets = Theme::default().blame_heat.len();
+    let buckets = crate::theme::Theme::default().blame_heat.len();
     let mut times: Vec<i64> = blame
         .commits
         .iter()
@@ -911,7 +911,7 @@ fn heat_color(bucket: Option<usize>, theme: &Theme) -> Color {
 /// doesn't depend on where in the file they appear. Only with more authors
 /// than colors do two share one.
 fn author_colors(blame: &Blame) -> Vec<usize> {
-    let slots = Theme::default().blame_authors.len();
+    let slots = crate::theme::Theme::default().blame_authors.len();
     let mut names: Vec<&str> = blame
         .commits
         .iter()
@@ -990,7 +990,7 @@ mod tests {
 
     #[test]
     fn authors_in_a_file_get_different_colors() {
-        let slots = Theme::default().blame_authors.len();
+        let slots = crate::theme::Theme::default().blame_authors.len();
         let names: Vec<String> = (0..slots).map(|i| format!("Author {i}")).collect();
         let oids = "abcdefghijklmnopqrstuvwxyz";
         // Each author twice, so their commits share a color.
@@ -1017,7 +1017,7 @@ mod tests {
             commits: vec![by('a', "Ada Park")],
             ..Blame::default()
         };
-        let slots = Theme::default().blame_authors.len();
+        let slots = crate::theme::Theme::default().blame_authors.len();
         assert_eq!(author_colors(&alone), vec![author_slot("Ada Park", slots)]);
     }
 }

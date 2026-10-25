@@ -9,7 +9,7 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::keymap::Command;
 use crate::syntax::Tokens;
-use crate::theme::Theme;
+use crate::tui_theme::Theme;
 
 /// Cursor and scroll offset of a list.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

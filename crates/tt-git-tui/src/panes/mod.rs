@@ -19,7 +19,7 @@ use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Borders};
 use tt_git_core::time::relative_changes_at;
 
-use crate::theme::Theme;
+use crate::tui_theme::Theme;
 
 /// When the relative dates last drawn were drawn, and when the first of
 /// them changes.

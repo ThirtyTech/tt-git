@@ -18,7 +18,7 @@ use crate::jobs::Ctx;
 use crate::keymap::{Command, Context, KeyCode, KeyCombo};
 use crate::modal::{GitOp, Modal, PaletteItem, PaletteTarget, PromptAction};
 use crate::mouse::PanePart;
-use crate::theme::Theme;
+use crate::tui_theme::Theme;
 use crate::widgets::{Cursor, fit, fit_right, truncate};
 
 const STATE_WIDTH: usize = 9;

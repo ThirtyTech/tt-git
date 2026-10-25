@@ -13,7 +13,7 @@ use tt_git_testkit::{Sandbox, TestDriver};
 use tt_git_tui::component::Component;
 use tt_git_tui::jobs::Ctx;
 use tt_git_tui::panes::{GraphPane, GraphScope};
-use tt_git_tui::theme::Theme;
+use tt_git_tui::tui_theme::Theme;
 use tt_git_tui::{Action, loaders};
 
 #[test]

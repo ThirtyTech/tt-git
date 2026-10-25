@@ -6,7 +6,7 @@ use tt_git_testkit::{Sandbox, TestDriver};
 use tt_git_tui::Config;
 use tt_git_tui::panes::{DetailsSubject, PaneId};
 use tt_git_tui::syntax::Class;
-use tt_git_tui::theme::Theme;
+use tt_git_tui::tui_theme::Theme;
 
 const OLD: &str = "// greet\nfn main() {\n    let n = 1;\n}\n";
 const NEW: &str = "// greet\nfn main() {\n    let n = 2;\n    println!(\"hi\");\n}\n";

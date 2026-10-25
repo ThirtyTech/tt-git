@@ -2704,7 +2704,7 @@ impl App {
         self.pane_areas = pane_areas.iter().map(|(p, r)| (*p, convert::geom_rect(*r))).collect();
         self.layout_rects = (convert::geom_rect(main), convert::geom_rect(details_area));
         let focus = self.focus;
-        let theme = &self.theme;
+        let theme = &crate::tui_theme::Theme::from(&self.theme);
         for &(pane, area) in &pane_areas {
             match pane {
                 PaneId::Status => self.status.draw(frame, area, focus == pane, theme),
@@ -2713,32 +2713,31 @@ impl App {
                 PaneId::Details => {}
             }
         }
-        if self.pane_area(PaneId::Details).is_some() && !self.draw_split_pane(frame, details_area) {
+        if self.pane_area(PaneId::Details).is_some() && !self.draw_split_pane(frame, details_area, theme) {
             // Fullscreen has room for the file list beside the diff.
             self.details.set_files_beside(self.zoom == Zoom::Full(PaneId::Details));
-            let theme = &self.theme;
             self.details.draw(frame, details_area, focus == PaneId::Details, theme);
         }
 
-        self.draw_help_bar(frame, help);
+        self.draw_help_bar(frame, help, theme);
         if self.show_help {
-            self.draw_help_popup(frame, main);
+            self.draw_help_popup(frame, main, theme);
         }
-        self.draw_modal_panes(frame, main, details_area);
+        self.draw_modal_panes(frame, main, details_area, theme);
         if let Some(modal) = &self.modal {
-            modal.draw(frame, main, &self.theme);
+            modal.draw(frame, main, theme);
         }
         if let Some(err) = &self.error {
-            draw_error_popup(frame, main, err, &self.theme);
+            draw_error_popup(frame, main, err, theme);
         }
         if self.config.theme_background
-            && let (Some(bg), Some(fg)) = (self.theme.background, self.theme.foreground)
+            && let (Some(bg), Some(fg)) = (theme.background, theme.foreground)
         {
             paint_background(frame, bg, fg);
         }
     }
 
-    fn draw_help_bar(&self, frame: &mut Frame, area: ratatui::layout::Rect) {
+    fn draw_help_bar(&self, frame: &mut Frame, area: ratatui::layout::Rect, theme: &crate::tui_theme::Theme) {
         use unicode_width::UnicodeWidthStr;
 
         // The notice and any running git operation get their own
@@ -2751,20 +2750,20 @@ impl App {
             && (self.busy.is_empty() || self.notice_age() < NOTICE_HOLD)
         {
             let style = if notice.starts_with('✓') && self.notice_age() < SUCCESS_FADE {
-                self.theme.diff_add
+                theme.diff_add
             } else {
-                self.theme.muted
+                theme.muted
             };
             parts.push((notice.clone(), style));
         }
         if let Some(line) = self.busy_line() {
             if !parts.is_empty() {
-                parts.push((" · ".into(), self.theme.muted));
+                parts.push((" · ".into(), theme.muted));
             }
-            parts.push((line, self.theme.help_key.add_modifier(Modifier::BOLD)));
+            parts.push((line, theme.help_key.add_modifier(Modifier::BOLD)));
         }
         if !parts.is_empty() {
-            parts.insert(0, (" │ ".into(), self.theme.muted));
+            parts.insert(0, (" │ ".into(), theme.muted));
             let text: String = parts.iter().map(|(t, _)| t.as_str()).collect();
             let width = (text.width() as u16).min(area.width / 2);
             let [left, right] = Layout::horizontal([Constraint::Fill(1), Constraint::Length(width)]).areas(area);
@@ -2805,34 +2804,34 @@ impl App {
             if !spans.is_empty() {
                 spans.push(Span::raw("  "));
             }
-            spans.push(Span::styled(key, self.theme.help_key));
-            spans.push(Span::styled(format!(" {label}"), self.theme.help_text));
+            spans.push(Span::styled(key, theme.help_key));
+            spans.push(Span::styled(format!(" {label}"), theme.help_text));
         }
         frame.render_widget(Paragraph::new(Line::from(spans)), keys_area);
     }
 
-    fn draw_help_popup(&self, frame: &mut Frame, area: ratatui::layout::Rect) {
+    fn draw_help_popup(&self, frame: &mut Frame, area: ratatui::layout::Rect, theme: &crate::tui_theme::Theme) {
         let search = if self.help_query.is_empty() {
             Line::from(vec![
-                Span::styled("> ", self.theme.help_key),
-                Span::styled("type to search", self.theme.muted),
+                Span::styled("> ", theme.help_key),
+                Span::styled("type to search", theme.muted),
             ])
         } else {
             Line::from(vec![
-                Span::styled("> ", self.theme.help_key),
+                Span::styled("> ", theme.help_key),
                 Span::raw(self.help_query.clone()),
-                Span::styled("█", self.theme.help_key),
+                Span::styled("█", theme.help_key),
             ])
         };
         let mut lines = vec![search];
         let rows = self.help_rows();
         if rows.is_empty() {
-            lines.push(Line::styled("no matching keys", self.theme.muted));
+            lines.push(Line::styled("no matching keys", theme.muted));
         }
         for (keys, label) in rows {
             lines.push(Line::from(vec![
-                Span::styled(format!("{keys:>16}  "), self.theme.help_key),
-                Span::styled(label, self.theme.help_text),
+                Span::styled(format!("{keys:>16}  "), theme.help_key),
+                Span::styled(label, theme.help_text),
             ]));
         }
 
@@ -2841,11 +2840,9 @@ impl App {
         frame.render_widget(Clear, popup);
         let block = Block::bordered()
             .border_type(BorderType::Rounded)
-            .border_style(self.theme.border_focused)
-            .title(Span::styled(" Keybindings ", self.theme.title_focused))
-            .title_top(
-                Line::styled(concat!(" tt-git ", env!("CARGO_PKG_VERSION"), " "), self.theme.muted).right_aligned(),
-            );
+            .border_style(theme.border_focused)
+            .title(Span::styled(" Keybindings ", theme.title_focused))
+            .title_top(Line::styled(concat!(" tt-git ", env!("CARGO_PKG_VERSION"), " "), theme.muted).right_aligned());
         frame.render_widget(Paragraph::new(lines).block(block), popup);
     }
 }
@@ -2865,7 +2862,7 @@ fn paint_background(frame: &mut Frame, bg: ratatui::style::Color, fg: ratatui::s
     }
 }
 
-fn draw_error_popup(frame: &mut Frame, area: ratatui::layout::Rect, msg: &str, theme: &Theme) {
+fn draw_error_popup(frame: &mut Frame, area: ratatui::layout::Rect, msg: &str, theme: &crate::tui_theme::Theme) {
     let width = 70.min(area.width);
     let inner_width = width.saturating_sub(2).max(1) as usize;
     let text_lines: usize = msg

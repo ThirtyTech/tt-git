@@ -23,7 +23,7 @@ use crate::keymap::{Command, Context, KeyCombo};
 use crate::mouse::PanePart;
 use crate::search::{LineSearch, SearchKey};
 use crate::syntax::{HunkTokens, LineTokens, Tokens};
-use crate::theme::Theme;
+use crate::tui_theme::Theme;
 use crate::widgets::{Cursor, marked_code_spans, split_lines, truncate};
 
 /// What the details pane is showing.

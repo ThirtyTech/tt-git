@@ -593,7 +593,7 @@ fn a_bad_regex_or_no_match_leaves_the_selection_alone() {
 fn matches_are_marked_in_the_code() {
     let (_sb, mut t) = blame_notes();
     t.press("/").type_text("a f").press("enter");
-    let theme = tt_git_tui::theme::Theme::default();
+    let theme = tt_git_tui::tui_theme::Theme::default();
     let (x, y) = t.find_text("alpha five").expect("on screen");
     let bg = |dx: u16| t.buffer()[(x + dx, y)].bg;
     assert_eq!(bg(4), theme.search_match.bg.unwrap());

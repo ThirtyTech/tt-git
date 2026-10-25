@@ -12,9 +12,9 @@
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use ratatui::style::Color;
 use serde::Deserialize;
 
+use crate::style::Color;
 use crate::theme::{Theme, mix};
 
 /// What `theme` means when config leaves it out.

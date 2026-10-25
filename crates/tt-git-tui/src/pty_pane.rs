@@ -17,7 +17,7 @@ use tt_git_plugin::runtime::{CommandRequest, HostEnv, plugin_env, resolve_progra
 use crate::action::Action;
 use crate::jobs::Ctx;
 use crate::keymap::{KeyCode, KeyCombo, KeyModifiers};
-use crate::theme::Theme;
+use crate::tui_theme::Theme;
 
 pub type PaneId = u64;
 

@@ -10,6 +10,7 @@ use super::App;
 use crate::keymap::KeyCombo;
 use crate::panes::PaneId;
 use crate::pty_pane::{self, PtyPane};
+use crate::tui_theme::Theme;
 
 /// Optional overrides when opening a pane (from the API/CLI).
 #[derive(Debug, Clone, Default)]
@@ -168,26 +169,24 @@ impl App {
     }
 
     /// Draws the split pane into `details` if there is one. Returns whether it did.
-    pub(super) fn draw_split_pane(&mut self, frame: &mut Frame, details: Rect) -> bool {
+    pub(super) fn draw_split_pane(&mut self, frame: &mut Frame, details: Rect, theme: &Theme) -> bool {
         let focused = self.focus == PaneId::Details;
         let hint = self.release_hint();
-        let theme = self.theme.clone();
         let Some(pane) = self.split_pane() else {
             return false;
         };
-        let cursor = pane.draw(frame, details, focused, &hint, &theme);
+        let cursor = pane.draw(frame, details, focused, &hint, theme);
         self.cursor_shown |= cursor;
         true
     }
 
-    pub(super) fn draw_modal_panes(&mut self, frame: &mut Frame, main: Rect, details: Rect) {
+    pub(super) fn draw_modal_panes(&mut self, frame: &mut Frame, main: Rect, details: Rect, theme: &Theme) {
         let hint = self.release_hint();
-        let theme = self.theme.clone();
         let top = self.panes.iter().rposition(|p| p.is_modal());
         let mut cursor = false;
         for (i, pane) in self.panes.iter_mut().enumerate().filter(|(_, p)| p.is_modal()) {
             let area = pane.area(main, details);
-            cursor |= pane.draw(frame, area, Some(i) == top, &hint, &theme);
+            cursor |= pane.draw(frame, area, Some(i) == top, &hint, theme);
         }
         self.cursor_shown |= cursor;
     }

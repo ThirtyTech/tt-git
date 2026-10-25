@@ -15,7 +15,7 @@ use unicode_width::UnicodeWidthStr;
 use crate::keymap::{KeyCode, KeyCombo, KeyModifiers};
 use crate::modal::ModalOutcome;
 use crate::mouse::{FilterSpot, MouseKind};
-use crate::theme::Theme;
+use crate::tui_theme::Theme;
 use crate::widgets::{fit, truncate};
 
 /// Rows of choices shown at once.

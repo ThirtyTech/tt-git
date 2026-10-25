@@ -1,6 +1,6 @@
-//! Colors and styles.
+//! Colors and styles, in tt-git's own [`style`](crate::style) types.
 
-use ratatui::style::{Color, Modifier, Style};
+use crate::style::{Color, Modifier, Style};
 
 use crate::syntax::Class;
 use crate::themes::Palette;

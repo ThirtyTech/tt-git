@@ -6,7 +6,7 @@ use ratatui::layout::Rect;
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context, KeyCombo};
 use crate::mouse::PanePart;
-use crate::theme::Theme;
+use crate::tui_theme::Theme;
 
 /// Whether a component handled a command.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

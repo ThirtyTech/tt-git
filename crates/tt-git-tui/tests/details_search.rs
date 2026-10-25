@@ -88,7 +88,7 @@ fn matches_are_marked_and_esc_goes_back() {
     let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
     t.press("enter").wait_idle();
     t.press("/").type_text("dle 1").press("enter");
-    let theme = tt_git_tui::theme::Theme::default();
+    let theme = tt_git_tui::tui_theme::Theme::default();
     let (x, y) = t.find_text("+needle 10").expect("on screen");
     let bg = |dx: u16| t.buffer()[(x + dx, y)].bg;
     assert_eq!(bg(4), theme.search_match.bg.unwrap());

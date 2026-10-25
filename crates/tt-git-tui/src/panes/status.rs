@@ -13,7 +13,7 @@ use crate::component::{Component, EventState};
 use crate::jobs::Ctx;
 use crate::keymap::{Command, Context};
 use crate::modal::{DiscardCounts, GitOp, Modal, PaletteItem, PaletteTarget, PromptAction};
-use crate::theme::Theme;
+use crate::tui_theme::Theme;
 use crate::widgets::{Cursor, truncate};
 
 /// Working tree status with a repo/branch summary in the title.
