@@ -46,13 +46,24 @@ impl Shell {
                 AppEvent::Quit => {
                     // Opening another worktree quits the app and starts a
                     // new one there.
-                    if let Some(repo) = model.update(cx, |m, _| m.app_mut().take_reopen()) {
-                        crate::reopen(repo, cx);
+                    if let Some(repo) = model.update(cx, |m, _| m.app_mut().take_reopen())
+                        && let Err(e) = crate::windows::open_repo(repo, cx)
+                    {
+                        tracing::error!("{e}");
                     }
                     window.remove_window();
                 }
+                AppEvent::OpenRepository => {
+                    let model = model.downgrade();
+                    crate::windows::pick_repos(cx, move |result, cx| {
+                        if let Err(e) = result {
+                            let _ = model.update(cx, |m, cx| m.send(tt_git_app::Action::Error(e), cx));
+                        }
+                    });
+                }
             }),
-            cx.observe_window_bounds(window, |shell, _, cx| {
+            cx.observe_window_bounds(window, |shell, window, cx| {
+                crate::window_state::remember_window(window, cx);
                 shell.model.update(cx, |m, cx| m.resized(cx));
             }),
         ];

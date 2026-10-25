@@ -62,6 +62,12 @@ impl Gui {
             crate::init(cx);
             crate::open_window(app, rx, cx).expect("window opens")
         });
+        Self::attach(cx, window)
+    }
+
+    /// The harness on a repository window opened some other way (by
+    /// [`crate::windows::open_repo`], say), once its first loads are done.
+    pub fn attach(cx: &mut TestAppContext, window: WindowHandle<Root>) -> Self {
         let shell = window
             .update(cx, |root, _, _| root.view().clone().downcast::<Shell>().expect("shell"))
             .expect("window is open");
