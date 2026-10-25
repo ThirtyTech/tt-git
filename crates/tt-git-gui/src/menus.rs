@@ -27,7 +27,7 @@ pub struct RunCommand(pub Command);
 gpui::actions!(
     tt_git,
     [
-        /// Shows tt-git's version.
+        /// Opens the About dialog.
         About,
         /// Quits every window, as the quit key does in each.
         Quit
@@ -110,11 +110,12 @@ const APP: &[Command] = &[Command::Theme, Command::PluginLogs, Command::SelfUpda
 /// menu named after the focused pane listing its commands (the help
 /// popup's first section). While a dialog, the help popup or an error is
 /// open, keys go to it rather than to commands, so the command items are
-/// disabled; About and Quit stay enabled.
-pub fn build(app: &tt_git_app::App) -> Vec<MenuSpec> {
+/// disabled, as they are while the About dialog is (`about`); About and
+/// Quit stay enabled.
+pub fn build(app: &tt_git_app::App, about: bool) -> Vec<MenuSpec> {
     let context = app.keymap_context();
     let keymap = app.keymap();
-    let enabled = app.modal().is_none() && app.error().is_none() && !app.shows_help();
+    let enabled = !about && app.modal().is_none() && app.error().is_none() && !app.shows_help();
     let item = |cmd: Command| ItemSpec::Item {
         label: sentence_case(cmd.label()),
         key: keymap.display_key_text(context, cmd).map(str::to_string),
@@ -281,14 +282,6 @@ fn quit_all(cx: &mut App) {
         let model = shell.read(cx).model().clone();
         model.update(cx, |m, cx| m.send(tt_git_app::Action::Command(Command::Quit), cx));
     }
-}
-
-/// Shows tt-git's version in a prompt over `window`.
-pub fn about(window: &mut gpui::Window, cx: &mut App) {
-    let version = format!("tt-git {}", env!("CARGO_PKG_VERSION"));
-    let detail = "A git client with a commit graph, unified branches and plugins.";
-    // Nothing to do with the answer.
-    drop(window.prompt(gpui::PromptLevel::Info, &version, Some(detail), &["OK"], cx));
 }
 
 #[cfg(test)]
