@@ -163,6 +163,10 @@ mod tests {
 
     #[gpui::test]
     fn a_drawn_menu_runs_the_picked_command_and_gives_the_keys_back(cx: &mut TestAppContext) {
+        // macOS uses the native menu bar instead.
+        if !super::DRAWS_MENUS {
+            return;
+        }
         let sb = Sandbox::new();
         sb.commit_file("a.txt", "a", "first");
         sb.commit_file("b.txt", "b", "second");

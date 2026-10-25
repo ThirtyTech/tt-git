@@ -38,7 +38,7 @@ static TITLE_ICON: LazyLock<Option<Arc<RenderImage>>> = LazyLock::new(|| {
     let side = (TITLE_ICON_SIZE * 2.) as u32;
     let mut small = image::imageops::resize(icon.as_ref(), side, side, image::imageops::FilterType::Lanczos3);
     // GPUI wants BGRA.
-    for px in small.chunks_exact_mut(4) {
+    for px in small.as_chunks_mut::<4>().0 {
         px.swap(0, 2);
     }
     Some(Arc::new(RenderImage::new([image::Frame::new(small)])))
