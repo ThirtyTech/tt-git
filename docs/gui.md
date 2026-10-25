@@ -25,7 +25,7 @@ here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
 | `src/ui.rs` | `Ui`, what every view draws with, and `Measures`. |
 | `src/frame.rs`, `src/rows.rs`, `src/text.rs`, `src/overlay.rs` | The building blocks (below). |
 | `src/help_bar.rs` | The help bar. |
-| `src/panes/`, `src/dialogs/`, `src/terminal.rs` | One file per area, placeholders until ported. |
+| `src/panes/`, `src/dialogs/`, `src/terminal.rs` | One file per area (below). |
 | `src/testing.rs` | The GPUI test harness. |
 | `src/gpui_tokio.rs` | Zed's tokio adapter, copied in. Jobs run on its runtime. |
 
@@ -224,8 +224,6 @@ than putting a style in your view model.
    every OS.
 6. **Look at it.** Run the binary on a scratch repo (below) and check the
    area against the TUI on the same repo.
-7. **Remove the placeholder** text, and the `placeholder::` call, from your
-   files.
 
 ## Commands
 
@@ -284,23 +282,28 @@ from it, `feat(gui): ...` for the GUI view.
 ## Cell units
 
 `geom::Rect` is in the front end's units: terminal cells in the TUI, logical
-pixels in the GUI. These places in `tt-git-app` read a rect's size as cells,
-and are marked `// GUI:`. They behave as before; B8 converts them with the
-font's cell size.
+pixels in the GUI. The one place that needs cells is a PTY's size, and it
+gets it from `view::terminal::pty_size(rect, cell_size)`, with the front
+end's cell size from `App::set_cell_size` (1×1, the default, in the TUI).
+`App::open_pane` and `App::open_agent_pane` both size their PTYs that way;
+the GUI's terminal panes also resize the PTY to the rows and columns that
+fit where they were laid out.
 
-- `app/panes.rs`, `App::open_pane`: a plugin pane's PTY size from the main
-  or details rect, minus the border.
-- `app/agent.rs`, `App::open_agent_pane`: the agent pane's PTY size from the
-  details rect.
-- `app.rs`, `App::new`: the rects assumed before the first frame
-  (120×40 and 80×15).
-
-Also in cells, outside `tt-git-app`: a plugin manifest's pane `width` and
-`height` (`tt-git-plugin`'s `Dimension`, resolved in the TUI's
-`draw/pty.rs`), and `PtyPane::resize`, which takes rows and columns.
+Still in cells: a plugin manifest's pane `width` and `height`
+(`tt-git-plugin`'s `Dimension`) and `PtyPane::resize`, which takes rows
+and columns.
 
 Focus moves (`ctrl+h/j/k/l`) compare rects only with each other, and mouse
 input arrives already hit-tested, so they work in either unit.
+
+## Gotchas
+
+- A test helper that opens a `Gui` must hand the `Sandbox` back with it. If
+  the `Sandbox` is dropped, its repo is deleted and later git jobs fail
+  with "could not run git: No such file or directory".
+- `Gui::press` and `keystrokes` wait until the app is idle after each key.
+  To check what happens when keys arrive back to back, call
+  `model.key(..)` in a loop instead (see the shell's tests).
 
 ## Known gaps
 
