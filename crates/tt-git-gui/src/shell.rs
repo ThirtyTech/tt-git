@@ -69,6 +69,8 @@ impl Shell {
             }),
         ];
         ask_before_closing(&model, window, cx);
+        // Where it opened counts too, if it's never moved.
+        crate::window_state::remember_window(window, cx);
         Self {
             ui: Ui {
                 theme: Rc::new(theme),
