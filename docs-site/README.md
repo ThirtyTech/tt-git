@@ -75,6 +75,18 @@ a zoomed region, and callouts that point at text found on screen (so they
 survive small layout changes). After a UI change, run both steps and look
 over the images before committing them.
 
+### The desktop app
+
+`docshots` drives the terminal app only, so the desktop app's images
+(`src/assets/screens/gui-*.png`) are captures of its real window. Build
+`tt-git-gui`, run it with `--no-plugins` and its own `TTGIT_CONFIG_DIR` and
+`TTGIT_STATE_DIR` on a scratch repository (a few commits and branches,
+never a repository you work in), resize the window to 1400×860, open what
+the image shows, and capture just that window: on Windows, user32's
+`PrintWindow` with `PW_RENDERFULLCONTENT` (the window is drawn with
+DirectX) into a PNG. Pages show them with the same `<Screenshot>` component,
+without callouts. macOS and Linux need their own captures.
+
 ## Link previews
 
 When someone pastes a link to the site in Discord, Slack or X, the preview

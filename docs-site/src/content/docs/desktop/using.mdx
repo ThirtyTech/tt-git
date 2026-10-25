@@ -4,6 +4,7 @@ description: "What the desktop app does that the terminal app doesn't: menus, ri
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/Screenshot.astro';
 
 The desktop app works like the [terminal app](/getting-started/tour/), with
 the same panes and keys. This page covers what's different.
@@ -51,6 +52,8 @@ developer, and links to the [GitHub repository](https://github.com/thirtytech/tt
 and to [GPUI](https://gpui.rs/), the toolkit the app is drawn with. Click a
 link to open it in your browser. The dialog also points to the
 [terminal app](/getting-started/tour/), `tt-git`, which works the same way.
+
+<Screenshot name="gui-about" alt="The About tt-git dialog over the graph on Windows: the tt-git icon, the version, the developer, a link to github.com/thirtytech/tt-git, a line about the terminal app, and a link to gpui.rs" />
 
 <kbd>esc</kbd>, <kbd>enter</kbd>, <kbd>q</kbd>, <kbd>space</kbd> or a click
 outside the dialog closes it. Other keys do nothing while it's open, and
