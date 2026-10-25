@@ -16,7 +16,7 @@ here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
 | File | What it does |
 |---|---|
 | `src/main.rs` | Sets the app up as `tt-git`'s `main` does (config, themes, plugins) and opens the window. |
-| `src/model.rs` | `AppModel`, the GPUI entity that owns `tt_git_app::App`. A task applies the app's actions, a timer sends `Action::Tick` every 250 ms, and after every input it carries out what the app asks: `take_redraw` (notify), `take_clipboard` (system clipboard), `take_editor` (start it detached), `should_quit` (close the window). |
+| `src/model.rs` | `AppModel`, the GPUI entity that owns `tt_git_app::App`. A task applies the app's actions, a timer sends `Action::Tick` every 250 ms, and after every input it carries out what the app asks: `take_redraw` (notify), `take_clipboard` (system clipboard), `take_editor` (a windowed editor starts detached, a terminal one in a pane: see [Editors](#editors)), `should_quit` (close the window). |
 | `src/shell.rs` | `Shell`, the window's view. Draws the layout, the help bar and what opens over the panes, sends every key to tt-git's keymap, and reports where each pane went (`begin_frame`, `set_layout`), as the TUI's `draw_app` does. |
 | `src/keys.rs` | GPUI's `Keystroke` as tt-git's `KeyCombo`. tt-git's keymap resolves every key, text input included. There is no GPUI action per command. |
 | `src/theme.rs` | `GuiTheme`: tt-git's colors as `Hsla`, every `StyleRole` as a `HighlightStyle`, and gpui-component's theme set to match. |
@@ -296,6 +296,27 @@ and columns.
 Focus moves (`ctrl+h/j/k/l`) compare rects only with each other, and mouse
 input arrives already hit-tested, so they work in either unit.
 
+## Editors
+
+`App::take_editor` hands the front end an `EditorLaunch`. The TUI suspends
+itself and runs a terminal editor (`launch.terminal`) in its own terminal.
+The GUI has no terminal to give, so `AppModel::after_input` calls
+`App::open_editor_pane` (`app/editor_pane.rs`): the editor runs in a PTY
+pane with the overlay placement, over the main area, titled with the
+command and saying "quit <editor> to come back". Every key goes to it. The
+release key (f12) doesn't leave it: the first press says the editor is
+still running, a second in a row stops it ("stopped <editor>"). When the
+editor exits the pane closes and the app applies
+`EditorFinished(Ok(exit code))` itself, so what follows (the refresh, the
+"editor exited with status N" notice) is the same as in the TUI. If it
+can't start, the GUI sends `EditorFinished(Err)` and the error popup says
+so. An editor with a window of its own starts detached and reports
+`EditorFinished(Ok(None))` at once, as in the TUI.
+
+The tests in `tt-git-gui/src/terminal/editor_tests.rs` use the test
+binary itself as the terminal editor (the ignored test `fake_editor`), so
+they run on every OS.
+
 ## Gotchas
 
 - A test helper that opens a `Gui` must hand the `Sandbox` back with it. If
@@ -307,8 +328,9 @@ input arrives already hit-tested, so they work in either unit.
 
 ## Known gaps
 
-- Terminal editors (vim, nano) can't run from the GUI yet; it says so in
-  the error popup. Phase C4 decides how.
+- Closing the window while a terminal editor runs closes it as closing a
+  terminal emulator would (vim and nano keep their recovery files); it
+  doesn't ask first.
 - Plugins get no `TTGIT_BIN_PATH` from the GUI, since `tt-git-gui` has no
   CLI subcommands.
 - No menus, no remembered window size, one repository per window (C1, C3).
