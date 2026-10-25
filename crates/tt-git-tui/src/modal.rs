@@ -12,7 +12,7 @@ use tt_git_core::{
     StashScope, StatusEntry, UndoStep, ignores_case, message_regex,
 };
 
-use crate::agent::{AgentAction, AgentRequest};
+use crate::agent::{AgentAction, AgentHunk, AgentRequest};
 use crate::filter::FilterPanel;
 use crate::keymap::{Command, KeyCombo};
 use crate::theme::Theme;
@@ -343,10 +343,12 @@ pub enum PromptAction {
         index: usize,
     },
     /// A request for an AI agent. `tab` steps from a custom message
-    /// (`selected` none) through the ready-made `actions`.
+    /// (`selected` none) through the ready-made `actions`. `hunk` is what
+    /// it's about when that isn't the graph's commit.
     Agent {
         actions: Vec<AgentAction>,
         selected: Option<usize>,
+        hunk: Option<AgentHunk>,
     },
     /// A regex for the graph's commits, added to `filter` (the graph's
     /// filter now). `tab` puts the next of `presets` in the input, and
@@ -749,7 +751,12 @@ impl Modal {
                 KeyCode::Esc => ModalOutcome::Cancelled,
                 KeyCode::Enter => {
                     let value = input.trim();
-                    if let PromptAction::Agent { actions, selected } = action {
+                    if let PromptAction::Agent {
+                        actions,
+                        selected,
+                        hunk,
+                    } = action
+                    {
                         let picked = selected.and_then(|i| actions.get(i)).cloned();
                         return if value.is_empty() && picked.is_none() {
                             ModalOutcome::Open
@@ -757,6 +764,7 @@ impl Modal {
                             ModalOutcome::Agent(AgentRequest {
                                 action: picked,
                                 message: value.to_string(),
+                                hunk: hunk.clone(),
                             })
                         };
                     }
@@ -829,7 +837,7 @@ impl Modal {
                                 key.code == KeyCode::BackTab,
                             );
                         }
-                        PromptAction::Agent { actions, selected } => {
+                        PromptAction::Agent { actions, selected, .. } => {
                             // None (custom message), then each action, round again.
                             let n = actions.len() + 1;
                             let at = selected.map_or(0, |i| i + 1);
@@ -1005,7 +1013,7 @@ impl Modal {
                         };
                         (title, body, hint.into())
                     }
-                    PromptAction::Agent { actions, selected } => {
+                    PromptAction::Agent { actions, selected, .. } => {
                         let mut tabs = vec![tab("Custom message".into(), selected.is_none())];
                         for (i, a) in actions.iter().enumerate() {
                             tabs.push(Span::styled(" · ", theme.muted));
@@ -1462,6 +1470,7 @@ mod tests {
             PromptAction::Agent {
                 actions: actions.clone(),
                 selected: None,
+                hunk: None,
             },
         );
         assert_eq!(
@@ -1475,6 +1484,7 @@ mod tests {
             ModalOutcome::Agent(AgentRequest {
                 action: Some(actions[0].clone()),
                 message: String::new(),
+                hunk: None,
             })
         );
         m.handle_key(k("shift+tab"));
@@ -1487,6 +1497,7 @@ mod tests {
             ModalOutcome::Agent(AgentRequest {
                 action: Some(actions[actions.len() - 1].clone()),
                 message: "why".into(),
+                hunk: None,
             }),
             "shift+tab goes round to the last action"
         );
@@ -1496,6 +1507,7 @@ mod tests {
             ModalOutcome::Agent(AgentRequest {
                 action: None,
                 message: "why".into(),
+                hunk: None,
             })
         );
     }

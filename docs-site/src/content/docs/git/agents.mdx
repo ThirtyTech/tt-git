@@ -1,6 +1,6 @@
 ---
 title: Agent actions
-description: "Ask an AI coding agent about a commit, a branch or a conflicted merge, from the graph."
+description: "Ask an AI coding agent about a commit, a branch, a conflicted merge or a diff hunk."
 ---
 
 import Screenshot from '../../../components/Screenshot.astro';
@@ -10,7 +10,9 @@ Press <kbd>A</kbd> on a commit in the graph to hand it to an AI coding agent:
 ask it something about the commit, or pick a ready-made request such as
 *Explain branch* or *Resolve conflicts*. tt-git starts the agent in the
 repository with a prompt that already says which commit, branch and files
-you mean.
+you mean. <kbd>A</kbd> on a diff hunk, in the [staging view](/panes/staging/)
+or in [details](/panes/details/), asks about just those lines instead; see
+[Asking about a hunk](#asking-about-a-hunk).
 
 The agent is [Claude Code](https://claude.com/claude-code) (`claude`) unless
 you set another in [`[agent]`](#configuring-it). It runs interactively, so
@@ -47,12 +49,45 @@ input is empty.
 | Explain commit | always | explain what the selected commit changes and why |
 | Explain branch | always | explain what the current branch adds compared to the [base branch](/panes/merged-unmerged/) and how the feature works |
 | Review commit | always | look for bugs and risky changes in the selected commit |
+| Explain change | from a hunk | explain what the lines change and why |
+| Review change | from a hunk | look for bugs and risky edits in the lines |
 
 While a merge or rebase is stopped on conflicts, *Resolve conflicts* comes
 first and is already selected when the box opens, so <kbd>A</kbd> then
 <kbd>enter</kbd> starts it. When it's done, check the result in the
 [status pane](/panes/status/) and press <kbd>C</kbd> to continue, as after
 resolving by hand. See [Merge, rebase and cherry-pick](/git/merge-rebase/).
+
+## Asking about a hunk
+
+<kbd>A</kbd> also works on a diff, to ask about a few lines rather than a
+whole commit:
+
+- **In the [staging view](/panes/staging/)**, it asks about the selected
+  hunk. In line mode it's the selected line, or the range you started with
+  <kbd>v</kbd>, from its first line to its last. The diff is of the side
+  you're on: the unstaged changes (the working tree against the index) or
+  the staged ones (the index against `HEAD`).
+- **In [details](/panes/details/)**, on a commit, a stash or a file's diff
+  from the status pane, it asks about the hunk at the top of the diff, the
+  same line <kbd>e</kbd> opens. Scroll so the hunk you want is at the top
+  first. On a commit's message or a file's header, that's the first hunk
+  below it.
+
+<Screenshot name="agent-hunk-staging" alt="The Ask an agent dialog over lines picked in the staging view" />
+
+The box's title names the file and lines, like
+**Ask an agent about src/main.rs lines 12-30**. Only the actions for hunks
+are offered: *Explain change* and *Review change*. A custom message works as
+well, and the prompt puts the lines in front of it as a diff, with which file
+and lines they are and what they're a diff of.
+
+<Screenshot name="agent-hunk-details" alt="Asking an agent about the first hunk of a commit in details" />
+
+Where there's no hunk at the top of details (a commit with no file changes,
+a binary file), <kbd>A</kbd> says `no diff hunk here to ask about` and opens
+nothing. In blame, <kbd>A</kbd> isn't bound; *Ask agent* in the palette asks
+about the graph's commit.
 
 ## Where the agent runs
 
@@ -92,11 +127,32 @@ message), with these placeholders filled in:
 | `{conflicts}` | the conflicted files, one per line |
 | `{merge_head}` | what's being merged, rebased or picked, by name |
 | `{log}` | `git log --oneline <base>..<branch>`, at most 50 commits |
+| `{file}` | from a hunk: the file's path |
+| `{lines}` | from a hunk: the new-side lines, as `line 12` or `lines 12-30`, or `old lines 5-7` when only removed lines are picked |
+| `{hunk}` | from a hunk: the lines as a diff, under their `@@` heading |
+| `{source}` | from a hunk: what the diff is of, such as `commit 1a2b3c4` or `the staged changes (the index against HEAD)` |
+
+From a hunk in a commit or a stash, `{commit}` and `{subject}` are that
+commit's rather than the graph's selection.
 
 A `{name}` tt-git doesn't know is left as it is, so braces in a prompt need
 no escaping. The prompts point the agent at commits rather than pasting
 whole diffs: the agent runs in the repository and reads what it needs with
-git.
+git. The exception is a hunk, which is pasted in, since the lines you picked
+may not be in any commit yet.
+
+From a hunk, the hunk prompt goes between the system prompt and the
+request. By default it's:
+
+````text
+This is about {lines} of {file}, in {source}:
+
+```diff
+{hunk}
+```
+````
+
+Set `hunk_prompt` in `[agent]` to change it.
 
 The default system prompt tells the agent it was started from tt-git, which
 repository and branch it's in, to use git itself, and not to push or commit
@@ -109,6 +165,7 @@ unless you ask.
 command = "claude"     # the agent to run
 placement = "auto"     # "auto", "herdr-tab", "herdr-split" or "details"
 # system_prompt = "..." # replaces the default; "" for none
+# hunk_prompt = "..."   # from a hunk, after the system prompt; "" for none
 
 [[agent.actions]]
 name = "Write release notes"
@@ -119,11 +176,17 @@ prompt = "Write release notes for what {branch} adds since {base}:\n{log}"
 name = "Resolve conflicts"
 when = "merging"
 prompt = "Resolve the conflicts in:\n{conflicts}\nStage each file. Don't commit."
+
+[[agent.actions]]
+name = "Write a test"
+when = "hunk"
+prompt = "Write a test that covers this change to {file}."
 ```
 
 See [`[agent]`](/configuration/#agent) for every setting. Setting
 `[[agent.actions]]` replaces the built-in actions, so copy the ones you want
-to keep.
+to keep. An action with `when = "hunk"` is offered only from a hunk, and
+only those are offered there.
 
 <Aside>
 By default the prompt goes to the agent as its last argument, which is how

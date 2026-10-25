@@ -38,11 +38,12 @@ pane_release_keys = ["ctrl+\\", "f12"]   # leave/close plugin panes
 # command = "nvim"              # default: $VISUAL, $EDITOR, git's core.editor, then notepad / vi
 # terminal = true               # runs in this terminal; default: worked out from the program
 
-[agent]                         # for `A` in the graph
+[agent]                         # for `A` in the graph, the staging view and details
 command = "claude"              # the prompt is its last argument, or put {prompt} / {prompt_file} in it
 placement = "auto"              # "auto" (herdr tab inside herdr, else the details pane), "herdr-tab", "herdr-split", "details"
 # system_prompt = "..."         # default: tt-git's own; "" for none
-# [[agent.actions]]             # replaces the built-in actions: name, prompt, description, when = "always" | "merging"
+# hunk_prompt = "..."           # asking about a diff hunk, after the system prompt; {file} {lines} {hunk} {source}
+# [[agent.actions]]             # replaces the built-in actions: name, prompt, description, when = "always" | "merging" | "hunk"
 ```
 
 ## Themes
@@ -253,6 +254,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `search`, `search_next`, `search_prev` | `/`, `n`, `N` | details |
 | `open_in_editor` | `e` | status, details, stage, blame |
 | `blame` | `b` | status, details |
+| `agent` | `A` | details, stage (the graph's is in the row above) |
 | `open_commit`, `toggle_details`, `blame_back`, `blame_forward`, `blame_older`, `blame_newer`, `search`, `search_next`, `search_prev`, `toggle_dates`, `close_details` | `enter`, `space`, `[`, `]`, `{`, `}`, `/`, `n`, `N`, `t`, `esc` | blame |
 | `go_to_line` | `ctrl+g` | blame |
 | `copy` (commit hash / branch name / absolute worktree path) | `c` | graph, branches, worktrees, blame |

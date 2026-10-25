@@ -435,6 +435,55 @@ pub fn diff_text_position<S: AsRef<str>>(lines: &[S], row: usize) -> Option<Diff
     })
 }
 
+/// One hunk found in diff text, by [`diff_text_hunk`].
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TextHunk {
+    /// As in [`DiffPosition`]: the new path, or the old one for a deletion.
+    pub path: Option<String>,
+    /// The rows of the text it covers, its `@@` heading first.
+    pub rows: std::ops::Range<usize>,
+    pub hunk: Hunk,
+}
+
+/// The hunk of diff text that holds row `row`, or for a row above a file's
+/// first hunk (its header, a commit's message) the first hunk below it in
+/// that file. `None` when there's no hunk there.
+pub fn diff_text_hunk<S: AsRef<str>>(lines: &[S], row: usize) -> Option<TextHunk> {
+    let line = |i: usize| lines[i].as_ref();
+    let is_file = |i: usize| line(i).starts_with("diff --git ");
+    let row = row.min(lines.len().checked_sub(1)?);
+    let start = (0..=row)
+        .rev()
+        .find(|&i| is_file(i))
+        .or_else(|| (row..lines.len()).find(|&i| is_file(i)))
+        .unwrap_or(0);
+    let end = (start + 1..lines.len()).find(|&i| is_file(i)).unwrap_or(lines.len());
+    // The hunk's own lines end at the first row that isn't one.
+    let hunk_end = |at: usize| {
+        (at + 1..end)
+            .find(|&i| !matches!(line(i).as_bytes().first(), Some(b' ' | b'+' | b'-' | b'\\') | None))
+            .unwrap_or(end)
+    };
+    let before = (start..=row.max(start)).rev().find(|&i| line(i).starts_with("@@ "));
+    let at = match before {
+        Some(at) if row < hunk_end(at) => at,
+        _ => (row.max(start)..end).find(|&i| line(i).starts_with("@@ "))?,
+    };
+    let rows = at..hunk_end(at);
+    // Trailing blank rows separate files in `git show`; they aren't the hunk's.
+    let mut rows_end = rows.end;
+    while rows_end > at + 1 && line(rows_end - 1).is_empty() {
+        rows_end -= 1;
+    }
+    let text: Vec<&str> = (at..rows_end).map(line).collect();
+    let hunk = FileDiff::parse(&text.join("\n"))?.hunks.into_iter().next()?;
+    Some(TextHunk {
+        path: diff_text_position(lines, at).and_then(|p| p.path),
+        rows: at..rows_end,
+        hunk,
+    })
+}
+
 /// The row of diff text that shows new-side line `line`: an added or
 /// context line of the hunk that holds it. `None` when no hunk reaches it.
 pub fn diff_text_row_of_line<S: AsRef<str>>(lines: &[S], line: u32) -> Option<usize> {
@@ -570,6 +619,28 @@ index 1111111..2222222 100644
  z
  w
 ";
+
+    #[test]
+    fn finds_the_hunk_at_a_row() {
+        let shown = format!(
+            "commit abc\n\n    subject\n\n{TWO_HUNKS}\ndiff --git a/g.txt b/g.txt\n--- a/g.txt\n+++ /dev/null\n@@ -1 +0,0 @@\n-gone\n"
+        );
+        let lines: Vec<&str> = shown.lines().collect();
+        let at = |row| diff_text_hunk(&lines, row).map(|h| (h.path, h.rows, h.hunk.new_start));
+        // The message and the file's header: the first hunk below.
+        assert_eq!(at(0), Some((Some("f.txt".into()), 8..14, 1)));
+        assert_eq!(at(6), Some((Some("f.txt".into()), 8..14, 1)));
+        assert_eq!(at(11), Some((Some("f.txt".into()), 8..14, 1)));
+        assert_eq!(at(14), Some((Some("f.txt".into()), 14..19, 10)));
+        // The blank row closing a file stays with its last hunk, but isn't part of it.
+        assert_eq!(at(19), Some((Some("f.txt".into()), 14..19, 10)));
+        assert_eq!(at(21), Some((Some("g.txt".into()), 23..25, 0)));
+        let hunk = diff_text_hunk(&lines, 15).unwrap().hunk;
+        assert_eq!(hunk.lines.len(), 4);
+        assert_eq!(hunk.lines[1].kind, LineKind::Add);
+        assert_eq!(diff_text_hunk(&["no diff here"], 0), None);
+        assert_eq!(diff_text_hunk::<&str>(&[], 0), None);
+    }
 
     #[test]
     fn finds_the_row_of_a_new_line() {

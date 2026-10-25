@@ -109,6 +109,15 @@ the file as it is now.
 
 Which editor runs is set in [`[editor]`](/configuration/#editor).
 
+## Asking an agent about the change
+
+Press <kbd>A</kbd> to ask an AI agent about the selected hunk, or in line mode the selected line or
+range. The agent gets the lines as a diff, with the file, the line numbers and which side they're
+on. Pick *Explain change* or *Review change* with <kbd>tab</kbd>, or type your own question. See
+[Asking about a hunk](/git/agents/#asking-about-a-hunk).
+
+<Screenshot name="agent-hunk-staging" alt="The Ask an agent dialog over a range of lines in the staging view" />
+
 ## Moving to another file
 
 Press <kbd>]</kbd> to stage the next file in the status pane without going back to it, and
@@ -150,5 +159,6 @@ For how tt-git turns your selection into a patch git can apply, see
 | <kbd>d</kbd> | Discard the selection from the working tree (asks first) |
 | <kbd>c</kbd> | Commit what's staged |
 | <kbd>e</kbd> | Open the file in your editor at the selection |
+| <kbd>A</kbd> | [Ask an AI agent](/git/agents/#asking-about-a-hunk) about the selection |
 | <kbd>]</kbd> <kbd>[</kbd> | Next / previous file in the status pane |
 | <kbd>esc</kbd> | Back to the status pane |

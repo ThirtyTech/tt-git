@@ -474,7 +474,10 @@ loaded, plus two git calls on a background job:
 `git log --oneline --no-decorate -50 <base>..<branch>` for `{log}`, and,
 while a merge, rebase, cherry-pick or revert is stopped,
 `git name-rev --name-only --always MERGE_HEAD` (or `REBASE_HEAD`,
-`CHERRY_PICK_HEAD`, `REVERT_HEAD`) for `{merge_head}`. The prompt is also
+`CHERRY_PICK_HEAD`, `REVERT_HEAD`) for `{merge_head}`. From a diff hunk,
+`{hunk}` and its line numbers come from the diff already on screen (the
+staging view's, or the `git show` or `git diff` text in details), with no
+git call of its own. The prompt is also
 written to `<temp>/tt-git/<repo>/agent-prompt-<pid>-<n>.md` for
 `{prompt_file}`.
 
