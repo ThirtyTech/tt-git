@@ -80,10 +80,11 @@ The menus are in the macOS menu bar at the top of the screen, as in any Mac
 app, each item with its key after its name. The window's title bar has the
 traffic-light buttons, then the tt-git icon and the window's title.
 
-{/* Screenshot: the desktop app on macOS on the lumen-web mock repository.
-    `gui-overview-macos` comes from the guishots example on a Mac. The Graph
-    menu open in the menu bar, `gui-menu-macos`, is outside the window, so
-    take it with the system's screenshot tool (shift+cmd+4). */}
+<Screenshot name="gui-overview-macos" alt="The desktop app on macOS, with the traffic-light buttons, the tt-git icon and the window's title above the graph, the Status pane and the Branches pane" caption="On macOS the title bar has only the window's buttons and title; the menus are in the menu bar." />
+
+{/* Screenshot: the Graph menu open in the macOS menu bar, `gui-menu-macos`.
+    It's outside the window, so guishots can't take it: use the system's
+    screenshot tool (shift+cmd+4). */}
 
 Install it from the `.dmg`; see [Install and open](/desktop/install/).
 
@@ -94,11 +95,11 @@ The window draws its own title bar with the menus, as on Windows. Under
 Wayland on GNOME, which leaves window buttons to the app, it draws those
 too. It runs on Wayland and X11, and draws with Vulkan.
 
-{/* Screenshot: the desktop app on Linux (GNOME on Wayland) on the lumen-web
-    mock repository, with its title bar and the Graph menu open. Name it
-    `gui-overview-linux` (and `gui-menu-linux` for the menu open). GPUI has
-    no render_to_image on Linux, so guishots can't take it there yet: use the
-    desktop's screenshot tool on the window. */}
+<Screenshot name="gui-menu-linux" alt="The Graph menu open in the desktop app's title bar on Linux, listing the graph's commands with their keys" caption="The menus live in the title bar on Linux too (here on GNOME, under X11)." />
+
+{/* Screenshot: the same on GNOME under Wayland, with the window buttons the
+    app draws there. GPUI has no render_to_image on Linux, so guishots can't
+    take it: use the desktop's screenshot tool on the window. */}
 
 Install it from the tarball or the AppImage; see
 [Install and open](/desktop/install/).
