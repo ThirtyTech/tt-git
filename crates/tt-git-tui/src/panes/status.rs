@@ -277,6 +277,13 @@ impl StatusPane {
         self.status.as_ref().map_or(&[], |s| s.entries.as_slice())
     }
 
+    /// The front end shows `rows` lines of files (under the banner of a
+    /// merge or rebase in progress): keeps the selection among them, and
+    /// pages by them. Call before drawing.
+    pub fn set_viewport(&mut self, rows: usize) {
+        self.cursor.scroll_into_view(rows);
+    }
+
     /// The text of each row as drawn (without colors), for tests.
     pub fn row_texts(&self) -> Vec<String> {
         self.rows
@@ -734,7 +741,7 @@ impl Component for StatusPane {
             inner.height = inner.height.saturating_sub(1);
         }
         let height = inner.height as usize;
-        self.cursor.scroll_into_view(height);
+        self.set_viewport(height);
         let width = inner.width as usize;
         let start = self.cursor.offset.min(self.rows.len());
         let end = (start + height).min(self.rows.len());

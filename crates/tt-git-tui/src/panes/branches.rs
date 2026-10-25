@@ -129,6 +129,29 @@ pub struct BranchesPane {
 }
 
 impl BranchesPane {
+    /// The front end shows `rows` lines of the tab's list: keeps the
+    /// selection among them, and pages by them. Call before drawing.
+    pub fn set_viewport(&mut self, rows: usize) {
+        self.cursor_mut().scroll_into_view(rows);
+    }
+
+    /// The front end drew the list's entries `range` (positions among
+    /// those shown) at `now`: notes their dates, so a tick can tell when
+    /// they'd read differently.
+    pub fn note_drawn(&mut self, now: i64, range: std::ops::Range<usize>) {
+        let list = self.list(self.tab);
+        let mut dates = DrawnDates::new(now);
+        for &i in &self.visible[range] {
+            dates.add(match self.tab {
+                BranchTab::Tags => self.tags[i].date,
+                BranchTab::Stash => self.stashes[i].date,
+                BranchTab::Worktrees => continue,
+                _ => list[i].activity,
+            });
+        }
+        self.dates = dates;
+    }
+
     /// The tab drawn at screen cell `pos` in the last frame.
     pub fn part_at(&self, pos: Position) -> Option<PanePart> {
         self.tab_cells
@@ -1589,13 +1612,14 @@ impl Component for BranchesPane {
         }
         let inner = block.inner(area);
         frame.render_widget(block, area);
-        self.dates = DrawnDates::new(self.clock.now());
+        let now = self.clock.now();
         if self.visible.is_empty() {
+            self.note_drawn(now, 0..0);
             frame.render_widget(Paragraph::new(self.empty_message()).style(theme.muted), inner);
             return;
         }
         let height = inner.height as usize;
-        self.cursor_mut().scroll_into_view(height);
+        self.set_viewport(height);
         let cursor = *self.cursor();
         let start = cursor.offset.min(self.visible.len());
         let end = (start + height).min(self.visible.len());
@@ -1646,15 +1670,6 @@ impl Component for BranchesPane {
             })
             .collect();
         frame.render_widget(Paragraph::new(lines), inner);
-        let mut dates = self.dates;
-        for &i in &self.visible[start..end] {
-            dates.add(match self.tab {
-                BranchTab::Tags => self.tags[i].date,
-                BranchTab::Stash => self.stashes[i].date,
-                BranchTab::Worktrees => continue,
-                _ => list[i].activity,
-            });
-        }
-        self.dates = dates;
+        self.note_drawn(now, start..end);
     }
 }

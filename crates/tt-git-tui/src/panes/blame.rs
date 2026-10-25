@@ -677,6 +677,29 @@ impl BlameView {
         }
     }
 
+    /// The front end shows `rows` lines of code: puts a selection that
+    /// jumped where it was asked to go, keeps it among them, and pages by
+    /// them. Call before drawing.
+    pub fn set_viewport(&mut self, rows: usize) {
+        let shown = self.shown();
+        let level = &mut self.levels[shown];
+        level.cursor.height = rows;
+        if !matches!(level.blame, Some(Ok(_))) {
+            return;
+        }
+        match level.place.take() {
+            Some(Place::Center) => {
+                // A third of the way down, without scrolling past the end.
+                let last_page = level.len().saturating_sub(rows);
+                level.cursor.offset = level.cursor.selected.saturating_sub(rows / 3).min(last_page);
+            }
+            // Where it was, even if that leaves room below the end.
+            Some(Place::Row(row)) => level.cursor.offset = level.cursor.selected.saturating_sub(row),
+            None => {}
+        }
+        level.cursor.scroll_into_view(rows);
+    }
+
     pub fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
         let commit_rows = if self.show_commit && self.levels[self.shown()].len() > 0 {
             COMMIT_ROWS.min(area.height / 2)
@@ -698,10 +721,10 @@ impl BlameView {
         let dates = self.dates;
         let clock = self.clock.clone();
         let height = area.height as usize;
+        self.set_viewport(height);
         let shown = self.shown();
         let search = &self.search;
-        let level = &mut self.levels[shown];
-        level.cursor.height = height;
+        let level = &self.levels[shown];
         match &level.blame {
             None => {
                 frame.render_widget(Paragraph::new("loading…").style(theme.muted), area);
@@ -714,18 +737,6 @@ impl BlameView {
             }
             Some(Ok(_)) => {}
         }
-        match level.place.take() {
-            Some(Place::Center) => {
-                // A third of the way down, without scrolling past the end.
-                let last_page = level.len().saturating_sub(height);
-                level.cursor.offset = level.cursor.selected.saturating_sub(height / 3).min(last_page);
-            }
-            // Where it was, even if that leaves room below the end.
-            Some(Place::Row(row)) => level.cursor.offset = level.cursor.selected.saturating_sub(row),
-            None => {}
-        }
-        level.cursor.scroll_into_view(height);
-        let level = &*level;
         let blame = level.blame().expect("checked above");
         let selected = level.cursor.selected;
         let selected_commit = blame.lines.get(selected).map(|l| l.commit);

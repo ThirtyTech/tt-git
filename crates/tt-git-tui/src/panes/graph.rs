@@ -355,6 +355,34 @@ impl GraphPane {
         self.drawn_dates.stale(now)
     }
 
+    /// The front end shows `rows` lines of commits: keeps the selection
+    /// among them, and pages by them. Call before drawing.
+    pub fn set_viewport(&mut self, rows: usize) {
+        if !self.commits.is_empty() {
+            self.cursor.scroll_into_view(rows);
+        }
+    }
+
+    /// The commits a viewport of `rows` lines shows: from the scroll
+    /// offset on.
+    pub fn visible_range(&self, rows: usize) -> std::ops::Range<usize> {
+        let start = self.cursor.offset.min(self.commits.len());
+        start..(start + rows).min(self.commits.len())
+    }
+
+    /// The front end drew the commits in `range` at `now`: notes their
+    /// dates, so a tick can tell when they'd read differently.
+    pub fn note_drawn(&mut self, now: i64, range: std::ops::Range<usize>) {
+        self.drawn_dates = DrawnDates::new(now);
+        // Whether or not the date column fits; extra redraws are harmless.
+        // Clock times don't change as time passes.
+        if self.dates == DateStyle::Relative {
+            for commit in &self.commits[range] {
+                self.drawn_dates.add(commit.commit_time);
+            }
+        }
+    }
+
     fn clear(&mut self) {
         self.commits.clear();
         // Drawing never shows more columns than this.
@@ -978,9 +1006,9 @@ impl Component for GraphPane {
         let inner = block.inner(area);
         frame.render_widget(block, area);
         let now = self.clock.now();
-        self.drawn_dates = DrawnDates::new(now);
 
         if self.commits.is_empty() {
+            self.note_drawn(now, 0..0);
             let msg = match () {
                 _ if self.loading => "loading…",
                 _ if self.is_filtered() => "no commits match the filter (f or / to change it, esc to clear it)",
@@ -991,9 +1019,8 @@ impl Component for GraphPane {
         }
 
         let height = inner.height as usize;
-        self.cursor.scroll_into_view(height);
-        let start = self.cursor.offset.min(self.commits.len());
-        let end = (start + height).min(self.commits.len());
+        self.set_viewport(height);
+        let std::ops::Range { start, end } = self.visible_range(height);
         let lanes = if !self.lanes {
             0
         } else {
@@ -1027,13 +1054,7 @@ impl Component for GraphPane {
             })
             .collect();
         frame.render_widget(Paragraph::new(lines), inner);
-        // Whether or not the date column fits; extra redraws are harmless.
-        // Clock times don't change as time passes.
-        if self.dates == DateStyle::Relative {
-            for commit in &self.commits[start..end] {
-                self.drawn_dates.add(commit.commit_time);
-            }
-        }
+        self.note_drawn(now, start..end);
     }
 }
 

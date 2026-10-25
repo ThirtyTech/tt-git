@@ -465,6 +465,27 @@ impl StageView {
         self.applying = true;
     }
 
+    /// The front end shows `rows` lines of side `id`'s diff: keeps what's
+    /// picked on the active side among them, and pages by them. Call
+    /// before drawing.
+    pub fn set_viewport(&mut self, id: StageSideId, rows: usize) {
+        let selection = (id == self.side && self.follow).then(|| self.selected_rows());
+        let view = match id {
+            StageSideId::Unstaged => &mut self.unstaged,
+            StageSideId::Staged => &mut self.staged,
+        };
+        view.height = rows;
+        if let Some((first, last)) = selection
+            && rows > 0
+        {
+            if last + 1 - first > rows || first < view.offset {
+                view.offset = first;
+            } else if last >= view.offset + rows {
+                view.offset = last + 1 - rows;
+            }
+        }
+    }
+
     pub fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
         if !self.loaded() {
             frame.render_widget(Paragraph::new("loading…").style(theme.muted), area);
@@ -530,21 +551,7 @@ impl StageView {
             return;
         }
         let height = body.height as usize;
-        let selection = (active && self.follow).then(|| self.selected_rows());
-        let view = match id {
-            StageSideId::Unstaged => &mut self.unstaged,
-            StageSideId::Staged => &mut self.staged,
-        };
-        view.height = height;
-        if let Some((first, last)) = selection
-            && height > 0
-        {
-            if last + 1 - first > height || first < view.offset {
-                view.offset = first;
-            } else if last >= view.offset + height {
-                view.offset = last + 1 - height;
-            }
-        }
+        self.set_viewport(id, height);
         let view = self.view(id);
         let Some(diff) = view.diff.as_ref().and_then(|d| d.as_ref().ok()) else {
             return;

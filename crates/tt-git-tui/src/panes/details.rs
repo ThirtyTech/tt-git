@@ -193,6 +193,40 @@ impl DetailsPane {
         view.files.get(view.cursor.selected)
     }
 
+    /// The front end shows `rows` lines of the text (in the files view, of
+    /// the selected file's diff): pages and searches by them. Call before
+    /// drawing.
+    pub fn set_viewport(&mut self, rows: usize) {
+        self.cursor.height = rows;
+    }
+
+    /// The front end shows the files view's list in `list_rows` lines, the
+    /// first `header_rows` lines of the commit header, and `diff_rows`
+    /// lines of the diff: keeps the selected file in view, and scrolls the
+    /// line blame came from a third of the way down once it's found. Call
+    /// before [`set_viewport`](Self::set_viewport) and drawing.
+    pub fn set_files_viewport(&mut self, list_rows: usize, header_rows: usize, diff_rows: usize) {
+        self.header_rows = header_rows;
+        let mark = self.files_mark();
+        let Some(view) = &mut self.files else { return };
+        view.cursor.scroll_into_view(list_rows);
+        if let Some((row, _)) = mark
+            && std::mem::take(&mut view.center)
+        {
+            let last_page = self.lines.len().saturating_sub(diff_rows);
+            self.cursor.offset = row.saturating_sub(diff_rows / 3).min(last_page);
+        }
+    }
+
+    /// In the files view, the row of the selected file's diff blame came
+    /// from and its new-side line number, once found.
+    pub fn files_mark(&self) -> Option<(usize, u32)> {
+        let view = self.files.as_ref()?;
+        view.marked
+            .filter(|(idx, _, _)| *idx == view.cursor.selected)
+            .map(|(_, row, line)| (row, line))
+    }
+
     /// Puts the files view's list beside the diff instead of below it.
     pub fn set_files_beside(&mut self, beside: bool) {
         self.files_beside = beside;
@@ -772,7 +806,6 @@ impl DetailsPane {
             frame.render_widget(list_block, list_area);
             frame.render_widget(Paragraph::new(title), title_area);
             view.rows_area = rows_area;
-            draw_file_list(view, frame, rows_area, focused, theme);
             Rect {
                 x: right.x + 1,
                 width: right.width.saturating_sub(1),
@@ -788,7 +821,6 @@ impl DetailsPane {
                 .border_style(theme.border)
                 .title(title);
             view.rows_area = list_block.inner(list_area);
-            draw_file_list(view, frame, view.rows_area, focused, theme);
             frame.render_widget(list_block, list_area);
             top
         };
@@ -803,13 +835,17 @@ impl DetailsPane {
             max_header
         };
         let header_rows = view.header.len().min(max_header);
-        self.header_rows = header_rows;
         let [header_area, rule_area, diff_area] = Layout::vertical([
             Constraint::Length(header_rows as u16),
             Constraint::Length(u16::from(header_rows > 0)),
             Constraint::Fill(1),
         ])
         .areas(body);
+        view.diff_area = diff_area;
+        let rows_area = view.rows_area;
+        self.set_files_viewport(rows_area.height as usize, header_rows, diff_area.height as usize);
+        let Some(view) = &self.files else { return };
+        draw_file_list(view, frame, rows_area, focused, theme);
         let header: Vec<Line> = view.header[..header_rows]
             .iter()
             .map(|l| style_line(l, None, 0, &[], theme))
@@ -817,25 +853,14 @@ impl DetailsPane {
         frame.render_widget(Paragraph::new(header), header_area);
         let rule = "─".repeat(rule_area.width as usize);
         frame.render_widget(Paragraph::new(rule).style(theme.border), rule_area);
-        view.diff_area = diff_area;
-        let mark = view
-            .marked
-            .filter(|(idx, _, _)| *idx == view.cursor.selected)
-            .map(|(_, row, line)| (row, line));
-        if let Some((row, _)) = mark
-            && std::mem::take(&mut view.center)
-        {
-            let height = diff_area.height as usize;
-            let last_page = self.lines.len().saturating_sub(height);
-            self.cursor.offset = row.saturating_sub(height / 3).min(last_page);
-        }
+        let mark = self.files_mark();
         self.draw_text(frame, diff_area, mark, theme);
     }
 
     /// The text, with `mark`'s row (and new-side line number) picked out:
     /// the line blame came from.
     fn draw_text(&mut self, frame: &mut Frame, area: Rect, mark: Option<(usize, u32)>, theme: &Theme) {
-        self.cursor.height = area.height as usize;
+        self.set_viewport(area.height as usize);
         let start = self.cursor.offset.min(self.lines.len());
         let end = (start + area.height as usize).min(self.lines.len());
         let lines: Vec<Line> = (start..end)
@@ -863,9 +888,8 @@ impl DetailsPane {
 }
 
 /// The changed files, scrolled to keep the selection in `area`.
-fn draw_file_list(view: &mut FilesView, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
+fn draw_file_list(view: &FilesView, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
     let width = area.width as usize;
-    view.cursor.scroll_into_view(area.height as usize);
     let start = view.cursor.offset.min(view.files.len());
     let end = (start + area.height as usize).min(view.files.len());
     let mut rows = Vec::new();
@@ -1222,7 +1246,7 @@ impl Component for DetailsPane {
         frame.render_widget(block, area);
 
         if self.subject.is_none() {
-            self.cursor.height = inner.height as usize;
+            self.set_viewport(inner.height as usize);
             frame.render_widget(Paragraph::new("nothing selected").style(theme.muted), inner);
             return;
         }
