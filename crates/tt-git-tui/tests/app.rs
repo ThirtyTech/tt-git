@@ -339,6 +339,32 @@ fn details_follow_the_selection() {
 }
 
 #[test]
+fn shift_page_keys_in_the_graph_page_the_details() {
+    let sb = Sandbox::new();
+    // A message long enough to page through.
+    let body: String = (1..=40).map(|i| format!("row {i:02}\n")).collect();
+    sb.commit_staged(&format!("add rows\n\n{body}"));
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 30);
+    let shows = |t: &TestDriver, text: &str| t.pane_lines(PaneId::Details).iter().any(|l| l.contains(text));
+
+    // Closed, there's nothing to page and the keys do nothing.
+    t.press("shift+pagedown");
+    assert!(!t.app().shows(PaneId::Details));
+
+    t.press("space").wait_idle();
+    assert!(shows(&t, "Author:"));
+    assert!(!shows(&t, "row 03"));
+    t.press("shift+pagedown");
+    assert_eq!(t.app().focus(), PaneId::Graph);
+    assert!(!shows(&t, "Author:"), "paged down");
+    assert!(shows(&t, "row 03"));
+
+    t.press("shift+pageup");
+    assert_eq!(t.app().focus(), PaneId::Graph);
+    assert!(shows(&t, "Author:"), "back at the top");
+}
+
+#[test]
 fn merge_commit_details_show_first_parent_diff() {
     let sb = branchy_repo();
     let mut t = TestDriver::new(&sb);

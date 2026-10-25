@@ -968,6 +968,8 @@ impl Component for GraphPane {
             Command::Agent,
             Command::NextTab,
             Command::PrevTab,
+            Command::DetailsPageDown,
+            Command::DetailsPageUp,
         ]
     }
 

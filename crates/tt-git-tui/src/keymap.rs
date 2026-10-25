@@ -226,6 +226,10 @@ pub enum Command {
     MoveDown,
     PageUp,
     PageDown,
+    /// In the graph, pages the details pane up without focusing it.
+    DetailsPageUp,
+    /// In the graph, pages the details pane down without focusing it.
+    DetailsPageDown,
     Top,
     Bottom,
     Refresh,
@@ -334,6 +338,8 @@ impl Command {
             Command::MoveDown => "down",
             Command::PageUp => "page up",
             Command::PageDown => "page down",
+            Command::DetailsPageUp => "page details up",
+            Command::DetailsPageDown => "page details down",
             Command::Top => "top",
             Command::Bottom => "bottom",
             Command::Refresh => "refresh",
@@ -574,6 +580,8 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Graph, Command::Agent, &["A"]),
     (Context::Graph, Command::PrevTab, &["[", "{"]),
     (Context::Graph, Command::NextTab, &["]", "}"]),
+    (Context::Graph, Command::DetailsPageUp, &["shift+pageup"]),
+    (Context::Graph, Command::DetailsPageDown, &["shift+pagedown"]),
     (Context::Branches, Command::Copy, &["c"]),
     (Context::Branches, Command::Merge, &["M"]),
     (Context::Branches, Command::Rebase, &["r"]),

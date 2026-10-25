@@ -2556,6 +2556,18 @@ impl App {
                 let ctx = self.ctx.clone();
                 self.branches.on_command(cmd, &ctx);
             }
+            // Pages the details beside the graph, leaving focus in the graph.
+            Command::DetailsPageUp | Command::DetailsPageDown
+                if self.focus == PaneId::Graph && self.shows(PaneId::Details) =>
+            {
+                let page = if cmd == Command::DetailsPageUp {
+                    Command::PageUp
+                } else {
+                    Command::PageDown
+                };
+                let ctx = self.ctx.clone();
+                self.details.on_command(page, &ctx);
+            }
             Command::Refresh => self.update(Action::Refresh),
             Command::Palette => {
                 // In blame, a number typed there goes to that line, as `:42` in vim.
