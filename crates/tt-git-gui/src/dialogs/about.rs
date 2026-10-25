@@ -7,7 +7,7 @@
 //! key does: esc, enter, `q` or space close it, other keys wait. A click
 //! outside the box closes it too, by sending the app esc.
 
-use gpui::{AnyElement, InteractiveElement, IntoElement, MouseButton, ParentElement, SharedString, Styled, div};
+use gpui::{AnyElement, Div, InteractiveElement, IntoElement, MouseButton, ParentElement, SharedString, Styled, div};
 use tt_git_app::keymap::{KeyCode, KeyCombo};
 use tt_git_app::view::StyleRole;
 use tt_git_app::view::dialogs::DialogLook;
@@ -35,8 +35,29 @@ pub const GPUI_URL: &str = "https://gpui.rs/";
 const WIDTH: usize = 56;
 
 pub fn render(ui: &Ui) -> AnyElement {
-    let theme = &ui.theme;
     let look = DialogLook::Normal;
+    let muted = ui.theme.fg(StyleRole::Muted);
+    let dialog = dialog_box(ui, ID, look, WIDTH, title(ui, ABOUT_TITLE, look).element())
+        // A click inside isn't one outside.
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .child(content(ui))
+        .child(blank(ui))
+        .child(div().text_color(muted).child(ABOUT_HINT));
+    let model = ui.model.clone();
+    layer(dialog)
+        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+            cx.stop_propagation();
+            if let Some(model) = model.upgrade() {
+                model.update(cx, |m, cx| m.key(KeyCombo::plain(KeyCode::Esc), cx));
+            }
+        })
+        .into_any_element()
+}
+
+/// What About says, in the About dialog and on the keys popup's About tab:
+/// the icon, the version, who made it and the links.
+pub fn content(ui: &Ui) -> Div {
+    let theme = &ui.theme;
     let muted = theme.fg(StyleRole::Muted);
     let line = |text: SharedString| div().min_h(ui.font.line_height).whitespace_normal().child(text);
 
@@ -54,9 +75,9 @@ pub fn render(ui: &Ui) -> AnyElement {
         )
         .child(div().text_center().text_color(muted).child(ABOUT_TAGLINE));
 
-    let dialog = dialog_box(ui, ID, look, WIDTH, title(ui, ABOUT_TITLE, look).element())
-        // A click inside isn't one outside.
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+    div()
+        .flex()
+        .flex_col()
         .child(heading)
         .child(blank(ui))
         .child(line(ABOUT_DEVELOPER.into()))
@@ -74,17 +95,6 @@ pub fn render(ui: &Ui) -> AnyElement {
                 .child("Built with GPUI: ")
                 .child(link(ui, GPUI_LINK, "gpui.rs", GPUI_URL)),
         )
-        .child(blank(ui))
-        .child(div().text_color(muted).child(ABOUT_HINT));
-    let model = ui.model.clone();
-    layer(dialog)
-        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-            cx.stop_propagation();
-            if let Some(model) = model.upgrade() {
-                model.update(cx, |m, cx| m.key(KeyCombo::plain(KeyCode::Esc), cx));
-            }
-        })
-        .into_any_element()
 }
 
 /// `text`, underlined, that opens `url` in the system browser when clicked.

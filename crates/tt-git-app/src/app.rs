@@ -27,6 +27,7 @@ use crate::panes::{
     SavedDetails, StatusPane,
 };
 use crate::theme::Theme;
+use crate::view::dialogs::HelpTab;
 use crate::watcher::RepoWatcher;
 
 mod agent;
@@ -306,6 +307,8 @@ pub struct App {
     show_help: bool,
     /// What's typed into the help popup to narrow its list.
     help_query: String,
+    /// The help popup's tab: its keys or About.
+    help_tab: HelpTab,
     error: Option<String>,
     notice: Option<String>,
     /// Text waiting for the runner to put on the clipboard.
@@ -423,6 +426,7 @@ impl App {
             cell_size: (1, 1),
             show_help: false,
             help_query: String::new(),
+            help_tab: HelpTab::Keys,
             error: None,
             notice: None,
             clipboard: None,
@@ -708,6 +712,11 @@ impl App {
         &self.help_query
     }
 
+    /// The help popup's tab.
+    pub fn help_tab(&self) -> HelpTab {
+        self.help_tab
+    }
+
     /// What the help bar's slot on the right says, in pieces with how each
     /// looks: the notice, then what git operations are running. Empty when
     /// there's neither. While something runs, a notice shows beside it for
@@ -984,10 +993,25 @@ impl App {
     }
 
     /// Typing narrows the help popup's list. The help key closes it while
-    /// nothing is typed; other bound keys only count for quit.
+    /// nothing is typed; other bound keys only count for quit. Tab switches
+    /// to About, where typing does nothing and enter or the quit key closes it
+    /// too.
     fn help_key(&mut self, combo: KeyCombo) {
         let ctrl_or_alt = combo.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
         let bound = self.keymap.lookup(Context::Global, combo);
+        if matches!(combo.code, KeyCode::Tab | KeyCode::BackTab) {
+            self.help_tab = self.help_tab.other();
+            return;
+        }
+        if self.help_tab == HelpTab::About {
+            match combo.code {
+                KeyCode::Esc | KeyCode::Enter => self.show_help = false,
+                _ if bound == Some(Command::Quit) && ctrl_or_alt => self.should_quit = true,
+                _ if matches!(bound, Some(Command::Help | Command::Quit)) => self.show_help = false,
+                _ => {}
+            }
+            return;
+        }
         match combo.code {
             KeyCode::Esc => self.show_help = false,
             KeyCode::Backspace => {
@@ -2797,6 +2821,7 @@ impl App {
             Command::Help => {
                 self.show_help = !self.show_help;
                 self.help_query.clear();
+                self.help_tab = HelpTab::Keys;
             }
             Command::FocusNext => self.cycle_focus(1),
             Command::FocusPrev => self.cycle_focus(PaneId::ALL.len() - 1),
