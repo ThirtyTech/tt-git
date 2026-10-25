@@ -22,3 +22,5 @@ pnpm-debug.log*
 
 # screen captures from docshots (regenerate with pnpm screens:capture)
 screens/captures/
+# screenshots of the desktop app from guishots (pnpm screens:gui:capture)
+screens/gui-captures/

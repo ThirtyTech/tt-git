@@ -12,6 +12,8 @@
     "astro": "astro",
     "screens:capture": "cd .. && cargo run -p tt-git-testkit --example docshots -- docs-site/screens/captures",
     "screens": "node screens/render.mjs",
+    "screens:gui:capture": "cd .. && cargo run -p tt-git-gui --example guishots -- docs-site/screens/gui-captures",
+    "screens:gui": "node screens/gui.mjs",
     "screens:social": "node screens/social.mjs"
   },
   "dependencies": {
