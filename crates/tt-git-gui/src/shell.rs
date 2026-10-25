@@ -8,6 +8,7 @@ use gpui::{
     AnyElement, App, Bounds, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyDownEvent,
     ParentElement, Pixels, Render, Styled, Subscription, Window, canvas, div,
 };
+use tt_git_app::Action;
 use tt_git_app::geom::Rect;
 use tt_git_app::layout::{Placed, Split};
 use tt_git_app::panes::PaneId;
@@ -15,6 +16,7 @@ use tt_git_app::panes::PaneId;
 use crate::dialogs::{self, DialogCx};
 use crate::font::MonoFont;
 use crate::frame::frame_id;
+use crate::menus::{self, About, RunCommand};
 use crate::model::{AppEvent, AppModel};
 use crate::panes::{self, PaneCx};
 use crate::theme::GuiTheme;
@@ -55,6 +57,8 @@ impl Shell {
             cx.observe_window_bounds(window, |shell, _, cx| {
                 shell.model.update(cx, |m, cx| m.resized(cx));
             }),
+            // C1: the active window's menus are the app's.
+            cx.observe_window_activation(window, |_, _, cx| cx.notify()),
         ];
         Self {
             ui: Ui {
@@ -79,11 +83,26 @@ impl Shell {
         &self.ui
     }
 
-    fn key_down(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+    fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        // C1: an open menu (menus::bar) has the keys.
+        if !self.focus.is_focused(window) {
+            return;
+        }
         if let Some(key) = keys::key_combo(&event.keystroke, event.prefer_character_input) {
             cx.stop_propagation();
             self.model.update(cx, |m, cx| m.key(key, cx));
         }
+    }
+
+    /// C1: a menu item runs its command as its key would.
+    fn run_command(&mut self, action: &RunCommand, _: &mut Window, cx: &mut Context<Self>) {
+        tracing::debug!(command = ?action.0, "menu");
+        self.model.update(cx, |m, cx| m.send(Action::Command(action.0), cx));
+    }
+
+    /// C1: the app menu's About.
+    fn about(&mut self, _: &About, window: &mut Window, cx: &mut Context<Self>) {
+        menus::about(window, cx);
     }
 
     /// Picks up a theme the app switched to (the theme picker, a theme
@@ -115,8 +134,9 @@ impl Render for Shell {
             self.title = title;
         }
 
-        let (main, help, overlays, shown) = self.model.update(cx, |model, _| {
+        let (main, help, overlays, shown, menu_specs) = self.model.update(cx, |model, _| {
             let app = model.app_mut();
+            let menu_specs = menus::build(app);
             app.begin_frame();
             let focus = app.focus();
             let placed = layout::placed(app);
@@ -146,8 +166,15 @@ impl Render for Shell {
             overlays.extend(terminal::floating(&mut cx));
             overlays.extend(dialogs::modal(&mut cx));
             overlays.extend(dialogs::error(&mut cx));
-            (main, help, overlays, shown)
+            (main, help, overlays, shown, menu_specs)
         });
+        // C1: the menus, native for the active window and drawn in its
+        // title bar.
+        let id = window.window_handle().window_id();
+        if cx.active_window().is_none_or(|w| w.window_id() == id) {
+            menus::install(&menu_specs, cx);
+        }
+        let title_bar = menus::bar::title_bar(&ui, &menu_specs, &self.title, &self.focus);
 
         let report = {
             let (model, measures) = (self.model.clone(), ui.measures.clone());
@@ -164,6 +191,8 @@ impl Render for Shell {
             .key_context(CONTEXT)
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::key_down))
+            .on_action(cx.listener(Self::run_command))
+            .on_action(cx.listener(Self::about))
             .size_full()
             .flex()
             .flex_col()
@@ -172,6 +201,7 @@ impl Render for Shell {
             .font_family(ui.font.family.clone())
             .text_size(ui.font.size)
             .line_height(ui.font.line_height)
+            .child(title_bar)
             .child(
                 div()
                     .id(MAIN)

@@ -16,8 +16,7 @@ use std::rc::Rc;
 
 use gpui::component::Root;
 use gpui::{
-    App, AppContext, Bounds, Global, KeyBinding, NoAction, TitlebarOptions, WindowBounds, WindowHandle, WindowOptions,
-    px, size,
+    App, AppContext, Bounds, Global, KeyBinding, NoAction, WindowBounds, WindowHandle, WindowOptions, px, size,
 };
 use tokio::sync::mpsc::UnboundedReceiver;
 use tt_git_app::Action;
@@ -30,6 +29,7 @@ pub mod gpui_tokio;
 pub mod help_bar;
 pub mod keys;
 pub mod layout;
+pub mod menus;
 pub mod model;
 pub mod overlay;
 pub mod panes;
@@ -61,6 +61,7 @@ pub fn init(cx: &mut App) {
             .iter()
             .map(|key| KeyBinding::new(key, NoAction, Some(CONTEXT))),
     );
+    menus::init(cx);
 }
 
 /// Opens a window on `app`, which [`App::new`](tt_git_app::App::new) made
@@ -77,10 +78,10 @@ pub fn open_window(
             size(px(1280.), px(800.)),
             cx,
         ))),
-        titlebar: Some(TitlebarOptions {
-            title: Some(title.into()),
-            ..Default::default()
-        }),
+        // C1: the app draws the title bar, with the menus (menus::bar).
+        titlebar: Some(menus::bar::titlebar_options(title)),
+        app_owns_titlebar_drag: true,
+        icon: menus::icon::window_icon(),
         app_id: Some("tt-git".into()),
         ..Default::default()
     };
