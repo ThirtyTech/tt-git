@@ -190,7 +190,8 @@ command palette, which lists built-in commands and plugin actions.
 | | `esc` | back to where blame was opened from |
 
 The mouse also works: click a pane or row to focus and select it,
-double-click a commit to open its files fullscreen, click a tab in the
+double-click a row to do what `enter` does on it (open a commit's files
+fullscreen, stage a file, fold a folder, check out a branch), click a tab in the
 branches pane's title, a file in the changed-files view or an entry
 in the graph's filter popup, use the wheel to scroll the pane under the
 pointer, and `ctrl`+click a link in the details pane. Every binding can be changed; see
