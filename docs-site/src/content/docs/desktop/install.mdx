@@ -75,13 +75,22 @@ the terminal app with the [install script](/getting-started/install/#install-scr
 <TabItem label="macOS">
 
 Download **`tt-git-gui-<version>-macos-arm64.dmg`** and open it. Drag
-**tt-git** to the Applications folder beside it, then open it from
+**tt-git** onto the Applications folder beside it, then open it from
 Applications or Spotlight.
 
-If the build is unsigned, macOS blocks the first launch. Right-click
-**tt-git** in Applications and choose **Open**, then **Open** again. Or,
-after macOS has blocked it once, allow it in **System Settings → Privacy &
-Security** and open it again.
+<Screenshot name="gui-installer-dmg" alt="The disk image's window on macOS: the tt-git app icon, an arrow, and the Applications folder, over a dark tt-git background with the line Drag tt-git to Applications to install it." />
+
+If the build is unsigned, macOS stops the first launch with *"tt-git" Not
+Opened: Apple could not verify "tt-git" is free of malware*, and offers only
+**Done**:
+
+<Screenshot name="gui-installer-gatekeeper" alt="macOS's dialog &quot;tt-git&quot; Not Opened, saying Apple could not verify &quot;tt-git&quot; is free of malware that may harm your Mac or compromise your privacy, with a Done button" />
+
+Click **Done**, open **System Settings → Privacy & Security**, and under
+**Security** click **Open Anyway** beside the message about tt-git. Confirm
+with your password, and tt-git opens; after that it starts like any other
+app. On macOS 14 and earlier you can instead right-click **tt-git** in
+Applications, choose **Open**, then **Open** again.
 
 The app holds both binaries in `tt-git.app/Contents/MacOS`: `tt-git-gui`
 and `tt-git`. For `tt-git` in a terminal, link to the app's copy:

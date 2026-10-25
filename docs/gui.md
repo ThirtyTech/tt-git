@@ -397,7 +397,7 @@ The release's `gui` job (`.github/workflows/release.yml`) builds
 | Script | Makes |
 |---|---|
 | `windows/package.ps1` | the zip, and the installer from `windows/tt-git.iss` (Inno Setup 6): per user or all users, Start menu entry, optional desktop shortcut, Explorer's "Open in tt-git" on folders (`Directory\shell` and `Directory\Background\shell`), uninstall from Settings, a welcome page with the sidebar image (`windows/sidebar.svg`, rendered to `sidebar.bmp`). Never change its `AppId`. |
-| `macos/package.sh` | `tt-git.app` (`Info.plist`, the `.icns` from `icons/`) in a `.dmg`, signed and notarized when the secrets are set |
+| `macos/package.sh` | `tt-git.app` (`Info.plist`, the `.icns` from `icons/`) in a `.dmg`, signed and notarized when the secrets are set. The `.dmg` comes from `macos/dmg.py` (dmgbuild, pinned in `dmg-requirements.txt`, installed into a venv, so the job needs `python3` and network access): the app and an Applications link at 128 points over `macos/dmg-background.svg`, rendered to `dmg-background.png` and `@2x.png`. The background is stored as an alias only; with dmgbuild's bookmark as well, macOS 26's Finder shows none. Finder draws the icon names in black on any picture background, so the background puts light tags under them. |
 | `linux/package.sh` | the prefix tarball; the AppImage with `APPIMAGETOOL`; the `.deb`, `.rpm` and `.pkg.tar.zst` with `NFPM` (`linux/nfpm.yaml`, all under `/usr`) |
 
 `install-gui.sh` at the repository root is published with each release and
