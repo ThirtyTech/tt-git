@@ -271,6 +271,9 @@ pub struct App {
     opens_repos: bool,
     /// [`Command::OpenRepository`] ran, for the front end to take.
     open_repo_wanted: bool,
+    /// `tt-git update` can update this front end. Not the desktop app,
+    /// which updates from its own download.
+    self_updates: bool,
     watcher: Option<RepoWatcher>,
     plugins: Option<plugins::PluginState>,
     panes: Vec<crate::pty_pane::PtyPane>,
@@ -382,6 +385,7 @@ impl App {
             reopen: None,
             opens_repos: false,
             open_repo_wanted: false,
+            self_updates: true,
             watcher: None,
             plugins: None,
             panes: Vec::new(),
@@ -455,6 +459,17 @@ impl App {
 
     pub fn opens_repos(&self) -> bool {
         self.opens_repos
+    }
+
+    /// Says `tt-git update` can't update this front end (the desktop app,
+    /// whose packages the install scripts don't know): [`Command::SelfUpdate`]
+    /// leaves the palette and only says where to get the new release.
+    pub fn disable_self_update(&mut self) {
+        self.self_updates = false;
+    }
+
+    pub fn self_updates(&self) -> bool {
+        self.self_updates
     }
 
     /// Whether [`Command::OpenRepository`] ran since the last call: the
@@ -2745,7 +2760,13 @@ impl App {
             },
             Command::PluginLogs => self.show_plugin_logs(),
             Command::Theme => self.open_theme_picker(),
-            Command::SelfUpdate => self.check_update(),
+            Command::SelfUpdate if self.self_updates => self.check_update(),
+            Command::SelfUpdate => {
+                self.notice = Some(format!(
+                    "update the desktop app by downloading the latest release: https://github.com/{}/releases/latest",
+                    tt_git_core::update::REPO
+                ));
+            }
             Command::OpenLink if self.focus == PaneId::Details => self.open_link(),
             Command::ToggleFiles if self.focus == PaneId::Details => self.toggle_files(),
             Command::NewerCommit | Command::OlderCommit | Command::PrevFile | Command::NextFile
