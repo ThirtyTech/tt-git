@@ -185,6 +185,16 @@ For a commit, blame shows the file as of that commit, not as it is now. A file t
 deleted is blamed as it was just before the commit. For a file's diff from the status pane, it shows
 your working tree. Blame opens fullscreen, and <kbd>esc</kbd> comes back to exactly this view.
 
+## Asking an agent about a hunk
+
+Press <kbd>A</kbd> to ask an AI agent about the hunk at the top of the diff: the same line
+<kbd>e</kbd> opens, so scroll the hunk you want to the top first. It works on a commit, a stash and
+a file's diff from the status pane. The agent gets the hunk as a diff, with its file, its lines and
+the commit it's from. With no hunk there, the help bar says `no diff hunk here to ask about`. See
+[Asking about a hunk](/git/agents/#asking-about-a-hunk).
+
+<Screenshot name="agent-hunk-details" alt="Asking an agent about a commit's first hunk in details" />
+
 ## Links
 
 <Screenshot name="details-link" alt="A commit message with an issue link in the details pane" />
@@ -209,6 +219,7 @@ says `no plugin handles …` rather than guessing which program should open it.
 | <kbd>o</kbd> | Open the link in view with a plugin |
 | <kbd>e</kbd> | Open the file in view in your editor |
 | <kbd>b</kbd> | [Blame](/panes/blame/) the file in view, as of the commit |
+| <kbd>A</kbd> | [Ask an AI agent](/git/agents/#asking-about-a-hunk) about the hunk at the top |
 | <kbd>esc</kbd> <kbd>space</kbd> | Close details |
 | <kbd>+</kbd> | Fullscreen and back |
 

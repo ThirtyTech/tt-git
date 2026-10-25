@@ -65,6 +65,14 @@ fn main() {
             "agent-dialog",
             &["j", "A", "tab", "tab", "text:start from the bell icon"],
         ),
+        (
+            "agent-hunk-staging",
+            &["2", "j", "j", "j", "enter", "a", "j", "v", "j", "A", "tab"],
+        ),
+        (
+            "agent-hunk-details",
+            &["j", "space", "4", "+", "A", "text:why poll every 30 seconds?"],
+        ),
         ("details-files", &["j", "space", "4", "}"]),
         (
             "details-link",

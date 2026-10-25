@@ -159,6 +159,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `o` | open the link in view with a plugin link handler |
 | | `e` | open the file in view in your editor, at the line at the top of the diff |
 | | `b` | blame the file in view as of that commit, at the line at the top of the diff |
+| | `A` | ask an AI agent about the hunk at the top of the diff |
 | | `esc` `space` | close details |
 | staging | `j` / `k` | next / previous hunk (or changed line) |
 | | `space` | stage the selection, or unstage it on the staged side |
@@ -168,6 +169,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `d` | discard the selection from the working tree (asks first) |
 | | `c` | commit what's staged |
 | | `e` | open the file in your editor at the selected hunk or line |
+| | `A` | ask an AI agent about the selected hunk or lines |
 | | `]` / `[` | stage the next / previous file in the status pane |
 | | `esc` | back to the status pane |
 | blame | `ctrl+g` | go to a line by number (vim style works too: `42G`, `5j`, `:42` `enter`) |

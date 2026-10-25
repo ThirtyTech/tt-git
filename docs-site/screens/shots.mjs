@@ -272,6 +272,26 @@ export const shots = [
 		],
 	},
 	{
+		name: 'agent-hunk-staging',
+		capture: 'agent-hunk-staging',
+		view: { region: { cells: [0, 0, 132, 30] } },
+		callouts: [
+			{ target: { cells: [1, 9, 64, 5] }, text: 'The lines picked with **v**', markerSide: 'right', tone: 'amber' },
+			{ target: { find: 'Ask an agent about src/components/NotificationBell.tsx lines 7-9' }, text: 'The **file and lines** it asks about', markerSide: 'above' },
+			{ target: { find: 'Explain change' }, text: '**tab**: actions for a hunk', markerSide: 'left' },
+		],
+	},
+	{
+		name: 'agent-hunk-details',
+		capture: 'agent-hunk-details',
+		view: { region: { cells: [0, 0, 132, 40] } },
+		callouts: [
+			{ target: { find: '@@ -0,0 +1,28 @@' }, text: 'The **first hunk** from the top of the view', markerSide: 'right', tone: 'amber' },
+			{ target: { find: 'Ask an agent about src/api/notifications.ts lines 1-28' }, text: 'The **file and lines** it asks about', markerSide: 'above' },
+			{ target: { find: 'why poll every 30 seconds?█' }, text: 'Your question, sent with the hunk', markerSide: 'left' },
+		],
+	},
+	{
 		name: 'status-stash',
 		capture: 'stash-prompt',
 		view: { region: { box: 'Stash' } },
