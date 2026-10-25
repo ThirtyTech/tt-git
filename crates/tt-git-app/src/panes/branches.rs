@@ -303,6 +303,16 @@ impl BranchesPane {
         &self.worktrees
     }
 
+    /// The worktree other than this one that has `branch` checked out,
+    /// with its name as the worktrees tab shows it.
+    pub fn worktree_with_branch(&self, branch: &str) -> Option<(&Worktree, &str)> {
+        let i = self
+            .worktrees
+            .iter()
+            .position(|w| !w.current && w.branch.as_deref() == Some(branch))?;
+        Some((&self.worktrees[i], &self.worktree_names[i]))
+    }
+
     /// The worktrees passing the filter, in display order, on the worktrees tab.
     pub fn visible_worktrees(&self) -> impl Iterator<Item = &Worktree> {
         let worktrees = self.worktree_list();

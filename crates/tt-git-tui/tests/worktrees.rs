@@ -1,4 +1,5 @@
-//! The branches pane's Worktrees tab: listing, opening and removing.
+//! The branches pane's Worktrees tab: listing, opening and removing; and
+//! checking out a branch another worktree has, which opens that worktree.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -125,6 +126,82 @@ fn enter_opens_another_worktree() {
     let repo = t.app().reopen().expect("asked to open the worktree");
     assert!(same(repo.root(), &sb.path().join(".worktrees/side")));
     assert!(t.app().should_quit(), "quits so the caller can open it");
+}
+
+/// The commit in the graph with `summary`, selected.
+fn select_commit(t: &mut TestDriver, summary: &str) {
+    let idx = t
+        .app()
+        .graph()
+        .commits()
+        .iter()
+        .position(|c| &*c.summary == summary)
+        .unwrap();
+    t.press("1").press("g");
+    for _ in 0..idx {
+        t.press("j");
+    }
+}
+
+#[test]
+fn checking_out_a_branch_another_worktree_has_opens_it() {
+    let sb = repo_with_worktrees();
+    let mut t = TestDriver::new(&sb);
+    t.press("3");
+    select(&mut t, "side");
+    t.press("enter");
+    let repo = t.app().reopen().expect("asked to open the worktree");
+    assert!(same(repo.root(), &sb.path().join(".worktrees/side")));
+    assert!(t.app().should_quit(), "quits so the caller can open it");
+    let notice = t.app().notice().unwrap_or_default().to_string();
+    assert_eq!(notice, "side is checked out in .worktrees/side; opening it…");
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(sb.current_branch(), "main", "no checkout ran here");
+}
+
+#[test]
+fn the_graph_opens_the_worktree_without_asking_to_stash() {
+    let sb = repo_with_worktrees();
+    sb.write(
+        "local.txt",
+        "local
+",
+    );
+    let mut t = TestDriver::new(&sb);
+    select_commit(&mut t, "side work");
+    t.press("o");
+    assert!(t.app().modal().is_none(), "nothing to stash: {:?}", t.app().modal());
+    let repo = t.app().reopen().expect("asked to open the worktree");
+    assert!(same(repo.root(), &sb.path().join(".worktrees/side")));
+    assert!(sb.path().join("local.txt").exists());
+}
+
+#[test]
+fn checking_out_the_branch_left_behind_goes_back() {
+    let sb = repo_with_worktrees();
+    let side = sb.path().join(".worktrees/side");
+    let mut t = TestDriver::at(Config::default(), &sb, &side, 120, 30);
+    t.press("3");
+    select(&mut t, "main");
+    t.press("enter");
+    let repo = t.app().reopen().expect("asked to open main");
+    assert!(same(repo.root(), sb.path()));
+    let notice = t.app().notice().unwrap_or_default().to_string();
+    assert_eq!(notice, "main is checked out in ../..; opening it…");
+}
+
+#[test]
+fn a_worktree_whose_folder_is_gone_is_not_opened() {
+    let sb = repo_with_worktrees();
+    std::fs::remove_dir_all(sb.path().join(".worktrees/side")).unwrap();
+    let mut t = TestDriver::new(&sb);
+    t.press("3");
+    select(&mut t, "side");
+    t.press("enter");
+    assert!(t.app().reopen().is_none());
+    assert!(!t.app().should_quit());
+    let notice = t.app().notice().unwrap_or_default().to_string();
+    assert!(notice.contains("whose folder is gone"), "{notice}");
 }
 
 #[test]

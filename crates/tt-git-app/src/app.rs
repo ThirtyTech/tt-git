@@ -1618,6 +1618,11 @@ impl App {
     }
 
     fn run_op(&mut self, op: GitOp) {
+        if let GitOp::Checkout { plan, .. } = &op
+            && self.checkout_elsewhere(plan)
+        {
+            return;
+        }
         let label = op.label();
         let (doing, done) = self.describe_op(&op);
         // A second pull, push or fetch would only race the first.
@@ -1748,6 +1753,9 @@ impl App {
 
     /// Checks out `plan`, or with uncommitted changes asks to stash them first.
     fn checkout(&mut self, plan: CheckoutPlan) {
+        if self.checkout_elsewhere(&plan) {
+            return;
+        }
         let changed = self.status.all_entries().len();
         if changed == 0 {
             self.run_op(GitOp::Checkout { plan, stash: false });
@@ -1770,6 +1778,30 @@ impl App {
             ),
             GitOp::Checkout { plan, stash: true },
         ));
+    }
+
+    /// When another worktree has `plan`'s branch checked out, opens that
+    /// worktree in place of a checkout git would refuse, as lazygit does,
+    /// and says so. True if it was handled here.
+    fn checkout_elsewhere(&mut self, plan: &CheckoutPlan) -> bool {
+        let CheckoutPlan::Local(name) = plan else {
+            return false;
+        };
+        let Some((wt, shown)) = self.branches.worktree_with_branch(name) else {
+            return false;
+        };
+        if wt.prunable.is_some() {
+            self.notice = Some(format!(
+                "{name} is checked out in {shown}, whose folder is gone (d on the Worktrees tab drops it)"
+            ));
+            return true;
+        }
+        let (path, shown) = (wt.path.clone(), shown.to_string());
+        self.open_worktree(path);
+        if self.reopen.is_some() {
+            self.notice = Some(format!("{name} is checked out in {shown}; opening it…"));
+        }
+        true
     }
 
     /// Checks the next batch of branches and worktrees not yet checked for
