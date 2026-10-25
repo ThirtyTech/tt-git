@@ -95,6 +95,7 @@ fn main() {
         ("palette-search", &[":", "text:sta"]),
         ("help", &["?"]),
         ("help-search", &["?", "text:merge"]),
+        ("help-about", &["?", "tab"]),
         ("about", &[":", "text:about", "enter"]),
         ("status-staged", &["2", "j", "space"]),
         ("after-commit", &["2", "c", "text:Bump React to 19.2", "enter"]),

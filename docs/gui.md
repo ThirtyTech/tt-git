@@ -390,11 +390,13 @@ does. No GPUI key binding is made: the key is part of the item's text.
 command to every window. `About` sends `Command::About`, as *About* in
 the palette does, which opens `Modal::About`. The GUI draws it in
 `dialogs/about.rs`: the icon at 96px (`menus::icon::about_icon`), the
-version, the developer, and links to the repository and gpui.rs that open
-with `cx.open_url`; the text it shares with the TUI's is in
-`tt_git_app::view::dialogs::about`. Its keys go to the app like any
-modal's (esc, enter, `q` or space close it; others wait), and a click
-outside sends the app esc.
+version, the developer, and links to the repository, gpui.rs and the
+terminal app's install page that open with `cx.open_url`; the text it
+shares with the TUI's is in `tt_git_app::view::dialogs::about`. Its keys go
+to the app like any modal's (esc, enter, `q` or space close it; others
+wait), and a click outside sends the app esc. The help popup's About tab
+(`App::help_tab`, `HelpTab::About`) draws the same body,
+`dialogs::about::content`, inside `dialogs/help.rs`.
 
 Per platform (gpui-pre 0.3.9):
 

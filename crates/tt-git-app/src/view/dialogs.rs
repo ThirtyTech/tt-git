@@ -26,7 +26,7 @@ mod palette;
 mod prompt;
 
 pub use filter::{FILTER_HINT, FILTER_TITLE, FilterView};
-pub use help::{HELP_KEYS_WIDTH, HELP_TITLE, HelpView};
+pub use help::{HELP_KEYS_WIDTH, HELP_TAB_HINT, HELP_TITLE, HelpTab, HelpView};
 pub use palette::PaletteView;
 
 /// One line of a dialog, as spans.

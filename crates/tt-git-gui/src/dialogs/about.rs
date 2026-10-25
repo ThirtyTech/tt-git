@@ -7,12 +7,12 @@
 //! key does: esc, enter, `q` or space close it, other keys wait. A click
 //! outside the box closes it too, by sending the app esc.
 
-use gpui::{AnyElement, InteractiveElement, IntoElement, MouseButton, ParentElement, SharedString, Styled, div};
+use gpui::{AnyElement, Div, InteractiveElement, IntoElement, MouseButton, ParentElement, SharedString, Styled, div};
 use tt_git_app::keymap::{KeyCode, KeyCombo};
 use tt_git_app::view::StyleRole;
 use tt_git_app::view::dialogs::DialogLook;
 use tt_git_app::view::dialogs::about::{
-    ABOUT_DEVELOPER, ABOUT_HINT, ABOUT_TAGLINE, ABOUT_TITLE, REPO_URL, about_heading,
+    ABOUT_DEVELOPER, ABOUT_HINT, ABOUT_TAGLINE, ABOUT_TITLE, REPO_URL, TUI_INSTALL_URL, about_heading,
 };
 
 use super::prompt::{blank, dialog_box, layer, title};
@@ -28,6 +28,9 @@ pub const REPO_LINK: &str = "dialog:about:repo";
 /// The id the GPUI link is measured as.
 pub const GPUI_LINK: &str = "dialog:about:gpui";
 
+/// The id the terminal app's install link is measured as.
+pub const TUI_LINK: &str = "dialog:about:tui";
+
 /// The UI framework the app is drawn with.
 pub const GPUI_URL: &str = "https://gpui.rs/";
 
@@ -35,8 +38,29 @@ pub const GPUI_URL: &str = "https://gpui.rs/";
 const WIDTH: usize = 56;
 
 pub fn render(ui: &Ui) -> AnyElement {
-    let theme = &ui.theme;
     let look = DialogLook::Normal;
+    let muted = ui.theme.fg(StyleRole::Muted);
+    let dialog = dialog_box(ui, ID, look, WIDTH, title(ui, ABOUT_TITLE, look).element())
+        // A click inside isn't one outside.
+        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+        .child(content(ui))
+        .child(blank(ui))
+        .child(div().text_color(muted).child(ABOUT_HINT));
+    let model = ui.model.clone();
+    layer(dialog)
+        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
+            cx.stop_propagation();
+            if let Some(model) = model.upgrade() {
+                model.update(cx, |m, cx| m.key(KeyCombo::plain(KeyCode::Esc), cx));
+            }
+        })
+        .into_any_element()
+}
+
+/// What About says, in the About dialog and on the keys popup's About tab:
+/// the icon, the version, who made it and the links.
+pub fn content(ui: &Ui) -> Div {
+    let theme = &ui.theme;
     let muted = theme.fg(StyleRole::Muted);
     let line = |text: SharedString| div().min_h(ui.font.line_height).whitespace_normal().child(text);
 
@@ -54,9 +78,9 @@ pub fn render(ui: &Ui) -> AnyElement {
         )
         .child(div().text_center().text_color(muted).child(ABOUT_TAGLINE));
 
-    let dialog = dialog_box(ui, ID, look, WIDTH, title(ui, ABOUT_TITLE, look).element())
-        // A click inside isn't one outside.
-        .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
+    div()
+        .flex()
+        .flex_col()
         .child(heading)
         .child(blank(ui))
         .child(line(ABOUT_DEVELOPER.into()))
@@ -66,8 +90,6 @@ pub fn render(ui: &Ui) -> AnyElement {
                 .child("Source: ")
                 .child(link(ui, REPO_LINK, "github.com/thirtytech/tt-git", REPO_URL)),
         )
-        .child(blank(ui))
-        .child(line("Prefer the terminal? Run `tt-git` for the TUI.".into()))
         .child(
             div()
                 .flex()
@@ -75,16 +97,12 @@ pub fn render(ui: &Ui) -> AnyElement {
                 .child(link(ui, GPUI_LINK, "gpui.rs", GPUI_URL)),
         )
         .child(blank(ui))
-        .child(div().text_color(muted).child(ABOUT_HINT));
-    let model = ui.model.clone();
-    layer(dialog)
-        .on_mouse_down(MouseButton::Left, move |_, _, cx| {
-            cx.stop_propagation();
-            if let Some(model) = model.upgrade() {
-                model.update(cx, |m, cx| m.key(KeyCombo::plain(KeyCode::Esc), cx));
-            }
-        })
-        .into_any_element()
+        .child(div().flex().child("Prefer the terminal? ").child(link(
+            ui,
+            TUI_LINK,
+            "Install the terminal app",
+            TUI_INSTALL_URL,
+        )))
 }
 
 /// `text`, underlined, that opens `url` in the system browser when clicked.
@@ -168,6 +186,10 @@ mod tests {
         let gpui_link = drawn(&gui, GPUI_LINK).expect("the GPUI link");
         click(&mut gui, gpui_link.center());
         assert_eq!(gui.cx.opened_url().as_deref(), Some(GPUI_URL));
+
+        let tui_link = drawn(&gui, TUI_LINK).expect("the terminal app's install link");
+        click(&mut gui, tui_link.center());
+        assert_eq!(gui.cx.opened_url().as_deref(), Some(TUI_INSTALL_URL));
     }
 
     #[gpui::test]

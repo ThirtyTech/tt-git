@@ -6,6 +6,7 @@ use ratatui::Frame;
 use ratatui::layout::Rect;
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Clear, Padding, Paragraph, Wrap};
+use unicode_width::UnicodeWidthStr;
 
 use super::centered;
 use super::filter::draw_filter;
@@ -14,8 +15,10 @@ use crate::app::App;
 use crate::modal::Modal;
 use crate::tui_theme::Theme;
 use crate::view::TextSpan;
-use crate::view::dialogs::about::{ABOUT_DEVELOPER, ABOUT_HINT, ABOUT_TAGLINE, ABOUT_TITLE, REPO_URL, about_heading};
-use crate::view::dialogs::{HELP_TITLE, ListRow, PaletteView, error_view, line_text};
+use crate::view::dialogs::about::{
+    ABOUT_DEVELOPER, ABOUT_HINT, ABOUT_TAGLINE, ABOUT_TITLE, GUI_INSTALL_URL, REPO_URL, about_heading,
+};
+use crate::view::dialogs::{HELP_TITLE, HelpTab, ListRow, PaletteView, error_view, line_text};
 
 pub fn draw_modal(modal: &Modal, frame: &mut Frame, area: Rect, theme: &Theme) {
     if let Some(view) = modal.palette_view(area.width as usize) {
@@ -79,23 +82,36 @@ fn draw_palette(frame: &mut Frame, area: Rect, theme: &Theme, view: PaletteView)
     frame.render_widget(Paragraph::new(lines).block(block), popup);
 }
 
-/// The keys popup, narrowed to what's typed.
+/// The keys popup, narrowed to what's typed, or its About tab.
 pub(super) fn draw_help_popup(app: &App, frame: &mut Frame, area: Rect, theme: &Theme) {
     let view = app.help_view();
-    let mut lines = vec![line(view.search, theme)];
-    if let Some(empty) = view.empty {
-        lines.push(Line::styled(empty, theme.muted));
+    let mut lines = vec![line(view.tabs, theme)];
+    let about = view.tab == HelpTab::About;
+    if about {
+        // Its lines start with a blank.
+        lines.extend(about_lines(theme));
+    } else {
+        lines.push(Line::raw(""));
+        lines.push(line(view.search, theme));
+        if let Some(empty) = view.empty {
+            lines.push(Line::styled(empty, theme.muted));
+        }
+        lines.extend(view.rows.into_iter().map(|r| line(r, theme)));
     }
-    lines.extend(view.rows.into_iter().map(|r| line(r, theme)));
 
     let popup = centered(area, view.width as u16, view.height as u16);
     frame.render_widget(Clear, popup);
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(theme.border_focused)
+        .padding(Padding::horizontal(1))
         .title(Span::styled(format!(" {HELP_TITLE} "), theme.title_focused))
         .title_top(Line::styled(format!(" {} ", view.version), theme.muted).right_aligned());
-    frame.render_widget(Paragraph::new(lines).block(block), popup);
+    let mut text = Paragraph::new(lines);
+    if about {
+        text = text.wrap(Wrap { trim: false });
+    }
+    frame.render_widget(text.block(block), popup);
 }
 
 /// The error popup.
@@ -117,8 +133,13 @@ pub(super) fn draw_error_popup(frame: &mut Frame, area: Rect, msg: &str, theme: 
     frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block), popup);
 }
 
-/// The About dialog's width in columns, the border included.
+/// The About dialog's width in columns, the border included. The keys
+/// popup, whose About tab shows the same lines, is as wide.
 const ABOUT_WIDTH: u16 = 58;
+
+/// The columns About's text has, inside the border and a column of
+/// padding each side.
+const ABOUT_TEXT_WIDTH: usize = ABOUT_WIDTH as usize - 4;
 
 /// Ratatui, which the terminal app is drawn with.
 pub const RATATUI_URL: &str = "https://ratatui.rs/";
@@ -127,29 +148,8 @@ pub const RATATUI_URL: &str = "https://ratatui.rs/";
 /// it's built with, laid out as the desktop app's is. The URLs are plain
 /// text; most terminals make them clickable.
 fn draw_about(frame: &mut Frame, area: Rect, theme: &Theme) {
-    let mut lines = vec![
-        Line::raw(""),
-        Line::styled(about_heading(), theme.title_focused).centered(),
-    ];
-    // The tagline over two lines, broken after its comma.
-    lines.extend(
-        ABOUT_TAGLINE
-            .split_inclusive(", ")
-            .map(|part| Line::styled(part.trim_end(), theme.muted).centered()),
-    );
-    lines.extend([
-        Line::raw(""),
-        Line::raw(ABOUT_DEVELOPER),
-        Line::from(vec![Span::raw("Source: "), Span::styled(REPO_URL, theme.help_key)]),
-        Line::raw(""),
-        Line::raw("Prefer a window? Run `tt-git-gui` for the desktop app."),
-        Line::from(vec![
-            Span::raw("Built with Ratatui: "),
-            Span::styled(RATATUI_URL, theme.help_key),
-        ]),
-        Line::raw(""),
-        Line::styled(ABOUT_HINT, theme.muted),
-    ]);
+    let mut lines = about_lines(theme);
+    lines.extend([Line::raw(""), Line::styled(ABOUT_HINT, theme.muted)]);
     let popup = centered(area, ABOUT_WIDTH, lines.len() as u16 + 2);
     frame.render_widget(Clear, popup);
     let block = Block::bordered()
@@ -158,4 +158,47 @@ fn draw_about(frame: &mut Frame, area: Rect, theme: &Theme) {
         .padding(Padding::horizontal(1))
         .title(Span::styled(format!(" {ABOUT_TITLE} "), theme.title_focused));
     frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block), popup);
+}
+
+/// What About says, in the About dialog and on the keys popup's About tab.
+fn about_lines(theme: &Theme) -> Vec<Line<'static>> {
+    let mut lines = vec![
+        Line::raw(""),
+        Line::styled(about_heading(), theme.title_focused).centered(),
+    ];
+    // Broken into lines here rather than by the paragraph, so the dialog
+    // knows how tall it is.
+    lines.extend(
+        word_wrap(ABOUT_TAGLINE, ABOUT_TEXT_WIDTH)
+            .into_iter()
+            .map(|part| Line::styled(part, theme.muted).centered()),
+    );
+    lines.extend([
+        Line::raw(""),
+        Line::raw(ABOUT_DEVELOPER),
+        Line::from(vec![Span::raw("Source: "), Span::styled(REPO_URL, theme.help_key)]),
+        Line::from(vec![
+            Span::raw("Built with Ratatui: "),
+            Span::styled(RATATUI_URL, theme.help_key),
+        ]),
+        Line::raw(""),
+        Line::raw("Prefer a window? Install the desktop app:"),
+        Line::styled(GUI_INSTALL_URL, theme.help_key),
+    ]);
+    lines
+}
+
+/// `text` in lines of at most `width` columns, broken between words.
+fn word_wrap(text: &str, width: usize) -> Vec<String> {
+    let mut lines: Vec<String> = Vec::new();
+    for word in text.split_whitespace() {
+        match lines.last_mut() {
+            Some(line) if line.width() + 1 + word.width() <= width => {
+                line.push(' ');
+                line.push_str(word);
+            }
+            _ => lines.push(word.to_string()),
+        }
+    }
+    lines
 }
