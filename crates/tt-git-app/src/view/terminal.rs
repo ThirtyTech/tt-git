@@ -108,6 +108,15 @@ impl PtyPane {
         }
     }
 
+    /// What the pane says about leaving it: [`leave_hint`], or for an
+    /// editor's pane that quitting the editor does.
+    pub fn leave_text(&self, release_hint: &str) -> String {
+        match &self.editor {
+            Some(run) => format!("quit {} to come back", run.program),
+            None => leave_hint(release_hint),
+        }
+    }
+
     /// Where the pane goes, in an area under the help bar of `cols` by
     /// `rows` cells. A popup's size is the manifest's (cells or a share of
     /// the area), four fifths of the area by default.

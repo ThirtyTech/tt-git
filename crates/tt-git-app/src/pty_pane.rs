@@ -10,6 +10,7 @@ use tt_git_plugin::manifest::{Dimension, PaneSpec, Placement};
 use tt_git_plugin::runtime::{CommandRequest, HostEnv, plugin_env, resolve_program};
 
 use crate::action::Action;
+use crate::editor::EditorLaunch;
 use crate::jobs::Ctx;
 use crate::keymap::{KeyCode, KeyCombo, KeyModifiers};
 
@@ -17,6 +18,20 @@ pub type PaneId = u64;
 
 /// The `plugin_id` of panes tt-git opens itself rather than for a plugin.
 pub const BUILTIN: &str = "tt-git";
+
+/// The `entrypoint` of the pane a terminal editor runs in.
+pub const EDITOR_PANE: &str = "editor";
+
+/// What a pane running the user's editor keeps besides the terminal.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct EditorRun {
+    /// The editor's name, for messages.
+    pub program: String,
+    /// The release key was pressed once: pressing it again stops the editor.
+    pub stop_armed: bool,
+    /// tt-git stopped it.
+    pub stopped: bool,
+}
 
 /// Who a pane belongs to and where it goes.
 struct PaneMeta {
@@ -50,6 +65,10 @@ pub struct PtyPane {
     output_pending: Arc<AtomicBool>,
     /// Set once the process ended; the text describes how.
     pub exited: Option<String>,
+    /// The process's exit code, once it ended with one (not by a signal).
+    exit_code: Arc<Mutex<Option<i32>>>,
+    /// Set when the pane runs the user's editor.
+    pub editor: Option<EditorRun>,
 }
 
 impl std::fmt::Debug for PtyPane {
@@ -138,6 +157,44 @@ impl PtyPane {
         Self::start(id, cmd, program, meta, rows, cols, ctx)
     }
 
+    /// Starts a terminal editor in an overlay pane, for a front end that
+    /// can't hand it its own terminal. It reports as plugin [`BUILTIN`],
+    /// entry point [`EDITOR_PANE`].
+    pub fn spawn_editor(id: PaneId, launch: &EditorLaunch, rows: u16, cols: u16, ctx: Ctx) -> Result<Self, String> {
+        let mut cmd = CommandBuilder::new(resolve_program(&launch.program, &launch.cwd));
+        cmd.args(&launch.args);
+        cmd.cwd(&launch.cwd);
+        cmd.env("TERM", "xterm-256color");
+        let name = std::path::Path::new(&launch.program)
+            .file_name()
+            .map_or_else(|| launch.program.clone(), |n| n.to_string_lossy().into_owned());
+        // Files under the repo are shown relative to it.
+        let root = format!("{}{}", launch.cwd.display(), std::path::MAIN_SEPARATOR);
+        let title = std::iter::once(name.as_str())
+            .chain(launch.args.iter().map(|a| a.strip_prefix(&root).unwrap_or(a)))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let meta = PaneMeta {
+            plugin_id: BUILTIN.into(),
+            entrypoint: EDITOR_PANE.into(),
+            title,
+            placement: Placement::Overlay,
+            width: None,
+            height: None,
+        };
+        let mut pane = Self::start(id, cmd, &launch.program, meta, rows, cols, ctx).map_err(|e| {
+            format!(
+                "couldn't start `{}` (from {}): {e}. Set [editor] command in config.toml.",
+                launch.program, launch.from
+            )
+        })?;
+        pane.editor = Some(EditorRun {
+            program: name,
+            ..Default::default()
+        });
+        Ok(pane)
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn start(
         id: PaneId,
@@ -171,6 +228,8 @@ impl PtyPane {
         let output_pending = Arc::new(AtomicBool::new(false));
         let pending = output_pending.clone();
         let exit_ctx = ctx.clone();
+        let exit_code = Arc::new(Mutex::new(None));
+        let code = exit_code.clone();
         std::thread::Builder::new()
             .name("tt-git-pane-reader".into())
             .spawn(move || {
@@ -209,7 +268,14 @@ impl PtyPane {
             .name("tt-git-pane-wait".into())
             .stack_size(crate::IO_THREAD_STACK)
             .spawn(move || {
-                let status = match child.wait() {
+                let status = child.wait();
+                if let Ok(s) = &status
+                    && s.signal().is_none()
+                {
+                    // As `std::process::ExitStatus::code` reads it.
+                    *code.lock().unwrap_or_else(|e| e.into_inner()) = Some(s.exit_code() as i32);
+                }
+                let status = match status {
                     Ok(s) if s.success() => "process exited".to_string(),
                     Ok(s) => format!("process exited with code {}", s.exit_code()),
                     Err(e) => format!("process ended: {e}"),
@@ -233,6 +299,8 @@ impl PtyPane {
             size: (rows, cols),
             output_pending,
             exited: None,
+            exit_code,
+            editor: None,
         })
     }
 
@@ -282,6 +350,12 @@ impl PtyPane {
     /// Records how the process ended.
     pub fn mark_exited(&mut self, status: String) {
         self.exited = Some(status);
+    }
+
+    /// The process's exit code, once it has ended with one. None while it
+    /// runs, and for a process ended by a signal.
+    pub fn exit_code(&self) -> Option<i32> {
+        *self.exit_code.lock().unwrap_or_else(|e| e.into_inner())
     }
 
     pub fn kill(&mut self) {
