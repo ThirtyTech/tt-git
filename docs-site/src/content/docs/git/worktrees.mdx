@@ -119,7 +119,7 @@ again and they get `repo.opened` for the new path). tt-git also changes its
 working directory to the worktree, so it doesn't hold the old folder open.
 The plugin API socket gets a new address, so a plugin process still running
 from before can't reach the new one. To go back, open the main worktree the
-same way.
+same way, or check out the branch you left (see below).
 
 In the [desktop app](/desktop/using/#windows), a window on the worktree opens
 and this one closes. If the worktree has a window already, that one comes to
@@ -145,11 +145,28 @@ branches, tags, remotes, stashes and config, including the
 in one shows up in the other's graph right away. The checked-out branch, the
 staged changes and any merge or rebase in progress are separate.
 
-<Aside type="caution">
-	Git only lets a branch be checked out in one worktree at a time. Checking
-	out `fix-login` in your main checkout fails while `.worktrees/fix-login`
-	has it.
-</Aside>
+## Checking out a branch another worktree has
+
+Git only lets a branch be checked out in one worktree at a time, so
+`git switch fix-login` in your main checkout fails while
+`.worktrees/fix-login` has it. tt-git doesn't run it. When you check out
+such a branch, with <kbd>enter</kbd> in the [branches pane](/panes/branches/#checking-out)
+or <kbd>o</kbd> in the [graph](/panes/graph/#checking-out-a-commit), it
+opens the worktree that has the branch instead, the same way as
+[opening a worktree](#opening-a-worktree) from the Worktrees tab. The help
+bar says `fix-login is checked out in .worktrees/fix-login; opening it…`.
+It doesn't ask first: nothing changes in either worktree, and uncommitted
+changes stay where they are, so there's nothing to stash.
+
+<Screenshot name="worktree-switch" alt="The branches pane with fix/bell-a11y selected and the help bar saying it is checked out in .worktrees/fix/bell-a11y and is being opened" />
+
+The branch you were on is still checked out in the worktree you left, so
+checking it out from the new one takes you back. From a linked worktree,
+checking out `main` opens the main checkout.
+
+If the worktree that has the branch is `missing` (its folder is gone), tt-git
+says so and opens nothing. Press <kbd>d</kbd> on it on the Worktrees tab to
+drop it from git's list, then check the branch out again.
 
 ## Removing a worktree
 

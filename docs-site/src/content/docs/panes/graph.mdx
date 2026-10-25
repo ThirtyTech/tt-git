@@ -331,6 +331,9 @@ cherry-pick runs.
 - Otherwise it checks out the commit itself with HEAD detached
   (`git switch --detach <commit>`). The graph shows ` HEAD ` on it.
 - If HEAD is already there, tt-git says so and does nothing.
+- If the branch is checked out in another worktree, tt-git opens that
+  worktree instead, without asking to stash. See
+  [Worktrees](/git/worktrees/#checking-out-a-branch-another-worktree-has).
 
 With uncommitted changes, tt-git asks first: **Uncommitted changes** says how
 many files have changes and offers to stash them. <kbd>y</kbd> stashes

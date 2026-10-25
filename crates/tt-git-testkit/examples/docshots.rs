@@ -195,6 +195,8 @@ children = [
     for (name, keys) in [
         ("worktrees-tab", &["3", "["][..]),
         ("worktree-remove", &["3", "[", "j", "d"][..]),
+        // Checking out a branch the fix worktree has opens that worktree.
+        ("worktree-switch", &["3", "/", "text:bell", "enter", "enter"][..]),
     ] {
         let mut driver = TestDriver::with_size(Config::default(), &trees, WIDTH, HEIGHT);
         press(&mut driver, keys);

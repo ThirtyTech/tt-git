@@ -135,7 +135,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `f` | filter: only one author's commits, or the commits that changed a file or folder (`tab` in the panel switches between the two; both can be set) |
 | | `/` | filter by a regex on the commit subject, such as `^feat` (`tab` in the prompt fills in the next of the repo's most used prefixes; `ctrl+t` searches the whole message or the diff, `git log -G`, instead) |
 | | `.` | only the commits that changed the folder tt-git was started in (Status narrows too); again for everything |
-| | `o` | check out the selected commit: the local branch on it if there is one, else the commit with HEAD detached (with uncommitted changes, asks to stash them first) |
+| | `o` | check out the selected commit: the local branch on it if there is one, else the commit with HEAD detached (with uncommitted changes, asks to stash them first; a branch another worktree has opens that worktree) |
 | | `n` | new branch at the selected commit (`tab` in the dialog: create it in a worktree) |
 | | `T` | new tag at the selected commit (`tab` in the dialog: annotated, with a message) |
 | | `M` / `r` / `C` / `R` | merge into current / rebase current onto / cherry-pick (the whole range, if one is selected) / revert |
@@ -144,7 +144,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `c` | copy the commit hash |
 | | `A` | ask an AI agent about the commit, or start a ready-made action (explain branch, resolve conflicts…); opens in a herdr tab inside herdr, else in place of details |
 | | `]` `[` (or `}` `{`) | next / previous tab in the branches pane, without leaving the graph |
-| branches | `enter` `space` | check out (remote-only branches get a tracking branch) |
+| branches | `enter` `space` | check out (remote-only branches get a tracking branch; one checked out in another worktree opens that worktree) |
 | | `n` `d` `R` | new (`tab` in the dialog: create it in a worktree under `.worktrees/`) / delete (asks before force-deleting unmerged) / rename |
 | | `T` | new tag at the selected branch or tag (`tab` in the dialog: annotated) |
 | | `P` | on the tags tab: push the selected tag (elsewhere: push the current branch) |

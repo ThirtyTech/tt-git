@@ -185,6 +185,11 @@ your changes first, tt-git runs `git stash push --include-untracked`, then the
 switch. If the switch fails, it runs `git stash pop` to put the changes back
 (only if the push made a stash, so an older one is never popped by mistake).
 
+A local branch that another worktree has checked out (from
+`git worktree list --porcelain`, already loaded for the Worktrees tab) runs
+nothing: tt-git opens that worktree instead, since git would refuse the
+switch.
+
 ### Other branch commands
 
 | Action | Runs |
