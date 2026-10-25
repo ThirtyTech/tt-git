@@ -218,3 +218,33 @@ fn a_windowed_editor_still_starts_detached(cx: &mut TestAppContext) {
     );
     assert!(!gui.read(App::editor_running));
 }
+
+#[gpui::test]
+fn closing_the_window_while_the_editor_runs_asks_first(cx: &mut TestAppContext) {
+    let sb = sandbox();
+    let mut gui = Gui::with_config(cx, &sb, fake_editor_config());
+    open_editor(&mut gui);
+
+    assert!(!gui.cx.simulate_close(), "it asks instead of closing");
+    gui.draw();
+    let (message, _) = cx.pending_prompt().expect("a prompt");
+    assert_eq!(message, "An editor is still running");
+    cx.simulate_prompt_answer("Cancel");
+    gui.draw();
+    assert!(gui.is_open());
+    assert!(gui.read(App::editor_running));
+
+    assert!(!gui.cx.simulate_close());
+    gui.draw();
+    cx.simulate_prompt_answer(crate::shell::CLOSE);
+    cx.run_until_parked();
+    assert!(!gui.is_open(), "closed, ending the editor");
+}
+
+#[gpui::test]
+fn closing_the_window_with_no_editor_running_just_closes(cx: &mut TestAppContext) {
+    let sb = sandbox();
+    let mut gui = Gui::open(cx, &sb);
+    assert!(gui.cx.simulate_close());
+    assert!(!cx.has_pending_prompt());
+}

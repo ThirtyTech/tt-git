@@ -2,11 +2,12 @@
 //! does (the panes in their layout, the help bar, then what opens over
 //! them), sends it the keys, and reports where the panes went.
 
+use std::cell::Cell;
 use std::rc::Rc;
 
 use gpui::{
     AnyElement, App, Bounds, Context, Entity, FocusHandle, Focusable, InteractiveElement, IntoElement, KeyDownEvent,
-    ParentElement, Pixels, Render, Styled, Subscription, Window, canvas, div,
+    ParentElement, Pixels, PromptLevel, Render, Styled, Subscription, Window, canvas, div,
 };
 use tt_git_app::geom::Rect;
 use tt_git_app::layout::{Placed, Split};
@@ -67,6 +68,7 @@ impl Shell {
                 shell.model.update(cx, |m, cx| m.resized(cx));
             }),
         ];
+        ask_before_closing(&model, window, cx);
         Self {
             ui: Ui {
                 theme: Rc::new(theme),
@@ -108,6 +110,45 @@ impl Shell {
         }
     }
 }
+
+/// Closing the window while a terminal editor runs in it (which would
+/// end the editor and lose what it hasn't saved) asks first.
+fn ask_before_closing(model: &Entity<AppModel>, window: &mut Window, cx: &mut Context<Shell>) {
+    let model = model.downgrade();
+    let asking = Rc::new(Cell::new(false));
+    window.on_window_should_close(cx, move |window, cx| {
+        let Some(model) = model.upgrade() else {
+            return true;
+        };
+        if !model.read(cx).app().editor_running() {
+            return true;
+        }
+        if asking.replace(true) {
+            return false;
+        }
+        let answer = window.prompt(
+            PromptLevel::Warning,
+            "An editor is still running",
+            Some("Closing the window stops it, and anything it hasn't saved is lost."),
+            &[CLOSE, "Cancel"],
+            cx,
+        );
+        let (asking, handle) = (asking.clone(), window.window_handle());
+        cx.spawn(async move |cx| {
+            let close = answer.await == Ok(0);
+            asking.set(false);
+            if close {
+                tracing::info!("closing the window with its editor running");
+                let _ = handle.update(cx, |_, window, _| window.remove_window());
+            }
+        })
+        .detach();
+        false
+    });
+}
+
+/// The button that closes the window anyway.
+pub const CLOSE: &str = "Close";
 
 impl Focusable for Shell {
     fn focus_handle(&self, _: &App) -> FocusHandle {
