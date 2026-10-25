@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
-use gpui::{AnyWindowHandle, App, AsyncApp, Global, PromptLevel, WeakEntity};
+use gpui::{AnyWindowHandle, App, AsyncApp, Global, PromptButton, PromptLevel, WeakEntity};
 use serde::{Deserialize, Serialize};
 use tt_git_app::Action;
 use tt_git_core::update::{CURRENT_VERSION, is_newer};
@@ -237,13 +237,14 @@ pub fn check(window: AnyWindowHandle, model: WeakEntity<AppModel>, cx: &mut App)
     .detach();
 }
 
-/// Asks over `window`; `None` when the window has gone.
+/// Asks over `window`; `None` when the window has gone. The way out is
+/// a cancel button, so esc and the dialog's close button pick it too.
 async fn ask(
     window: AnyWindowHandle,
     level: PromptLevel,
     message: String,
     detail: String,
-    answers: &[&str],
+    answers: &[PromptButton],
     cx: &mut AsyncApp,
 ) -> Option<usize> {
     let answer = window
@@ -275,7 +276,7 @@ async fn offer(
             PromptLevel::Info,
             "tt-git is up to date".into(),
             detail,
-            &["OK"],
+            &[PromptButton::ok("OK")],
             cx,
         )
         .await;
@@ -288,7 +289,15 @@ async fn offer(
         Ok(install) => install,
         Err(refusal) => {
             let detail = format!("You have {current}. {refusal} Download the new release from its page.");
-            let answer = ask(window, PromptLevel::Info, title, detail, &[OPEN_PAGE, "Close"], cx).await;
+            let answer = ask(
+                window,
+                PromptLevel::Info,
+                title,
+                detail,
+                &[PromptButton::new(OPEN_PAGE), PromptButton::cancel("Close")],
+                cx,
+            )
+            .await;
             if answer == Some(0) {
                 cx.update(|cx| cx.open_url(&install::release_page(&latest)));
             }
@@ -299,7 +308,17 @@ async fn offer(
         "You have {current}. Updating downloads it, replaces this copy and restarts tt-git: \
          every window closes and opens again on its repository."
     );
-    if ask(window, PromptLevel::Info, title, detail, &[UPDATE, "Later"], cx).await != Some(0) {
+    if ask(
+        window,
+        PromptLevel::Info,
+        title,
+        detail,
+        &[PromptButton::new(UPDATE), PromptButton::cancel("Later")],
+        cx,
+    )
+    .await
+        != Some(0)
+    {
         return Ok(());
     }
 
