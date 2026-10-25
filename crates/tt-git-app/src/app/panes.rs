@@ -77,6 +77,7 @@ impl App {
     }
 
     pub fn close_pane(&mut self, id: pty_pane::PaneId) -> bool {
+        self.editor_pane_closing(id);
         let before = self.panes.len();
         self.panes.retain(|p| p.id != id);
         // A split pane may have been covering details.
@@ -124,6 +125,9 @@ impl App {
 
     /// Routes a key to a focused plugin pane. Returns whether it was taken.
     pub(super) fn pane_key(&mut self, key: KeyCombo) -> bool {
+        if self.editor_pane_key(key) {
+            return true;
+        }
         let release = self.is_release_key(key);
         if let Some(pane) = self.top_modal_pane() {
             let id = pane.id;
@@ -163,6 +167,9 @@ impl App {
     }
 
     pub(super) fn pane_exited(&mut self, id: pty_pane::PaneId, status: String) {
+        if self.editor_pane_exited(id) {
+            return;
+        }
         let agent = self.is_agent_pane(id);
         let Some(pane) = self.panes.iter_mut().find(|p| p.id == id) else {
             return;

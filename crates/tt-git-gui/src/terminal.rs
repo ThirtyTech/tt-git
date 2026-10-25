@@ -26,6 +26,9 @@ use crate::ui::Ui;
 
 pub mod grid;
 
+#[cfg(test)]
+mod editor_tests;
+
 use grid::TerminalGrid;
 
 /// The id a pane's screen is measured as.
@@ -58,7 +61,7 @@ pub fn floating(cx: &mut DialogCx) -> Vec<AnyElement> {
     let ui = cx.ui;
     set_cell_size(cx.app, ui);
     let main = ui.fit(MAIN);
-    let hint = leave_hint(&cx.app.release_hint());
+    let release = cx.app.release_hint();
     let panes = cx.app.plugin_panes_mut();
     let top = panes.iter().rposition(PtyPane::is_modal);
     panes
@@ -68,6 +71,7 @@ pub fn floating(cx: &mut DialogCx) -> Vec<AnyElement> {
         .map(|(i, pane)| {
             let focused = Some(i) == top;
             let spot = pane.spot(cells(main.cols), cells(main.rows));
+            let hint = pane.leave_text(&release);
             let body = floating_box(ui, pane, focused, &hint);
             match spot {
                 TerminalSpot::Centered { cols, rows } => overlay::centered(
