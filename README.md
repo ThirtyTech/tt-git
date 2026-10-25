@@ -91,8 +91,12 @@ tt-git            # in a repository, or: tt-git path/to/repo
 
 ### The desktop app
 
+![The tt-git desktop app on Windows: the menus in the title bar, the commit graph on top, the status pane and the branch list below](docs-site/src/assets/screens/gui-overview-windows.webp)
+
 `tt-git-gui` is tt-git as a desktop app for Windows, macOS and Linux, drawn
-with [GPUI](https://gpui.rs/). It has the same panes, keys, config and
+on the GPU with [GPUI](https://gpui.rs/), the UI framework the
+[Zed](https://zed.dev/) editor is built on. It runs the same app as the
+terminal one (the shared `tt-git-app` crate), so it has the same panes, keys, config and
 plugins as the terminal app, plus menus that show each command's key,
 right-click menus, panes you resize by dragging, and a window per
 repository. It's a separate download on each release: a `.dmg` for macOS,
@@ -100,7 +104,9 @@ an installer or a zip for Windows x64, and a tarball or an AppImage for
 Linux, each with `tt-git` beside the app (plugins use it). It doesn't update
 itself: download the new release. See
 [The desktop app](https://thirtytech.github.io/tt-git/desktop/) for
-installing it and what's different.
+installing it and what's different, and
+[How it's built](https://thirtytech.github.io/tt-git/desktop/architecture/)
+for how the two apps share one core.
 
 ```sh
 cargo install --path crates/tt-git-gui   # from source
@@ -239,6 +245,8 @@ The full documentation is at <https://thirtytech.github.io/tt-git/>. For how eac
 - [Configuration](https://thirtytech.github.io/tt-git/configuration/): settings, keys and layout
 - [The desktop app](https://thirtytech.github.io/tt-git/desktop/): installing `tt-git-gui`, menus,
   right-click menus, windows, and what it can't do yet
+- [How it's built](https://thirtytech.github.io/tt-git/desktop/architecture/): the crates, and how the
+  terminal and desktop apps share one core
 - [Themes](https://thirtytech.github.io/tt-git/configuration/themes/): built-in themes, Omarchy's,
   and writing your own
 
@@ -401,6 +409,9 @@ cargo test --workspace --doc
 those when you remove a test.
 
 ### Crates
+
+[How it's built](https://thirtytech.github.io/tt-git/desktop/architecture/)
+draws how they depend on each other.
 
 | Crate | What |
 |---|---|

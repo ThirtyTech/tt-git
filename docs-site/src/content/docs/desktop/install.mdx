@@ -4,6 +4,7 @@ description: "Install the desktop app on Windows, macOS or Linux, start it, and 
 ---
 
 import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/Screenshot.astro';
 
 ## Requirements
 
@@ -201,8 +202,7 @@ next to the terminal app's `tt-git.log` (see [Logs](/configuration/#logs)).
 Started outside a repository, from a launcher say, tt-git opens a small
 start window instead:
 
-{/* Screenshot: the start window with a few recent repositories, one of them
-    marked (missing). Name it `gui-start`. */}
+<Screenshot name="gui-start-windows" alt="The start window: Open folder… at the top, then the recent repositories, the last one greyed out and marked (missing)" />
 
 - **Open folder…** shows the system's folder picker. Pick one or more
   repositories, and each opens in its own window.

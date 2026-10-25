@@ -1,0 +1,168 @@
+---
+// The workspace's crates and what depends on what, from the crates'
+// Cargo.toml files. Drawn with the theme's colors, so it reads in light and
+// dark mode. An arrow points from a crate to one it depends on.
+---
+
+<figure class="crate-diagram not-content">
+	<svg viewBox="0 0 960 600" role="img" aria-labelledby="crate-diagram-title crate-diagram-desc">
+		<title id="crate-diagram-title">tt-git's crates</title>
+		<desc id="crate-diagram-desc">
+			The tt-git binary depends on tt-git-tui, which draws with ratatui. The tt-git-gui binary draws with GPUI
+			and gpui-component. Both front ends depend on tt-git-app, the shared app, which depends on tt-git-core,
+			tt-git-graph and tt-git-plugin. tt-git-plugin depends on tt-git-core. tt-git-testkit is for tests, and the
+			plugins in plugins/ are separate programs that talk to tt-git through its CLI and socket.
+		</desc>
+		<defs>
+			<marker id="crate-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+				<path d="M 0 0 L 10 5 L 0 10 z" class="head" />
+			</marker>
+		</defs>
+
+		<!-- Binaries -->
+		<g class="box tui">
+			<rect x="40" y="20" width="400" height="70" rx="10" />
+			<text x="240" y="50" class="name">tt-git</text>
+			<text x="240" y="72" class="what">terminal app: the binary and its CLI</text>
+		</g>
+		<g class="box gui">
+			<rect x="520" y="20" width="400" height="70" rx="10" />
+			<text x="720" y="50" class="name">tt-git-gui</text>
+			<text x="720" y="72" class="what">desktop app: windows, menus, GPUI views</text>
+		</g>
+
+		<!-- What draws -->
+		<g class="box tui">
+			<rect x="40" y="140" width="400" height="70" rx="10" />
+			<text x="240" y="170" class="name">tt-git-tui</text>
+			<text x="240" y="192" class="what">draws with ratatui, reads crossterm input</text>
+		</g>
+		<g class="box external">
+			<rect x="600" y="140" width="320" height="70" rx="10" />
+			<text x="760" y="170" class="name">GPUI + gpui-component</text>
+			<text x="760" y="192" class="what">Zed's GPU UI framework</text>
+		</g>
+
+		<!-- The shared app -->
+		<g class="box shared">
+			<rect x="40" y="260" width="880" height="80" rx="10" />
+			<text x="480" y="292" class="name">tt-git-app</text>
+			<text x="480" y="316" class="what">the app both front ends run: state, panes, keymap, dialogs, view models, jobs, plugin panes</text>
+		</g>
+
+		<!-- The foundations -->
+		<g class="box">
+			<rect x="40" y="390" width="270" height="70" rx="10" />
+			<text x="175" y="420" class="name">tt-git-core</text>
+			<text x="175" y="442" class="what">runs git, parses what it says</text>
+		</g>
+		<g class="box">
+			<rect x="345" y="390" width="270" height="70" rx="10" />
+			<text x="480" y="420" class="name">tt-git-graph</text>
+			<text x="480" y="442" class="what">the commit graph's lanes</text>
+		</g>
+		<g class="box">
+			<rect x="650" y="390" width="270" height="70" rx="10" />
+			<text x="785" y="420" class="name">tt-git-plugin</text>
+			<text x="785" y="442" class="what">plugin host and socket API</text>
+		</g>
+
+		<!-- Outside the apps -->
+		<g class="box aside">
+			<rect x="40" y="520" width="420" height="60" rx="10" />
+			<text x="250" y="546" class="name">tt-git-testkit</text>
+			<text x="250" y="566" class="what">tests only: sandbox repos, test driver</text>
+		</g>
+		<g class="box aside">
+			<rect x="500" y="520" width="420" height="60" rx="10" />
+			<text x="710" y="546" class="name">plugins/</text>
+			<text x="710" y="566" class="what">GitHub, Azure DevOps: separate programs</text>
+		</g>
+
+		<!-- Depends on -->
+		<g class="edges">
+			<line x1="240" y1="90" x2="240" y2="138" />
+			<line x1="760" y1="90" x2="760" y2="138" />
+			<line x1="550" y1="90" x2="550" y2="258" />
+			<line x1="240" y1="210" x2="240" y2="258" />
+			<line x1="175" y1="340" x2="175" y2="388" />
+			<line x1="480" y1="340" x2="480" y2="388" />
+			<line x1="785" y1="340" x2="785" y2="388" />
+			<path d="M 785 460 V 486 H 175 V 462" />
+		</g>
+		<g class="edges loose">
+			<path d="M 880 520 V 462" />
+		</g>
+		<text x="888" y="496" class="label">CLI, socket</text>
+	</svg>
+	<figcaption>An arrow points to a crate the other one uses. The front ends also use tt-git-core's and tt-git-plugin's types directly.</figcaption>
+</figure>
+
+<style>
+	.crate-diagram {
+		margin-block: 1.5rem;
+	}
+	.crate-diagram svg {
+		display: block;
+		width: 100%;
+		height: auto;
+		font-family: var(--sl-font);
+	}
+	.box rect {
+		fill: var(--sl-color-gray-6);
+		stroke: var(--sl-color-gray-4);
+		stroke-width: 1.5;
+	}
+	.box.tui rect {
+		stroke: var(--tt-green);
+	}
+	.box.gui rect {
+		stroke: var(--tt-cyan);
+	}
+	.box.shared rect {
+		stroke: var(--sl-color-accent);
+		stroke-width: 2.5;
+		fill: color-mix(in srgb, var(--sl-color-accent) 12%, var(--sl-color-gray-6));
+	}
+	.box.external rect,
+	.box.aside rect {
+		fill: none;
+		stroke-dasharray: 6 5;
+	}
+	.box text {
+		text-anchor: middle;
+	}
+	.name {
+		fill: var(--sl-color-white);
+		font-family: var(--__sl-font-mono);
+		font-size: 19px;
+		font-weight: 600;
+	}
+	.what {
+		fill: var(--sl-color-gray-2);
+		font-size: 14px;
+	}
+	.edges line,
+	.edges path {
+		fill: none;
+		stroke: var(--sl-color-gray-3);
+		stroke-width: 1.75;
+		marker-end: url(#crate-arrow);
+	}
+	.edges.loose path {
+		stroke-dasharray: 5 4;
+	}
+	.head {
+		fill: var(--sl-color-gray-3);
+	}
+	.label {
+		fill: var(--sl-color-gray-2);
+		font-size: 13px;
+	}
+	.crate-diagram figcaption {
+		margin-top: 0.5rem;
+		color: var(--sl-color-gray-3);
+		font-size: var(--sl-text-sm);
+		text-align: center;
+	}
+</style>
