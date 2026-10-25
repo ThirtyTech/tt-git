@@ -1,0 +1,36 @@
+[package]
+name = "tt-git-gui"
+description = "tt-git's desktop app, drawn with GPUI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "tt-git-gui"
+path = "src/main.rs"
+
+[dependencies]
+# GPUI through gpui-kit, which pins the gpui-pre snapshot gpui-component is
+# built on (gpui-pre =0.3.9, zed@93d7456) and re-exports both, so the two
+# always match. Named `gpui` so GPUI's macros resolve through it.
+gpui = { package = "gpui-kit", version = "=0.8.0" }
+clap.workspace = true
+color-eyre.workspace = true
+# rt-multi-thread for the runtime `gpui_tokio` starts.
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+tracing.workspace = true
+tracing-appender.workspace = true
+tracing-subscriber.workspace = true
+tt-git-app.workspace = true
+tt-git-core.workspace = true
+tt-git-plugin.workspace = true
+unicode-width = "0.2"
+
+[dev-dependencies]
+gpui = { package = "gpui-kit", version = "=0.8.0", features = ["test-support"] }
+tt-git-testkit.workspace = true
+
+[lints]
+workspace = true
