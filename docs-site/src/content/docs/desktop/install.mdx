@@ -39,12 +39,31 @@ so leave it where it is.
 Pick one of two downloads:
 
 - **`tt-git-gui-<version>-windows-x64-setup.exe`**, an installer. It
-  installs for your user without admin rights, into
-  `%LOCALAPPDATA%\Programs\tt-git`, adds **tt-git** to the Start menu, and
-  offers a desktop shortcut. Uninstall it from **Settings → Apps**.
+  first asks whether to install for you alone (no admin rights needed) or
+  for all users (asks for admin rights). For you alone it installs into
+  `%LOCALAPPDATA%\Programs\tt-git`; for all users into
+  `C:\Program Files\tt-git`. It adds **tt-git** to the Start menu.
 - **`tt-git-gui-<version>-windows-x64.zip`**, a folder holding
   `tt-git-gui.exe` and `tt-git.exe`. Unpack it anywhere and run
   `tt-git-gui.exe`.
+
+The installer's *Select Additional Tasks* page offers two extras:
+
+- **Create a desktop shortcut**, off unless you tick it.
+- **Add "Open in tt-git" to the menu of folders in Explorer**, on unless
+  you untick it. Right-click a folder, or the empty space inside one, and
+  pick **Open in tt-git** to open its repository in a window. On
+  Windows 11 the entry is under **Show more options**. A folder outside a
+  repository opens the [start window](#the-start-window) with a message
+  saying so.
+
+<Screenshot name="gui-installer-tasks" alt="The installer's Select Additional Tasks page on Windows: Create a desktop shortcut, unticked, and Add &quot;Open in tt-git&quot; to the menu of folders in Explorer, ticked" />
+
+To uninstall, pick **tt-git** in **Settings → Apps → Installed apps** and
+choose **Uninstall**. That removes the app, its Start menu entry, the
+desktop shortcut and the Explorer entry. Your settings and plugins in
+`%APPDATA%\tt-git` stay. If tt-git is running when you install a new
+version, the installer offers to close it first.
 
 If the build is unsigned, SmartScreen stops the first run with *Windows
 protected your PC*. Click **More info**, then **Run anyway**.
@@ -56,13 +75,22 @@ the terminal app with the [install script](/getting-started/install/#install-scr
 <TabItem label="macOS">
 
 Download **`tt-git-gui-<version>-macos-arm64.dmg`** and open it. Drag
-**tt-git** to the Applications folder beside it, then open it from
+**tt-git** onto the Applications folder beside it, then open it from
 Applications or Spotlight.
 
-If the build is unsigned, macOS blocks the first launch. Right-click
-**tt-git** in Applications and choose **Open**, then **Open** again. Or,
-after macOS has blocked it once, allow it in **System Settings → Privacy &
-Security** and open it again.
+<Screenshot name="gui-installer-dmg" alt="The disk image's window on macOS: the tt-git app icon, an arrow, and the Applications folder, over a dark tt-git background with the line Drag tt-git to Applications to install it." />
+
+If the build is unsigned, macOS stops the first launch with *"tt-git" Not
+Opened: Apple could not verify "tt-git" is free of malware*, and offers only
+**Done**:
+
+<Screenshot name="gui-installer-gatekeeper" alt="macOS's dialog &quot;tt-git&quot; Not Opened, saying Apple could not verify &quot;tt-git&quot; is free of malware that may harm your Mac or compromise your privacy, with a Done button" />
+
+Click **Done**, open **System Settings → Privacy & Security**, and under
+**Security** click **Open Anyway** beside the message about tt-git. Confirm
+with your password, and tt-git opens; after that it starts like any other
+app. On macOS 14 and earlier you can instead right-click **tt-git** in
+Applications, choose **Open**, then **Open** again.
 
 The app holds both binaries in `tt-git.app/Contents/MacOS`: `tt-git-gui`
 and `tt-git`. For `tt-git` in a terminal, link to the app's copy:
@@ -74,33 +102,92 @@ sudo ln -s /Applications/tt-git.app/Contents/MacOS/tt-git /usr/local/bin/tt-git
 or install the terminal app on its own with the
 [install script](/getting-started/install/#install-script).
 
+To uninstall, drag **tt-git** from Applications to the Trash. Your
+settings and plugins stay in `~/Library/Application Support/tt-git`.
+
 </TabItem>
 <TabItem label="Linux">
 
-Pick one of two downloads, for `linux-x64` or `linux-arm64`:
+Each download comes for `linux-x64` and `linux-arm64`. Pick the one that
+suits your system.
 
-- **`tt-git-gui-<version>-linux-<arch>.tar.gz`**, a tree to unpack into
-  `~/.local` (or `/usr/local` for every user, with `sudo`):
+**A package** for your distribution's package manager. It installs
+`tt-git-gui` and `tt-git` into `/usr/bin`, `tt-git.desktop` into
+`/usr/share/applications` and the icons into `/usr/share/icons/hicolor`,
+and pulls in what the app needs, git included (see [below](#linux)).
+**tt-git** then shows up in your app launcher.
 
-  ```sh
-  tar -xzf tt-git-gui-v0.10.0-linux-x64.tar.gz --strip-components=1 -C ~/.local
-  ```
+| Distribution | Download | Install | Uninstall |
+|---|---|---|---|
+| Debian, Ubuntu | `tt-git-gui-<version>-linux-<arch>.deb` | `sudo apt install ./tt-git-gui-v0.10.0-linux-x64.deb` | `sudo apt remove tt-git` |
+| Fedora | `tt-git-gui-<version>-linux-<arch>.rpm` | `sudo dnf install ./tt-git-gui-v0.10.0-linux-x64.rpm` | `sudo dnf remove tt-git` |
+| openSUSE | `tt-git-gui-<version>-linux-<arch>.rpm` | `sudo zypper install ./tt-git-gui-v0.10.0-linux-x64.rpm` | `sudo zypper remove tt-git` |
+| Arch Linux | `tt-git-gui-<version>-linux-<arch>.pkg.tar.zst` | `sudo pacman -U tt-git-gui-v0.10.0-linux-x64.pkg.tar.zst` | `sudo pacman -R tt-git` |
 
-  That puts `tt-git-gui` and `tt-git` in `bin/`, `tt-git.desktop` in
-  `share/applications/` and the icons in `share/icons/hicolor/`. **tt-git**
-  then shows up in your app launcher. The launcher runs `tt-git-gui` from
-  your `PATH`, so `~/.local/bin` must be on your session's `PATH`, not only
-  your shell's.
-- **`tt-git-gui-<version>-linux-<arch>.AppImage`**, one file. Make it
-  executable and run it:
+The package is called `tt-git` because it holds both apps. It needs glibc
+2.35 or newer: Debian 12, Ubuntu 22.04, a current Fedora or openSUSE
+Tumbleweed. The packages aren't signed, so zypper asks before it installs
+one.
 
-  ```sh
-  chmod +x tt-git-gui-v0.10.0-linux-x64.AppImage
-  ./tt-git-gui-v0.10.0-linux-x64.AppImage
-  ```
+**The install script** puts the app in your home folder, without `sudo`
+and without a package manager:
 
-  It still uses the system's Wayland or X11, Vulkan and fontconfig
-  libraries.
+```sh
+curl -fsSL https://github.com/ThirtyTech/tt-git/releases/latest/download/install-gui.sh | sh
+```
+
+It downloads the tarball (below) for your machine, checks it against the
+release's checksums, and copies `tt-git-gui` and `tt-git` into
+`~/.local/bin`, `tt-git.desktop` into `~/.local/share/applications` and
+the icons into `~/.local/share/icons/hicolor`. The launcher entry runs
+`tt-git-gui` by its full path, so it works whether or not `~/.local/bin`
+is on your `PATH`. If a library the app links is missing, the script says
+which.
+
+| Variable | Default | Does |
+|---|---|---|
+| `TTGIT_VERSION` | the latest release | The release to install, such as `v0.10.0` |
+| `TTGIT_PREFIX` | `~/.local` | Where to install. For every user, use `/usr/local` and run the script with `sudo` |
+
+For example, for every user:
+
+```sh
+curl -fsSL https://github.com/ThirtyTech/tt-git/releases/latest/download/install-gui.sh | sudo TTGIT_PREFIX=/usr/local sh
+```
+
+To uninstall, run it again with `--uninstall` (and the same
+`TTGIT_PREFIX`, if you set one). It removes `tt-git-gui`, `tt-git`, the
+launcher entry and the icons, and keeps your settings in
+`~/.config/tt-git`:
+
+```sh
+curl -fsSL https://github.com/ThirtyTech/tt-git/releases/latest/download/install-gui.sh | sh -s -- --uninstall
+```
+
+`tt-git` in `~/.local/bin` is the same file the
+[terminal app's install script](/getting-started/install/#install-script)
+puts there, so uninstalling the desktop app removes the terminal app too.
+
+**`tt-git-gui-<version>-linux-<arch>.tar.gz`**, a tree to unpack yourself,
+into `~/.local` (or `/usr/local` for every user, with `sudo`):
+
+```sh
+tar -xzf tt-git-gui-v0.10.0-linux-x64.tar.gz --strip-components=1 -C ~/.local
+```
+
+That puts the same files in the same places as the install script. Here
+the launcher runs `tt-git-gui` from your `PATH`, so `~/.local/bin` must be
+on your session's `PATH`, not only your shell's.
+
+**`tt-git-gui-<version>-linux-<arch>.AppImage`**, one file. Make it
+executable and run it:
+
+```sh
+chmod +x tt-git-gui-v0.10.0-linux-x64.AppImage
+./tt-git-gui-v0.10.0-linux-x64.AppImage
+```
+
+It still uses the system's Wayland or X11 and Vulkan libraries.
 
 </TabItem>
 </Tabs>
@@ -140,7 +227,7 @@ installed the app:
 | The Windows zip | `…-windows-x64.zip` | Replaces `tt-git-gui.exe` and `tt-git.exe` in their folder. Windows can't overwrite a running program, so the old ones are renamed to `tt-git-gui.exe.old` and `tt-git.exe.old` and deleted the next time the app starts. |
 | The macOS .dmg | `…-macos-arm64.dmg` | Replaces the whole `tt-git.app`, where it is. |
 | A Linux AppImage | `…-linux-<arch>.AppImage` | Replaces the AppImage file. |
-| The Linux tarball | `…-linux-<arch>.tar.gz` | Replaces `bin/tt-git-gui` and `bin/tt-git`. Under `/usr/local` that needs write permission there, so it fails for a normal user: update that copy by hand. |
+| The Linux tarball or the install script | `…-linux-<arch>.tar.gz` | Replaces `bin/tt-git-gui` and `bin/tt-git`. Under `/usr/local` that needs write permission there, so it fails for a normal user: update that copy by hand. |
 
 The folder it's in must be one you can write to. If the download, the
 checksum or the swap fails, an error popup says why, starting *updating
@@ -156,7 +243,9 @@ Some copies can't update themselves. The dialog then says why and offers
 **Open Download Page**, which opens the release on GitHub:
 
 - one built from source with cargo: *build it again instead*;
-- one installed by a package manager (in `/usr/bin`): update it there;
+- one installed from the `.deb`, `.rpm` or Arch package (in `/usr/bin`):
+  install the new package the same way (`apt`, `dnf`, `zypper` and `pacman`
+  upgrade the installed one);
 - a copy not laid out the way a release download installs it, or on a
   platform without a desktop app download (Windows on arm64).
 
@@ -183,14 +272,19 @@ instead*.
 ### Linux
 
 The desktop app draws with the GPU through Vulkan and uses the system's
-font, keyboard and window libraries. Most desktops have them already. On
-Debian or Ubuntu:
+keyboard and window libraries and fontconfig's settings to find fonts. Most
+desktops have them already, and the packages install them for you. With
+the install script, the tarball or the AppImage on Debian or Ubuntu:
 
 ```sh
-sudo apt install libvulkan1 mesa-vulkan-drivers libfontconfig1 libfreetype6 \
-  libwayland-client0 libxkbcommon0 libxkbcommon-x11-0 libx11-xcb1 libxcb1 \
-  libasound2 libzstd1
+sudo apt install libvulkan1 mesa-vulkan-drivers libwayland-client0 \
+  libxkbcommon0 libxkbcommon-x11-0 libxcb1 fontconfig-config
 ```
+
+On Fedora, `sudo dnf install vulkan-loader mesa-vulkan-drivers
+libwayland-client libxkbcommon-x11 libxcb fontconfig`; on Arch, `sudo
+pacman -S vulkan-icd-loader wayland libxkbcommon-x11 libxcb fontconfig`
+and the Vulkan driver for your GPU.
 
 It runs on both Wayland and X11. The folder picker behind *Open repository*
 needs the desktop portal (`xdg-desktop-portal` and the one for your

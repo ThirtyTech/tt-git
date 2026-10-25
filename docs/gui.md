@@ -417,8 +417,35 @@ the start window's title bar draws it too. The window's icon: on X11 through
 `WindowOptions::icon`, on Windows as the executable's icon resource
 (`build.rs`); Wayland and macOS take it from the packages
 (`packaging/`): on Wayland from `share/applications/tt-git.desktop` and
-the hicolor icons in the Linux tarball and AppImage (the file name is the
-`app_id`, `tt-git`), on macOS from `tt-git.app/Contents/Resources/tt-git.icns`.
+the hicolor icons in the Linux packages, tarball and AppImage (the file
+name is the `app_id`, `tt-git`), on macOS from
+`tt-git.app/Contents/Resources/tt-git.icns`.
+
+## Packaging
+
+The release's `gui` job (`.github/workflows/release.yml`) builds
+`tt-git-gui` and `tt-git` and runs one script per OS from
+`crates/tt-git-gui/packaging/`. Every download is named
+`tt-git-gui-<tag>-<platform>.*`, apart from the TUI's archives, and carries
+`tt-git` next to `tt-git-gui`.
+
+| Script | Makes |
+|---|---|
+| `windows/package.ps1` | the zip, and the installer from `windows/tt-git.iss` (Inno Setup 6): per user or all users, Start menu entry, optional desktop shortcut, Explorer's "Open in tt-git" on folders (`Directory\shell` and `Directory\Background\shell`), uninstall from Settings, a welcome page with the sidebar image (`windows/sidebar.svg`, rendered to `sidebar.bmp`). Never change its `AppId`. |
+| `macos/package.sh` | `tt-git.app` (`Info.plist`, the `.icns` from `icons/`) in a `.dmg`, signed and notarized when the secrets are set. The `.dmg` comes from `macos/dmg.py` (dmgbuild, pinned in `dmg-requirements.txt`, installed into a venv, so the job needs `python3` and network access): the app and an Applications link at 128 points over `macos/dmg-background.svg`, rendered to `dmg-background.png` and `@2x.png`. The background is stored as an alias only; with dmgbuild's bookmark as well, macOS 26's Finder shows none. Finder draws the icon names in black on any picture background, so the background puts light tags under them. |
+| `linux/package.sh` | the prefix tarball; the AppImage with `APPIMAGETOOL`; the `.deb`, `.rpm` and `.pkg.tar.zst` with `NFPM` (`linux/nfpm.yaml`, all under `/usr`) |
+
+`install-gui.sh` at the repository root is published with each release and
+installs the Linux tarball into `~/.local` or `TTGIT_PREFIX`.
+
+The packages' dependencies in `nfpm.yaml` come from the release binary:
+it links libxcb, libxkbcommon and libxkbcommon-x11, and loads
+`libvulkan.so.1`, `libEGL.so.1` and `libwayland-client.so.0` when it
+starts. Check them again when GPUI changes (`ldd`, and
+`grep -ao 'lib[a-z0-9_-]*\.so[.0-9]*'` on the binary for what it loads).
+The scripts run on CI only; to try the Linux ones locally, build in an
+`ubuntu:22.04` container and install the packages in `debian`, `fedora`,
+`opensuse/tumbleweed` and `archlinux` containers.
 
 ## Gotchas
 
