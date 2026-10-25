@@ -1,0 +1,96 @@
+# The .deb, .rpm and Arch .pkg.tar.zst of tt-git-gui, built with nfpm
+# (https://nfpm.goreleaser.com) by package.sh, which runs it from the
+# staged prefix tree (bin/, share/) and sets:
+#
+#   VERSION  the release's version (0.9.0, 0.9.0-rc.1)
+#   ARCH     amd64 or arm64; nfpm names it per format (x86_64, aarch64)
+#
+# Everything goes under /usr. The desktop database and icon cache are
+# refreshed by the distributions' own triggers and hooks, so there are no
+# install scripts.
+name: tt-git
+version: ${VERSION}
+version_schema: semver
+arch: ${ARCH}
+platform: linux
+section: vcs
+priority: optional
+maintainer: ThirtyTech <noreply@thirtytech.net>
+vendor: ThirtyTech
+homepage: https://github.com/ThirtyTech/tt-git
+license: MIT
+description: |-
+  A git client for the terminal and the desktop.
+  tt-git browses a repository's history and works with its branches,
+  stashes and changes. This package holds the desktop app (tt-git-gui)
+  and the terminal app (tt-git).
+
+contents:
+  - src: bin/tt-git-gui
+    dst: /usr/bin/tt-git-gui
+    file_info: { mode: 0755 }
+  - src: bin/tt-git
+    dst: /usr/bin/tt-git
+    file_info: { mode: 0755 }
+  - src: share/applications/tt-git.desktop
+    dst: /usr/share/applications/tt-git.desktop
+  - src: share/icons/hicolor
+    dst: /usr/share/icons/hicolor
+    type: tree
+  - src: share/doc/tt-git
+    dst: /usr/share/doc/tt-git
+    type: tree
+
+# What tt-git-gui needs at run time: the libraries it links (xcb,
+# xkbcommon), the ones it loads when it starts (the Vulkan loader, and
+# wayland-client on Wayland), the fontconfig settings it reads to find
+# fonts, and git. The release builds on Ubuntu 22.04, so glibc 2.35. A
+# Vulkan driver and the desktop portal (the folder picker) are only
+# recommended: the distribution or the desktop picks those.
+overrides:
+  deb:
+    depends:
+      - libc6 (>= 2.35)
+      - git (>= 1:2.31)
+      - libvulkan1
+      - libwayland-client0
+      - libxcb1
+      - libxkbcommon-x11-0
+      - libxkbcommon0
+      - fontconfig-config
+    recommends:
+      - mesa-vulkan-drivers | vulkan-icd
+      - xdg-desktop-portal
+  # Sonames rather than package names, so it installs on Fedora and
+  # openSUSE alike.
+  rpm:
+    depends:
+      - git-core >= 2.31
+      - libvulkan.so.1()(64bit)
+      - libwayland-client.so.0()(64bit)
+      - libxcb.so.1()(64bit)
+      - libxkbcommon-x11.so.0()(64bit)
+      - libxkbcommon.so.0()(64bit)
+      - fontconfig
+    recommends:
+      - xdg-desktop-portal
+  archlinux:
+    depends:
+      - git>=2.31
+      - fontconfig
+      - libxcb
+      - libxkbcommon
+      - libxkbcommon-x11
+      - vulkan-icd-loader
+      - wayland
+    # Arch's optdepends.
+    suggests:
+      - vulkan-driver
+      - xdg-desktop-portal
+
+rpm:
+  group: Development/Tools
+  summary: A git client for the terminal and the desktop
+  compression: zstd
+archlinux:
+  packager: ThirtyTech <noreply@thirtytech.net>

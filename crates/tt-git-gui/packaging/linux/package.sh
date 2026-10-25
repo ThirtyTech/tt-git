@@ -10,9 +10,12 @@
 #   tt-git-gui-<tag>-<platform>.tar.gz   a prefix tree to unpack into ~/.local
 #                                        or /usr/local (bin/, share/)
 #   tt-git-gui-<tag>-<platform>.AppImage when APPIMAGETOOL names appimagetool
+#   tt-git-gui-<tag>-<platform>.deb      when NFPM names nfpm: packages that
+#   tt-git-gui-<tag>-<platform>.rpm      install the same tree under /usr
+#   tt-git-gui-<tag>-<platform>.pkg.tar.zst  (nfpm.yaml)
 #
-# Both carry tt-git next to tt-git-gui, where the GUI looks for the binary
-# it gives plugins as TTGIT_BIN_PATH.
+# All of them carry tt-git next to tt-git-gui, where the GUI looks for the
+# binary it gives plugins as TTGIT_BIN_PATH.
 set -euo pipefail
 
 [ $# -eq 3 ] || { echo "usage: $0 <bin-dir> <tag> <platform>" >&2; exit 2; }
@@ -45,24 +48,46 @@ done
 tar -czf "$name.tar.gz" -C "$stage" "$name"
 echo "Wrote $name.tar.gz"
 
-[ -n "${APPIMAGETOOL:-}" ] || exit 0
-
-# The AppImage: the same tree under usr/, with the .desktop file and icon at
-# the top and AppRun starting tt-git-gui.
-appdir="$stage/tt-git.AppDir"
-mkdir -p "$appdir/usr"
-cp -a "$tree/bin" "$tree/share" "$appdir/usr/"
-cp "$here/tt-git.desktop" "$appdir/tt-git.desktop"
-cp "$here/../icons/256.png" "$appdir/tt-git.png"
-ln -s tt-git.png "$appdir/.DirIcon"
-ln -s usr/bin/tt-git-gui "$appdir/AppRun"
 case "$(uname -m)" in
-    x86_64 | amd64) arch=x86_64 ;;
-    aarch64 | arm64) arch=aarch64 ;;
-    *) echo "package.sh: no AppImage for $(uname -m)" >&2; exit 1 ;;
+    x86_64 | amd64) arch=x86_64 goarch=amd64 ;;
+    aarch64 | arm64) arch=aarch64 goarch=arm64 ;;
+    *) arch="" goarch="" ;;
 esac
-# APPIMAGE_EXTRACT_AND_RUN: appimagetool is itself an AppImage, and CI
-# runners have no FUSE to mount it with.
-ARCH=$arch VERSION="${tag#v}" APPIMAGE_EXTRACT_AND_RUN=1 \
-    "$APPIMAGETOOL" --no-appstream "$appdir" "$name.AppImage"
-echo "Wrote $name.AppImage"
+
+if [ -n "${APPIMAGETOOL:-}" ]; then
+    # The AppImage: the same tree under usr/, with the .desktop file and icon
+    # at the top and AppRun starting tt-git-gui.
+    [ -n "$arch" ] || { echo "package.sh: no AppImage for $(uname -m)" >&2; exit 1; }
+    appdir="$stage/tt-git.AppDir"
+    mkdir -p "$appdir/usr"
+    cp -a "$tree/bin" "$tree/share" "$appdir/usr/"
+    cp "$here/tt-git.desktop" "$appdir/tt-git.desktop"
+    cp "$here/../icons/256.png" "$appdir/tt-git.png"
+    ln -s tt-git.png "$appdir/.DirIcon"
+    ln -s usr/bin/tt-git-gui "$appdir/AppRun"
+    # APPIMAGE_EXTRACT_AND_RUN: appimagetool is itself an AppImage, and CI
+    # runners have no FUSE to mount it with.
+    ARCH=$arch VERSION="${tag#v}" APPIMAGE_EXTRACT_AND_RUN=1 \
+        "$APPIMAGETOOL" --no-appstream "$appdir" "$name.AppImage"
+    echo "Wrote $name.AppImage"
+fi
+
+if [ -n "${NFPM:-}" ]; then
+    # The packages, from the same tree. nfpm reads the tree relative to the
+    # directory it runs in.
+    [ -n "$goarch" ] || { echo "package.sh: no packages for $(uname -m)" >&2; exit 1; }
+    out=$(pwd)
+    for format in deb rpm archlinux; do
+        version="${tag#v}"
+        case "$format" in
+            # nfpm drops a pre-release from Arch's pkgver, which can't hold
+            # a "-": 0.9.0-rc.1 goes in as 0.9.0rc.1, which pacman orders
+            # before 0.9.0. deb and rpm get 0.9.0~rc.1 from nfpm.
+            archlinux) file="$name.pkg.tar.zst" version="${version/-/}" ;;
+            *) file="$name.$format" ;;
+        esac
+        (cd "$tree" && VERSION="$version" ARCH=$goarch \
+            "$NFPM" package --config "$here/nfpm.yaml" --packager "$format" --target "$out/$file")
+        echo "Wrote $file"
+    done
+fi
