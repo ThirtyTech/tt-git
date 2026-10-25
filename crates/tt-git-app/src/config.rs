@@ -108,11 +108,20 @@ pub struct UiConfig {
     /// How big everything is drawn, in percent: text, spacing and widgets
     /// together, as a browser zooms. Zooming in the app saves it here.
     pub zoom: u16,
+    /// The font everything is drawn in, by family name; unset is the OS's
+    /// usual monospace font. Picking one in the app saves it here.
+    pub font: Option<String>,
+    /// The font size at 100% zoom, in pixels.
+    pub font_size: f32,
 }
 
 impl Default for UiConfig {
     fn default() -> Self {
-        Self { zoom: DEFAULT_ZOOM }
+        Self {
+            zoom: DEFAULT_ZOOM,
+            font: None,
+            font_size: DEFAULT_FONT_SIZE,
+        }
     }
 }
 
@@ -121,9 +130,29 @@ impl UiConfig {
     pub fn zoom(&self) -> u16 {
         clamp_zoom(self.zoom)
     }
+
+    /// [`font`](Self::font), with an empty name as unset.
+    pub fn font(&self) -> Option<&str> {
+        self.font.as_deref().map(str::trim).filter(|f| !f.is_empty())
+    }
+
+    /// [`font_size`](Self::font_size), kept within [`FONT_SIZES`]; the
+    /// default if it isn't a number.
+    pub fn font_size(&self) -> f32 {
+        if self.font_size.is_finite() {
+            self.font_size.clamp(*FONT_SIZES.start(), *FONT_SIZES.end())
+        } else {
+            DEFAULT_FONT_SIZE
+        }
+    }
 }
 
 pub const DEFAULT_ZOOM: u16 = 100;
+
+pub const DEFAULT_FONT_SIZE: f32 = 13.;
+
+/// The font sizes `[ui] font_size` can be, in pixels.
+pub const FONT_SIZES: std::ops::RangeInclusive<f32> = 6.0..=72.0;
 
 /// The zoom levels zooming in and out steps through, in percent: a
 /// browser's, from 50 to 300.
@@ -419,6 +448,33 @@ pub fn set_in_table(text: &str, table: &str, key: &str, value: &str) -> String {
     out
 }
 
+/// `text` (a config.toml) without `key` in table `[table]`. Everything
+/// else, comments and the table's header included, is left as it was.
+pub fn remove_in_table(text: &str, table: &str, key: &str) -> String {
+    let header = format!("[{table}]");
+    let mut lines: Vec<&str> = text.lines().collect();
+    let is_key = |l: &str| {
+        l.trim_start()
+            .strip_prefix(key)
+            .is_some_and(|rest| rest.trim_start().starts_with('='))
+    };
+    let Some(start) = lines.iter().position(|l| l.trim() == header) else {
+        return text.to_string();
+    };
+    let end = lines[start + 1..]
+        .iter()
+        .position(|l| l.trim_start().starts_with('['))
+        .map_or(lines.len(), |i| start + 1 + i);
+    let Some(at) = lines[start + 1..end].iter().position(|l| is_key(l)) else {
+        return text.to_string();
+    };
+    lines.remove(start + 1 + at);
+    let eol = if text.contains("\r\n") { "\r\n" } else { "\n" };
+    let mut out = lines.join(eol);
+    out.push_str(eol);
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -619,6 +675,37 @@ zoom = 900
             .ui
             .zoom(),
             300
+        );
+    }
+
+    #[test]
+    fn ui_font_defaults_and_clamps() {
+        let ui = Config::default().ui;
+        assert_eq!((ui.font(), ui.font_size()), (None, 13.));
+        let ui = Config::parse("[ui]\nfont = \"Fira Code\"\nfont_size = 15.5\n")
+            .unwrap()
+            .ui;
+        assert_eq!((ui.font(), ui.font_size()), (Some("Fira Code"), 15.5));
+        let ui = Config::parse("[ui]\nfont = \"  \"\nfont_size = 2\n").unwrap().ui;
+        assert_eq!((ui.font(), ui.font_size()), (None, 6.));
+        assert_eq!(Config::parse("[ui]\nfont_size = 500\n").unwrap().ui.font_size(), 72.);
+    }
+
+    #[test]
+    fn remove_in_table_keeps_the_rest() {
+        let text = "font = 1\n[ui]\nfont_size = 14\nfont = \"Fira Code\" # mine\n\n[graph]\nfont = 3\n";
+        assert_eq!(
+            remove_in_table(text, "ui", "font"),
+            "font = 1\n[ui]\nfont_size = 14\n\n[graph]\nfont = 3\n"
+        );
+        assert_eq!(remove_in_table(text, "status", "font"), text, "no such table");
+        assert_eq!(
+            remove_in_table("[ui]\nzoom = 110\n", "ui", "font"),
+            "[ui]\nzoom = 110\n"
+        );
+        assert_eq!(
+            remove_in_table("[ui]\r\nfont = \"A\"\r\nzoom = 1\r\n", "ui", "font"),
+            "[ui]\r\nzoom = 1\r\n"
         );
     }
 

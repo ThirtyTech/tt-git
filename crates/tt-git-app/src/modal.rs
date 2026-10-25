@@ -431,6 +431,8 @@ pub enum PaletteTarget {
     Op(GitOp),
     /// A color theme, by name.
     Theme(String),
+    /// A font family, by name; `None` for the default.
+    Font(Option<String>),
     /// Another dialog, such as a confirm before something that can't be
     /// taken back.
     Modal(Box<Modal>),
@@ -573,6 +575,8 @@ pub enum ModalOutcome {
     Agent(AgentRequest),
     /// Keep this color theme.
     Theme(String),
+    /// Keep this font (`None` for the default).
+    Font(Option<String>),
     /// Close this modal and open that one.
     Next(Box<Modal>),
 }
@@ -719,6 +723,7 @@ impl Modal {
                                 PaletteTarget::PluginPane(p, e) => ModalOutcome::PluginPane(p.clone(), e.clone()),
                                 PaletteTarget::Op(op) => ModalOutcome::Run(op.clone()),
                                 PaletteTarget::Theme(name) => ModalOutcome::Theme(name.clone()),
+                                PaletteTarget::Font(family) => ModalOutcome::Font(family.clone()),
                                 PaletteTarget::Modal(modal) => ModalOutcome::Next(modal.clone()),
                             },
                             None => ModalOutcome::Open,

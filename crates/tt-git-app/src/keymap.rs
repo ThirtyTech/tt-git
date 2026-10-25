@@ -386,6 +386,9 @@ pub enum Command {
     ZoomIn,
     ZoomOut,
     ResetZoom,
+    /// Picks the font the app draws in. Only the desktop app offers it
+    /// (see `App::enable_ui_fonts`).
+    Font,
 }
 
 impl Command {
@@ -492,6 +495,7 @@ impl Command {
             Command::ZoomIn => "zoom in",
             Command::ZoomOut => "zoom out",
             Command::ResetZoom => "reset zoom",
+            Command::Font => "font",
         }
     }
 }

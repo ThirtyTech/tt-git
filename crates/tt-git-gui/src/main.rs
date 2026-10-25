@@ -47,8 +47,13 @@ fn main() -> Result<()> {
 
     let config_path = args.config.unwrap_or_else(tt_git_core::paths::config_file);
     let global = GlobalConfig::load(&config_path)?;
-    // One zoom for every window, from the global file alone.
-    let zoom = global.config()?.ui.zoom();
+    // One zoom and font for every window, from the global file alone.
+    let ui = global.config()?.ui;
+    let zoom = ui.zoom();
+    let font = tt_git_gui::font::UiFont {
+        family: ui.font().map(|f| f.to_string().into()),
+        size: ui.font_size(),
+    };
     let filter_to_cwd = if args.filter_to_cwd {
         Some(true)
     } else if args.no_filter_to_cwd {
@@ -115,6 +120,7 @@ fn main() -> Result<()> {
     gpui::application().with_assets(tt_git_gui::Assets).run(move |cx| {
         tt_git_gui::init(cx);
         tt_git_gui::zoom::set(zoom, cx);
+        tt_git_gui::font::set(font, cx);
         tt_git_gui::window_state::install(tt_git_gui::window_state::default_path(), cx);
         tt_git_gui::set_launcher(Rc::new(new_app), cx);
         tt_git_gui::windows::quit_when_last_closes(cx);
