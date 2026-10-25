@@ -19,6 +19,7 @@ here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
 | `src/windows.rs` | Every way of opening a repository (command line, start window, "Open repository", another worktree) goes through `open_repo`/`open_path`: a new window with its own `AppModel`, or the window that shows it already brought forward. `pick_repos` is the native folder picker. The app quits when its last window closes. |
 | `src/window_state.rs` | `<state_dir>/gui.json`: the last window's bounds and mode, and the recent repositories. `place` puts a new window on a display that still exists. Only `main` installs it, so tests never touch the state folder. |
 | `src/start.rs` | The start window: recent repositories and "Open folder…". |
+| `src/update.rs`, `src/update/` | Updating the app: Check for Updates… (and the palette's Update tt-git, which `App::delegate_self_update` hands to the GUI), the daily check (`<state_dir>/gui-update.json`), and the restart. `install.rs` picks the release download for how this copy was installed and swaps it in; `instances.rs` is the registry of running copies (`<state_dir>/gui-instances`, a held file lock each) and the waiter (`tt-git-gui --finish-update`) that starts them again. The network and the swap go through the `Updater` trait, which only `main` installs; tests use a fake. |
 | `src/tt_git_bin.rs` | The `tt-git` plugins get as `TTGIT_BIN_PATH`. |
 | `src/model.rs` | `AppModel`, the GPUI entity that owns `tt_git_app::App`. A task applies the app's actions, a timer sends `Action::Tick` every 250 ms, and after every input it carries out what the app asks: `take_redraw` (notify), `take_clipboard` (system clipboard), `take_editor` (a windowed editor starts detached, a terminal one in a pane: see [Editors](#editors)), `should_quit` (close the window). |
 | `src/shell.rs` | `Shell`, the window's view. Draws the layout, the help bar and what opens over the panes, sends every key to tt-git's keymap, and reports where each pane went (`begin_frame`, `set_layout`), as the TUI's `draw_app` does. |
@@ -348,8 +349,7 @@ they run on every OS.
 
 The menus list tt-git's commands; the keymap stays the only place keys
 are bound. `menus::build(app)` makes them from the app as it is: tt-git
-(About, Theme, Plugin logs, Quit; Update tt-git only where the app
-`self_updates()`, which the GUI turns off), Repository, View, and a
+(About, Check for Updates…, Theme, Plugin logs, Quit), Repository, View, and a
 menu named after the focused pane's key context with its `commands()`
 (the help popup's first section). Each item shows the key
 `display_key_text` gives in the focused context, so a rebind shows.

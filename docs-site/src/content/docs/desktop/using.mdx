@@ -19,7 +19,7 @@ item does exactly what pressing its key does.
 
 | Menu | Holds |
 |---|---|
-| **tt-git** | *About tt-git* (the version), *Theme*, *Plugin logs* and *Quit* |
+| **tt-git** | *About tt-git* (the version), *Check for Updates…* (see [Updating](/desktop/install/#updating)), *Theme*, *Plugin logs* and *Quit* |
 | **Repository** | *Fetch*, *Prune gone*, *Pull*, *Push*, *Refresh*; *Continue merge/rebase*, *Abort merge/rebase*, *Undo*; *Ask agent*; *Open repository* |
 | **View** | Focus *Graph*, *Status*, *Branches* or *Details*; *Next pane*, *Prev pane*; *Zoom*; *Zoom in*, *Zoom out*, *Reset zoom*; *Commands* (the [palette](/git/palette/)) and *Help* |
 | The focused pane | Named after it (**Graph**, **Status**, **Branches**, **Details**, **Stage**, **Blame**, **Stash** or **Worktrees**): that pane's commands, the ones the [help popup](/getting-started/navigation/#getting-help) lists first |
@@ -40,8 +40,8 @@ buttons on macOS), then the menus on Windows and Linux, then the window's
 title.
 
 While a dialog, the help popup or an error is open, the command items are
-greyed out, since a key would go to that instead. *About tt-git* and *Quit*
-always work. *Quit* closes every window; <kbd>q</kbd> closes only the window
+greyed out, since a key would go to that instead. *About tt-git*, *Check for
+Updates…* and *Quit* always work. *Quit* closes every window; <kbd>q</kbd> closes only the window
 you press it in.
 
 ## Right-click menus
@@ -123,6 +123,11 @@ The desktop app keeps a small file, `gui.json`, in the
   that's there.
 - **The repositories you opened last**, for the
   [start window](/desktop/install/#the-start-window).
+
+Two more things live in the state folder, for
+[updating](/desktop/install/#updating): `gui-update.json`, when the app last
+looked for a new release, and the `gui-instances` folder, where each running
+copy of the app notes itself so an update can restart them all.
 
 On Wayland the compositor decides where windows go, so only the size and
 maximized or full screen come back.

@@ -4,6 +4,7 @@ description: "Install the desktop app on Windows, macOS or Linux, start it, and 
 ---
 
 import { Aside, Steps, TabItem, Tabs } from '@astrojs/starlight/components';
+import Screenshot from '../../../components/Screenshot.astro';
 
 ## Requirements
 
@@ -106,21 +107,73 @@ Pick one of two downloads, for `linux-x64` or `linux-arm64`:
 
 ## Updating
 
-The desktop app doesn't update itself, and the
-[install script](/getting-started/install/#install-script) and
-`tt-git update` only know the terminal app. To update, download the new
-release and install it the same way:
+The desktop app updates itself. In the **tt-git** menu, choose **Check for
+Updates…**, right under *About tt-git*. *Update tt-git* in the
+[command palette](/git/palette/#updating-tt-git) does the same.
 
-- **Windows**: run the new installer; it replaces the old version. With the
-  zip, unpack the new one over the old folder.
-- **macOS**: drag the new **tt-git** to Applications and replace the old one.
-- **Linux**: unpack the new tarball over the old one, or replace the
-  AppImage.
+<Screenshot name="gui-check-for-updates" alt="The tt-git menu open from the title bar on Windows: About tt-git, Check for Updates… (highlighted), Theme, Plugin logs and Quit" />
 
-In the desktop app, the menus and the palette have no *Update tt-git*. Run
-from a key bound to `self_update` or by a plugin, it says *update the
-desktop app by downloading the latest release:* and the address of the
-latest release.
+It looks on GitHub for the latest release, with *checking for a tt-git
+update…* in the help bar:
+
+- If you have it, a dialog says *tt-git is up to date*.
+- If there's a newer one, a dialog says *tt-git v0.10.0 is available* and
+  asks first. Choose **Update and Restart**, or **Later** (or press
+  <kbd>esc</kbd>) to leave it.
+
+<Screenshot name="gui-update-available" alt="The dialog on Windows: tt-git v0.9.0 is available. You have 0.8.0. Updating downloads it, replaces this copy and restarts tt-git: every window closes and opens again on its repository. Buttons: Update and Restart, Later" />
+
+**Update and Restart** downloads the new release (the help bar says
+*downloading tt-git v0.10.0…*), checks it against the release's
+`SHA256SUMS.txt`, and puts it in place of the copy you're running. Then
+every tt-git window closes and opens again on the same repository, in
+every copy of the app you have open, so a second copy started from the
+Start menu or a terminal comes back too. A copy that only showed the
+[start window](#the-start-window) comes back on the start window.
+
+Which download it uses, and how it's put in place, depends on how you
+installed the app:
+
+| Installed from | Downloads | Then |
+|---|---|---|
+| The Windows installer | `…-windows-x64-setup.exe` | Waits until every window has closed, runs the new installer without its wizard, and opens the windows again. Settings → Apps shows the new version. An install for all users asks for admin rights. |
+| The Windows zip | `…-windows-x64.zip` | Replaces `tt-git-gui.exe` and `tt-git.exe` in their folder. Windows can't overwrite a running program, so the old ones are renamed to `tt-git-gui.exe.old` and `tt-git.exe.old` and deleted the next time the app starts. |
+| The macOS .dmg | `…-macos-arm64.dmg` | Replaces the whole `tt-git.app`, where it is. |
+| A Linux AppImage | `…-linux-<arch>.AppImage` | Replaces the AppImage file. |
+| The Linux tarball | `…-linux-<arch>.tar.gz` | Replaces `bin/tt-git-gui` and `bin/tt-git`. Under `/usr/local` that needs write permission there, so it fails for a normal user: update that copy by hand. |
+
+The folder it's in must be one you can write to. If the download, the
+checksum or the swap fails, an error popup says why, starting *updating
+tt-git to v0.10.0 failed*, and the copy you have stays as it was.
+
+A window with a [terminal editor](/desktop/using/#editing-files) running
+still asks before it closes. Choose **Cancel** and that copy of the app
+keeps running the old version; the others restart. With the Windows
+installer, nothing is installed until every copy has closed, and after 5
+minutes it gives up and leaves the old version.
+
+Some copies can't update themselves. The dialog then says why and offers
+**Open Download Page**, which opens the release on GitHub:
+
+- one built from source with cargo: *build it again instead*;
+- one installed by a package manager (in `/usr/bin`): update it there;
+- a copy not laid out the way a release download installs it, or on a
+  platform without a desktop app download (Windows on arm64).
+
+### Checking in the background
+
+Once a day, the app looks for a new release by itself (the first time 30
+seconds after it starts). When there's one, the help bar says so, once per
+release:
+
+<Screenshot name="gui-update-notice" alt="The right end of the help bar: tt-git v0.9.0 is out: tt-git ▸ Check for Updates installs it" />
+
+It never installs anything without asking: choose **Check for Updates…**
+for that. The time of the last check is kept in `gui-update.json` in the
+[state folder](/configuration/#logs), shared by every copy of the app, so
+two windows don't both go online. A check that fails (offline, say) waits
+a day too. To turn it off, set [`check_for_updates = false` in
+`[ui]`](/configuration/#ui).
 
 On macOS, `tt-git update` refuses to replace the `tt-git` inside the app,
 even through a link on your `PATH`: *tt-git is part of the desktop app
@@ -174,16 +227,18 @@ a path:
 ```sh
 tt-git-gui                  # the repository in the current directory
 tt-git-gui path/to/repo     # another repository
+tt-git-gui ~/src/a ~/src/b  # two windows
 ```
 
 Any folder inside a repository works, and so do linked worktrees. The
 window's title is `<repo> - tt-git`.
 
-It takes the same options as [`tt-git`](/reference/cli/#tt-git):
+It takes the same options as [`tt-git`](/reference/cli/#tt-git), and
+several repositories at once:
 
 | Option | Does |
 |---|---|
-| `PATH` | Open this repository instead of the current directory |
+| `PATH`… | Open these repositories instead of the current directory, each in a window of its own |
 | `--config FILE` | Read settings from this file instead of the default `config.toml` |
 | `--no-plugins` | Start without plugins and without the plugin API socket |
 | `--filter-to-cwd`, `--no-filter-to-cwd` | Started in a subfolder, narrow the graph and Status to it, or don't |

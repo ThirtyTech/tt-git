@@ -50,6 +50,7 @@ placement = "auto"              # "auto" (herdr tab inside herdr, else the detai
 
 [ui]                            # the desktop app's; the TUI ignores it
 zoom = 100                      # how big everything is drawn, in percent (50–300); ctrl+= / ctrl+- / ctrl+0 in the app save it here. Global config file only
+check_for_updates = true        # look for a new release once a day and say so in the help bar. Global config file only
 ```
 
 ## Themes
