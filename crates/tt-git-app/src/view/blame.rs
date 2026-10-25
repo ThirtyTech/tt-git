@@ -1,7 +1,7 @@
 //! The view model for blame in the details pane: one row per line of code
 //! on screen, reading right to left from the code: when (the age stripe and
 //! the date), who, and why (the commit and its summary, where its lines
-//! start). Below the code, the selected line's commit when `d` shows it,
+//! start). Below the code, the selected line's commit when `space` shows it,
 //! and the title's right-hand part: when the file changed and whether it's
 //! the latest version. [`code`](super::code) makes the code spans.
 
