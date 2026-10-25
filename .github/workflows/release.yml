@@ -106,10 +106,12 @@ jobs:
           if-no-files-found: error
 
   # The desktop app, packaged per OS: a .dmg on macOS, a zip and an
-  # installer on Windows, a tarball and an AppImage on Linux. Each carries
-  # tt-git next to tt-git-gui, since plugins in the app run that tt-git. They
-  # are separate downloads named tt-git-gui-*, so the TUI archives above, and
-  # install.sh, install.ps1 and `tt-git update` that fetch them, don't change.
+  # installer on Windows, a tarball, an AppImage, a .deb, an .rpm and an
+  # Arch .pkg.tar.zst on Linux (install-gui.sh installs the tarball). Each
+  # carries tt-git next to tt-git-gui, since plugins in the app run that
+  # tt-git. They are separate downloads named tt-git-gui-*, so the TUI
+  # archives above, and install.sh, install.ps1 and `tt-git update` that
+  # fetch them, don't change.
   gui:
     needs: version
     strategy:
@@ -161,7 +163,17 @@ jobs:
             "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-$arch.AppImage"
           echo "$sum  $tool" | sha256sum -c -
           chmod +x "$tool"
-          APPIMAGETOOL="$tool" crates/tt-git-gui/packaging/linux/package.sh \
+          # nfpm builds the .deb, .rpm and .pkg.tar.zst (packaging/linux/nfpm.yaml).
+          case "${{ matrix.target }}" in
+            x86_64-*) nfpm_arch=x86_64 nfpm_sum=6d7f9a28b2f397934403950fcbba83f598b08d02edbe79a0815b3b4897341750 ;;
+            aarch64-*) nfpm_arch=arm64 nfpm_sum=a9a75213763783b7669719e505474c748c5ad7dc66591a195619deb50f85c2f4 ;;
+          esac
+          nfpm_tgz="$RUNNER_TEMP/nfpm.tar.gz"
+          curl -fsSL -o "$nfpm_tgz" \
+            "https://github.com/goreleaser/nfpm/releases/download/v2.48.0/nfpm_2.48.0_Linux_$nfpm_arch.tar.gz"
+          echo "$nfpm_sum  $nfpm_tgz" | sha256sum -c -
+          tar -xzf "$nfpm_tgz" -C "$RUNNER_TEMP" nfpm
+          APPIMAGETOOL="$tool" NFPM="$RUNNER_TEMP/nfpm" crates/tt-git-gui/packaging/linux/package.sh \
             "target/${{ matrix.target }}/release" "$GITHUB_REF_NAME" "${{ matrix.name }}"
       - name: Package (macOS)
         if: runner.os == 'macOS'
@@ -193,6 +205,9 @@ jobs:
           path: |
             tt-git-gui-*.tar.gz
             tt-git-gui-*.AppImage
+            tt-git-gui-*.deb
+            tt-git-gui-*.rpm
+            tt-git-gui-*.pkg.tar.zst
             tt-git-gui-*.dmg
             tt-git-gui-*.zip
             tt-git-gui-*-setup.exe
@@ -219,7 +234,7 @@ jobs:
         working-directory: dist
         run: sha256sum tt-git-* > SHA256SUMS.txt
       - name: Add install script
-        run: cp install.sh install.ps1 dist/
+        run: cp install.sh install.ps1 install-gui.sh dist/
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -248,6 +263,14 @@ jobs:
               echo
               echo 'The desktop app, `tt-git-gui`, is a separate download. Each one also carries `tt-git`.'
               echo
+              if compgen -G 'dist/tt-git-gui-*-linux-*.tar.gz' >/dev/null; then
+                echo 'On Linux, the install script puts it in `~/.local`:'
+                echo
+                echo '```sh'
+                echo "curl -fsSL ${url%.sh}-gui.sh | TTGIT_VERSION=$GITHUB_REF_NAME sh"
+                echo '```'
+                echo
+              fi
               for f in dist/tt-git-gui-*; do
                 file="${f#dist/}"
                 case "$file" in
@@ -255,6 +278,9 @@ jobs:
                   *-setup.exe) what='Windows installer' ;;
                   *windows*.zip) what='Windows, to unpack anywhere' ;;
                   *.AppImage) what='Linux AppImage' ;;
+                  *.deb) what="Debian and Ubuntu: \`sudo apt install ./$file\`" ;;
+                  *.rpm) what="Fedora, openSUSE: \`sudo dnf install ./$file\` or \`sudo zypper install ./$file\`" ;;
+                  *.pkg.tar.zst) what="Arch Linux: \`sudo pacman -U $file\`" ;;
                   *linux*.tar.gz) what='Linux, to unpack into `~/.local` or `/usr/local`' ;;
                   *) what='' ;;
                 esac
