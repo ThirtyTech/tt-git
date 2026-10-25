@@ -348,6 +348,8 @@ pub enum Command {
     PluginLogs,
     Theme,
     SelfUpdate,
+    /// Shows the version, who made tt-git and where its source is.
+    About,
     OpenLink,
     OpenInEditor,
     Copy,
@@ -460,6 +462,7 @@ impl Command {
             Command::PluginLogs => "plugin logs",
             Command::Theme => "theme",
             Command::SelfUpdate => "update tt-git",
+            Command::About => "about",
             Command::OpenLink => "open link",
             Command::OpenInEditor => "edit file",
             Command::Copy => "copy",

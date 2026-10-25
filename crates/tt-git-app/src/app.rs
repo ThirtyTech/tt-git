@@ -2814,6 +2814,7 @@ impl App {
             },
             Command::PluginLogs => self.show_plugin_logs(),
             Command::Theme => self.open_theme_picker(),
+            Command::About => self.modal = Some(Modal::About),
             Command::SelfUpdate if self.self_updates => self.check_update(),
             Command::SelfUpdate => {
                 self.notice = Some(format!(

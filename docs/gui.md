@@ -360,13 +360,14 @@ Every command item carries one action, `menus::RunCommand(Command)`. The
 shell handles it by sending `Action::Command`, which is what a bound key
 does. No GPUI key binding is made: the key is part of the item's text.
 `About` and `Quit` are the only other actions; `Quit` sends the quit
-command to every window. `About` opens the About dialog
-(`dialogs/about.rs`): the icon at 96px (`menus::icon::about_icon`), the
+command to every window. `About` sends `Command::About`, as *About* in
+the palette does, which opens `Modal::About`. The GUI draws it in
+`dialogs/about.rs`: the icon at 96px (`menus::icon::about_icon`), the
 version, the developer, and links to the repository and gpui.rs that open
-with `cx.open_url`. The TUI has no About, so there's no `Modal` for it: the
-`Shell` keeps whether it's open, draws it over the other overlays, and
-takes the keys while it is (esc, enter, `q` or space close it; others are
-dropped). `menus::build(app, about)` disables the command items meanwhile.
+with `cx.open_url`; the text it shares with the TUI's is in
+`tt_git_app::view::dialogs::about`. Its keys go to the app like any
+modal's (esc, enter, `q` or space close it; others wait), and a click
+outside sends the app esc.
 
 Per platform (gpui-pre 0.3.9):
 

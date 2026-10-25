@@ -11,7 +11,7 @@
 //! | `discard_all.rs` | `Modal::DiscardAll` |
 //! | `filter.rs` | `Modal::Filter`: the graph's filter panel |
 //! | `error.rs` | the error popup |
-//! | `about.rs` | the About dialog, which the shell opens (the app has no `Modal` for it) |
+//! | `about.rs` | `Modal::About`: the version, the developer and links |
 //!
 //! Each returns an element laid over the main area (it's inside a
 //! `.relative()` container the size of the area under the help bar).
@@ -50,6 +50,7 @@ pub fn modal(cx: &mut DialogCx) -> Option<AnyElement> {
         Modal::Confirm { .. } => confirm::render(cx),
         Modal::Filter(_) => filter::render(cx),
         Modal::DiscardAll { .. } => discard_all::render(cx),
+        Modal::About => about::render(cx.ui),
     })
 }
 

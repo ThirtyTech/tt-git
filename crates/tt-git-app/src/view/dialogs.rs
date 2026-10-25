@@ -1,6 +1,6 @@
 //! The view models for what opens over the panes: the palette and pickers,
-//! prompts, confirms, discard-all, the graph filter panel, the help popup and
-//! the error popup.
+//! prompts, confirms, discard-all, the graph filter panel, the help popup,
+//! the error popup and the About dialog.
 //!
 //! Each gives the text a dialog shows, in roles, and the width it wants in
 //! columns (border included); the front end lays it out, wraps it and says
@@ -13,11 +13,13 @@
 //! | `Modal::Palette` | [`Modal::palette_view`](crate::modal::Modal::palette_view) ([`PaletteView`]) |
 //! | `Modal::Filter` | [`FilterPanel::view`](crate::filter::FilterPanel::view) ([`FilterView`]) |
 //! | the keys popup | [`App::help_view`](crate::App::help_view) ([`HelpView`]) |
+//! | `Modal::About` | none: each front end lays it out, from the text in [`about`] |
 
 use unicode_width::UnicodeWidthStr;
 
 use super::{StyleRole, TextSpan};
 
+pub mod about;
 mod filter;
 mod help;
 mod palette;

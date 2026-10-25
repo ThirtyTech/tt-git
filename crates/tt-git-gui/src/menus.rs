@@ -110,12 +110,11 @@ const APP: &[Command] = &[Command::Theme, Command::PluginLogs, Command::SelfUpda
 /// menu named after the focused pane listing its commands (the help
 /// popup's first section). While a dialog, the help popup or an error is
 /// open, keys go to it rather than to commands, so the command items are
-/// disabled, as they are while the About dialog is (`about`); About and
-/// Quit stay enabled.
-pub fn build(app: &tt_git_app::App, about: bool) -> Vec<MenuSpec> {
+/// disabled; About and Quit stay enabled.
+pub fn build(app: &tt_git_app::App) -> Vec<MenuSpec> {
     let context = app.keymap_context();
     let keymap = app.keymap();
-    let enabled = !about && app.modal().is_none() && app.error().is_none() && !app.shows_help();
+    let enabled = app.modal().is_none() && app.error().is_none() && !app.shows_help();
     let item = |cmd: Command| ItemSpec::Item {
         label: sentence_case(cmd.label()),
         key: keymap.display_key_text(context, cmd).map(str::to_string),

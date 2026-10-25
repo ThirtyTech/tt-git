@@ -553,6 +553,10 @@ pub enum Modal {
         counts: DiscardCounts,
         folder: Option<String>,
     },
+    /// The version, who made tt-git and where its source is. Each front
+    /// end draws it itself, since each names the toolkit it's built with
+    /// (see [`about`](crate::view::dialogs::about)).
+    About,
 }
 
 /// Result of feeding a key to a modal.
@@ -888,6 +892,12 @@ impl Modal {
                 KeyCode::Char('n') | KeyCode::Char('N') | KeyCode::Esc => ModalOutcome::Cancelled,
                 _ => ModalOutcome::Open,
             },
+            Modal::About => match key.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q' | ' ') if key.modifiers == KeyModifiers::NONE => {
+                    ModalOutcome::Cancelled
+                }
+                _ => ModalOutcome::Open,
+            },
         }
     }
 }
@@ -1218,5 +1228,15 @@ mod tests {
         assert_eq!(m.handle_key(k("q")), ModalOutcome::Open);
         assert_eq!(m.handle_key(k("y")), ModalOutcome::Run(op));
         assert_eq!(m.handle_key(k("n")), ModalOutcome::Cancelled);
+    }
+
+    #[test]
+    fn about_closes_on_esc_enter_q_or_space() {
+        for key in ["esc", "enter", "q", "space"] {
+            assert_eq!(Modal::About.handle_key(k(key)), ModalOutcome::Cancelled, "{key}");
+        }
+        for key in ["tab", "j", "ctrl+q", "?"] {
+            assert_eq!(Modal::About.handle_key(k(key)), ModalOutcome::Open, "{key} waits");
+        }
     }
 }

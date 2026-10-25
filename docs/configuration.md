@@ -269,6 +269,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `plugin_logs` | (palette only) | global |
 | `theme` | (palette only) | global |
 | `self_update` | (palette only) | global |
+| `about` | (palette only; also the desktop app's tt-git menu) | global |
 | `open_repository` | (palette and menu only; desktop app only, the TUI just says it needs the desktop app) | global |
 | `zoom_in`, `zoom_out`, `reset_zoom` | `ctrl+=` `ctrl++`, `ctrl+-`, `ctrl+0` (desktop app only, which also zooms with ctrl+wheel; the TUI just says they need the desktop app) | global |
 
