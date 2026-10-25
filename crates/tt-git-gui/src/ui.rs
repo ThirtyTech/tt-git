@@ -42,8 +42,10 @@ impl Ui {
         let measures = self.measures.clone();
         canvas(
             move |bounds, window, _| {
+                // GPUI ignores `refresh` while it draws, so ask for the
+                // next frame and refresh from there.
                 if measures.record(&id, bounds) {
-                    window.refresh();
+                    window.on_next_frame(|window, _| window.refresh());
                 }
             },
             |_, _, _, _| {},

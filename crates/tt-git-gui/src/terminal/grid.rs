@@ -185,8 +185,9 @@ impl Element for TerminalGrid {
         _: &mut App,
     ) -> GridPaint {
         if self.measures.record(&self.id, bounds) {
-            // The PTY gets the new size next frame.
-            window.refresh();
+            // The PTY gets the new size next frame. GPUI ignores `refresh`
+            // while it draws, so ask for that frame.
+            window.on_next_frame(|window, _| window.refresh());
         }
         let origin = bounds.origin;
         let mut quads = Vec::new();

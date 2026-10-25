@@ -631,4 +631,35 @@ mod tests {
         gui.wait_idle();
         assert_eq!(gui.read(|app| app.graph().selected_index()), 4 + 6);
     }
+
+    #[gpui::test]
+    fn zooming_fills_the_window_without_another_key(cx: &mut TestAppContext) {
+        let sb = Sandbox::new();
+        for i in 1..=80 {
+            sb.commit_file("a.txt", &i.to_string(), &format!("commit {i}"));
+        }
+        let mut gui = Gui::open(cx, &sb);
+        // Draws only the frames the window asks for, as the platform does.
+        let next_frames = |gui: &mut Gui| {
+            gui.cx.run_until_parked();
+            gui.cx.update(|window, cx| window.simulate_next_frame(cx))
+        };
+        while next_frames(&mut gui) > 0 {
+            gui.cx.update(|window, cx| window.draw(cx).clear(cx));
+        }
+        let before = gui.shell.read_with(&gui.cx, |shell, _| shell.ui().fit(ROWS));
+
+        let combo: tt_git_app::keymap::KeyCombo = "+".parse().unwrap();
+        gui.model.update(&mut gui.cx, |model, cx| model.key(combo, cx));
+        gui.cx.run_until_parked();
+        assert_eq!(gui.read(|app| app.zoom()), tt_git_app::app::Zoom::Full(PaneId::Graph));
+        let after = gui.shell.read_with(&gui.cx, |shell, _| shell.ui().fit(ROWS));
+        assert!(after.rows > before.rows, "the list grew: {before:?} then {after:?}");
+
+        // The zoomed frame was sized from the old list; the new size asks
+        // for another, which shows the rows that fit now.
+        assert!(next_frames(&mut gui) > 0, "the new size asks for a frame");
+        gui.cx.update(|window, cx| window.draw(cx).clear(cx));
+        assert_eq!(next_frames(&mut gui), 0, "and then settles");
+    }
 }
