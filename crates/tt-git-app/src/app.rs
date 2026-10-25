@@ -502,6 +502,11 @@ impl App {
         self.focused().context()
     }
 
+    /// The focused pane's commands, in the order its help popup lists them.
+    pub fn pane_commands(&self) -> &[Command] {
+        self.focused().commands()
+    }
+
     pub fn modal(&self) -> Option<&Modal> {
         self.modal.as_ref()
     }

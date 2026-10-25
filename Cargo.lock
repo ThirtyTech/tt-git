@@ -8416,7 +8416,9 @@ version = "0.9.0"
 dependencies = [
  "clap",
  "color-eyre",
+ "embed-resource",
  "gpui-kit",
+ "image",
  "serde",
  "serde_json",
  "tempfile",

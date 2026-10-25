@@ -29,6 +29,7 @@ here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
 | `src/ui.rs` | `Ui`, what every view draws with, and `Measures`. |
 | `src/frame.rs`, `src/rows.rs`, `src/text.rs`, `src/overlay.rs` | The building blocks (below). |
 | `src/help_bar.rs` | The help bar. |
+| `src/menus.rs`, `src/menus/` | The menus (below), the title bar (`bar.rs`) and the app icon (`icon.rs`, `assets/`, `build.rs`). |
 | `src/panes/`, `src/dialogs/`, `src/terminal.rs` | One file per area (below). |
 | `src/testing.rs` | The GPUI test harness. |
 | `src/gpui_tokio.rs` | Zed's tokio adapter, copied in. Jobs run on its runtime. |
@@ -326,6 +327,41 @@ The tests in `tt-git-gui/src/terminal/editor_tests.rs` use the test
 binary itself as the terminal editor (the ignored test `fake_editor`), so
 they run on every OS.
 
+## Menus and the title bar
+
+The menus list tt-git's commands; the keymap stays the only place keys
+are bound. `menus::build(app)` makes them from the app as it is: tt-git
+(About, Theme, Plugin logs, Update tt-git, Quit), Repository, View, and a
+menu named after the focused pane's key context with its `commands()`
+(the help popup's first section). Each item shows the key
+`display_key_text` gives in the focused context, so a rebind shows.
+While a dialog, the help popup or an error is open, the command items are
+disabled, since a key would go there too.
+
+Every command item carries one action, `menus::RunCommand(Command)`. The
+shell handles it by sending `Action::Command`, which is what a bound key
+does. No GPUI key binding is made: the key is part of the item's text.
+`About` and `Quit` are the only other actions; `Quit` sends the quit
+command to every window.
+
+Per platform (gpui-pre 0.3.9):
+
+- **macOS**: `cx.set_menus` makes the native menu bar, installed by the
+  active window when its menus change. The key follows the label,
+  `Checkout  (o)`.
+- **Windows and Linux**: GPUI keeps the menus but shows no menu bar, so
+  the shell draws them in its title bar (`menus::bar`, gpui-component's
+  `TitleBar` with a dropdown per menu). A picked item gives the focus back
+  to the shell and dispatches the item's action to it. While a menu is
+  open the shell ignores keys.
+
+The window's title bar is always drawn by the app (`TitleBar` moves the
+window and, under client-side decorations such as GNOME on Wayland, draws
+its controls), with the title in it. The icon: on X11 through
+`WindowOptions::icon`, on Windows as the executable's icon resource
+(`build.rs`); Wayland and macOS take it from a `.desktop` file and the app
+bundle, which packaging adds.
+
 ## Gotchas
 
 - A test helper that opens a `Gui` must hand the `Sandbox` back with it. If
@@ -337,7 +373,6 @@ they run on every OS.
 
 ## Known gaps
 
-- No menus (C1).
 - On Wayland the compositor places windows, so only the size (and
   maximized or fullscreen) comes back, not the position.
 - The folder picker needs the desktop portal on Linux
@@ -350,5 +385,7 @@ they run on every OS.
   listening until the app quits.
 - `TTGIT_BIN_PATH` is the `tt-git` next to `tt-git-gui` or on `PATH`;
   with neither, plugins get none.
-- Quitting the whole app (cmd+Q on macOS) doesn't ask about running
+- Quit (the menu's, or cmd+Q on macOS) doesn't ask about running
   terminal editors; closing their window does.
+- Wayland and macOS show no app icon until packaging installs a
+  `tt-git.desktop` and builds an app bundle.
