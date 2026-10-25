@@ -128,6 +128,24 @@ mod tests {
         gui.wait_idle();
     }
 
+    #[test]
+    fn the_window_controls_have_their_icons() {
+        use gpui::AssetSource as _;
+        use gpui::component::{IconName, IconNamed as _};
+
+        let icons = [
+            IconName::WindowMinimize,
+            IconName::WindowMaximize,
+            IconName::WindowRestore,
+            IconName::WindowClose,
+        ];
+        for icon in icons {
+            let path = icon.path();
+            let svg = crate::Assets.load(&path).unwrap_or_else(|e| panic!("{path}: {e}"));
+            assert!(svg.is_some_and(|svg| !svg.is_empty()), "{path} is empty");
+        }
+    }
+
     #[gpui::test]
     fn the_title_bar_starts_with_the_app_icon(cx: &mut TestAppContext) {
         let sb = Sandbox::new();

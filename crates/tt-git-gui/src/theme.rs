@@ -160,6 +160,9 @@ impl GuiTheme {
             t.popover = background;
             t.popover_foreground = foreground;
             t.danger = error;
+            // What's drawn on `danger`: the close button's X on hover, white
+            // as Windows draws it. The dark default is red, lost on red.
+            t.danger_foreground = gpui::white();
             t.caret = accent;
             t.mono_font_family = font.family.clone();
             t.mono_font_size = font.size;
@@ -330,5 +333,18 @@ mod tests {
             &tt_git_app::themes::Palette::parse(latte.1).unwrap(),
         ));
         assert!(!light.is_dark());
+    }
+
+    #[gpui::test]
+    fn the_close_buttons_x_shows_on_its_hover_color(cx: &mut gpui::TestAppContext) {
+        let sb = tt_git_testkit::Sandbox::new();
+        sb.commit_file("a.txt", "a", "first");
+        let mut gui = crate::testing::Gui::open(cx, &sb);
+        let (danger, x) = gui.cx.update(|_, cx| {
+            let t = ComponentTheme::global(cx);
+            (t.danger, t.danger_foreground)
+        });
+        assert!(same(danger, GuiTheme::new(&Theme::default()).fg(StyleRole::Error)));
+        assert!(same(x, gpui::white()));
     }
 }

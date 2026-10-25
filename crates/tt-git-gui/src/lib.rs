@@ -45,6 +45,11 @@ pub mod zoom;
 
 pub use windows::{NewApp, set_launcher};
 
+/// The icons gpui-component draws, the title bar's window controls among
+/// them. `main` registers it; GPUI's test context has no asset source, so
+/// windows in tests draw no icons.
+pub use gpui::assets::Assets;
+
 /// The key context of the window's content. tt-git's keymap resolves every
 /// key; GPUI key bindings that would take one first are switched off in it.
 pub const CONTEXT: &str = "TtGit";
