@@ -511,6 +511,26 @@ fn code_style<'a>(entries: impl IntoIterator<Item = &'a StatusEntry>, theme: &Th
     }
 }
 
+/// The pane's commands, the tree's own last.
+const TREE_COMMANDS: &[Command] = &[
+    Command::StageToggle,
+    Command::StageAll,
+    Command::Discard,
+    Command::DiscardAll,
+    Command::Ignore,
+    Command::Commit,
+    Command::Amend,
+    Command::Stash,
+    Command::OpenInEditor,
+    Command::Blame,
+    Command::ToggleTree,
+    Command::FilterFolder,
+    Command::Continue,
+    Command::Abort,
+    Command::CollapseAll,
+    Command::ExpandAll,
+];
+
 impl Component for StatusPane {
     fn context(&self) -> Context {
         Context::Status
@@ -682,24 +702,12 @@ impl Component for StatusPane {
     }
 
     fn commands(&self) -> &[Command] {
-        &[
-            Command::StageToggle,
-            Command::StageAll,
-            Command::Discard,
-            Command::DiscardAll,
-            Command::Ignore,
-            Command::Commit,
-            Command::Amend,
-            Command::Stash,
-            Command::OpenInEditor,
-            Command::Blame,
-            Command::ToggleTree,
-            Command::CollapseAll,
-            Command::ExpandAll,
-            Command::FilterFolder,
-            Command::Continue,
-            Command::Abort,
-        ]
+        // Folding every folder only means something in the tree.
+        if self.tree {
+            TREE_COMMANDS
+        } else {
+            &TREE_COMMANDS[..TREE_COMMANDS.len() - 2]
+        }
     }
 
     fn draw(&mut self, frame: &mut Frame, area: Rect, focused: bool, theme: &Theme) {
