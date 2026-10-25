@@ -264,6 +264,10 @@ pub struct App {
     worktree_sized: Vec<std::path::PathBuf>,
     /// The worktree to open in place of this repository once the app quits.
     reopen: Option<Repo>,
+    /// The front end can open another repository (the desktop app).
+    opens_repos: bool,
+    /// [`Command::OpenRepository`] ran, for the front end to take.
+    open_repo_wanted: bool,
     watcher: Option<RepoWatcher>,
     plugins: Option<plugins::PluginState>,
     panes: Vec<crate::pty_pane::PtyPane>,
@@ -373,6 +377,8 @@ impl App {
             worktree_size_queue: Vec::new(),
             worktree_sized: Vec::new(),
             reopen: None,
+            opens_repos: false,
+            open_repo_wanted: false,
             watcher: None,
             plugins: None,
             panes: Vec::new(),
@@ -436,6 +442,22 @@ impl App {
     /// Takes [`reopen`](Self::reopen).
     pub fn take_reopen(&mut self) -> Option<Repo> {
         self.reopen.take()
+    }
+
+    /// Says the front end can open another repository, which offers
+    /// [`Command::OpenRepository`] in the palette.
+    pub fn enable_open_repository(&mut self) {
+        self.opens_repos = true;
+    }
+
+    pub fn opens_repos(&self) -> bool {
+        self.opens_repos
+    }
+
+    /// Whether [`Command::OpenRepository`] ran since the last call: the
+    /// front end then asks which repository to open.
+    pub fn take_open_repository(&mut self) -> bool {
+        std::mem::take(&mut self.open_repo_wanted)
     }
 
     pub fn focus(&self) -> PaneId {
@@ -2731,6 +2753,10 @@ impl App {
             Command::Pull => self.update(Action::Run(GitOp::Pull)),
             Command::Undo => self.plan_undo(),
             Command::Agent => self.open_agent_dialog(),
+            Command::OpenRepository if self.opens_repos => self.open_repo_wanted = true,
+            Command::OpenRepository => {
+                self.notice = Some("opening another repository needs the desktop app".into());
+            }
             _ => {
                 let ctx = self.ctx.clone();
                 if self.focused_mut().on_command(cmd, &ctx) == EventState::NotConsumed {

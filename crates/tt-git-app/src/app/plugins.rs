@@ -474,6 +474,9 @@ impl App {
                 .filter(|c| !pane_cmds.contains(c))
                 .map(|c| builtin(*c)),
         );
+        if self.opens_repos() {
+            items.push(builtin(Command::OpenRepository));
+        }
         items
     }
 

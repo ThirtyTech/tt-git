@@ -378,6 +378,9 @@ pub enum Command {
     SearchNext,
     SearchPrev,
     Agent,
+    /// Opens another repository in a window of its own. Only the desktop
+    /// app offers it (see `App::enable_open_repository`).
+    OpenRepository,
 }
 
 impl Command {
@@ -480,6 +483,7 @@ impl Command {
             Command::SearchNext => "next match",
             Command::SearchPrev => "prev match",
             Command::Agent => "ask agent",
+            Command::OpenRepository => "open repository",
         }
     }
 }
