@@ -51,6 +51,9 @@ impl AppModel {
         let mut app = app;
         app.set_runtime(Tokio::handle(cx));
         app.enable_open_repository();
+        // The install scripts behind `tt-git update` only know the TUI's
+        // archives, not the app's packages.
+        app.disable_self_update();
         app.start();
         let rx = Rc::new(RefCell::new(rx));
         let waiting = rx.clone();

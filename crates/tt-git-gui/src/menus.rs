@@ -140,7 +140,12 @@ pub fn build(app: &tt_git_app::App) -> Vec<MenuSpec> {
         },
         ItemSpec::Separator,
     ];
-    app_items.extend(APP.iter().map(|c| item(*c)));
+    // Update tt-git only where `tt-git update` can update this front end.
+    app_items.extend(
+        APP.iter()
+            .filter(|c| app.self_updates() || **c != Command::SelfUpdate)
+            .map(|c| item(*c)),
+    );
     app_items.push(ItemSpec::Separator);
     app_items.push(ItemSpec::Item {
         label: "Quit".into(),
@@ -392,6 +397,43 @@ mod tests {
         gui.press("esc");
         let (disabled, _) = item(&mut gui, "Graph", "Checkout  (o)").expect("item");
         assert!(!disabled);
+    }
+
+    #[gpui::test]
+    fn update_tt_git_points_at_the_release_instead(cx: &mut TestAppContext) {
+        let sb = sandbox();
+        let mut gui = Gui::open(cx, &sb);
+        // `tt-git update` installs the TUI's archive, not the app.
+        assert!(!gui.read(|app| app.self_updates()));
+        let app_menu: Vec<String> = menus(&mut gui)[0]
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                OwnedMenuItem::Action { name, .. } => Some(name.to_string()),
+                _ => None,
+            })
+            .collect();
+        assert!(app_menu.iter().any(|n| n.starts_with("Theme")), "{app_menu:?}");
+        assert!(!app_menu.iter().any(|n| n.starts_with("Update tt-git")), "{app_menu:?}");
+
+        gui.press(":");
+        let offered = gui.read(|app| match app.modal() {
+            Some(tt_git_app::modal::Modal::Palette { items, .. }) => {
+                items.iter().map(|i| i.label.clone()).collect::<Vec<_>>()
+            }
+            _ => panic!("no palette"),
+        });
+        assert!(offered.iter().any(|l| l == "Theme"), "{offered:?}");
+        assert!(!offered.iter().any(|l| l == "Update tt-git"), "{offered:?}");
+        gui.press("esc");
+
+        // A plugin or a key can still run it: it says where to update.
+        gui.cx.dispatch_action(RunCommand(Command::SelfUpdate));
+        gui.wait_idle();
+        let notice = gui.read(|app| app.notice().unwrap_or_default().to_string());
+        assert!(notice.starts_with("update the desktop app by downloading"), "{notice}");
+        assert!(notice.ends_with("/releases/latest"), "{notice}");
+        assert_eq!(gui.read(|app| app.error().map(str::to_string)), None);
     }
 
     #[gpui::test]
