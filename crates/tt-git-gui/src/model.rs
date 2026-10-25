@@ -148,17 +148,16 @@ impl AppModel {
             cx.write_to_clipboard(ClipboardItem::new_string(text));
         }
         if let Some(launch) = self.app.take_editor() {
-            let result = if launch.terminal {
-                // Phase C4 decides how a terminal editor runs from the GUI.
-                Err(format!(
-                    "`{}` (from {}) runs in a terminal, which the desktop app can't host yet. \
-                     Set [editor] command in config.toml to an editor with a window of its own.",
-                    launch.program, launch.from
-                ))
+            let finished = if launch.terminal {
+                // In a pane over the main area, which reports
+                // `EditorFinished` itself when the editor exits.
+                self.app.open_editor_pane(&launch).err().map(Err)
             } else {
-                start_detached(&launch)
+                Some(start_detached(&launch))
             };
-            self.app.update(Action::EditorFinished(result));
+            if let Some(result) = finished {
+                self.app.update(Action::EditorFinished(result));
+            }
         }
         if self.app.take_redraw() {
             cx.notify();

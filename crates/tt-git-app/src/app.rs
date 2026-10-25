@@ -30,6 +30,7 @@ use crate::theme::Theme;
 use crate::watcher::RepoWatcher;
 
 mod agent;
+mod editor_pane;
 mod panes;
 mod plugins;
 mod themes;
