@@ -68,6 +68,7 @@ const PALETTE_BUILTINS: &[Command] = &[
     Command::Theme,
     Command::PluginLogs,
     Command::SelfUpdate,
+    Command::About,
     Command::Help,
     Command::Quit,
 ];

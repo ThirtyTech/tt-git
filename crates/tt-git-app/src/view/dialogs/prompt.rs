@@ -9,7 +9,8 @@ use crate::view::{StyleRole, TextSpan};
 impl Modal {
     /// What a prompt, confirm or discard-all shows in a screen `cols`
     /// columns across; `None` for the palette and the filter panel, which
-    /// have views of their own.
+    /// have views of their own, and for the About dialog, which each front
+    /// end lays out itself.
     pub fn dialog_view(&self, cols: usize) -> Option<DialogView<'_>> {
         // The stash dialog's row of choices ends in a file name.
         let wide = matches!(
@@ -22,7 +23,7 @@ impl Modal {
         let width = if wide { 72 } else { 60 }.min(cols);
         let inner_width = width.saturating_sub(2).max(1);
         let (title, body, hint) = match self {
-            Modal::Palette { .. } | Modal::Filter(_) => return None,
+            Modal::Palette { .. } | Modal::Filter(_) | Modal::About => return None,
             Modal::Prompt { title, input, action } => {
                 let (body, hint) = prompt_body(input, action, inner_width);
                 (title.clone(), body, hint)
