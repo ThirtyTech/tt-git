@@ -139,6 +139,24 @@ impl RenderOnce for StyledRows {
                 );
             }
         };
+        let right_click = {
+            let (ui, id, target) = (ui.clone(), id.clone(), target.clone());
+            move |ev: &MouseDownEvent, window: &mut Window, cx: &mut App| {
+                let Some(line) = line_at(&ui, &id, ev.position.y) else {
+                    return;
+                };
+                // Not stopped: the pane's context menu opens on it next.
+                window.prevent_default();
+                ui.send_mouse(
+                    MouseInput {
+                        kind: MouseKind::RightClick,
+                        ctrl: ev.modifiers.control,
+                        target: target(line),
+                    },
+                    cx,
+                );
+            }
+        };
         let wheel = {
             let (ui, id) = (ui.clone(), id.clone());
             move |ev: &ScrollWheelEvent, _: &mut Window, cx: &mut App| {
@@ -173,6 +191,7 @@ impl RenderOnce for StyledRows {
             .overflow_hidden()
             .whitespace_nowrap()
             .on_mouse_down(MouseButton::Left, click)
+            .on_mouse_down(MouseButton::Right, right_click)
             .on_scroll_wheel(wheel)
             .child(ui.measure(id))
             .children(rows.into_iter().map(move |row| {

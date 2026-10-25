@@ -23,6 +23,7 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use tt_git_app::Action;
 use tt_git_core::Repo;
 
+pub mod context_menu;
 pub mod dialogs;
 pub mod font;
 pub mod frame;

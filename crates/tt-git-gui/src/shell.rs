@@ -79,7 +79,11 @@ impl Shell {
         &self.ui
     }
 
-    fn key_down(&mut self, event: &KeyDownEvent, _: &mut Window, cx: &mut Context<Self>) {
+    fn key_down(&mut self, event: &KeyDownEvent, window: &mut Window, cx: &mut Context<Self>) {
+        // A context menu has the focus: the app waits until it closes.
+        if !self.focus.is_focused(window) && self.focus.contains_focused(window, cx) {
+            return;
+        }
         if let Some(key) = keys::key_combo(&event.keystroke, event.prefer_character_input) {
             cx.stop_propagation();
             self.model.update(cx, |m, cx| m.key(key, cx));

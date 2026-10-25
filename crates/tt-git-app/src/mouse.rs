@@ -18,6 +18,11 @@ pub struct MouseInput {
 pub enum MouseKind {
     /// The left button went down.
     Click,
+    /// The right button went down: picks what's under it as a click does
+    /// (never the second of a double click), before a context menu of
+    /// [`App::pane_commands`](crate::App::pane_commands) opens. The TUI
+    /// leaves the right button to the terminal.
+    RightClick,
     ScrollUp,
     ScrollDown,
     /// Anything else: a move, a release, another button.

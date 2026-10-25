@@ -310,7 +310,7 @@ impl FilterPanel {
                 self.list_mut().step(kind == MouseKind::ScrollUp, 3);
                 ModalOutcome::Open
             }
-            (MouseKind::Other, _) => ModalOutcome::Open,
+            (MouseKind::Other | MouseKind::RightClick, _) => ModalOutcome::Open,
         }
     }
 

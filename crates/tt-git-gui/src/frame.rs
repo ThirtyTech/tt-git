@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use gpui::component::menu::ContextMenuExt as _;
 use gpui::{
     AnyElement, App, Div, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement, RenderOnce,
     ScrollDelta, ScrollWheelEvent, SharedString, Styled, Window, div, prelude::FluentBuilder, px,
@@ -11,6 +12,7 @@ use tt_git_app::panes::PaneId;
 use tt_git_app::view::{StyleRole, TextSpan};
 use unicode_width::UnicodeWidthStr;
 
+use crate::context_menu;
 use crate::rows::WHEEL_STEP_LINES;
 use crate::text::StyledLine;
 use crate::ui::Ui;
@@ -223,6 +225,24 @@ impl RenderOnce for PaneFrame {
                 );
             }
         };
+        // The context menu opens after this, so it can't stop the event:
+        // a list that took the right click says so with `prevent_default`.
+        let right_click = {
+            let (ui, target) = (ui.clone(), target.clone());
+            move |ev: &MouseDownEvent, window: &mut Window, cx: &mut App| {
+                if window.default_prevented() {
+                    return;
+                }
+                ui.send_mouse(
+                    MouseInput {
+                        kind: MouseKind::RightClick,
+                        ctrl: ev.modifiers.control,
+                        target: target.clone(),
+                    },
+                    cx,
+                );
+            }
+        };
         let wheel = {
             let ui = ui.clone();
             let id = frame_id(pane);
@@ -260,6 +280,7 @@ impl RenderOnce for PaneFrame {
             .rounded(px(4.))
             .border_color(theme.fg(border))
             .on_mouse_down(MouseButton::Left, click)
+            .on_mouse_down(MouseButton::Right, right_click)
             .on_scroll_wheel(wheel)
             .child(ui.measure(frame_id(pane)))
             .child(line(&ui).text_color(theme.fg(title_role)).child(title_line))
@@ -274,6 +295,7 @@ impl RenderOnce for PaneFrame {
                     .children(children),
             )
             .children(bottom)
+            .context_menu(context_menu::builder(ui.clone()))
     }
 }
 
