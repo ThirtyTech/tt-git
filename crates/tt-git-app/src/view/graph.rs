@@ -6,7 +6,7 @@ use std::borrow::Cow;
 use std::ops::Range;
 
 use tt_git_core::time::{clock_time, relative};
-use tt_git_graph::RowRef;
+use tt_git_graph::{Cell, RowRef, bits};
 use unicode_width::UnicodeWidthStr;
 
 use super::{StyleRole, TextSpan};
@@ -34,7 +34,23 @@ pub struct GraphRow<'a> {
     pub index: usize,
     /// It's selected, or inside the range selection.
     pub picked: bool,
+    /// The lane columns as shapes, for a front end that draws them itself;
+    /// no cells with lanes hidden.
+    pub lanes: LaneRow,
+    /// The whole row as text: the lanes as box-drawing characters, then the
+    /// commit. [`text`](Self::text) is the part after the lanes.
     pub spans: Vec<TextSpan<'a>>,
+    /// How many of `spans` draw the lanes ([`GraphView::lanes`] × 2 + 1
+    /// columns), the space after them included.
+    pub lane_spans: usize,
+}
+
+impl GraphRow<'_> {
+    /// The spans after the lane columns: labels, summary, author, date and
+    /// hash.
+    pub fn text(&self) -> &[TextSpan<'_>] {
+        &self.spans[self.lane_spans..]
+    }
 }
 
 impl GraphPane {
@@ -70,50 +86,173 @@ impl GraphPane {
         let selection = self.selected_range();
         let rows = range
             .clone()
-            .map(|index| GraphRow {
-                index,
-                picked: match selection {
-                    Some((first, last)) => (first..=last).contains(&index),
-                    None => index == self.selected_index(),
-                },
-                spans: row_spans(self, index, lanes, width, now),
+            .map(|index| {
+                let (lanes, spans, lane_spans) = row_parts(self, index, lanes, width, now);
+                GraphRow {
+                    index,
+                    picked: match selection {
+                        Some((first, last)) => (first..=last).contains(&index),
+                        None => index == self.selected_index(),
+                    },
+                    lanes,
+                    spans,
+                    lane_spans,
+                }
             })
             .collect();
         GraphView { range, lanes, rows }
     }
 }
 
+/// One row's lane columns, left to right, each two text columns wide: the
+/// lane itself, then the gap to the next one.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct LaneRow {
+    /// The columns drawn in full.
+    pub cells: Vec<LaneCell>,
+    /// The row is wider than the lanes drawn: one more column, right of
+    /// `cells`, marks the rest.
+    pub overflow: Option<LaneOverflow>,
+    /// The commit has more than one parent (`◉`, not `●`).
+    pub merge: bool,
+    /// The commit's lane color, for [`overflow`](Self::overflow).
+    pub node_color: u8,
+}
+
+/// One lane column of a row: which sides its lines touch (as the
+/// box-drawing character in its place does) and the commit node, in lane
+/// color `color` (a [`StyleRole::Lane`]).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct LaneCell {
+    /// A line comes down from the row above.
+    pub up: bool,
+    /// A line goes on down to the row below.
+    pub down: bool,
+    /// A line goes left, to the column before.
+    pub left: bool,
+    /// A line goes right, to the column after.
+    pub right: bool,
+    /// The row's commit is in this column.
+    pub node: bool,
+    pub color: u8,
+    /// A line crosses the gap to the next column, in this lane color.
+    pub gap: Option<u8>,
+}
+
+/// What the column past the last lane drawn shows when a row is wider.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaneOverflow {
+    /// The commit is in a lane further right: its node is drawn here.
+    Node,
+    /// The commit is in a lane drawn; this one stands for the rest (`…`).
+    More,
+}
+
+impl LaneCell {
+    fn from_graph(cell: Cell, gap: Option<u8>) -> Self {
+        Self {
+            up: cell.bits & bits::UP != 0,
+            down: cell.bits & bits::DOWN != 0,
+            left: cell.bits & bits::LEFT != 0,
+            right: cell.bits & bits::RIGHT != 0,
+            node: cell.node,
+            color: cell.color,
+            gap,
+        }
+    }
+
+    fn to_graph(self) -> Cell {
+        let bit = |on: bool, b: u8| if on { b } else { 0 };
+        Cell {
+            bits: bit(self.up, bits::UP)
+                | bit(self.down, bits::DOWN)
+                | bit(self.left, bits::LEFT)
+                | bit(self.right, bits::RIGHT),
+            node: self.node,
+            color: self.color,
+        }
+    }
+}
+
+/// `row` in `lanes` columns: past that, one column marks the rest.
+fn lane_row(row: RowRef, lanes: usize) -> LaneRow {
+    let overflow = row.width() > lanes;
+    let shown = if overflow { lanes.saturating_sub(1) } else { row.width() };
+    let cells = (0..shown)
+        .map(|i| {
+            // The gap after the last column is drawn only toward the mark.
+            let gap = row.filler(i).filter(|_| i + 1 < shown || overflow);
+            LaneCell::from_graph(row.cell(i), gap)
+        })
+        .collect();
+    LaneRow {
+        cells,
+        overflow: overflow.then(|| {
+            if row.node_lane() >= shown {
+                LaneOverflow::Node
+            } else {
+                LaneOverflow::More
+            }
+        }),
+        merge: row.is_merge(),
+        node_color: row.node_color(),
+    }
+}
+
+/// `lanes` as text in `width` lane columns, the space after them included.
+fn lane_spans(lanes: &LaneRow, width: usize) -> Vec<TextSpan<'static>> {
+    let mut spans = Vec::with_capacity(lanes.cells.len() * 2 + 2);
+    let node_glyph = if lanes.merge { "◉" } else { "●" };
+    for cell in &lanes.cells {
+        spans.push(TextSpan::new(
+            cell.to_graph().glyph_str(node_glyph),
+            StyleRole::Lane(cell.color),
+        ));
+        spans.push(match cell.gap {
+            Some(c) => TextSpan::new("─", StyleRole::Lane(c)),
+            None => TextSpan::plain(" "),
+        });
+    }
+    if let Some(mark) = lanes.overflow {
+        let glyph = match (mark, lanes.merge) {
+            (LaneOverflow::Node, true) => "◉ ",
+            (LaneOverflow::Node, false) => "● ",
+            (LaneOverflow::More, _) => "… ",
+        };
+        spans.push(TextSpan::new(glyph, StyleRole::Lane(lanes.node_color)));
+    }
+    let used = (lanes.cells.len() + usize::from(lanes.overflow.is_some())) * 2;
+    spans.push(TextSpan::plain(spaces((width * 2).saturating_sub(used) + 1)));
+    spans
+}
+
 /// Commit `idx` with `lanes` lane columns, or none when `lanes` is 0.
 pub fn row_spans(graph: &GraphPane, idx: usize, lanes: usize, width: usize, now: i64) -> Vec<TextSpan<'_>> {
+    row_parts(graph, idx, lanes, width, now).1
+}
+
+/// Commit `idx`'s lanes, its spans, and how many of those draw the lanes.
+fn row_parts(
+    graph: &GraphPane,
+    idx: usize,
+    lanes: usize,
+    width: usize,
+    now: i64,
+) -> (LaneRow, Vec<TextSpan<'_>>, usize) {
     let commit = &graph.commits()[idx];
     let row: RowRef = graph.rows().get(idx).expect("a row per commit");
     let mut spans: Vec<TextSpan> = Vec::new();
 
     // Graph columns.
+    let lane_row = if lanes > 0 {
+        lane_row(row, lanes)
+    } else {
+        LaneRow::default()
+    };
     if lanes > 0 {
-        let node_glyph = if row.is_merge() { "◉" } else { "●" };
-        let overflow = row.width() > lanes;
-        let shown = if overflow { lanes.saturating_sub(1) } else { row.width() };
-        for i in 0..shown {
-            let cell = row.cell(i);
-            spans.push(TextSpan::new(cell.glyph_str(node_glyph), StyleRole::Lane(cell.color)));
-            let filler = match row.filler(i) {
-                Some(c) if i + 1 < shown || overflow => TextSpan::new("─", StyleRole::Lane(c)),
-                _ => TextSpan::plain(" "),
-            };
-            spans.push(filler);
-        }
-        if overflow {
-            let glyph = match (row.node_lane() >= shown, row.is_merge()) {
-                (true, true) => "◉ ",
-                (true, false) => "● ",
-                (false, _) => "… ",
-            };
-            spans.push(TextSpan::new(glyph, StyleRole::Lane(row.node_color())));
-        }
-        let graph_used = (shown + usize::from(overflow)) * 2;
-        spans.push(TextSpan::plain(spaces((lanes * 2).saturating_sub(graph_used) + 1)));
+        spans = lane_spans(&lane_row, lanes);
     }
+    let lane_count = spans.len();
 
     // Metadata columns, dropped from the right when narrow.
     let graph_cols = if lanes > 0 { lanes * 2 + 1 } else { 0 };
@@ -170,7 +309,7 @@ pub fn row_spans(graph: &GraphPane, idx: usize, lanes: usize, width: usize, now:
         spans.push(TextSpan::plain(" "));
         spans.push(TextSpan::new(commit.short_oid().to_string(), dim(StyleRole::Sha)));
     }
-    spans
+    (lane_row, spans, lane_count)
 }
 
 /// `n` spaces, borrowed when there are few.
@@ -321,6 +460,8 @@ mod tests {
             .collect();
         assert!(whole.iter().any(|r| r.width() > 30), "wide enough");
 
+        // Rows cut short with their node past the cut, and before it.
+        let mut marks = (false, false);
         for max_lanes in [2, 5, 16, 64] {
             let mut graph = GraphPane::new(Arc::new(FixedClock(0)));
             graph.max_lanes = max_lanes;
@@ -329,11 +470,113 @@ mod tests {
             for lanes in 1..=max_lanes.max(2) {
                 for (i, row) in whole.iter().enumerate() {
                     let want = unpacked_graph_spans(row, lanes);
-                    let spans = row_spans(&graph, i, lanes, 200, 0);
+                    let (lane_row, spans, lane_spans) = row_parts(&graph, i, lanes, 200, 0);
                     assert_eq!(spans[..want.len()], want[..], "max {max_lanes}, {lanes} lanes, row {i}");
+                    assert_eq!(lane_spans, want.len(), "the lanes' spans end where the commit's start");
+                    let drawn = lane_row.cells.len() + usize::from(lane_row.overflow.is_some());
+                    assert!(drawn <= lanes, "row {i} fits in {lanes} lanes");
+                    match lane_row.overflow {
+                        Some(LaneOverflow::Node) => marks.0 = true,
+                        Some(LaneOverflow::More) => {
+                            marks.1 = true;
+                            assert!(lane_row.cells.iter().any(|c| c.node), "row {i} draws its node");
+                        }
+                        None => assert_eq!(lane_row.cells.len(), row.width()),
+                    }
                 }
             }
         }
+        assert_eq!(marks, (true, true), "both kinds of mark were drawn");
+    }
+
+    #[test]
+    fn lanes_say_where_each_line_goes() {
+        // A merge of two branches off one commit: c, then a and b on it, then m.
+        let (m, a, b, c) = ("a".repeat(40), "b".repeat(40), "c".repeat(40), "d".repeat(40));
+        let mut graph = loaded(vec![
+            commit(&m, &[&a, &b]),
+            commit(&a, &[&c]),
+            commit(&b, &[&c]),
+            commit(&c, &[]),
+        ]);
+        graph.set_viewport(4);
+        let view = graph.view(4, 80, 0);
+        assert_eq!(view.lanes, 2);
+        let lanes: Vec<&LaneRow> = view.rows.iter().map(|r| &r.lanes).collect();
+        let cell = |up, down, left, right, node| LaneCell {
+            up,
+            down,
+            left,
+            right,
+            node,
+            ..LaneCell::default()
+        };
+        let shape = |l: &LaneRow| -> Vec<LaneCell> {
+            l.cells
+                .iter()
+                .map(|c| LaneCell {
+                    color: 0,
+                    gap: None,
+                    ..*c
+                })
+                .collect()
+        };
+
+        // The merge: its node, and a line out right and down to b.
+        assert!(lanes[0].merge && lanes[0].overflow.is_none());
+        assert_eq!(
+            shape(lanes[0]),
+            [
+                cell(false, true, false, true, true),
+                cell(false, true, true, false, false)
+            ]
+        );
+        assert_eq!(lanes[0].cells[0].gap, Some(lanes[0].cells[1].color), "in b's color");
+        assert_ne!(lanes[0].cells[0].color, lanes[0].cells[1].color);
+        // a, then b in the second lane, the other one running past.
+        assert_eq!(
+            shape(lanes[1]),
+            [
+                cell(true, true, false, false, true),
+                cell(true, true, false, false, false)
+            ]
+        );
+        assert_eq!(
+            shape(lanes[2]),
+            [
+                cell(true, true, false, false, false),
+                cell(true, true, false, false, true)
+            ]
+        );
+        // c: b's line comes back in from the right.
+        assert!(!lanes[3].merge);
+        assert_eq!(
+            shape(lanes[3]),
+            [
+                cell(true, false, false, true, true),
+                cell(true, false, true, false, false)
+            ]
+        );
+        assert!(lanes[3].cells[0].gap.is_some());
+        assert_eq!(lanes[3].cells[1].gap, None, "nothing past the last lane");
+
+        // The text after the lanes is the commit's.
+        for row in &view.rows {
+            assert_eq!(text(&row.spans[..row.lane_spans]).width(), 5, "two lanes and a space");
+            assert!(text(row.text()).starts_with("a commit"), "{:?}", row.text());
+        }
+
+        // One lane: b's node is past it, so it's drawn as the mark.
+        let (lane_row, _, _) = row_parts(&graph, 2, 1, 80, 0);
+        assert!(lane_row.cells.is_empty());
+        assert_eq!(lane_row.overflow, Some(LaneOverflow::Node));
+
+        // Lanes hidden: no lanes, and the text is the whole row.
+        graph.lanes = false;
+        let view = graph.view(4, 80, 0);
+        assert_eq!(view.rows[0].lanes, LaneRow::default());
+        assert_eq!(view.rows[0].lane_spans, 0);
+        assert_eq!(view.rows[0].text(), &view.rows[0].spans[..]);
     }
 
     #[test]
