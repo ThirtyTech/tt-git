@@ -396,7 +396,7 @@ The release's `gui` job (`.github/workflows/release.yml`) builds
 
 | Script | Makes |
 |---|---|
-| `windows/package.ps1` | the zip, and the installer from `windows/tt-git.iss` (Inno Setup 6): per user or all users, Start menu entry, optional desktop shortcut, Explorer's "Open in tt-git" on folders (`Directory\shell` and `Directory\Background\shell`), uninstall from Settings. Never change its `AppId`. |
+| `windows/package.ps1` | the zip, and the installer from `windows/tt-git.iss` (Inno Setup 6): per user or all users, Start menu entry, optional desktop shortcut, Explorer's "Open in tt-git" on folders (`Directory\shell` and `Directory\Background\shell`), uninstall from Settings, a welcome page with the sidebar image (`windows/sidebar.svg`, rendered to `sidebar.bmp`). Never change its `AppId`. |
 | `macos/package.sh` | `tt-git.app` (`Info.plist`, the `.icns` from `icons/`) in a `.dmg`, signed and notarized when the secrets are set |
 | `linux/package.sh` | the prefix tarball; the AppImage with `APPIMAGETOOL`; the `.deb`, `.rpm` and `.pkg.tar.zst` with `NFPM` (`linux/nfpm.yaml`, all under `/usr`) |
 
