@@ -6,7 +6,7 @@ use crate::syntax::Class;
 use crate::themes::Palette;
 use crate::view::{StyleRole, TextSpan};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Theme {
     pub border: Style,
     pub border_focused: Style,
@@ -301,7 +301,7 @@ impl Theme {
 }
 
 /// Code colors, one per [`Class`].
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SyntaxStyles {
     pub comment: Style,
     pub string: Style,
