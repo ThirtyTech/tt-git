@@ -96,8 +96,9 @@ with [GPUI](https://gpui.rs/). It has the same panes, keys, config and
 plugins as the terminal app, plus menus that show each command's key,
 right-click menus, panes you resize by dragging, and a window per
 repository. It's a separate download on each release: a `.dmg` for macOS,
-an installer or a zip for Windows x64, and a tarball or an AppImage for
-Linux, each with `tt-git` beside the app (plugins use it). It doesn't update
+an installer or a zip for Windows x64, and a `.deb`, an `.rpm`, an Arch
+package, an install script, a tarball or an AppImage for Linux, each with
+`tt-git` beside the app (plugins use it). It doesn't update
 itself: download the new release. See
 [The desktop app](https://thirtytech.github.io/tt-git/desktop/) for
 installing it and what's different.
