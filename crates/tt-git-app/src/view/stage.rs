@@ -15,7 +15,7 @@ use tt_git_core::patch::LineKind;
 use super::code::code_spans;
 use super::{StyleRole, TextSpan};
 use crate::panes::stage::{Row, SIDE_BY_SIDE_WIDTH};
-use crate::panes::{DetailsPane, StageSideId, StageView};
+use crate::panes::{StageSideId, StageView};
 use crate::syntax::{self, Tokens};
 use crate::widgets::truncate;
 
@@ -172,20 +172,6 @@ fn code<'a>(body: Cow<'a, str>, tokens: &Tokens, width: usize, pad: bool) -> Vec
     }
 }
 
-/// The details pane's title while it stages a file: the staging view's own,
-/// what `esc` goes back to, and whether the details are loading, as the
-/// TUI's details pane titles it.
-pub fn pane_title(details: &DetailsPane) -> Option<String> {
-    let mut title = details.stage()?.title();
-    if let Some(trail) = &details.trail {
-        title.push_str(&format!("  ‹ {trail}"));
-    }
-    if details.loading {
-        title.push_str(" loading…");
-    }
-    Some(title)
-}
-
 #[cfg(test)]
 mod tests {
     use tt_git_core::patch::FileDiff;
@@ -195,6 +181,7 @@ mod tests {
     use crate::component::EventState;
     use crate::jobs::Ctx;
     use crate::keymap::Command;
+    use crate::panes::DetailsPane;
     use crate::syntax::Class;
 
     fn entry(path: &str) -> StatusEntry {
@@ -405,11 +392,10 @@ mod tests {
     #[test]
     fn the_pane_title_says_what_esc_goes_back_to() {
         let mut details = DetailsPane::default();
-        assert_eq!(pane_title(&details), None);
         details.request_stage(entry("f.txt"));
-        assert_eq!(pane_title(&details).unwrap(), "Stage f.txt · hunks loading…");
+        assert_eq!(details.frame_title(), "Stage f.txt · hunks loading…");
         details.set_stage_diffs(entry("f.txt"), Ok(two_hunks("f.txt")), none(), Default::default());
         details.trail = Some("Status".into());
-        assert_eq!(pane_title(&details).unwrap(), "Stage f.txt · hunks  ‹ Status");
+        assert_eq!(details.frame_title(), "Stage f.txt · hunks  ‹ Status");
     }
 }

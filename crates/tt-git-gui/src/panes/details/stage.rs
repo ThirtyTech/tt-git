@@ -11,7 +11,7 @@
 use gpui::{AnyElement, Div, IntoElement, ParentElement, Styled, div};
 use tt_git_app::panes::{PaneId, StageSideId, StageView};
 use tt_git_app::view::StyleRole;
-use tt_git_app::view::stage::{StageLayout, pane_title};
+use tt_git_app::view::stage::StageLayout;
 
 use crate::frame::{PaneFrame, body_id};
 use crate::panes::PaneCx;
@@ -35,7 +35,7 @@ pub fn rows_id(id: StageSideId) -> &'static str {
 pub fn render(cx: &mut PaneCx) -> AnyElement {
     let (ui, focused) = (cx.ui, cx.focused);
     let details = cx.app.details_mut();
-    let frame = PaneFrame::new(ui, PaneId::Details, focused).title(pane_title(details).unwrap_or_default());
+    let frame = PaneFrame::new(ui, PaneId::Details, focused).title(details.frame_title());
     let Some(stage) = details.stage_mut() else {
         return frame.into_any_element();
     };

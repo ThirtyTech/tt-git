@@ -23,17 +23,16 @@ pub const ROWS: &str = "blame";
 pub fn render(cx: &mut PaneCx) -> AnyElement {
     let (ui, focused) = (cx.ui, cx.focused);
     let details = cx.app.details_mut();
-    let trail = details.trail.clone();
+    let (title, right) = (details.frame_title(), details.title_right());
     let frame = PaneFrame::new(ui, PaneId::Details, focused);
     let Some(view) = details.blame_mut() else {
-        return frame.title("Details").into_any_element();
+        return frame.title(title).into_any_element();
     };
 
-    let title = view.pane_title(trail.as_deref());
     // The title bar loses a column to each side's padding and one to the
     // border, as the TUI loses its corners.
     let title_cols = ui.fit(&frame_id(PaneId::Details)).cols.saturating_sub(3);
-    let title = title_spans(title, view.title_right(), title_cols);
+    let title = title_spans(title, right, title_cols);
 
     let commit_rows = view.commit_rows(ui.fit(&body_id(PaneId::Details)).rows);
     let fit = ui.fit(ROWS);
@@ -210,10 +209,7 @@ mod tests {
         gui.press_all(&["2", "G"]);
         assert_eq!(gui.read(|app| app.details().blame().unwrap().selected_line()), 2);
         gui.press("[");
-        let (title, depth) = gui.read(|app| {
-            let view = app.details().blame().unwrap();
-            (view.pane_title(None), view.depth())
-        });
+        let (title, depth) = gui.read(|app| (app.details().frame_title(), app.details().blame().unwrap().depth()));
         assert_eq!(depth, 2, "{title}");
         assert!(
             title.starts_with("Blame f.rs at ") && title.contains("^  ‹ working tree"),
