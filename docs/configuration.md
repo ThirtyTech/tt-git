@@ -256,7 +256,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `filter_message` | `/` | graph |
 | `filter_folder` | `.` | graph, status |
 | `checkout`, `new_branch`, `new_tag`, `delete_branch`, `rename_branch`, `fetch`, `prune_gone`, `fast_forward`, `filter`, `merge`, `rebase`, `reset` | `enter`/`space`, `n`, `T`, `d`, `R`, `f`, `D`, `F`, `/`, `M`, `r`, `X` | branches |
-| `push_tag` | `P` (on the Tags tab; pushes the branch on the others) | branches |
+| `push_tag` | `P` (on the Tags tab; pushes the selected branch on the others, and the worktree's branch on the Worktrees tab) | branches, worktrees |
 | `next_tab`, `prev_tab`, `pick_base` | `]` `}`, `[` `{`, `b` | branches |
 | `next_tab`, `prev_tab` | `]` `}`, `[` `{` (steps the branches pane's tabs) | graph |
 | `stage_toggle`, `open_staging`, `stage_all`, `discard`, `discard_all`, `ignore`, `commit`, `amend`, `stash`, `continue`, `abort` | `space`, `enter`, `a`, `d`, `D`, `i`, `c`, `A`, `s`, `C`, `X` | status |

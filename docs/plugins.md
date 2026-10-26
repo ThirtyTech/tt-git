@@ -144,7 +144,7 @@ Event hooks are low-volume events, each run as a fresh process:
 | `branch.fast_forwarded` | `{branch, upstream}` (a branch that isn't checked out moved to its upstream, like `origin/feature`) |
 | `tag.created` / `tag.pushed` / `tag.deleted` | `{tag, target, annotated}` / `{tag}` / `{tag, remote}` (`remote` is null for a local-only delete) |
 | `commit.created` | `{oid, amend, summary}` |
-| `fetch.completed` / `pull.completed` / `push.completed` | `{}` / `{branch, head}` / `{branch}` |
+| `fetch.completed` / `pull.completed` / `push.completed` | `{}` / `{branch, head}` / `{branch}` (the branch pushed; not always HEAD, since the branches pane pushes the selected one) |
 | `files.staged` / `files.unstaged` / `files.discarded` | `{paths}` (`"all"` for stage-all) / `{paths}` / `{path}`, plus `partial: true` when only some hunks or lines changed; discard all sends `{path: "all", scope}` with `scope` one of `everything`, `unstaged`, `unstaged_and_untracked`, `untracked`; while Status is narrowed to a folder, stage/unstage all send `paths: ["<folder>/"]` and discard all `path: "<folder>/"` |
 | `merge.completed` / `rebase.completed` / `cherry_pick.completed` / `revert.completed` | `{target/onto/picked/reverted, head}`; cherry-pick also sends `summary` and `commits` (every hash picked, oldest first; `picked` is the last) |
 | `stash.created` / `stash.applied` / `stash.dropped` | `{message}` / `{stash, pop}` / `{stash}` |

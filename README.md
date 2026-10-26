@@ -155,7 +155,7 @@ command palette, which lists built-in commands and plugin actions.
 | branches | `enter` `space` | check out (remote-only branches get a tracking branch; one checked out in another worktree opens that worktree) |
 | | `n` `d` `R` | new (`tab` in the dialog: create it in a worktree under `.worktrees/`) / delete (asks before force-deleting unmerged) / rename |
 | | `T` | new tag at the selected branch or tag (`tab` in the dialog: annotated) |
-| | `P` | on the tags tab: push the selected tag (elsewhere: push the current branch) |
+| | `P` | on the tags tab: push the selected tag (elsewhere: push the selected branch, or on the worktrees tab its branch) |
 | | `d` (tags tab) | delete the tag: `y` here only, `r` here and on the remote |
 | | `f` | `fetch --all --prune` |
 | | `D` | fetch, then delete the local branches whose upstream is gone (asks; asks again before force-deleting unmerged) |

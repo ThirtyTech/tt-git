@@ -28,6 +28,11 @@ spinner (see [While it runs](#while-it-runs)), then `✓ pushed main →
 origin/main`. If git refuses, for example because the remote has commits you
 don't, the error box shows git's message. Pull, then push again.
 
+In the branches pane, <kbd>P</kbd> pushes the selected branch instead, so
+you can push a branch without checking it out; see
+[Pushing a branch](/panes/branches/#pushing-a-branch). On the Worktrees tab
+it pushes the selected worktree's branch.
+
 Pushing a branch doesn't push tags. On the branches pane's Tags tab,
 <kbd>P</kbd> pushes the selected tag instead; see [Tags](/panes/tags/#pushing-a-tag).
 
@@ -85,7 +90,7 @@ spinner and, after the first second, how long it has been running:
 - **Failed**: the spinner goes and an **Error** box shows git's message.
 - **Pressed again**: pressing <kbd>P</kbd> while a push runs (or
   <kbd>p</kbd> during a pull, <kbd>f</kbd> during a fetch, <kbd>P</kbd> on
-  a tag being pushed) says `already pushing` instead of starting a second
+  a branch or tag being pushed) says `already pushing` instead of starting a second
   one.
 - **Several at once**: a fetch and a push together show `fetching · pushing`.
 - **Other messages**: something else that happens meanwhile, such as
