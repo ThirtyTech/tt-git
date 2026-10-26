@@ -37,11 +37,13 @@ mod fonts;
 mod pane_commands;
 mod panes;
 mod plugins;
+mod taskbar;
 mod themes;
 pub use fonts::FontChoice;
 pub use pane_commands::PaneCommand;
 pub use panes::PaneRequest;
 pub use plugins::PluginOptions;
+pub use taskbar::{JobProgress, RepoAlert};
 
 /// The longest gap between the clicks of a double click.
 const DOUBLE_CLICK: Duration = Duration::from_millis(500);
@@ -136,6 +138,8 @@ struct Busy {
     done: String,
     /// [`App::ticks`] when it started.
     since: u64,
+    /// It talks to a remote, so the taskbar shows it ([`App::take_job_progress`]).
+    network: bool,
 }
 
 /// A git load for the details pane's subject.
@@ -249,6 +253,8 @@ pub struct App {
     modal: Option<Modal>,
     /// Write operations in flight, oldest first.
     busy: Vec<Busy>,
+    /// What the taskbar shows of `busy`.
+    jobs: taskbar::JobState,
     /// Ticks since the app started, for the spinner and how long things
     /// have been showing.
     ticks: u64,
@@ -404,6 +410,7 @@ impl App {
             clock,
             modal: None,
             busy: Vec::new(),
+            jobs: taskbar::JobState::default(),
             ticks: 0,
             notice_drawn: (None, 0),
             select_head: false,
@@ -1753,6 +1760,7 @@ impl App {
             doing,
             done,
             since: self.ticks,
+            network: taskbar::is_network(&op),
         });
         if let GitOp::SelfUpdate { tag } = op {
             self.ctx.spawn_streaming(move |ctx| loaders::self_update(ctx, tag));
@@ -2201,6 +2209,7 @@ impl App {
                 }
             }
             Err(err) => {
+                self.job_failed(&GitOp::PruneGone);
                 self.notice = None;
                 self.error = Some(format!("{} failed:\n{err}", GitOp::PruneGone.label()));
             }
@@ -2260,6 +2269,9 @@ impl App {
     fn op_done(&mut self, op: GitOp, result: Result<String, String>, head: Option<String>) {
         let label = op.label();
         let done = self.finish_busy(&op);
+        if result.is_err() {
+            self.job_failed(&op);
+        }
         // Nothing in the repository changed.
         if let (GitOp::SelfUpdate { tag }, Ok(_)) = (&op, &result) {
             self.notice = Some(format!("✓ installed tt-git {tag}; restart tt-git to use it"));

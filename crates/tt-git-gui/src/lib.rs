@@ -36,6 +36,7 @@ pub mod panes;
 pub mod rows;
 pub mod shell;
 pub mod start;
+pub mod taskbar;
 pub mod terminal;
 #[cfg(test)]
 pub mod testing;

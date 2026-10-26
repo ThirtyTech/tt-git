@@ -24,6 +24,11 @@ use crate::gpui_tokio::Tokio;
 pub enum AppEvent {
     /// The app asked to quit: close the window.
     Quit,
+    /// A network job started, finished or failed: show it on the taskbar.
+    JobProgress(tt_git_app::app::JobProgress),
+    /// The repository has conflicts or a stopped operation, or no longer
+    /// has (only with `[ui] notifications` on): badge the taskbar button.
+    RepoAlert(tt_git_app::app::RepoAlert),
     /// "Open repository" ran: ask which.
     OpenRepository,
     /// "Update tt-git" ran: check for updates as the app menu does.
@@ -199,6 +204,12 @@ impl AppModel {
             if let Some(result) = finished {
                 self.app.update(Action::EditorFinished(result));
             }
+        }
+        if let Some(progress) = self.app.take_job_progress() {
+            cx.emit(AppEvent::JobProgress(progress));
+        }
+        if let Some(alert) = self.app.take_repo_alert() {
+            cx.emit(AppEvent::RepoAlert(alert));
         }
         if self.app.take_redraw() {
             cx.notify();

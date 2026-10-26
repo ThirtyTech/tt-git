@@ -66,6 +66,8 @@ pub struct Shell {
     title: String,
     /// What `ui.font` was made from.
     font_key: FontKey,
+    /// The window's taskbar button (Windows): progress and the badge.
+    taskbar: crate::taskbar::Taskbar,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -77,7 +79,7 @@ impl Shell {
         window.focus(&focus, cx);
         let subscriptions = vec![
             cx.observe(&model, |_, _, cx| cx.notify()),
-            cx.subscribe_in(&model, window, |_, model, event, window, cx| match event {
+            cx.subscribe_in(&model, window, |shell, model, event, window, cx| match event {
                 AppEvent::Quit => {
                     // Opening another worktree quits the app and starts a
                     // new one there.
@@ -91,7 +93,10 @@ impl Shell {
                 AppEvent::CheckForUpdates => {
                     crate::update::check(window.window_handle(), model.downgrade(), cx);
                 }
-                AppEvent::NewCommits(new) => crate::notify::new_commits(new, model, window, cx),
+                AppEvent::NewCommits(new) => {
+                    shell.taskbar.new_commits(window, new);
+                    crate::notify::new_commits(new, model, window, cx);
+                }
                 AppEvent::OpenRepository => {
                     let model = model.downgrade();
                     crate::windows::pick_repos(cx, move |result, cx| {
@@ -100,6 +105,8 @@ impl Shell {
                         }
                     });
                 }
+                AppEvent::JobProgress(progress) => shell.taskbar.progress(window, *progress),
+                AppEvent::RepoAlert(alert) => shell.taskbar.alert(window, *alert),
             }),
             cx.observe_window_bounds(window, |shell, window, cx| {
                 crate::window_state::remember_window(window, cx);
@@ -107,6 +114,8 @@ impl Shell {
             }),
             // C1: the active window's menus are the app's.
             cx.observe_window_activation(window, |_, _, cx| cx.notify()),
+            // Focused, the new commits on the taskbar's badge are seen.
+            cx.observe_window_activation(window, |shell, window, _| shell.taskbar.activated(window)),
             cx.observe_global::<crate::zoom::UiZoom>(|_, cx| cx.notify()),
             cx.observe_global::<crate::font::UiFont>(|_, cx| cx.notify()),
             cx.observe_global::<crate::look::UiLook>(|_, cx| cx.notify()),
@@ -128,6 +137,7 @@ impl Shell {
             focus,
             title: String::new(),
             font_key,
+            taskbar: Default::default(),
             _subscriptions: subscriptions,
         }
     }
