@@ -160,14 +160,14 @@ pub struct View {
     pub details: bool,
     /// Only the graph and, if it's showing, details.
     pub wide: bool,
-    /// Status in a full-height column on the left, with the wide view
-    /// beside it.
+    /// Status in a full-height column on the left, with the rest of the
+    /// layout beside it.
     pub status_column: bool,
 }
 
-/// How much of the width the status column takes when status is zoomed: a
-/// third of what the default layout gives it.
-pub const STATUS_COLUMN_SIZE: u16 = 17;
+/// How much of the width the status column takes when status is zoomed, in
+/// percent.
+pub const STATUS_COLUMN_SIZE: u16 = 27;
 
 /// The layout tree with hidden panes pruned and sizes turned into fill
 /// weights: each child of a split takes its weight's share of the space.
@@ -191,13 +191,8 @@ impl Layout {
     /// none are.
     pub fn resolve(&self, view: View) -> Option<Placed> {
         if view.status_column {
-            let wide = View {
-                wide: true,
-                status_column: false,
-                ..view
-            };
             let status = (STATUS_COLUMN_SIZE, Placed::Pane(PaneId::Status));
-            let Some(rest) = resolve(&self.root, wide) else {
+            let Some(rest) = resolve(&self.root, view) else {
                 return Some(status.1);
             };
             return Some(Placed::Split(
@@ -219,7 +214,9 @@ fn resolve(node: &Node, view: View) -> Option<Placed> {
         return Some(Placed::Pane(PaneId::Details));
     }
     if let Some(pane) = node.pane {
-        let hidden = view.wide && !matches!(pane, PaneId::Graph | PaneId::Details);
+        // The status column draws status itself, beside the rest of the layout.
+        let hidden = (view.wide && !matches!(pane, PaneId::Graph | PaneId::Details))
+            || (view.status_column && pane == PaneId::Status);
         return (!hidden).then_some(Placed::Pane(pane));
     }
     let sized: u16 = node.children.iter().filter_map(|c| c.size).sum();
@@ -278,32 +275,38 @@ mod tests {
     }
 
     #[test]
-    fn status_column_puts_status_left_of_the_wide_view() {
+    fn status_column_puts_status_left_of_the_rest_of_the_layout() {
         let column = View {
             status_column: true,
             ..View::default()
         };
-        let graph = (83, Placed::Pane(PaneId::Graph));
+        let status = (27, Placed::Pane(PaneId::Status));
+        let rest = |bottom| {
+            Placed::Split(
+                Split::Rows,
+                vec![(70, Placed::Pane(PaneId::Graph)), (30, Placed::Pane(bottom))],
+            )
+        };
+        // Branches keeps its place under the graph, and details replaces it.
         assert_eq!(
             Layout::default().resolve(column),
             Some(Placed::Split(
                 Split::Columns,
-                vec![(17, Placed::Pane(PaneId::Status)), graph]
+                vec![status.clone(), (73, rest(PaneId::Branches))]
             ))
         );
         let open = View {
             details: true,
             ..column
         };
-        let Some(Placed::Split(Split::Columns, children)) = Layout::default().resolve(open) else {
-            panic!("expected columns");
-        };
-        assert_eq!(children[0], (17, Placed::Pane(PaneId::Status)));
-        assert!(children[1].1.contains(PaneId::Graph) && children[1].1.contains(PaneId::Details));
-        assert!(!Layout::default().shows(PaneId::Branches, open));
-        // A layout with its own details pane shows it in the wide view.
-        assert!(!classic().shows(PaneId::Branches, column));
-        assert!(classic().shows(PaneId::Details, column));
+        assert_eq!(
+            Layout::default().resolve(open),
+            Some(Placed::Split(Split::Columns, vec![status, (73, rest(PaneId::Details))]))
+        );
+        // Every other pane stays where the layout puts it.
+        for pane in [PaneId::Branches, PaneId::Graph, PaneId::Details] {
+            assert!(classic().shows(pane, column), "{pane:?}");
+        }
     }
 
     fn parse_err(layout: &str) -> String {

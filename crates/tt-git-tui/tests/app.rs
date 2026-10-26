@@ -497,26 +497,29 @@ fn zoom_from_status_puts_it_in_a_column_beside_the_graph() {
     sb.commit_file("a.txt", "a\n", "first");
     sb.write("new.txt", "hello\n");
     let mut t = TestDriver::with_size(Config::default(), &sb, 120, 24);
-    let normal_status = t.app().pane_area(PaneId::Status).unwrap();
     t.press("2").press("+");
     assert_eq!(t.app().zoom(), Zoom::Status);
     assert_eq!(t.app().focus(), PaneId::Status);
 
-    // Full height on the left, a third of its usual width; graph beside it.
+    // Full height on the left, 27% of the width; graph beside it,
+    // with branches still under the graph.
     let status = t.app().pane_area(PaneId::Status).unwrap();
     let graph = t.app().pane_area(PaneId::Graph).unwrap();
+    let branches = t.app().pane_area(PaneId::Branches).unwrap();
     assert_eq!((status.x, status.y, status.height), (0, 0, 23));
-    assert_eq!(status.width, normal_status.width / 3);
-    assert_eq!((graph.x, graph.y, graph.height), (status.width, 0, 23));
+    assert_eq!(status.width, 120 * 27 / 100);
+    assert_eq!((graph.x, graph.y), (status.width, 0));
     assert_eq!(graph.x + graph.width, 120);
-    assert!(t.app().pane_area(PaneId::Branches).is_none());
+    assert_eq!((branches.x, branches.y), (graph.x, graph.height));
+    assert_eq!(branches.width, graph.width);
+    assert_eq!(branches.y + branches.height, 23);
     insta::assert_snapshot!(t.screen());
 
-    // Details opens under the graph and keeps the column.
+    // Details opens in branches' place and keeps the column.
     t.press("1").press("space");
     assert_eq!(t.app().zoom(), Zoom::Status);
     let details = t.app().pane_area(PaneId::Details).unwrap();
-    assert_eq!(details.x, status.width);
+    assert_eq!(details, branches);
     assert_eq!(t.app().pane_area(PaneId::Status).unwrap(), status);
 
     t.press("+");
@@ -524,16 +527,25 @@ fn zoom_from_status_puts_it_in_a_column_beside_the_graph() {
 }
 
 #[test]
-fn focusing_branches_leaves_the_status_column() {
+fn the_status_column_stays_while_focus_moves_around() {
     let sb = Sandbox::new();
     let mut t = TestDriver::new(&sb);
     t.press("2").press("+");
     assert_eq!(t.app().zoom(), Zoom::Status);
     t.press("1");
-    assert_eq!(t.app().zoom(), Zoom::Status, "the graph is still on screen");
+    assert_eq!(t.app().zoom(), Zoom::Status);
     t.press("3");
-    assert_eq!(t.app().zoom(), Zoom::Off);
+    assert_eq!(t.app().zoom(), Zoom::Status);
     assert_eq!(t.app().focus(), PaneId::Branches);
+    // Details opens in place of branches, so focusing it opens it there.
+    t.press("4");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    assert_eq!(t.app().focus(), PaneId::Details);
+    assert!(t.app().pane_area(PaneId::Branches).is_none());
+    // And focusing branches again closes details.
+    t.press("3");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    assert!(t.app().pane_area(PaneId::Details).is_none());
 }
 
 #[test]

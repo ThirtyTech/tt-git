@@ -2876,6 +2876,16 @@ impl App {
         if self.shows(self.focus) {
             return;
         }
+        // The status column has the whole layout beside it: opening or
+        // closing details is enough, and keeps the column.
+        if self.zoom == Zoom::Status {
+            let open = self.details_open;
+            self.details_open = self.focus == PaneId::Details;
+            if self.shows(self.focus) {
+                return;
+            }
+            self.details_open = open;
+        }
         self.zoom = Zoom::Off;
         if self.shows(self.focus) {
             return;
