@@ -261,6 +261,11 @@ The jump list belongs to tt-git's AppUserModelID, `ThirtyTech.tt-git`, so
 whichever copy started last (the installed one, the zip, or a build from
 source) writes it, and its entries start that copy.
 
+On Linux, right-click tt-git in the dock or the app launcher for
+**Open repository…**, which does the same. It comes from `tt-git.desktop`,
+so it's there once tt-git is [installed](/desktop/install/#linux) and lists
+no recent repositories.
+
 ### Taskbar progress
 
 On Windows, while a repository's window pushes, pulls or fetches, its
@@ -271,6 +276,14 @@ it too. git doesn't say how far along it is, so the bar has no value. If
 the job fails, the bar turns red for two seconds, then clears; the error
 is in the window. Local work such as staging, committing or checking out
 is over too quickly to show.
+
+On Linux, a dock that shows app progress (Dash to Dock and Ubuntu Dock on
+GNOME, the task manager on KDE Plasma) shows an empty progress bar on
+tt-git's icon while any of its windows pushes, pulls or fetches. A failed
+job just clears it. tt-git sends it through the Unity launcher API on the
+session bus, for the installed `tt-git.desktop`, so a build from source
+with no `.desktop` file installed shows nothing. GNOME's own dash shows
+neither the progress nor the badge below.
 
 ## Notifications
 
@@ -318,6 +331,14 @@ taskbar button:
 Only one shows at a time: red over amber over blue. A screen reader says
 what it means, such as *3 new commits*. The dot has a white ring, so it
 shows on a light taskbar and a dark one.
+
+On Linux the dock has one icon for all of tt-git's windows and no colored
+dots, so it shows this instead:
+
+| Shows | Means | Goes away |
+|---|---|---|
+| A number | New commits came in while the window wasn't the one you're in, added up over every window. | When you switch to the windows they came in. |
+| The icon marked urgent (Dash to Dock wiggles it, KDE highlights it) | Conflicts, or a merge, rebase, cherry-pick or revert that stopped, turned up while the window wasn't the one you're in, for example after a `git merge` in a terminal. | When you switch to the window. The conflicts themselves stay until you resolve them. |
 
 ## Editing files
 

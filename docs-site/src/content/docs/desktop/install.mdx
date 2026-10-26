@@ -328,6 +328,22 @@ tt-git-gui ~/src/a ~/src/b  # two windows
 Any folder inside a repository works, and so do linked worktrees. The
 window's title is `<repo> - tt-git`.
 
+On Linux, the packages and the install script also make tt-git an app for
+folders. Right-click a folder in Nautilus, Dolphin, Thunar or another file
+manager and choose **Open With** > **tt-git** to open the repository it's
+in, or the start window if it isn't in one. Pick several folders and each
+opens in its own window. Right-click tt-git in the dock or the launcher for
+**Open repository…**, which starts it with the folder picker showing.
+
+Your file manager stays the app that opens folders on GNOME and KDE, which
+name it as the default. On a desktop that names none, folders can start
+opening in tt-git instead. Set the file manager back with `xdg-mime`, for
+example:
+
+```sh
+xdg-mime default org.gnome.Nautilus.desktop inode/directory
+```
+
 It takes the same options as [`tt-git`](/reference/cli/#tt-git), and
 several repositories at once:
 
@@ -337,6 +353,7 @@ several repositories at once:
 | `--config FILE` | Read settings from this file instead of the default `config.toml` |
 | `--no-plugins` | Start without plugins and without the plugin API socket |
 | `--filter-to-cwd`, `--no-filter-to-cwd` | Started in a subfolder, narrow the graph and Status to it, or don't |
+| `--open-repository` | Start with the folder picker showing, over the start window |
 | `--version`, `--help` | Print the version or help and exit |
 
 `tt-git-gui` has no subcommands. Use `tt-git` for `tt-git plugin list` and
