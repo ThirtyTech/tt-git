@@ -237,6 +237,38 @@ copy of the app notes itself so an update can restart them all.
 On Wayland the compositor decides where windows go, so only the size and
 maximized or full screen come back.
 
+## Notifications
+
+The desktop app can tell you when new commits arrive while you're working
+in something else. It's off until you set `notifications = true` under
+[`[ui]`](/configuration/#ui) in `config.toml`.
+
+With it on, when a fetch or pull brings commits to a remote-tracking branch
+and the repository's window isn't the one you're in, a notification says
+so: the repository's name over *3 new commits on origin/main*, or *5 new
+commits on origin/main and 2 other branches*. Only commits that no branch
+or tag in the repository had before count, so pushing your own commits, or
+fetching what a local branch already has, says nothing. A newer
+notification for the same repository replaces the last one.
+
+- Click it, or **Open**, to bring the repository's window forward.
+- **Pull** is there when the commits are on the branch the checked-out
+  branch tracks. It brings the window forward and pulls, as <kbd>p</kbd>
+  does.
+
+tt-git doesn't fetch in the background yet, so something else has to:
+you, a plugin, or `git fetch` in a terminal (the window refreshes when the
+repository changes). Opening a repository never notifies.
+
+On Windows the notification is a toast from *tt-git*, with no sound.
+Windows' own settings (**Settings > System > Notifications**) can turn
+tt-git's off or keep them out of sight. The installer gives the Start menu
+entry tt-git's AppUserModelID, `ThirtyTech.tt-git`, which toasts and the
+taskbar use, so installed toasts show tt-git's icon. A copy that wasn't
+installed (the zip, or a build from source) still shows them: the first one
+registers the ID under `HKCU\Software\Classes\AppUserModelId`, without an
+icon, so its toasts show a generic one. Uninstalling removes that key.
+
 ## Editing files
 
 <kbd>e</kbd> opens a file in your [editor](/configuration/#editor), as in
@@ -296,6 +328,8 @@ there, as in the terminal app.
 - **No updates from inside the app.** Download the new release to update
   it; see [Updating](/desktop/install/#updating).
 - **A closed window's API socket keeps listening** until the app quits.
+- **A notification left after tt-git quits does nothing.** Clicking it in
+  the notification center doesn't start tt-git again.
 
 <Aside type="tip">
 	For the developer view of how the desktop app is built, see

@@ -155,6 +155,17 @@ ref's target, date, upstream, ahead/behind counts, author and subject in a
 single process, so the pane never runs a `rev-list` per branch. A full
 refresh is 6 to 8 git processes however many branches and tags you have.
 
+### New commits
+
+With [notifications](/desktop/using/#notifications) on, the desktop app
+compares each refresh's remote-tracking branches with the last one's. For
+each one that moved or is new, it counts the commits no ref had before:
+`git rev-list --count --ignore-missing --stdin`, given the branch's new tip
+and `^<tip>` for every ref's tip at the last refresh. Your own pushed
+commits and ones a local branch already had count none. A refresh where no
+remote-tracking branch moved runs nothing more. With notifications off it
+runs nothing.
+
 ### Grouping and sorting
 
 Local and remote branches are grouped into one row: a remote branch joins
