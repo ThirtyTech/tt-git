@@ -196,11 +196,11 @@ export const shots = [
 	{
 		name: 'status-zoom',
 		capture: 'status-zoom',
-		highlights: [{ target: { pane: 'status' } }, { target: { pane: 'graph' }, tone: 'green' }],
+		highlights: [{ target: { pane: 'status' } }, { target: { pane: 'graph' }, tone: 'green' }, { target: { pane: 'branches' }, tone: 'green' }],
 		legend: { ...MID, y: 200 },
 		callouts: [
 			{ target: { find: '[2] Status' }, box: false, text: '**+** on status: a column down the left', markerSide: 'right' },
-			{ target: { find: '[1] Graph' }, box: false, text: 'The graph moves over beside it', markerSide: 'right', tone: 'green' },
+			{ target: { find: '[1] Graph' }, box: false, text: 'Graph and branches move beside it', markerSide: 'right', tone: 'green' },
 		],
 	},
 	{
