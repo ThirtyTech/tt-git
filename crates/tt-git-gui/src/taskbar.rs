@@ -3,15 +3,18 @@
 //! with `[ui] notifications` on a badge over the icon: conflicts, a stopped
 //! merge or rebase ([`App::take_repo_alert`](tt_git_app::App::take_repo_alert)),
 //! or new commits that came in while the window wasn't focused, until it is
-//! again. The Win32 calls are in `tt-git-win`; elsewhere this does nothing.
+//! again. The Win32 calls are in `tt-git-win`. On macOS the badge goes to
+//! the Dock icon, which every window shares ([`crate::dock`]); progress
+//! shows nowhere there.
 
-use gpui::Window;
+use gpui::{App, Window};
 use tt_git_app::app::{JobProgress, RepoAlert};
 use tt_git_app::new_commits::NewCommits;
 use tt_git_core::InProgress;
 
 /// The badge's size in pixels: twice the taskbar's 16, so it stays sharp
 /// at 200%.
+#[cfg_attr(not(windows), allow(dead_code))]
 const ICON_SIZE: u32 = 32;
 
 /// What the badge over a window's taskbar button says, most pressing first.
@@ -34,6 +37,7 @@ impl Badge {
     }
 
     /// The dot's color: red, amber, blue.
+    #[cfg_attr(not(windows), allow(dead_code))]
     fn color(self) -> [u8; 3] {
         match self {
             Badge::Conflicts => [0xcf, 0x22, 0x2e],
@@ -75,25 +79,25 @@ impl Taskbar {
     }
 
     /// The repository's alert changed.
-    pub fn alert(&mut self, window: &Window, alert: RepoAlert) {
+    pub fn alert(&mut self, window: &Window, alert: RepoAlert, cx: &mut App) {
         self.alert = alert;
-        self.show(window);
+        self.show(window, cx);
     }
 
     /// `new` came in. It's badged only while the window isn't focused, as
     /// the notification is.
-    pub fn new_commits(&mut self, window: &Window, new: &NewCommits) {
+    pub fn new_commits(&mut self, window: &Window, new: &NewCommits, cx: &mut App) {
         if !window.is_window_active() {
             self.new_commits += new.total();
-            self.show(window);
+            self.show(window, cx);
         }
     }
 
     /// The window was focused or left: focused, the new commits are seen.
-    pub fn activated(&mut self, window: &Window) {
+    pub fn activated(&mut self, window: &Window, cx: &mut App) {
         if window.is_window_active() && self.new_commits > 0 {
             self.new_commits = 0;
-            self.show(window);
+            self.show(window, cx);
         }
     }
 
@@ -107,12 +111,13 @@ impl Taskbar {
         }
     }
 
-    fn show(&mut self, window: &Window) {
+    fn show(&mut self, window: &Window, cx: &mut App) {
         let badge = self.badge();
         if badge == self.shown {
             return;
         }
         self.shown = badge;
+        crate::dock::set_badge(window.window_handle().window_id(), badge, cx);
         #[cfg(windows)]
         {
             use tt_git_win::taskbar::Icon;
