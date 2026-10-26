@@ -51,7 +51,7 @@ zbus = "5"
 ashpd = { version = "0.13", default-features = false, features = ["async-io", "notification"] }
 futures.workspace = true
 
-# The Quick Look panel.
+# The Quick Look panel and Finder's Open in tt-git (the services provider).
 [target.'cfg(target_os = "macos")'.dependencies]
 # The Objective-C calls, kept out of this crate: it forbids unsafe code.
 tt-git-win.workspace = true

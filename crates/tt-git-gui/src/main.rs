@@ -165,6 +165,7 @@ fn main() -> Result<()> {
         tt_git_gui::quick_look::install(cx);
         tt_git_gui::set_launcher(Rc::new(new_app), cx);
         tt_git_gui::windows::quit_when_last_closes(cx);
+        tt_git_gui::services::install(cx);
         start_updates(check_for_updates, cx);
         let opened = match first {
             Some((app, rx)) => tt_git_gui::open_window(app, rx, cx).map(|_| ()),

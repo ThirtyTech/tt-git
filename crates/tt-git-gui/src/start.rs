@@ -78,6 +78,32 @@ pub fn pick(start: WindowHandle<Root>, cx: &mut App) {
     });
 }
 
+/// The start windows that are open.
+pub fn windows(cx: &mut App) -> Vec<WindowHandle<Root>> {
+    cx.windows()
+        .into_iter()
+        .filter_map(|w| w.downcast::<Root>())
+        .filter(|w| {
+            w.update(cx, |root, _, _| root.view().clone().downcast::<StartView>().is_ok())
+                .unwrap_or(false)
+        })
+        .collect()
+}
+
+/// Shows `error` above the start window `start`'s list and brings it
+/// forward.
+pub fn show_error(start: WindowHandle<Root>, error: String, cx: &mut App) {
+    let _ = start.update(cx, |root, window, cx| {
+        if let Ok(view) = root.view().clone().downcast::<StartView>() {
+            view.update(cx, |view, cx| {
+                view.error = Some(error);
+                cx.notify();
+            });
+        }
+        window.activate_window();
+    });
+}
+
 impl StartView {
     fn new(recent: Vec<Recent>, error: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let theme = GuiTheme::new(&Theme::default());

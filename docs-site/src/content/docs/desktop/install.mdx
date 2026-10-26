@@ -93,6 +93,16 @@ with your password, and tt-git opens; after that it starts like any other
 app. On macOS 14 and earlier you can instead right-click **tt-git** in
 Applications, choose **Open**, then **Open** again.
 
+Once tt-git is in Applications, Finder offers **Open in tt-git** on
+folders. Right-click a folder and pick it (under **Services** or at the
+bottom of the menu, depending on how many services you have), or select a
+folder and choose **Finder → Services → Open in tt-git**. Its repository
+opens in a window of the running tt-git, which starts first if it isn't
+running. A folder outside a repository opens the
+[start window](#the-start-window) with a message saying so. If the entry
+is missing, turn it on under **System Settings → Keyboard → Keyboard
+Shortcuts → Services → Files and Folders**.
+
 The app holds both binaries in `tt-git.app/Contents/MacOS`: `tt-git-gui`
 and `tt-git`. For `tt-git` in a terminal, link to the app's copy:
 
@@ -103,7 +113,8 @@ sudo ln -s /Applications/tt-git.app/Contents/MacOS/tt-git /usr/local/bin/tt-git
 or install the terminal app on its own with the
 [install script](/getting-started/install/#install-script).
 
-To uninstall, drag **tt-git** from Applications to the Trash. Your
+To uninstall, drag **tt-git** from Applications to the Trash. That takes
+**Open in tt-git** off Finder's menus too. Your
 settings and plugins stay in `~/Library/Application Support/tt-git`.
 
 </TabItem>
@@ -386,8 +397,8 @@ start window instead:
 | <kbd>q</kbd> <kbd>esc</kbd> | Close the window |
 
 The start window closes once a repository opens. If you named a folder on
-the command line that isn't in a repository, it opens with a message saying
-so.
+the command line, or picked **Open in tt-git** in Finder on one, that isn't
+in a repository, it opens with a message saying so.
 
 ## Opening another repository
 
