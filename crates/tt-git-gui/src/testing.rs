@@ -49,12 +49,14 @@ impl Gui {
     }
 
     /// Like [`open`](Self::open) with `config` (the file watcher is turned
-    /// off, so its events can't race the assertions). Dates are relative
+    /// off, so its events can't race the assertions, and so is background
+    /// fetching). Dates are relative
     /// to [`NOW`], one day after the sandbox's first commit.
     pub fn with_config(cx: &mut TestAppContext, sb: &Sandbox, mut config: Config) -> Self {
         // Jobs run on tokio threads; let the test executor wait for them.
         cx.executor().allow_parking();
         config.watch = false;
+        config.fetch.interval = 0;
         let git = GitCli::new(sb.path()).with_env(sb.env());
         let repo = Repo::discover(sb.path(), &git).expect("sandbox repo");
         let (app, rx) = App::new(config, repo, Arc::new(FixedClock(NOW))).expect("app starts");

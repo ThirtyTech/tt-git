@@ -51,6 +51,7 @@ impl TestDriver {
     /// (it is off by default so its events can't race the assertions).
     pub fn with_watcher(mut config: Config, sb: &Sandbox) -> Self {
         config.watch = true;
+        config.fetch.interval = 0;
         Self::build(config, sb, DEFAULT_WIDTH, DEFAULT_HEIGHT)
     }
 
@@ -58,6 +59,7 @@ impl TestDriver {
     /// waits for the initial loads to finish.
     pub fn with_size(mut config: Config, sb: &Sandbox, width: u16, height: u16) -> Self {
         config.watch = false;
+        config.fetch.interval = 0;
         Self::build(config, sb, width, height)
     }
 
@@ -65,6 +67,7 @@ impl TestDriver {
     /// listening. `bin` becomes `TTGIT_BIN_PATH` (the built `tt-git`).
     pub fn with_plugins(mut config: Config, sb: &Sandbox, bin: &std::path::Path) -> Self {
         config.watch = false;
+        config.fetch.interval = 0;
         let opts = PluginOptions {
             dirs: sb.plugin_dirs(),
             bin_path: Some(bin.to_path_buf()),
@@ -78,13 +81,23 @@ impl TestDriver {
     /// worktree of the sandbox repo, say) instead of the sandbox repo.
     pub fn at(mut config: Config, sb: &Sandbox, path: &std::path::Path, width: u16, height: u16) -> Self {
         config.watch = false;
+        config.fetch.interval = 0;
         Self::build_at(config, sb, path, width, height, None)
     }
 
     /// Like [`at`](Self::at) but with the file watcher on.
     pub fn with_watcher_at(mut config: Config, sb: &Sandbox, path: &std::path::Path) -> Self {
         config.watch = true;
+        config.fetch.interval = 0;
         Self::build_at(config, sb, path, DEFAULT_WIDTH, DEFAULT_HEIGHT, None)
+    }
+
+    /// Like [`with_config`](Self::with_config) with background fetching
+    /// left as `config` has it (every other constructor turns it off, so it
+    /// can't fetch in the middle of a test).
+    pub fn with_background_fetch(mut config: Config, sb: &Sandbox) -> Self {
+        config.watch = false;
+        Self::build(config, sb, DEFAULT_WIDTH, DEFAULT_HEIGHT)
     }
 
     fn build(config: Config, sb: &Sandbox, width: u16, height: u16) -> Self {
@@ -114,6 +127,7 @@ impl TestDriver {
             let _guard = runtime.enter();
             let (mut app, rx) = App::new(config, repo, Arc::new(FixedClock(NOW))).expect("app starts");
             app.set_runtime(runtime.handle().clone());
+            app.set_fetch_state_dir(sb.root().join("tt-state").join("fetch"));
             if let Some(opts) = plugins {
                 app.enable_plugins(opts);
             }

@@ -44,6 +44,8 @@ pub enum Action {
     Notify(String),
     /// The latest tt-git release's tag, or why it couldn't be found.
     UpdateChecked(Result<String, String>),
+    /// A background fetch check ran ([`crate::bg_fetch`]).
+    BackgroundFetched(crate::bg_fetch::Outcome),
     /// Show an error popup.
     Error(String),
     /// Put this text on the clipboard.

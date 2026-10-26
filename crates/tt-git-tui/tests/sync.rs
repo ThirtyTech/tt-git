@@ -4,8 +4,8 @@
 
 use ratatui::style::Color;
 use tt_git_testkit::{Sandbox, TestDriver};
-use tt_git_tui::Action;
 use tt_git_tui::modal::GitOp;
+use tt_git_tui::{Action, Config};
 
 /// `main` tracking `origin/main`, one commit ahead.
 fn ahead_of_origin() -> Sandbox {
@@ -191,4 +191,59 @@ fn a_rejected_push_clears_the_spinner_and_shows_the_error() {
     assert!(error.starts_with("push failed:"), "{error}");
     assert!(t.app().notice().is_none());
     assert!(!help_bar(&t).contains('│'), "{}", help_bar(&t));
+}
+
+/// [`ahead_of_origin`] last fetched an hour ago, with a branch someone else
+/// pushed since.
+fn behind_a_push_elsewhere() -> Sandbox {
+    let sb = ahead_of_origin();
+    let other = sb.clone_to(&sb.root().join("remotes").join("origin.git"), "other");
+    sb.git_in(&other, &["push", "-q", "origin", "HEAD:theirs"]);
+    let hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+    std::fs::File::options()
+        .write(true)
+        .open(sb.path().join(".git").join("FETCH_HEAD"))
+        .and_then(|f| f.set_modified(hour_ago))
+        .expect("FETCH_HEAD");
+    sb
+}
+
+/// Ticks to the app's first background fetch check.
+const FIRST_CHECK: u64 = 10 * 4;
+
+#[test]
+fn a_background_fetch_says_nothing() {
+    let sb = behind_a_push_elsewhere();
+    let mut t = TestDriver::with_background_fetch(Config::default(), &sb);
+    t.tick(FIRST_CHECK - 1).wait_idle();
+    assert!(!sb.git(&["branch", "-r"]).contains("origin/theirs"));
+    t.tick(1);
+    assert!(!help_bar(&t).contains('│'), "{}", help_bar(&t));
+    t.wait_idle();
+    assert!(sb.git(&["branch", "-r"]).contains("origin/theirs"));
+    assert!(t.app().notice().is_none(), "{:?}", t.app().notice());
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert!(t.screen().contains("theirs"), "{}", t.screen());
+}
+
+#[test]
+fn a_fetch_asked_for_during_a_background_fetch_waits_for_it() {
+    let sb = behind_a_push_elsewhere();
+    let mut t = TestDriver::with_background_fetch(Config::default(), &sb);
+    t.tick(FIRST_CHECK);
+    t.send_frame(Action::Run(GitOp::FetchAll));
+    assert!(help_bar(&t).ends_with("│ ⠋ fetching all remotes"), "{}", help_bar(&t));
+    t.wait_idle();
+    assert_eq!(t.app().notice(), Some("✓ fetched all remotes"));
+    assert!(sb.git(&["branch", "-r"]).contains("origin/theirs"));
+}
+
+#[test]
+fn background_fetching_can_be_turned_off() {
+    let sb = behind_a_push_elsewhere();
+    let mut config = Config::default();
+    config.fetch.interval = 0;
+    let mut t = TestDriver::with_background_fetch(config, &sb);
+    t.tick(FIRST_CHECK * 2).wait_idle();
+    assert!(!sb.git(&["branch", "-r"]).contains("origin/theirs"));
 }

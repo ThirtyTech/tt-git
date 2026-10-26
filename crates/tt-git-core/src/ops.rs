@@ -230,6 +230,22 @@ impl Repo {
         self.git().run(&["fetch", "--all", "--prune"]).map(text)
     }
 
+    /// [`fetch_all`](Self::fetch_all) for a fetch nobody asked for: nothing
+    /// may ask for a password. Every command already has
+    /// `GIT_TERMINAL_PROMPT=0` and no stdin; this also stops git running an
+    /// askpass program (an empty `GIT_ASKPASS`), ssh running one, and Git
+    /// Credential Manager opening its sign-in window. A remote that needs
+    /// one fails instead.
+    pub fn fetch_all_quietly(&self) -> Result<String> {
+        let git = self.git().clone().with_env([
+            ("GIT_ASKPASS", ""),
+            ("SSH_ASKPASS_REQUIRE", "never"),
+            ("GCM_INTERACTIVE", "never"),
+        ]);
+        git.run(&["-c", "credential.interactive=never", "fetch", "--all", "--prune"])
+            .map(text)
+    }
+
     /// Fast-forwards local branch `name` to its upstream without checking
     /// it out: `git fetch <remote> <merge>:refs/heads/<name>`, where
     /// `<remote>` and `<merge>` are the branch's `branch.<name>.*` config

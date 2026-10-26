@@ -5,6 +5,7 @@
 pub mod action;
 pub mod agent;
 pub mod app;
+pub mod bg_fetch;
 pub mod component;
 pub mod config;
 pub mod editor;

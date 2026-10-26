@@ -226,3 +226,16 @@ fn fast_forward_follows_a_local_upstream() {
     open(&sb).fast_forward_branch("follower").unwrap();
     assert_eq!(sb.git(&["rev-parse", "follower"]), sb.git(&["rev-parse", "main"]));
 }
+
+#[test]
+fn quiet_fetch_brings_new_remote_branches() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let remote = sb.add_remote("origin");
+    sb.git(&["push", "-q", "origin", "main"]);
+    let other = sb.clone_to(&remote, "other");
+    sb.git_in(&other, &["push", "-q", "origin", "main:pushed-elsewhere"]);
+    let repo = open(&sb);
+    repo.fetch_all_quietly().unwrap();
+    assert!(sb.git(&["branch", "-r"]).contains("origin/pushed-elsewhere"));
+}

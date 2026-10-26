@@ -32,6 +32,7 @@ pub struct Config {
     pub editor: EditorConfig,
     pub agent: AgentConfig,
     pub ui: UiConfig,
+    pub fetch: FetchConfig,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -97,7 +98,30 @@ impl Default for Config {
             editor: EditorConfig::default(),
             agent: AgentConfig::default(),
             ui: UiConfig::default(),
+            fetch: FetchConfig::default(),
         }
+    }
+}
+
+/// Fetching on its own while a repository is open.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct FetchConfig {
+    /// Minutes between the fetches of every remote tt-git makes in the
+    /// background (`git fetch --all --prune`); `0` turns them off.
+    pub interval: u32,
+}
+
+impl FetchConfig {
+    /// The interval, or `None` when background fetching is off.
+    pub fn background_interval(&self) -> Option<std::time::Duration> {
+        (self.interval > 0).then(|| std::time::Duration::from_secs(u64::from(self.interval) * 60))
+    }
+}
+
+impl Default for FetchConfig {
+    fn default() -> Self {
+        Self { interval: 5 }
     }
 }
 
@@ -540,6 +564,17 @@ mod tests {
         assert!(!Config::parse("syntax = false").unwrap().syntax);
         let km = cfg.keymap().unwrap();
         assert_eq!(km.lookup(Context::Global, "x".parse().unwrap()), Some(Command::Quit));
+    }
+
+    #[test]
+    fn background_fetch_interval() {
+        let minutes = |text| Config::parse(text).unwrap().fetch.background_interval();
+        assert_eq!(minutes(""), Some(std::time::Duration::from_secs(5 * 60)));
+        assert_eq!(
+            minutes("[fetch]\ninterval = 30"),
+            Some(std::time::Duration::from_secs(30 * 60))
+        );
+        assert_eq!(minutes("[fetch]\ninterval = 0"), None);
     }
 
     #[test]
