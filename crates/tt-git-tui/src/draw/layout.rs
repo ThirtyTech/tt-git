@@ -104,6 +104,7 @@ mod tests {
         let wide = View {
             details: true,
             wide: true,
+            ..View::default()
         };
         for layout in [Layout::default(), classic()] {
             let placed = areas(&layout, wide);

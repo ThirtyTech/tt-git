@@ -210,14 +210,18 @@ struct Back {
 }
 
 /// How much of the screen the graph and details panes take. `+` toggles
-/// between [`Zoom::Off`] and [`Zoom::Full`]; `space` in a fullscreen graph
-/// opens details below it in [`Zoom::Wide`].
+/// between [`Zoom::Off`] and [`Zoom::Full`] (or [`Zoom::Status`] from the
+/// status pane); `space` in a fullscreen graph opens details below it in
+/// [`Zoom::Wide`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Zoom {
     #[default]
     Off,
     /// Only graph and details (if it's open), at full width.
     Wide,
+    /// Status in a narrow full-height column, with graph and details (if
+    /// it's open) beside it.
+    Status,
     /// One pane fills the screen.
     Full(PaneId),
 }
@@ -242,6 +246,8 @@ pub struct App {
     zoom: Zoom,
     /// Details is open in place of the layout's `details = true` node.
     details_open: bool,
+    /// The zoom to go back to when the staging view closes.
+    zoom_before_staging: Zoom,
     status: StatusPane,
     branches: BranchesPane,
     graph: GraphPane,
@@ -403,6 +409,7 @@ impl App {
             focus: PaneId::Graph,
             zoom: Zoom::Off,
             details_open: false,
+            zoom_before_staging: Zoom::Off,
             branches: BranchesPane::new(clock.clone()),
             graph,
             details: DetailsPane::default(),
@@ -735,6 +742,7 @@ impl App {
         View {
             details: self.details_open,
             wide: self.zoom == Zoom::Wide,
+            status_column: self.zoom == Zoom::Status,
         }
     }
 
@@ -2461,6 +2469,9 @@ impl App {
         self.details.request_stage(entry.clone());
         self.want_details(DetailsLoad::Stage(entry), true);
         self.details_open = true;
+        if self.zoom != Zoom::Full(PaneId::Details) {
+            self.zoom_before_staging = self.zoom;
+        }
         self.zoom = Zoom::Full(PaneId::Details);
         self.focus = PaneId::Details;
     }
@@ -2508,7 +2519,11 @@ impl App {
         self.details.clear();
         self.details_open = false;
         if self.zoom == Zoom::Full(PaneId::Details) {
-            self.zoom = Zoom::Off;
+            // Back to the status column if staging was opened from it.
+            self.zoom = match std::mem::take(&mut self.zoom_before_staging) {
+                Zoom::Status => Zoom::Status,
+                _ => Zoom::Off,
+            };
         }
         self.focus = PaneId::Status;
         self.refresh_details(true);
@@ -2843,13 +2858,14 @@ impl App {
 
     fn step_zoom(&mut self) {
         self.zoom = match self.zoom {
+            Zoom::Off if self.focus == PaneId::Status => Zoom::Status,
             Zoom::Off => {
                 if self.focus != PaneId::Details {
                     self.focus = PaneId::Graph;
                 }
                 Zoom::Full(self.focus)
             }
-            Zoom::Wide | Zoom::Full(_) => Zoom::Off,
+            Zoom::Wide | Zoom::Status | Zoom::Full(_) => Zoom::Off,
         };
     }
 

@@ -160,7 +160,14 @@ pub struct View {
     pub details: bool,
     /// Only the graph and, if it's showing, details.
     pub wide: bool,
+    /// Status in a full-height column on the left, with the wide view
+    /// beside it.
+    pub status_column: bool,
 }
+
+/// How much of the width the status column takes when status is zoomed: a
+/// third of what the default layout gives it.
+pub const STATUS_COLUMN_SIZE: u16 = 17;
 
 /// The layout tree with hidden panes pruned and sizes turned into fill
 /// weights: each child of a split takes its weight's share of the space.
@@ -183,6 +190,21 @@ impl Layout {
     /// The panes on screen in `view`, and how they share it; `None` when
     /// none are.
     pub fn resolve(&self, view: View) -> Option<Placed> {
+        if view.status_column {
+            let wide = View {
+                wide: true,
+                status_column: false,
+                ..view
+            };
+            let status = (STATUS_COLUMN_SIZE, Placed::Pane(PaneId::Status));
+            let Some(rest) = resolve(&self.root, wide) else {
+                return Some(status.1);
+            };
+            return Some(Placed::Split(
+                Split::Columns,
+                vec![status, (100 - STATUS_COLUMN_SIZE, rest)],
+            ));
+        }
         resolve(&self.root, view)
     }
 
@@ -253,6 +275,35 @@ mod tests {
         assert!(!default.shows(PaneId::Branches, wide));
         assert!(default.shows(PaneId::Graph, wide));
         assert!(classic().shows(PaneId::Details, View::default()));
+    }
+
+    #[test]
+    fn status_column_puts_status_left_of_the_wide_view() {
+        let column = View {
+            status_column: true,
+            ..View::default()
+        };
+        let graph = (83, Placed::Pane(PaneId::Graph));
+        assert_eq!(
+            Layout::default().resolve(column),
+            Some(Placed::Split(
+                Split::Columns,
+                vec![(17, Placed::Pane(PaneId::Status)), graph]
+            ))
+        );
+        let open = View {
+            details: true,
+            ..column
+        };
+        let Some(Placed::Split(Split::Columns, children)) = Layout::default().resolve(open) else {
+            panic!("expected columns");
+        };
+        assert_eq!(children[0], (17, Placed::Pane(PaneId::Status)));
+        assert!(children[1].1.contains(PaneId::Graph) && children[1].1.contains(PaneId::Details));
+        assert!(!Layout::default().shows(PaneId::Branches, open));
+        // A layout with its own details pane shows it in the wide view.
+        assert!(!classic().shows(PaneId::Branches, column));
+        assert!(classic().shows(PaneId::Details, column));
     }
 
     fn parse_err(layout: &str) -> String {

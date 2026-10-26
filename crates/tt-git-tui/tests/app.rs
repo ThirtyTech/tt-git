@@ -492,6 +492,51 @@ fn space_in_a_fullscreen_graph_opens_details_below_it() {
 }
 
 #[test]
+fn zoom_from_status_puts_it_in_a_column_beside_the_graph() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "a\n", "first");
+    sb.write("new.txt", "hello\n");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 120, 24);
+    let normal_status = t.app().pane_area(PaneId::Status).unwrap();
+    t.press("2").press("+");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    assert_eq!(t.app().focus(), PaneId::Status);
+
+    // Full height on the left, a third of its usual width; graph beside it.
+    let status = t.app().pane_area(PaneId::Status).unwrap();
+    let graph = t.app().pane_area(PaneId::Graph).unwrap();
+    assert_eq!((status.x, status.y, status.height), (0, 0, 23));
+    assert_eq!(status.width, normal_status.width / 3);
+    assert_eq!((graph.x, graph.y, graph.height), (status.width, 0, 23));
+    assert_eq!(graph.x + graph.width, 120);
+    assert!(t.app().pane_area(PaneId::Branches).is_none());
+    insta::assert_snapshot!(t.screen());
+
+    // Details opens under the graph and keeps the column.
+    t.press("1").press("space");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    let details = t.app().pane_area(PaneId::Details).unwrap();
+    assert_eq!(details.x, status.width);
+    assert_eq!(t.app().pane_area(PaneId::Status).unwrap(), status);
+
+    t.press("+");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+}
+
+#[test]
+fn focusing_branches_leaves_the_status_column() {
+    let sb = Sandbox::new();
+    let mut t = TestDriver::new(&sb);
+    t.press("2").press("+");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    t.press("1");
+    assert_eq!(t.app().zoom(), Zoom::Status, "the graph is still on screen");
+    t.press("3");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+    assert_eq!(t.app().focus(), PaneId::Branches);
+}
+
+#[test]
 fn zoom_from_details_goes_straight_to_fullscreen() {
     let sb = Sandbox::new();
     let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
