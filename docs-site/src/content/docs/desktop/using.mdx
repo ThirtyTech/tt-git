@@ -261,6 +261,17 @@ The jump list belongs to tt-git's AppUserModelID, `ThirtyTech.tt-git`, so
 whichever copy started last (the installed one, the zip, or a build from
 source) writes it, and its entries start that copy.
 
+### Taskbar progress
+
+On Windows, while a repository's window pushes, pulls or fetches, its
+taskbar button fills with a moving progress bar, so you can see it's still
+going from another app. Pushing a tag, fast-forwarding a branch, deleting a
+branch or tag on a remote, pruning gone branches and updating tt-git show
+it too. git doesn't say how far along it is, so the bar has no value. If
+the job fails, the bar turns red for two seconds, then clears; the error
+is in the window. Local work such as staging, committing or checking out
+is over too quickly to show.
+
 ## Notifications
 
 The desktop app can tell you when new commits arrive while you're working
@@ -292,6 +303,21 @@ taskbar use, so installed toasts show tt-git's icon. A copy that wasn't
 installed (the zip, or a build from source) still shows them: the first one
 registers the ID under `HKCU\Software\Classes\AppUserModelId`, without an
 icon, so its toasts show a generic one. Uninstalling removes that key.
+
+### The taskbar badge
+
+With notifications on, Windows also puts a small dot over the window's
+taskbar button:
+
+| Dot | Means | Goes away |
+|---|---|---|
+| Red | Files have conflicts. | When none are left. |
+| Amber | A merge, rebase, cherry-pick or revert stopped part way and waits to be continued. | When it's continued or aborted. |
+| Blue | New commits came in while the window wasn't the one you're in. | When you switch to the window. |
+
+Only one shows at a time: red over amber over blue. A screen reader says
+what it means, such as *3 new commits*. The dot has a white ring, so it
+shows on a light taskbar and a dark one.
 
 ## Editing files
 
