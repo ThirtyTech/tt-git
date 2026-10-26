@@ -32,8 +32,19 @@ pub struct Entry {
     /// The urgent mark: Dash to Dock wiggles the icon, KDE highlights it.
     pub urgent: bool,
     /// The progress bar. git gives no percentage and the API has no
-    /// "indeterminate", so it's the bar's empty track.
+    /// "indeterminate", so it fills in [`PULSE_STEPS`] steps and starts
+    /// again for as long as the job runs. (An empty bar, at 0, is a dark
+    /// track Dash to Dock draws on a dark icon: it can't be seen.)
     pub busy: bool,
+}
+
+/// The steps the busy bar fills in, one every [`PULSE_STEP`].
+pub const PULSE_STEPS: u32 = 8;
+pub const PULSE_STEP: std::time::Duration = std::time::Duration::from_millis(200);
+
+/// The busy bar's value at `step`: 1/8, 2/8 … 8/8, then 1/8 again.
+pub fn pulse(step: u32) -> f64 {
+    f64::from(step % PULSE_STEPS + 1) / f64::from(PULSE_STEPS)
 }
 
 impl Entry {
@@ -103,13 +114,13 @@ fn show(cx: &mut App) {
 #[cfg(target_os = "linux")]
 mod dbus {
     use std::collections::HashMap;
-    use std::sync::mpsc;
+    use std::sync::mpsc::{self, RecvTimeoutError};
 
     use zbus::blocking::Connection;
     use zbus::names::BusName;
     use zbus::zvariant::Value;
 
-    use super::Entry;
+    use super::{Entry, PULSE_STEP, pulse};
 
     /// The launcher the entry is for, by its `.desktop` file.
     fn app_uri() -> String {
@@ -121,7 +132,8 @@ mod dbus {
     const PATH: &str = "/com/thirtytech/tt_git/LauncherEntry";
 
     /// A thread with a session bus connection, sending each entry it's
-    /// handed (only the latest, when several are waiting).
+    /// handed (only the latest, when several are waiting), and while one is
+    /// busy, the bar's next step every [`PULSE_STEP`].
     pub(super) fn spawn() -> mpsc::Sender<Entry> {
         let (tx, rx) = mpsc::channel::<Entry>();
         let started = std::thread::Builder::new()
@@ -135,11 +147,23 @@ mod dbus {
                     }
                 };
                 let uri = app_uri();
-                while let Ok(mut entry) = rx.recv() {
-                    while let Ok(later) = rx.try_recv() {
-                        entry = later;
+                let mut entry = Entry::default();
+                let mut step = 0;
+                loop {
+                    let next = if entry.busy {
+                        rx.recv_timeout(PULSE_STEP)
+                    } else {
+                        rx.recv().map_err(|_| RecvTimeoutError::Disconnected)
+                    };
+                    match next {
+                        Ok(new) => {
+                            entry = rx.try_iter().last().unwrap_or(new);
+                            step = 0;
+                        }
+                        Err(RecvTimeoutError::Timeout) => step += 1,
+                        Err(RecvTimeoutError::Disconnected) => return,
                     }
-                    if let Err(e) = update(&conn, &uri, entry) {
+                    if let Err(e) = update(&conn, &uri, entry, pulse(step)) {
                         tracing::warn!("couldn't update the launcher: {e}");
                     }
                 }
@@ -153,12 +177,12 @@ mod dbus {
     /// Sends `com.canonical.Unity.LauncherEntry.Update` with every property,
     /// so a dock that starts later still gets the whole entry with the next
     /// one.
-    fn update(conn: &Connection, uri: &str, entry: Entry) -> zbus::Result<()> {
+    fn update(conn: &Connection, uri: &str, entry: Entry, progress: f64) -> zbus::Result<()> {
         let props: HashMap<&str, Value> = HashMap::from([
             ("count", Value::from(i64::try_from(entry.count).unwrap_or(i64::MAX))),
             ("count-visible", Value::from(entry.count > 0)),
             ("urgent", Value::from(entry.urgent)),
-            ("progress", Value::from(0.0)),
+            ("progress", Value::from(progress)),
             ("progress-visible", Value::from(entry.busy)),
         ]);
         conn.emit_signal(
@@ -182,6 +206,15 @@ mod dbus {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_busy_bar_fills_and_starts_again() {
+        let steps: Vec<f64> = (0..10).map(pulse).collect();
+        assert_eq!(steps[0], 0.125, "never empty: the track alone can't be seen");
+        assert_eq!(steps[7], 1.0);
+        assert_eq!(steps[8], 0.125);
+        assert!(steps.windows(2).take(7).all(|w| w[0] < w[1]));
+    }
 
     #[test]
     fn the_windows_add_up() {
