@@ -8436,6 +8436,7 @@ dependencies = [
  "tt-git-testkit",
  "tt-git-win",
  "unicode-width",
+ "zbus",
 ]
 
 [[package]]

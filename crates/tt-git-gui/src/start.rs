@@ -51,7 +51,7 @@ pub fn open(error: Option<String>, cx: &mut App) -> gpui::Result<WindowHandle<Ro
         titlebar: Some(crate::menus::bar::titlebar_options("tt-git".into())),
         app_owns_titlebar_drag: true,
         icon: crate::menus::icon::window_icon(),
-        app_id: Some("tt-git".into()),
+        app_id: Some(crate::app_id::APP_ID.into()),
         ..Default::default()
     };
     let recent = window_state::state(cx)

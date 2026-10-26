@@ -113,7 +113,7 @@ Each download comes for `linux-x64` and `linux-arm64`. Pick the one that
 suits your system.
 
 **A package** for your distribution's package manager. It installs
-`tt-git-gui` and `tt-git` into `/usr/bin`, `tt-git.desktop` into
+`tt-git-gui` and `tt-git` into `/usr/bin`, `ThirtyTech.tt-git.desktop` into
 `/usr/share/applications` and the icons into `/usr/share/icons/hicolor`,
 and pulls in what the app needs, git included (see [below](#linux)).
 **tt-git** then shows up in your app launcher.
@@ -139,11 +139,12 @@ curl -fsSL https://github.com/ThirtyTech/tt-git/releases/latest/download/install
 
 It downloads the tarball (below) for your machine, checks it against the
 release's checksums, and copies `tt-git-gui` and `tt-git` into
-`~/.local/bin`, `tt-git.desktop` into `~/.local/share/applications` and
+`~/.local/bin`, `ThirtyTech.tt-git.desktop` into `~/.local/share/applications` and
 the icons into `~/.local/share/icons/hicolor`. The launcher entry runs
 `tt-git-gui` by its full path, so it works whether or not `~/.local/bin`
 is on your `PATH`. If a library the app links is missing, the script says
-which.
+which. Earlier releases named the launcher entry `tt-git.desktop`; the
+script removes that one when it installs the new one.
 
 | Variable | Default | Does |
 |---|---|---|
@@ -328,6 +329,23 @@ tt-git-gui ~/src/a ~/src/b  # two windows
 Any folder inside a repository works, and so do linked worktrees. The
 window's title is `<repo> - tt-git`.
 
+On Linux, the packages and the install script also make tt-git an app for
+folders. Right-click a folder in Nautilus, Dolphin, Thunar or another file
+manager and choose **Open With** > **tt-git** to open the repository it's
+in, or the start window if it isn't in one. Pick several folders and each
+opens in its own window. Right-click tt-git in the dock or the launcher for
+**Open repository…**, which starts it with the folder picker showing.
+
+Your file manager stays the app that opens folders on GNOME and KDE, which
+name it as the default. On a desktop that names none, folders can start
+opening in tt-git instead: `xdg-mime query default inode/directory` then
+says `ThirtyTech.tt-git.desktop`. Set the file manager back with
+`xdg-mime`, for example:
+
+```sh
+xdg-mime default org.gnome.Nautilus.desktop inode/directory
+```
+
 It takes the same options as [`tt-git`](/reference/cli/#tt-git), and
 several repositories at once:
 
@@ -337,6 +355,7 @@ several repositories at once:
 | `--config FILE` | Read settings from this file instead of the default `config.toml` |
 | `--no-plugins` | Start without plugins and without the plugin API socket |
 | `--filter-to-cwd`, `--no-filter-to-cwd` | Started in a subfolder, narrow the graph and Status to it, or don't |
+| `--open-repository` | Start with the folder picker showing, over the start window |
 | `--version`, `--help` | Print the version or help and exit |
 
 `tt-git-gui` has no subcommands. Use `tt-git` for `tt-git plugin list` and

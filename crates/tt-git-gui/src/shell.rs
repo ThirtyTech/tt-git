@@ -66,7 +66,8 @@ pub struct Shell {
     title: String,
     /// What `ui.font` was made from.
     font_key: FontKey,
-    /// The window's taskbar button (Windows): progress and the badge.
+    /// The window's taskbar button (Windows) or launcher (Linux): progress
+    /// and the badge.
     taskbar: crate::taskbar::Taskbar,
     _subscriptions: Vec<Subscription>,
 }
@@ -94,7 +95,7 @@ impl Shell {
                     crate::update::check(window.window_handle(), model.downgrade(), cx);
                 }
                 AppEvent::NewCommits(new) => {
-                    shell.taskbar.new_commits(window, new);
+                    shell.taskbar.new_commits(window, new, cx);
                     crate::notify::new_commits(new, model, window, cx);
                 }
                 AppEvent::OpenRepository => {
@@ -105,8 +106,8 @@ impl Shell {
                         }
                     });
                 }
-                AppEvent::JobProgress(progress) => shell.taskbar.progress(window, *progress),
-                AppEvent::RepoAlert(alert) => shell.taskbar.alert(window, *alert),
+                AppEvent::JobProgress(progress) => shell.taskbar.progress(window, *progress, cx),
+                AppEvent::RepoAlert(alert) => shell.taskbar.alert(window, *alert, cx),
             }),
             cx.observe_window_bounds(window, |shell, window, cx| {
                 crate::window_state::remember_window(window, cx);
@@ -115,7 +116,12 @@ impl Shell {
             // C1: the active window's menus are the app's.
             cx.observe_window_activation(window, |_, _, cx| cx.notify()),
             // Focused, the new commits on the taskbar's badge are seen.
-            cx.observe_window_activation(window, |shell, window, _| shell.taskbar.activated(window)),
+            cx.observe_window_activation(window, |shell, window, cx| shell.taskbar.activated(window, cx)),
+            // Closed, it's off the launcher.
+            {
+                let id = window.window_handle().window_id();
+                cx.on_release(move |_, cx| crate::launcher_entry::forget(id, cx))
+            },
             cx.observe_global::<crate::zoom::UiZoom>(|_, cx| cx.notify()),
             cx.observe_global::<crate::font::UiFont>(|_, cx| cx.notify()),
             cx.observe_global::<crate::look::UiLook>(|_, cx| cx.notify()),

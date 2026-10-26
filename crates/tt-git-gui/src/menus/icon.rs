@@ -5,7 +5,8 @@
 //! - Windows: the executable's icon resource (`build.rs`), which GPUI gives
 //!   every window.
 //! - Wayland: the compositor finds the icon from the window's app id
-//!   (`tt-git`) in an installed `tt-git.desktop`, which packaging provides.
+//!   (`ThirtyTech.tt-git`) in an installed `ThirtyTech.tt-git.desktop`, which
+//!   packaging provides.
 //! - macOS: the `.app` bundle's icon, which packaging provides.
 //!
 //! The title bar draws it too, at its left end ([`title_icon`]), and the

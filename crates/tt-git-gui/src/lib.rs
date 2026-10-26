@@ -26,6 +26,7 @@ pub mod gpui_tokio;
 pub mod help_bar;
 pub mod jump_list;
 pub mod keys;
+pub mod launcher_entry;
 pub mod layout;
 pub mod look;
 pub mod menus;
@@ -98,7 +99,7 @@ pub fn open_window(
         titlebar: Some(menus::bar::titlebar_options(title)),
         app_owns_titlebar_drag: true,
         icon: menus::icon::window_icon(),
-        app_id: Some("tt-git".into()),
+        app_id: Some(app_id::APP_ID.into()),
         ..Default::default()
     };
     let font = font::MonoFont::new(cx);
