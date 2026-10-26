@@ -1,3 +1,5 @@
 // The window and taskbar icon on Windows. GPUI loads icon resource 1.
 // The terminal app's build.rs embeds this too.
 1 ICON "icon.ico"
+
+#include "version.rc"
