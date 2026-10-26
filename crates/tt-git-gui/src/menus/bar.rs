@@ -13,7 +13,7 @@ use gpui::component::menu::{DropdownMenu as _, PopupMenu};
 use gpui::component::{ActiveTheme as _, Sizable as _, TitleBar, h_flex};
 use gpui::{
     App, Context, FocusHandle, InteractiveElement as _, IntoElement, ParentElement, SharedString, Styled,
-    TitlebarOptions, Window, div,
+    TitlebarOptions, Window, div, prelude::FluentBuilder as _,
 };
 use tt_git_app::view::StyleRole;
 
@@ -43,19 +43,33 @@ pub fn title_bar(ui: &Ui, specs: &[MenuSpec], title: &str, focus: &FocusHandle) 
             .gap_0p5()
             .children(specs.iter().enumerate().map(|(ix, menu)| menu_button(ix, menu, focus)))
     });
+    // Native: one surface with the window's ground, no line under it, and
+    // the title muted after a divider, in the UI font.
+    let native = ui.native();
+    let (bg, line) = if native {
+        (theme.surfaces.ground, gpui::transparent_black())
+    } else {
+        (theme.background, theme.fg(StyleRole::Border))
+    };
+    let title = div()
+        .text_color(theme.fg(if native { StyleRole::Muted } else { StyleRole::Title }))
+        .when(native, |d| {
+            d.ml_1()
+                .pl_3()
+                .border_l_1()
+                .border_color(theme.surfaces.hairline)
+                .font_family(crate::look::ui_font_family())
+        })
+        .child(SharedString::from(title.to_string()));
     TitleBar::new()
-        .bg(theme.background)
-        .border_color(theme.fg(StyleRole::Border))
+        .bg(bg)
+        .border_color(line)
         .child(
             h_flex()
                 .gap_2()
                 .children(super::icon::title_icon())
                 .children(menus)
-                .child(
-                    div()
-                        .text_color(theme.fg(StyleRole::Title))
-                        .child(SharedString::from(title.to_string())),
-                ),
+                .child(title),
         )
         // Keeps the title off the window controls.
         .child(div())

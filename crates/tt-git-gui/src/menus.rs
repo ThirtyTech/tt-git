@@ -109,7 +109,7 @@ const VIEW: &[&[Command]] = &[
 
 /// The app's settings and tools, in the app menu between About and Quit.
 /// "Check for Updates…" stands for [`Command::SelfUpdate`].
-const APP: &[Command] = &[Command::Theme, Command::Font, Command::PluginLogs];
+const APP: &[Command] = &[Command::Theme, Command::Font, Command::WindowStyle, Command::PluginLogs];
 
 /// The menus for `app` as it is now: the app menu, Repository, View, and a
 /// menu named after the focused pane listing its commands (the help
@@ -345,6 +345,17 @@ mod tests {
         assert!(item(&mut gui, "Graph", "Checkout  (o)").is_some());
         assert!(item(&mut gui, "View", "Status  (2)").is_some());
         assert!(item(&mut gui, "Repository", "Push  (P)").is_some());
+    }
+
+    #[gpui::test]
+    fn the_app_menu_switches_the_style(cx: &mut TestAppContext) {
+        let sb = sandbox();
+        let mut gui = Gui::open(cx, &sb);
+        let (disabled, action) = item(&mut gui, "tt-git", "Native/terminal style").expect("item");
+        assert!(!disabled);
+        gui.cx.update(|window, cx| window.dispatch_action(action, cx));
+        gui.wait_idle();
+        assert_eq!(gui.cx.read(crate::look::style), crate::look::UiStyle::Terminal);
     }
 
     #[gpui::test]

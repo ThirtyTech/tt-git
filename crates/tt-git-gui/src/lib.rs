@@ -8,7 +8,7 @@
 //! - [`frame::PaneFrame`], [`rows::StyledRows`], [`text::StyledLine`],
 //!   [`theme::GuiTheme`], [`font::MonoFont`] and [`ui::Ui`] are what they
 //!   draw with.
-//! - [`zoom`] is how big it all is.
+//! - [`zoom`] is how big it all is, and [`look`] which style it's drawn in.
 //!
 //! `docs/gui.md` says how to port an area.
 
@@ -25,6 +25,7 @@ pub mod gpui_tokio;
 pub mod help_bar;
 pub mod keys;
 pub mod layout;
+pub mod look;
 pub mod menus;
 pub mod model;
 pub mod overlay;

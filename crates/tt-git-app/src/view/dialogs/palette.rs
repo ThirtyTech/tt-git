@@ -75,6 +75,7 @@ impl Modal {
                         TextSpan::plain(" "),
                         TextSpan::new(hint, StyleRole::Muted),
                     ],
+                    hint: true,
                 }
             })
             .collect();

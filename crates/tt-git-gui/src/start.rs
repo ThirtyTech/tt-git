@@ -72,7 +72,7 @@ impl StartView {
     fn new(recent: Vec<Recent>, error: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let theme = GuiTheme::new(&Theme::default());
         let font = MonoFont::new(cx);
-        theme.apply_to_components(&font, cx);
+        theme.apply_to_components(&font, crate::look::style(cx), cx);
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
         let selected = recent.iter().position(|r| !r.missing).unwrap_or(0);

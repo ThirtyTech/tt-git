@@ -7,13 +7,18 @@
 //! What's typed reaches the modal through tt-git's keymap, as every key
 //! does; the cursor is the view model's block at the end of the input.
 
-use gpui::{AnyElement, Div, InteractiveElement, IntoElement, ParentElement, Styled, div, rems};
-use tt_git_app::view::TextSpan;
+use gpui::{
+    AnyElement, BoxShadow, Div, FontWeight, InteractiveElement, IntoElement, ParentElement, Styled, div, point,
+    prelude::FluentBuilder as _, px, rems,
+};
 use tt_git_app::view::dialogs::{DialogLook, DialogView, ListRow};
+use tt_git_app::view::{StyleRole, TextSpan};
 
 use super::DialogCx;
+use crate::help_bar::key_chip;
+use crate::look;
 use crate::overlay;
-use crate::rows::StyledRow;
+use crate::rows::{StyledRow, row_box};
 use crate::shell::MAIN;
 use crate::text::{StyledLine, selection};
 use crate::ui::Ui;
@@ -40,9 +45,11 @@ pub fn screen_cols(ui: &Ui) -> usize {
 
 /// A layer over the main area with `dialog` in its middle, taking the
 /// mouse from the panes behind it (the app ignores the mouse while a
-/// dialog is open, as in the terminal).
-pub fn layer(dialog: impl IntoElement) -> Div {
-    overlay::centered(dialog).occlude()
+/// dialog is open, as in the terminal). The native style dims the panes.
+pub fn layer(ui: &Ui, dialog: impl IntoElement) -> Div {
+    overlay::centered(dialog)
+        .occlude()
+        .when(ui.native(), |d| d.bg(ui.theme.surfaces.scrim))
 }
 
 /// A dialog's box, `width` columns across as the view model says (the
@@ -51,7 +58,9 @@ pub fn layer(dialog: impl IntoElement) -> Div {
 /// the body as children.
 pub fn dialog_box(ui: &Ui, id: &'static str, look: DialogLook, width: usize, title: impl IntoElement) -> Div {
     let (theme, font) = (&ui.theme, &ui.font);
-    div()
+    let native = ui.native();
+    let s = &theme.surfaces;
+    let dialog = div()
         .relative()
         .flex()
         .flex_col()
@@ -63,30 +72,69 @@ pub fn dialog_box(ui: &Ui, id: &'static str, look: DialogLook, width: usize, tit
         .max_h_full()
         .overflow_hidden()
         .px(font.cell_width)
-        .pb(font.line_height / 2.)
-        .rounded(rems(0.375))
         .border_1()
-        .border_color(theme.fg(look.border()))
-        .bg(theme.background)
-        .shadow_lg()
-        .child(ui.measure(id))
-        .child(
-            div()
-                .flex()
-                .flex_none()
-                .h(font.line_height)
-                .overflow_hidden()
-                .whitespace_nowrap()
-                .text_color(theme.fg(look.title()))
-                .child(title),
-        )
+        .child(ui.measure(id));
+    let dialog = if native {
+        // Raised over the dimmed panes, with a soft shadow; an error's
+        // border keeps its color.
+        let border = match look {
+            DialogLook::Normal => s.hairline_strong,
+            DialogLook::Error => theme.fg(look.border()).opacity(0.7),
+        };
+        dialog
+            .pt(rems(0.625))
+            .pb(rems(0.75))
+            .rounded(look::DIALOG_RADIUS)
+            .border_color(border)
+            .bg(s.raised)
+            .shadow(vec![
+                BoxShadow {
+                    color: s.shadow,
+                    offset: point(px(0.), px(16.)),
+                    blur_radius: px(40.),
+                    spread_radius: px(0.),
+                    inset: false,
+                },
+                BoxShadow {
+                    color: s.shadow.opacity(0.6),
+                    offset: point(px(0.), px(2.)),
+                    blur_radius: px(8.),
+                    spread_radius: px(0.),
+                    inset: false,
+                },
+            ])
+    } else {
+        dialog
+            .pb(font.line_height / 2.)
+            .rounded(rems(0.375))
+            .border_color(theme.fg(look.border()))
+            .bg(theme.background)
+            .shadow_lg()
+    };
+    dialog.child(
+        div()
+            .flex()
+            .flex_none()
+            .h(font.line_height)
+            .overflow_hidden()
+            .whitespace_nowrap()
+            .text_color(theme.fg(look.title()))
+            .when(native, |d| {
+                d.items_center()
+                    .font_family(look::ui_font_family())
+                    .font_weight(FontWeight::SEMIBOLD)
+            })
+            .child(title),
+    )
 }
 
-/// One line of view-model spans, wrapped to the dialog's width.
+/// One line of view-model spans, wrapped to the dialog's width; in the UI
+/// font in the native style.
 pub fn line(ui: &Ui, spans: &[TextSpan]) -> Div {
     div()
         .min_h(ui.font.line_height)
         .whitespace_normal()
+        .when(ui.native(), |d| d.font_family(look::ui_font_family()))
         .child(StyledLine::new(&ui.theme, spans, None).element())
 }
 
@@ -108,6 +156,9 @@ pub fn blank(ui: &Ui) -> Div {
 /// A list entry, the picked one in the selection's look across the whole
 /// row.
 pub fn list_row(ui: &Ui, row: &ListRow) -> Div {
+    if ui.native() {
+        return native_list_row(ui, row);
+    }
     let row = StyledRow::new(&ui.theme, &row.spans, selection(row.picked, true));
     let mut d = div()
         .h(ui.font.line_height)
@@ -121,24 +172,78 @@ pub fn list_row(ui: &Ui, row: &ListRow) -> Div {
     d.child(row.line.element())
 }
 
-/// The title as the view model's look has it.
+/// The native style's list entry: rounded when picked, the label in the
+/// UI font and its hint (a key, a plugin) on a chip at the right.
+fn native_list_row(ui: &Ui, row: &ListRow) -> Div {
+    let n = row.spans.len();
+    let (label, hint) = match row.hint {
+        true if n >= 2 => (&row.spans[..n - 2], row.spans[n - 1].text.trim()),
+        _ => (&row.spans[..], ""),
+    };
+    let styled = StyledRow::new(&ui.theme, label, selection(row.picked, true));
+    row_box(ui, &styled)
+        .flex_none()
+        .flex()
+        .items_center()
+        .gap(rems(0.75))
+        .whitespace_nowrap()
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .overflow_hidden()
+                .font_family(look::ui_font_family())
+                .child(styled.line.element()),
+        )
+        .when(!hint.is_empty(), |d| d.child(key_chip(ui, hint.to_string())))
+}
+
+/// The title as the view model's look has it. The native style draws an
+/// ordinary dialog's title in the text color (an error's stays red).
 pub fn title(ui: &Ui, text: &str, look: DialogLook) -> StyledLine {
-    StyledLine::new(&ui.theme, &[TextSpan::new(text, look.title())], None)
+    let role = match look {
+        DialogLook::Normal if ui.native() => StyleRole::Plain,
+        _ => look.title(),
+    };
+    StyledLine::new(&ui.theme, &[TextSpan::new(text, role)], None)
+}
+
+/// A dialog's keys (`y confirm · n/esc cancel`): muted text, or in the
+/// native style each key on a chip before its label.
+fn keys_line(ui: &Ui, hint: &str) -> Div {
+    if !ui.native() {
+        return line(ui, &[TextSpan::new(hint, StyleRole::Muted)]);
+    }
+    let muted = ui.theme.fg(StyleRole::Muted);
+    div()
+        .flex()
+        .flex_wrap()
+        .justify_end()
+        .gap_x(rems(1.))
+        .gap_y(rems(0.25))
+        .font_family(look::ui_font_family())
+        .children(hint.split(" · ").map(|item| {
+            let (key, label) = item.split_once(' ').unwrap_or(("", item));
+            div()
+                .flex()
+                .items_center()
+                .gap(rems(0.375))
+                .whitespace_nowrap()
+                .when(!key.is_empty(), |d| d.child(key_chip(ui, key.to_string())))
+                .child(div().text_color(muted).child(label.to_string()))
+        }))
 }
 
 /// A dialog of text: the title, the body wrapped to the width, then a
 /// blank line and the keys.
 pub fn text_dialog(ui: &Ui, id: &'static str, view: DialogView) -> AnyElement {
-    let muted = tt_git_app::view::StyleRole::Muted;
     let title = title(ui, &view.title, view.look).element();
     let mut dialog = dialog_box(ui, id, view.look, view.width, title)
         .child(div().flex().flex_col().children(view.body.iter().map(|l| line(ui, l))));
     if let Some(hint) = &view.hint {
-        dialog = dialog
-            .child(blank(ui))
-            .child(line(ui, &[TextSpan::new(hint.as_str(), muted)]));
+        dialog = dialog.child(blank(ui)).child(keys_line(ui, hint));
     }
-    layer(dialog).into_any_element()
+    layer(ui, dialog).into_any_element()
 }
 
 #[cfg(test)]

@@ -23,9 +23,6 @@ const FAMILIES: &[&str] = &["SF Mono", "Menlo"];
 #[cfg(not(any(target_os = "windows", target_os = "macos")))]
 const FAMILIES: &[&str] = &["Noto Sans Mono", "Liberation Mono", "DejaVu Sans Mono"];
 
-/// Line height over font size.
-const LINE_SPACING: f32 = 1.4;
-
 /// The font the app draws in: a family (`None` for the OS's usual one) and
 /// the size at 100% zoom, in pixels.
 #[derive(Debug, Clone, PartialEq)]
@@ -185,8 +182,9 @@ impl MonoFont {
         Self::measured(resolve(family, cx), px(size), cx)
     }
 
-    /// `family` at `size`, measured with the text system. A text system
-    /// that can't measure it (as in tests) gets the usual proportions.
+    /// `family` at `size`, measured with the text system, with the line
+    /// height the [style](crate::look) gives it. A text system that can't
+    /// measure it (as in tests) gets the usual proportions.
     pub fn measured(family: SharedString, size: Pixels, cx: &App) -> Self {
         let text = cx.text_system();
         let id = text.resolve_font(&font(family.clone()));
@@ -198,7 +196,7 @@ impl MonoFont {
         Self {
             family,
             size,
-            line_height: (size * LINE_SPACING).round(),
+            line_height: (size * crate::look::line_spacing(crate::look::style(cx))).round(),
             cell_width,
         }
     }

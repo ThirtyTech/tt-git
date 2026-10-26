@@ -1,14 +1,16 @@
 //! The help bar along the bottom: the focused pane's key hints and the
 //! global ones, and on the right the notice and any git operation running.
-//! It fits them to its width in columns as the TUI's does.
+//! It fits them to its width in columns as the TUI's does. The native style
+//! draws it as a status bar: each key on a chip, the labels in the UI font.
 
-use gpui::{AnyElement, InteractiveElement, IntoElement, ParentElement, Styled, div};
+use gpui::{AnyElement, Div, FontWeight, InteractiveElement, IntoElement, ParentElement, Styled, div, rems};
 use tt_git_app::App;
 use tt_git_app::app::StatusLook;
 use tt_git_app::view::{StyleRole, TextSpan};
 use tt_git_app::widgets::truncate;
 use unicode_width::UnicodeWidthStr;
 
+use crate::look;
 use crate::text::StyledLine;
 use crate::ui::Ui;
 
@@ -18,6 +20,9 @@ pub const ID: &str = "help-bar";
 pub fn render(app: &App, ui: &Ui) -> AnyElement {
     let width = ui.fit(ID).cols;
     let (keys, status) = spans(app, width);
+    if ui.native() {
+        return status_bar(ui, &keys, &status);
+    }
     div()
         .id(ID)
         .relative()
@@ -42,6 +47,84 @@ pub fn render(app: &App, ui: &Ui) -> AnyElement {
                 .child(StyledLine::new(&ui.theme, &status, None).element()),
         )
         .into_any_element()
+}
+
+/// The native help bar: the hints as key chips and labels, the status on
+/// the right.
+fn status_bar(ui: &Ui, keys: &[TextSpan], status: &[TextSpan]) -> AnyElement {
+    let theme = &ui.theme;
+    let mut items: Vec<Div> = Vec::new();
+    let mut key = None;
+    for span in keys {
+        match span.role {
+            StyleRole::HelpKey => key = Some(span.text.to_string()),
+            StyleRole::HelpText => {
+                let label = span.text.trim_start().to_string();
+                items.push(
+                    div()
+                        .flex_none()
+                        .flex()
+                        .items_center()
+                        .gap(rems(0.375))
+                        .children(key.take().map(|k| key_chip(ui, k)))
+                        .child(div().text_color(theme.fg(StyleRole::HelpText)).child(label)),
+                );
+            }
+            _ => {}
+        }
+    }
+    div()
+        .id(ID)
+        .relative()
+        .flex_none()
+        .h(look::STATUS_BAR_HEIGHT)
+        .w_full()
+        .flex()
+        .items_center()
+        .gap(rems(1.))
+        .overflow_hidden()
+        .whitespace_nowrap()
+        .px(look::HEADER_PAD)
+        .font_family(look::ui_font_family())
+        .child(ui.measure(ID))
+        .child(
+            div()
+                .flex_1()
+                .min_w_0()
+                .overflow_hidden()
+                .flex()
+                .items_center()
+                .gap(rems(1.))
+                .children(items),
+        )
+        .child(
+            div()
+                .flex_none()
+                .child(StyledLine::new(&ui.theme, status, None).element()),
+        )
+        .into_any_element()
+}
+
+/// A key on a chip, as the native style shows keys: in the status bar, in
+/// dialogs, on the palette's rows.
+pub fn key_chip(ui: &Ui, key: impl Into<gpui::SharedString>) -> Div {
+    let theme = &ui.theme;
+    let s = &theme.surfaces;
+    div()
+        .flex_none()
+        .flex()
+        .items_center()
+        .h(rems(1.125))
+        .px(rems(0.3125))
+        .rounded(look::CHIP_RADIUS)
+        .border_1()
+        .border_color(s.hairline)
+        .bg(s.tint)
+        .text_color(theme.fg(StyleRole::HelpKey))
+        .font_family(ui.font.family.clone())
+        .font_weight(FontWeight::MEDIUM)
+        .text_size(ui.font.size * 0.85)
+        .child(key.into())
 }
 
 /// The key hints and the status slot, fitted to `width` columns.

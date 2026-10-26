@@ -8,11 +8,12 @@
 
 use gpui::{AnyElement, IntoElement, ParentElement, Styled, div};
 use tt_git_app::mouse::{MouseTarget, PanePart};
-use tt_git_app::panes::PaneId;
-use tt_git_app::view::StyleRole;
+use tt_git_app::panes::{BranchTab, PaneId};
+use tt_git_app::view::branches::BranchesTitle;
+use tt_git_app::view::{StyleRole, TextSpan};
 
 use super::PaneCx;
-use crate::frame::{PaneFrame, body_id, title_cols};
+use crate::frame::{FrameTab, PaneFrame, body_id, title_cols};
 use crate::rows::{StyledRow, StyledRows};
 use crate::text::selection;
 
@@ -48,17 +49,25 @@ pub fn render(cx: &mut PaneCx) -> AnyElement {
         }
     };
 
-    let spans = title.spans.clone();
-    PaneFrame::new(ui, PaneId::Branches, focused)
-        .title_spans(spans)
-        // A click on a tab's name switches to it, as in the TUI.
-        .on_title_click(move |col| {
-            title.tab_at(col).map(|tab| MouseTarget::Pane {
-                pane: PaneId::Branches,
-                body_row: None,
-                part: Some(PanePart::Tab(tab)),
+    let frame = PaneFrame::new(ui, PaneId::Branches, focused);
+    let frame = if ui.native() {
+        // A tab strip, then the rest of the title (the base, the filter).
+        let (tabs, rest) = native_tabs(&title, pane.tab());
+        frame.tabs(tabs).title_spans(rest)
+    } else {
+        let spans = title.spans.clone();
+        frame
+            .title_spans(spans)
+            // A click on a tab's name switches to it, as in the TUI.
+            .on_title_click(move |col| {
+                title.tab_at(col).map(|tab| MouseTarget::Pane {
+                    pane: PaneId::Branches,
+                    body_row: None,
+                    part: Some(PanePart::Tab(tab)),
+                })
             })
-        })
+    };
+    frame
         .bottom(
             footer.conflicts.into_iter().collect(),
             footer.total.into_iter().collect(),
@@ -67,10 +76,46 @@ pub fn render(cx: &mut PaneCx) -> AnyElement {
         .into_any_element()
 }
 
+/// The title's tabs for the native tab strip, each its name and count
+/// apart, and the spans after them.
+fn native_tabs(title: &BranchesTitle, shown: BranchTab) -> (Vec<FrameTab>, Vec<TextSpan<'static>>) {
+    let text: String = title.spans.iter().map(|s| s.text.as_ref()).collect();
+    let tabs = title
+        .tabs
+        .iter()
+        .map(|(tab, cols)| {
+            let name: String = text.chars().skip(cols.start).take(cols.len()).collect();
+            let (label, count) = match name.rsplit_once(' ') {
+                Some((label, count)) if count.chars().all(|c| c.is_ascii_digit()) => {
+                    (label.to_string(), Some(count.to_string()))
+                }
+                _ => (name, None),
+            };
+            FrameTab {
+                label,
+                count,
+                active: *tab == shown,
+                target: MouseTarget::Pane {
+                    pane: PaneId::Branches,
+                    body_row: None,
+                    part: Some(PanePart::Tab(*tab)),
+                },
+            }
+        })
+        .collect::<Vec<_>>();
+    // Each tab is a span, with a separator between two.
+    let rest = title
+        .spans
+        .iter()
+        .skip((2 * tabs.len()).saturating_sub(1))
+        .cloned()
+        .collect();
+    (tabs, rest)
+}
+
 #[cfg(test)]
 mod tests {
     use gpui::{Modifiers, Pixels, Point, TestAppContext, point, px};
-    use tt_git_app::panes::BranchTab;
     use tt_git_testkit::Sandbox;
 
     use super::*;
@@ -132,6 +177,8 @@ mod tests {
 
     #[gpui::test]
     fn a_click_on_a_tab_switches_to_it(cx: &mut TestAppContext) {
+        // The tabs in the title's text, by column.
+        cx.update(|cx| crate::look::set(crate::look::UiStyle::Terminal, cx));
         let sb = Sandbox::new();
         branches(&sb, 1);
         sb.git(&["tag", "v1"]);
@@ -160,6 +207,43 @@ mod tests {
         gui.cx.simulate_click(pos, Modifiers::none());
         gui.wait_idle();
         assert_eq!(gui.read(|app| app.branches().tab()), BranchTab::Tags);
+    }
+
+    #[gpui::test]
+    fn the_native_tab_strip_switches_tabs(cx: &mut TestAppContext) {
+        let sb = Sandbox::new();
+        branches(&sb, 2);
+        sb.git(&["tag", "v1"]);
+        let mut gui = Gui::open(cx, &sb);
+        let tab = gui.cx.debug_bounds("tab Tags").expect("the tags tab drawn");
+        let header = ui(&gui).measures.get(&title_id(PaneId::Branches)).expect("drawn");
+        assert!(header.contains(&tab.center()), "in the header: {tab:?} {header:?}");
+        gui.cx.simulate_click(tab.center(), Modifiers::none());
+        gui.wait_idle();
+        assert_eq!(gui.read(|app| app.branches().tab()), BranchTab::Tags);
+        assert_eq!(gui.read(|app| app.focus()), PaneId::Branches);
+        let text = texts(&mut gui);
+        assert!(text[0].contains("v1"), "{text:#?}");
+    }
+
+    #[test]
+    fn native_tabs_split_names_from_counts() {
+        let title = BranchesTitle {
+            spans: vec![
+                TextSpan::new("Branches 3", StyleRole::Underlined),
+                TextSpan::new(" · ", StyleRole::Muted),
+                TextSpan::new("Tags", StyleRole::Muted),
+                TextSpan::new(" (main)", StyleRole::Muted),
+            ],
+            tabs: vec![(BranchTab::All, 0..10), (BranchTab::Tags, 13..17)],
+        };
+        let (tabs, rest) = native_tabs(&title, BranchTab::All);
+        let got: Vec<_> = tabs
+            .iter()
+            .map(|t| (t.label.as_str(), t.count.as_deref(), t.active))
+            .collect();
+        assert_eq!(got, [("Branches", Some("3"), true), ("Tags", None, false)]);
+        assert_eq!(rest, [TextSpan::new(" (main)", StyleRole::Muted)]);
     }
 
     #[gpui::test]

@@ -48,6 +48,9 @@ pub struct ListRow<'a> {
     /// It's the highlighted one, which enter picks.
     pub picked: bool,
     pub spans: Vec<TextSpan<'a>>,
+    /// The last span is a hint (a key, a plugin, a count) after a one-space
+    /// span, which a front end may draw apart from the label, on the right.
+    pub hint: bool,
 }
 
 /// How a dialog's border and title look.

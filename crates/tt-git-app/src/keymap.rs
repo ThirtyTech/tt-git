@@ -391,6 +391,9 @@ pub enum Command {
     /// Picks the font the app draws in. Only the desktop app offers it
     /// (see `App::enable_ui_fonts`).
     Font,
+    /// Switches the desktop app between its native and terminal styles.
+    /// Only the desktop app offers it (see `App::enable_ui_style`).
+    WindowStyle,
 }
 
 impl Command {
@@ -499,6 +502,7 @@ impl Command {
             Command::ZoomOut => "zoom out",
             Command::ResetZoom => "reset zoom",
             Command::Font => "font",
+            Command::WindowStyle => "native/terminal style",
         }
     }
 }

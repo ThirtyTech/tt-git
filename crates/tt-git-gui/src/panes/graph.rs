@@ -51,11 +51,21 @@ pub fn render(cx: &mut PaneCx) -> AnyElement {
     let rows = view
         .rows
         .iter()
-        .map(|row| StyledRow::new(&ui.theme, &text_spans(row), selection(row.picked, focused)))
+        .map(|row| {
+            let (spans, pick) = (text_spans(row), selection(row.picked, focused));
+            // Native: the refs as pills.
+            if ui.native() {
+                StyledRow::with_pills(&ui.theme, &spans, pick)
+            } else {
+                StyledRow::new(&ui.theme, &spans, pick)
+            }
+        })
         .collect();
     let lanes = (view.lanes > 0).then(|| {
         let rows: Vec<LaneRow> = view.rows.iter().map(|r| r.lanes.clone()).collect();
-        lanes_canvas(ui.theme.clone(), ui.font.cell(), view.lanes, rows)
+        let canvas = lanes_canvas(ui.theme.clone(), ui.font.cell(), view.lanes, rows);
+        // Over the list's text, which a native row insets.
+        canvas.when(ui.native(), |c| c.left(crate::look::ROW_INSET))
     });
     graph.note_drawn(now, range);
     frame
@@ -82,7 +92,12 @@ fn text_spans<'a>(row: &'a GraphRow<'a>) -> Vec<TextSpan<'a>> {
 
 /// The lanes of `rows` (top to bottom, one line each) in `lanes` columns,
 /// painted over the list's left edge.
-fn lanes_canvas(theme: Rc<GuiTheme>, cell: Size<Pixels>, lanes: usize, rows: Vec<LaneRow>) -> impl IntoElement {
+fn lanes_canvas(
+    theme: Rc<GuiTheme>,
+    cell: Size<Pixels>,
+    lanes: usize,
+    rows: Vec<LaneRow>,
+) -> impl IntoElement + Styled + FluentBuilder {
     canvas(
         |_, _, _| {},
         move |bounds, (), window, _| {

@@ -47,7 +47,7 @@ pub fn render(ui: &Ui) -> AnyElement {
         .child(blank(ui))
         .child(div().text_color(muted).child(ABOUT_HINT));
     let model = ui.model.clone();
-    layer(dialog)
+    layer(ui, dialog)
         .on_mouse_down(MouseButton::Left, move |_, _, cx| {
             cx.stop_propagation();
             if let Some(model) = model.upgrade() {
