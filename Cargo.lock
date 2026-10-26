@@ -8434,8 +8434,8 @@ dependencies = [
  "tt-git-core",
  "tt-git-plugin",
  "tt-git-testkit",
+ "tt-git-win",
  "unicode-width",
- "windows 0.62.2",
 ]
 
 [[package]]
@@ -8486,6 +8486,13 @@ dependencies = [
  "tt-git-plugin",
  "tt-git-testkit",
  "unicode-width",
+]
+
+[[package]]
+name = "tt-git-win"
+version = "0.9.0"
+dependencies = [
+ "windows 0.62.2",
 ]
 
 [[package]]

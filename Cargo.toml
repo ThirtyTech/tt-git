@@ -15,6 +15,7 @@ tt-git-core = { path = "crates/tt-git-core" }
 tt-git-graph = { path = "crates/tt-git-graph" }
 tt-git-plugin = { path = "crates/tt-git-plugin" }
 tt-git-tui = { path = "crates/tt-git-tui" }
+tt-git-win = { path = "crates/tt-git-win" }
 tt-git-testkit = { path = "crates/tt-git-testkit" }
 
 # Only for local time: the UTC offset in effect at a commit's date.

@@ -1,0 +1,37 @@
+[package]
+name = "tt-git-win"
+description = "The Win32 and COM calls behind tt-git-gui's Windows integration"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish = false
+
+# The version GPUI already uses, so it isn't built twice.
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Data_Xml_Dom",
+    "Foundation",
+    "UI_Notifications",
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_System_Com",
+    "Win32_System_Com_StructuredStorage",
+    "Win32_System_Variant",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_UI_Shell_PropertiesSystem",
+    "Win32_UI_WindowsAndMessaging",
+] }
+
+# The workspace forbids unsafe code. This crate is the one place that allows
+# it, because every Win32 and COM call is unsafe: the rest of tt-git stays at
+# forbid and calls the safe functions here. Each unsafe block says why it's
+# sound in a `// SAFETY:` comment.
+[lints.rust]
+unsafe_code = "allow"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "warn"
