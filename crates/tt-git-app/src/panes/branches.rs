@@ -10,8 +10,8 @@ use super::{BranchFocus, DrawnDates};
 use crate::action::Action;
 use crate::component::{Component, EventState};
 use crate::jobs::Ctx;
-use crate::keymap::{Command, Context, KeyCode, KeyCombo};
-use crate::modal::{GitOp, Modal, PaletteItem, PaletteTarget, PromptAction};
+use crate::keymap::{Command, Context, KeyCode, KeyCombo, KeyModifiers};
+use crate::modal::{GitOp, Modal, PaletteItem, PaletteTarget, PromptAction, delete_word};
 use crate::mouse::PanePart;
 use crate::widgets::Cursor;
 
@@ -1327,6 +1327,10 @@ impl Component for BranchesPane {
                 self.filter.pop();
                 self.refilter();
             }
+            KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                delete_word(&mut self.filter);
+                self.refilter();
+            }
             KeyCode::Up | KeyCode::Down => {
                 let cmd = if key.code == KeyCode::Up {
                     Command::MoveUp
@@ -1337,7 +1341,7 @@ impl Component for BranchesPane {
                 self.cursor_mut().apply(cmd, len);
                 self.announce(ctx);
             }
-            KeyCode::Char(c) => {
+            KeyCode::Char(c) if !key.modifiers.intersects(KeyModifiers::CONTROL | KeyModifiers::ALT) => {
                 self.filter.push(c);
                 self.cursor_mut().selected = 0;
                 self.refilter();

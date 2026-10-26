@@ -470,7 +470,7 @@ mod tests {
     use super::*;
     use crate::component::Component;
     use crate::jobs::Ctx;
-    use crate::keymap::Command;
+    use crate::keymap::{Command, KeyCode, KeyCombo, KeyModifiers};
     use crate::mouse::PanePart;
 
     const NOW: i64 = 100 * 86_400;
@@ -631,6 +631,23 @@ mod tests {
         assert!(text(&pane.title(200).spans).ends_with(" /fe█"));
         pane.editing_filter = false;
         assert!(text(&pane.title(200).spans).ends_with(" /fe"));
+    }
+
+    #[test]
+    fn ctrl_w_in_the_filter_deletes_the_word_before_it() {
+        let mut pane = pane();
+        let ctx = ctx();
+        pane.on_command(Command::Filter, &ctx);
+        for c in "main fea".chars() {
+            pane.on_text_key(KeyCombo::char(c), &ctx);
+        }
+        let ctrl_w = KeyCombo::new(KeyCode::Char('w'), KeyModifiers::CONTROL);
+        pane.on_text_key(ctrl_w, &ctx);
+        assert_eq!(pane.filter(), "main ");
+        pane.on_text_key(ctrl_w, &ctx);
+        assert_eq!(pane.filter(), "");
+        assert_eq!(rows(&mut pane, 10, 40).range, 0..3, "the full list again");
+        assert!(pane.editing_filter, "still typing");
     }
 
     #[test]

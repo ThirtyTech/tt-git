@@ -308,6 +308,13 @@ pub fn worktree_rel_path(name: &str) -> String {
     format!("{}/{name}", tt_git_core::repo::WORKTREE_DIR)
 }
 
+/// Ctrl+w in a text input: deletes the word before the cursor, as in a
+/// shell: spaces, then everything up to the space before it.
+pub fn delete_word(input: &mut String) {
+    let kept = input.trim_end().trim_end_matches(|c: char| !c.is_whitespace()).len();
+    input.truncate(kept);
+}
+
 /// What a submitted prompt turns into.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PromptAction {
@@ -827,11 +834,8 @@ impl Modal {
                     }
                     ModalOutcome::Open
                 }
-                // The word before the cursor, as in a shell: spaces, then
-                // everything up to the space before it.
                 KeyCode::Char('w') if key.modifiers.contains(KeyModifiers::CONTROL) => {
-                    let kept = input.trim_end().trim_end_matches(|c: char| !c.is_whitespace()).len();
-                    input.truncate(kept);
+                    delete_word(input);
                     ModalOutcome::Open
                 }
                 KeyCode::Tab | KeyCode::BackTab => {
