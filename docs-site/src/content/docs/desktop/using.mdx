@@ -261,6 +261,20 @@ The jump list belongs to tt-git's AppUserModelID, `ThirtyTech.tt-git`, so
 whichever copy started last (the installed one, the zip, or a build from
 source) writes it, and its entries start that copy.
 
+### Dock menu
+
+On macOS, right-click tt-git in the Dock (or hold the click) for its menu:
+
+- **Recent repositories**: the ones you opened last, newest first, up to
+  ten, named as in the [jump list](#jump-list). Click one to open it in a new
+  window, or to bring its window forward if it's open already. Folders that
+  no longer exist are left out. If one can't be opened (it's no longer a
+  repository, say), the start window opens and says why.
+- **Open Repository…**: the folder picker, as in the Repository menu.
+
+The menu is updated whenever you open a repository. macOS adds its own
+items under it (Options, Show All Windows, Hide, Quit).
+
 ### Taskbar progress
 
 On Windows, while a repository's window pushes, pulls or fetches, its
@@ -304,6 +318,18 @@ installed (the zip, or a build from source) still shows them: the first one
 registers the ID under `HKCU\Software\Classes\AppUserModelId`, without an
 icon, so its toasts show a generic one. Uninstalling removes that key.
 
+On macOS notifications come from tt-git.app, the app the
+[`.dmg`](/desktop/install/) installs, and land in Notification Center under
+its bundle ID, `net.thirtytech.tt-git`. The first time you open a
+repository window with `notifications = true`, macOS asks whether tt-git may
+send notifications; after that it remembers your answer, and **System
+Settings > Notifications > tt-git** changes it. A build run straight from
+the command line (`cargo run -p tt-git-gui`) isn't an app bundle, so it
+shows none and doesn't ask. macOS can also refuse a build that's only
+signed ad hoc (an unsigned release, or one you package yourself) without
+asking; the log, `tt-git-gui.log`, then says *Notifications are not
+allowed for this application*.
+
 ### The taskbar badge
 
 With notifications on, Windows also puts a small dot over the window's
@@ -318,6 +344,20 @@ taskbar button:
 Only one shows at a time: red over amber over blue. A screen reader says
 what it means, such as *3 new commits*. The dot has a white ring, so it
 shows on a light taskbar and a dark one.
+
+### The Dock badge
+
+On macOS, with notifications on, the badge is on tt-git's Dock icon
+instead. All windows share the icon, so it sums them up:
+
+| Badge | Means | Goes away |
+|---|---|---|
+| **!** | A repository has files with conflicts, or a merge, rebase, cherry-pick or revert stopped part way. | When no window has either. |
+| A number | That many new commits came in while their windows weren't the one you're in, added up over the windows. | Each window's count when you switch to it, or close it. |
+
+**!** comes before a number. The Dock's badge has one color, so conflicts
+and a stopped merge look the same; the window's title bar and status say
+which. The Dock shows no progress for a push, pull or fetch.
 
 ## Editing files
 

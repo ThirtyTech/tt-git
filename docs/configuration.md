@@ -54,7 +54,7 @@ zoom = 100                      # how big everything is drawn, in percent (50–
 font_size = 13                  # the font size at 100% zoom, in pixels (6–72). Global config file only
 style = "native"                # "native": panes as cards, headers and dialogs in the OS's UI font; "terminal": as the TUI draws. Native/terminal style in the palette or the tt-git menu saves it here. Global config file only
 check_for_updates = true        # look for a new release once a day and say so in the help bar. Global config file only
-notifications = false           # a system notification (a toast on Windows) when a fetch brings new commits and the window isn't focused; on Windows also a taskbar badge for them, conflicts, or a stopped merge or rebase
+notifications = false           # a system notification (a toast on Windows) when a fetch brings new commits and the window isn't focused; on Windows also a taskbar badge for them, conflicts, or a stopped merge or rebase; on macOS a Dock badge
 ```
 
 ## Themes
