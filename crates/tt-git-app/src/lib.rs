@@ -19,6 +19,7 @@ pub mod mouse;
 pub mod new_commits;
 pub mod panes;
 pub mod pty_pane;
+pub mod quick_look;
 pub mod search;
 pub mod style;
 pub mod syntax;

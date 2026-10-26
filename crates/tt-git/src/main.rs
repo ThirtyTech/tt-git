@@ -92,6 +92,9 @@ fn main() -> Result<()> {
                 extra_env: Vec::new(),
             });
         }
+        // Quick Look previews in a window of its own (`qlmanage`).
+        #[cfg(target_os = "macos")]
+        app.enable_quick_look();
         Ok((app, rx, mouse))
     };
     // Made before the terminal is taken over, so a bad config is reported
@@ -146,6 +149,7 @@ fn main() -> Result<()> {
         let _ = crossterm::execute!(std::io::stdout(), crossterm::event::DisableMouseCapture);
     }
     ratatui::restore();
+    tt_git_tui::quick_look::clean_up();
     result.wrap_err("running the UI")
 }
 

@@ -65,6 +65,8 @@ impl AppModel {
         app.enable_ui_zoom();
         app.enable_ui_fonts();
         app.enable_ui_style();
+        #[cfg(target_os = "macos")]
+        app.enable_quick_look();
         // The install scripts behind `tt-git update` only know the TUI's
         // archives: the app updates itself (crate::update).
         app.delegate_self_update();
@@ -204,6 +206,11 @@ impl AppModel {
             if let Some(result) = finished {
                 self.app.update(Action::EditorFinished(result));
             }
+        }
+        if let Some(file) = self.app.take_quick_look()
+            && let Err(e) = crate::quick_look::preview(&file)
+        {
+            self.app.update(Action::Notify(e));
         }
         if let Some(progress) = self.app.take_job_progress() {
             cx.emit(AppEvent::JobProgress(progress));

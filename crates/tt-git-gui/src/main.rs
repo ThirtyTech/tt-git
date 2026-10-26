@@ -160,6 +160,7 @@ fn main() -> Result<()> {
         tt_git_gui::look::set(style, cx);
         tt_git_gui::window_state::install(tt_git_gui::window_state::default_path(), cx);
         tt_git_gui::jump_list::install(cx);
+        tt_git_gui::quick_look::install(cx);
         tt_git_gui::set_launcher(Rc::new(new_app), cx);
         tt_git_gui::windows::quit_when_last_closes(cx);
         start_updates(check_for_updates, cx);
