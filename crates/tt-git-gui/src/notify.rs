@@ -8,6 +8,12 @@
 //! window forward. Pull, offered when the commits are on what the
 //! checked-out branch tracks, runs the pull command in it as `p` does.
 //! GPUI hands the response to [`init`]'s handler on the main thread.
+//!
+//! On macOS they go through `UNUserNotificationCenter`, which only works in
+//! an app bundle: GPUI leaves them off when the process has no bundle
+//! identifier (`cargo run`). macOS asks the user once whether tt-git may
+//! notify; [`ask_permission`] does that when a window opens with the
+//! setting on, rather than with the first notification.
 
 use std::path::{Path, PathBuf};
 
@@ -34,6 +40,53 @@ const TAG_PREFIX: &str = "new-commits:";
 /// [`crate::init`].
 pub fn init(cx: &mut App) {
     cx.on_system_notification_response(respond);
+}
+
+/// Asks the OS for leave to notify, once per process: call when a window
+/// opens with `[ui] notifications` on. On macOS the user is asked the first
+/// time only; the answer is kept under the bundle's identifier and later
+/// asks get it back without a prompt. Elsewhere there's nothing to ask.
+pub fn ask_permission(cx: &mut App) {
+    if cx.has_global::<Asked>() {
+        return;
+    }
+    cx.set_global(Asked);
+    #[cfg(target_os = "macos")]
+    macos::ask_permission();
+}
+
+/// [`ask_permission`] has asked.
+struct Asked;
+
+impl gpui::Global for Asked {}
+
+#[cfg(target_os = "macos")]
+mod macos {
+    use block2::RcBlock;
+    use objc2::runtime::Bool;
+    use objc2_foundation::{NSBundle, NSError};
+    use objc2_user_notifications::{UNAuthorizationOptions, UNUserNotificationCenter};
+
+    pub fn ask_permission() {
+        // As GPUI does: the notification center aborts the process outside
+        // an app bundle.
+        if NSBundle::mainBundle().bundleIdentifier().is_none() {
+            tracing::info!("not running from tt-git.app, so no notifications");
+            return;
+        }
+        // GPUI logs why, when it's an error.
+        let done = RcBlock::new(|granted: Bool, _: *mut NSError| {
+            if granted.as_bool() {
+                tracing::info!("macOS allows notifications");
+            } else {
+                tracing::info!("macOS doesn't allow notifications (System Settings > Notifications > tt-git)");
+            }
+        });
+        UNUserNotificationCenter::currentNotificationCenter().requestAuthorizationWithOptions_completionHandler(
+            UNAuthorizationOptions::Alert | UNAuthorizationOptions::Sound,
+            &done,
+        );
+    }
 }
 
 /// Shows `new` for `model`'s repository, unless its `window` is focused.
@@ -180,6 +233,20 @@ mod tests {
             });
         gui.wait_idle();
         assert_eq!(sb.rev_parse("main"), sb.rev_parse("origin/main"));
+    }
+
+    #[gpui::test]
+    fn a_window_with_notifications_on_asks_leave_to_notify(cx: &mut TestAppContext) {
+        let (mut gui, _sb) = behind_origin(cx, 0);
+        assert!(gui.cx.update(|_, cx| cx.has_global::<Asked>()));
+    }
+
+    #[gpui::test]
+    fn with_notifications_off_nothing_is_asked(cx: &mut TestAppContext) {
+        let sb = Sandbox::new();
+        sb.commit_file("a.txt", "1", "base");
+        let mut gui = Gui::with_config(cx, &sb, Config::default());
+        assert!(!gui.cx.update(|_, cx| cx.has_global::<Asked>()));
     }
 
     #[test]

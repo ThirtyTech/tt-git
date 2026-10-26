@@ -123,6 +123,9 @@ impl Shell {
         let font_key = FontKey::now(&model, cx);
         let style = font_key.style;
         ask_before_closing(&model, window, cx);
+        if model.read(cx).app().config().ui.notifications {
+            crate::notify::ask_permission(cx);
+        }
         // Where it opened counts too, if it's never moved.
         crate::window_state::remember_window(window, cx);
         Self {
