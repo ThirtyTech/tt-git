@@ -45,12 +45,16 @@ cd apps/web && tt-git --filter-to-cwd   # just this project's commits and files
 
 ```sh
 tt-git-gui [PATH]... [--config FILE] [--no-plugins] [--filter-to-cwd | --no-filter-to-cwd]
+tt-git-gui --open-repository
 ```
 
 Opens the [desktop app](/desktop/) on a repository. It takes the same
 arguments as `tt-git`, plus more than one `PATH` (each opens in a window of
 its own), and has no subcommands. Outside a repository, it opens
 the [start window](/desktop/install/#the-start-window) instead of exiting.
+`--open-repository` opens the start window with the folder picker already
+showing, as the [jump list](/desktop/using/#jump-list)'s *Open repository…*
+does; it doesn't take a `PATH`.
 It logs to `<state>/logs/tt-git-gui.log`. It updates itself from its
 **Check for Updates…** menu item: see [Updating](/desktop/install/#updating).
 `tt-git update` updates only the terminal app.
