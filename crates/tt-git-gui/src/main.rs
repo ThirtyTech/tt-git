@@ -46,6 +46,11 @@ struct Cli {
     #[arg(long, hide = true)]
     start_window: bool,
 
+    /// Show the folder picker and open the repositories picked (the jump
+    /// list's Open repository… task).
+    #[arg(long, conflicts_with = "paths")]
+    open_repository: bool,
+
     /// Run as the update's waiter on this instances folder: wait for every
     /// instance to quit, then start them again.
     #[arg(long, hide = true, value_name = "DIR")]
@@ -89,7 +94,8 @@ fn main() -> Result<()> {
     // Outside a repository, the start window asks which to open (saying
     // why, when the folder was named on the command line).
     let mut not_a_repo = None;
-    let repo = if args.start_window {
+    let open_repository = args.open_repository;
+    let repo = if args.start_window || open_repository {
         None
     } else {
         let repo_path = match first_path {
@@ -153,12 +159,17 @@ fn main() -> Result<()> {
         tt_git_gui::font::set(font, cx);
         tt_git_gui::look::set(style, cx);
         tt_git_gui::window_state::install(tt_git_gui::window_state::default_path(), cx);
+        tt_git_gui::jump_list::install(cx);
         tt_git_gui::set_launcher(Rc::new(new_app), cx);
         tt_git_gui::windows::quit_when_last_closes(cx);
         start_updates(check_for_updates, cx);
         let opened = match first {
             Some((app, rx)) => tt_git_gui::open_window(app, rx, cx).map(|_| ()),
-            None => tt_git_gui::start::open(not_a_repo, cx).map(|_| ()),
+            None => tt_git_gui::start::open(not_a_repo, cx).map(|start| {
+                if open_repository {
+                    tt_git_gui::start::pick(start, cx);
+                }
+            }),
         };
         if let Err(e) = opened {
             eprintln!("tt-git-gui: couldn't open a window: {e}");

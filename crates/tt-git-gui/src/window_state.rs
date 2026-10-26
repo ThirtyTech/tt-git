@@ -287,6 +287,7 @@ pub fn remember_repo(root: &Path, cx: &mut App) {
         state.add_recent(root);
         true
     });
+    crate::jump_list::refresh(cx);
 }
 
 /// Drops `root` from the recent repositories.
@@ -296,6 +297,7 @@ pub fn forget_repo(root: &Path, cx: &mut App) {
         state.remove_recent(root);
         state.recent.len() != before
     });
+    crate::jump_list::refresh(cx);
 }
 
 /// Changes the state with `f` (which says whether it changed anything)

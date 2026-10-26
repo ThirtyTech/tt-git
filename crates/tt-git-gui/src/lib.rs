@@ -24,6 +24,7 @@ pub mod font;
 pub mod frame;
 pub mod gpui_tokio;
 pub mod help_bar;
+pub mod jump_list;
 pub mod keys;
 pub mod layout;
 pub mod look;

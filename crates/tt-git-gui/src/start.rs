@@ -68,6 +68,16 @@ pub fn open(error: Option<String>, cx: &mut App) -> gpui::Result<WindowHandle<Ro
     })
 }
 
+/// Shows the folder picker over the start window `start`, as its Open
+/// folder… button does (`tt-git-gui --open-repository`).
+pub fn pick(start: WindowHandle<Root>, cx: &mut App) {
+    let _ = start.update(cx, |root, window, cx| {
+        if let Ok(view) = root.view().clone().downcast::<StartView>() {
+            view.update(cx, |view, cx| view.browse(window, cx));
+        }
+    });
+}
+
 impl StartView {
     fn new(recent: Vec<Recent>, error: Option<String>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let theme = GuiTheme::new(&Theme::default());
