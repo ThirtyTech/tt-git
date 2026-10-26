@@ -1484,7 +1484,7 @@ impl App {
         }
         let repo = self.repo.clone();
         let scope = self.graph.scope;
-        let filter = self.graph.filter.clone();
+        let filter = self.graph.log_filter();
         self.ctx
             .spawn_streaming(move |ctx| loaders::load_graph(repo, scope, None, filter, load, limit, None, ctx));
     }
@@ -1500,7 +1500,7 @@ impl App {
         let limit = self.graph_limit;
         let repo = self.repo.clone();
         let scope = self.graph.scope;
-        let filter = self.graph.filter.clone();
+        let filter = self.graph.log_filter();
         let from = Some(loaders::Continue { skip, tips });
         self.ctx
             .spawn_streaming(move |ctx| loaders::load_graph(repo, scope, None, filter, load, limit, from, ctx));
@@ -1512,7 +1512,7 @@ impl App {
         }
         let repo = self.repo.clone();
         let scope = self.graph.scope;
-        let filter = self.graph.filter.clone();
+        let filter = self.graph.log_filter();
         let ctx = self.ctx.clone();
         let HistoryLoad { load, focus, limit } = history.clone();
         let done = self

@@ -488,6 +488,7 @@ fn filters_commits_by_author_and_path() {
         path: None,
         message: None,
         search_in: SearchIn::Subject,
+        no_merges: false,
     };
     let commits = repo.filtered_commits(&LogScope::All, &by_alice, 100).unwrap();
     let mut got = oids(&commits);
@@ -507,6 +508,7 @@ fn filters_commits_by_author_and_path() {
         path: Some("src".into()),
         message: None,
         search_in: SearchIn::Subject,
+        no_merges: false,
     };
     let commits = repo.filtered_commits(&LogScope::All, &in_src, 100).unwrap();
     assert_eq!(oids(&commits), vec![a2.clone(), a1.clone()]);
@@ -517,6 +519,7 @@ fn filters_commits_by_author_and_path() {
         path: Some("c.txt".into()),
         message: None,
         search_in: SearchIn::Subject,
+        no_merges: false,
     };
     assert_eq!(
         oids(&repo.filtered_commits(&LogScope::All, &both, 100).unwrap()),
@@ -529,6 +532,7 @@ fn filters_commits_by_author_and_path() {
         path: None,
         message: None,
         search_in: SearchIn::Subject,
+        no_merges: false,
     };
     assert!(repo.filtered_commits(&LogScope::All, &nobody, 100).unwrap().is_empty());
 
@@ -568,6 +572,7 @@ feat in the body doesn't count",
             path: None,
             message: Some(message.into()),
             search_in: SearchIn::Subject,
+            no_merges: false,
         };
         let mut got: Vec<String> = repo
             .filtered_commits(&LogScope::All, &filter, limit)
@@ -676,6 +681,45 @@ Co-authored-by: Ann <ann@example.com>",
 }
 
 #[test]
+fn leaves_out_merges_joining_their_children_to_the_first_parent() {
+    let sb = Sandbox::new();
+    let c1 = sb.commit_file("a.txt", "1\n", "c1");
+    sb.checkout_new("side");
+    let s1 = sb.commit_file("s.txt", "1\n", "s1");
+    sb.checkout("main");
+    sb.checkout_new("other");
+    let o1 = sb.commit_file("o.txt", "1\n", "o1");
+    sb.checkout("main");
+    let c2 = sb.commit_file("a.txt", "2\n", "c2");
+    // Two merges in a row: c3's parent passes through both.
+    sb.merge("side");
+    sb.merge("other");
+    let c3 = sb.commit_file("a.txt", "3\n", "c3");
+    let repo = open(&sb);
+    let no_merges = LogFilter {
+        no_merges: true,
+        ..LogFilter::default()
+    };
+    assert!(!no_merges.is_empty());
+
+    let commits = repo.filtered_commits(&LogScope::All, &no_merges, 100).unwrap();
+    let mut got: Vec<String> = commits.iter().map(|c| c.oid.to_string()).collect();
+    got.sort();
+    let mut want = vec![c1.clone(), s1.clone(), o1, c2.clone(), c3.clone()];
+    want.sort();
+    assert_eq!(got, want, "no merges listed");
+    let parents = |oid: &str| {
+        let commit = commits.iter().find(|c| c.oid == oid).unwrap();
+        commit.parents.iter().map(|p| p.to_string()).collect::<Vec<_>>()
+    };
+    assert_eq!(parents(&c3), vec![c2]);
+    assert_eq!(parents(&s1), vec![c1], "a side branch keeps its own parent");
+
+    // The limit counts the commits kept, not the merges passed over.
+    assert_eq!(repo.filtered_commits(&LogScope::All, &no_merges, 2).unwrap().len(), 2);
+}
+
+#[test]
 fn message_prefixes_ranks_subject_prefixes_by_use() {
     let summaries = [
         "docs(graph): Describe it",
@@ -755,6 +799,7 @@ fn author_filter_includes_every_mailmapped_account() {
         path: None,
         message: None,
         search_in: SearchIn::Subject,
+        no_merges: false,
     };
     let mut got: Vec<String> = repo
         .filtered_commits(&LogScope::All, &filter, 100)

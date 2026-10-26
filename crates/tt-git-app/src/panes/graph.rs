@@ -148,6 +148,9 @@ pub struct GraphPane {
     pub dates: DateStyle,
     /// Draws the branch lanes left of each commit.
     pub lanes: bool,
+    /// Lists merge commits; hiding them joins each line through a merge to
+    /// its first parent (see [`LogFilter::no_merges`]).
+    pub merges: bool,
     /// Commit limit of the current load; reaching it means more may exist.
     pub limit: usize,
     clock: SharedClock,
@@ -191,6 +194,7 @@ impl GraphPane {
             max_lanes: 16,
             dates: DateStyle::Relative,
             lanes: true,
+            merges: true,
             limit: usize::MAX,
             clock,
             commits: Vec::new(),
@@ -284,6 +288,7 @@ impl GraphPane {
             || self.stale
             || self.focus.is_some()
             || !self.filter.is_empty()
+            || !self.merges
             || self.commits.len() != self.limit
             || self.rows.len() != self.commits.len()
         {
@@ -417,8 +422,7 @@ impl GraphPane {
         }
         // A filtered load lists every match at once, and its parents may name
         // commits it left out; lanes to those would never end.
-        let listed: Option<HashSet<Oid>> = self
-            .is_filtered()
+        let listed: Option<HashSet<Oid>> = (self.is_filtered() || self.hides_merges())
             .then(|| self.commits.iter().chain(&commits).map(|c| c.oid).collect());
         let mut parents: Vec<NodeId> = Vec::new();
         for commit in commits {
@@ -664,6 +668,20 @@ impl GraphPane {
         self.focus.is_none() && !self.filter.is_empty()
     }
 
+    /// Whether merge commits are left out (a focused branch shows them all).
+    pub fn hides_merges(&self) -> bool {
+        self.focus.is_none() && !self.merges
+    }
+
+    /// What a load of the graph narrows it to: [`filter`](Self::filter),
+    /// and whether to leave out merges.
+    pub fn log_filter(&self) -> LogFilter {
+        LogFilter {
+            no_merges: !self.merges,
+            ..self.filter.clone()
+        }
+    }
+
     /// The pane's title: what it shows, the selection, and loading.
     pub fn title(&self) -> String {
         let mut t = format!("Graph [{}", self.scope_label());
@@ -678,6 +696,9 @@ impl GraphPane {
             if let Some(message) = &self.filter.message {
                 t.push_str(&format!(" · {} /{message}", self.filter.search_in.label()));
             }
+        }
+        if self.hides_merges() {
+            t.push_str(" · no merges");
         }
         t.push(']');
         if !self.commits.is_empty() {
@@ -766,6 +787,11 @@ impl Component for GraphPane {
             }
             Command::ToggleLanes => {
                 self.lanes = !self.lanes;
+                EventState::Consumed
+            }
+            Command::ToggleMerges => {
+                self.merges = !self.merges;
+                ctx.emit(Action::ReloadGraph);
                 EventState::Consumed
             }
             Command::Checkout => {
@@ -869,6 +895,7 @@ impl Component for GraphPane {
             Command::ToggleScope,
             Command::ToggleDates,
             Command::ToggleLanes,
+            Command::ToggleMerges,
             Command::Checkout,
             Command::NewBranch,
             Command::NewTag,

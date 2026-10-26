@@ -39,11 +39,14 @@ pub struct LogFilter {
     pub message: Option<String>,
     /// What `message` is matched against.
     pub search_in: SearchIn,
+    /// Leaves out merge commits. A listed commit whose parent was one gets
+    /// the merge's first parent instead.
+    pub no_merges: bool,
 }
 
 impl LogFilter {
     pub fn is_empty(&self) -> bool {
-        self.author.is_none() && self.path.is_none() && self.message.is_none()
+        self.author.is_none() && self.path.is_none() && self.message.is_none() && !self.no_merges
     }
 }
 
@@ -787,9 +790,9 @@ impl Repo {
                 .expect("has a format");
             format.push_str(parse::MESSAGE_FIELD);
         }
-        if message.is_some() {
-            // The message is matched here, so git lists everything and the
-            // limit counts only the commits that match.
+        if message.is_some() || filter.no_merges {
+            // The message is matched, or merges left out, here, so git lists
+            // everything and the limit counts only the commits kept.
             args.retain(|a| !a.starts_with("--max-count="));
         }
         if let Some(pattern) = diff {
@@ -818,7 +821,13 @@ impl Repo {
         args.push("--".into());
         args.extend(filter.path.clone());
         let mut commits = Vec::new();
+        // Each merge left out, and the first parent it stands for.
+        let mut merges: HashMap<Oid, Oid> = HashMap::new();
         self.stream_log(&args, |mut c| {
+            if filter.no_merges && c.is_merge() {
+                merges.insert(c.oid, c.parents[0]);
+                return true;
+            }
             let matched = match &message {
                 None => true,
                 Some(re) if whole => {
@@ -834,6 +843,18 @@ impl Repo {
             }
             commits.len() < limit
         })?;
+        if !merges.is_empty() {
+            // Children come before their parents, so this waits for the
+            // merges: a parent that was one becomes its first parent, through
+            // any run of merges, keeping the line through it joined.
+            for commit in &mut commits {
+                for parent in commit.parents.iter_mut() {
+                    while let Some(first) = merges.get(parent) {
+                        *parent = *first;
+                    }
+                }
+            }
+        }
         Ok(commits)
     }
 
