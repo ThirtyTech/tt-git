@@ -97,6 +97,7 @@ impl FilterPanel {
                             TextSpan::plain(" "),
                             TextSpan::new(choice.hint.as_str(), StyleRole::Muted),
                         ],
+                        hint: true,
                     });
                 }
                 None

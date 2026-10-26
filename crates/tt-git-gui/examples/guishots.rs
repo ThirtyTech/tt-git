@@ -24,6 +24,7 @@ use tt_git_app::themes::ThemeOptions;
 use tt_git_app::{App, Config};
 use tt_git_core::time::FixedClock;
 use tt_git_core::{GitCli, Repo};
+use tt_git_gui::look::UiStyle;
 use tt_git_gui::model::AppModel;
 use tt_git_gui::shell::Shell;
 use tt_git_gui::window_state::{GuiState, SavedWindow, WindowMode};
@@ -70,6 +71,8 @@ struct Shot {
     config: fn() -> Config,
     keys: &'static [&'static str],
     mouse: Mouse,
+    /// The window style it's drawn in.
+    style: UiStyle,
 }
 
 enum Mouse {
@@ -111,6 +114,11 @@ fn shoot(out: PathBuf) {
             },
             keys: &["j", "space"],
             mouse: Mouse::None,
+            style: UiStyle::Native,
+        },
+        Shot {
+            style: UiStyle::Terminal,
+            ..Shot::keys("terminal", &[])
         },
         Shot {
             mouse: Mouse::Menu(3),
@@ -180,6 +188,7 @@ impl Shot {
             config: Config::default,
             keys,
             mouse: Mouse::None,
+            style: UiStyle::Native,
         }
     }
 }
@@ -199,8 +208,12 @@ async fn take(
     let repo = Repo::discover(sb.path(), &git).expect("sandbox repo");
     let (mut app, rx) = App::new(config, repo, Arc::new(FixedClock(NOW))).expect("app starts");
     app.enable_themes(ThemeOptions::default());
+    let style = shot.style;
     let window = cx
-        .update(|cx| tt_git_gui::open_window(app, rx, cx))
+        .update(|cx| {
+            tt_git_gui::look::set(style, cx);
+            tt_git_gui::open_window(app, rx, cx)
+        })
         .expect("window opens");
     if let Some(last) = last {
         close(last, cx);

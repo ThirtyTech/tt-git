@@ -78,7 +78,12 @@ fn files_view(ui: &Ui, pane: &mut DetailsPane, focused: bool, layout: FilesLayou
         .collect();
     let rule = layout.header_rows > 0;
     let diff = diff::render(ui, pane, layout.diff_top(), Some(PanePart::Diff));
-    let border = theme.fg(StyleRole::Border);
+    // Native: the rules are hairlines, as the cards' edges are.
+    let border = if ui.native() {
+        theme.surfaces.hairline_strong
+    } else {
+        theme.fg(StyleRole::Border)
+    };
     let text = div()
         .flex()
         .flex_col()
@@ -241,6 +246,9 @@ mod tests {
 
     #[gpui::test]
     fn the_files_go_along_the_bottom_in_the_split(cx: &mut TestAppContext) {
+        // The test window is small: the terminal style's shorter rows leave
+        // a third of the body for all three files.
+        cx.update(|cx| crate::look::set(crate::look::UiStyle::Terminal, cx));
         let sb = sandbox();
         let mut gui = Gui::open(cx, &sb);
         gui.press("space");

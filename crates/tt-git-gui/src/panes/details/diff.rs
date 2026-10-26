@@ -69,6 +69,7 @@ pub fn text_row(theme: &GuiTheme, row: &TextRow) -> StyledRow {
             highlights,
         },
         background: theme.style(look).background_color,
+        ..StyledRow::default()
     }
 }
 

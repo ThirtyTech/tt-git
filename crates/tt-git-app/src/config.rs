@@ -113,6 +113,9 @@ pub struct UiConfig {
     pub font: Option<String>,
     /// The font size at 100% zoom, in pixels.
     pub font_size: f32,
+    /// How the window is drawn: as a desktop app (cards, the OS's UI font
+    /// around the panes) or as the terminal app is.
+    pub style: UiStyle,
     /// Look for a new tt-git release in the background, once a day, and
     /// say in the help bar when there is one.
     pub check_for_updates: bool,
@@ -124,6 +127,7 @@ impl Default for UiConfig {
             zoom: DEFAULT_ZOOM,
             font: None,
             font_size: DEFAULT_FONT_SIZE,
+            style: UiStyle::default(),
             check_for_updates: true,
         }
     }
@@ -147,6 +151,37 @@ impl UiConfig {
             self.font_size.clamp(*FONT_SIZES.start(), *FONT_SIZES.end())
         } else {
             DEFAULT_FONT_SIZE
+        }
+    }
+}
+
+/// How the desktop app draws its window (`[ui] style`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum UiStyle {
+    /// Panes as rounded cards with headers, a status bar of key chips and
+    /// dialogs with shadows, in the OS's UI font around the panes.
+    #[default]
+    Native,
+    /// Bordered boxes, a help bar and dialogs in one monospace font, as
+    /// the terminal app draws them.
+    Terminal,
+}
+
+impl UiStyle {
+    /// The other style.
+    pub fn toggled(self) -> Self {
+        match self {
+            UiStyle::Native => UiStyle::Terminal,
+            UiStyle::Terminal => UiStyle::Native,
+        }
+    }
+
+    /// Its name in config.toml.
+    pub fn name(self) -> &'static str {
+        match self {
+            UiStyle::Native => "native",
+            UiStyle::Terminal => "terminal",
         }
     }
 }
@@ -693,6 +728,15 @@ zoom = 900
         let ui = Config::parse("[ui]\nfont = \"  \"\nfont_size = 2\n").unwrap().ui;
         assert_eq!((ui.font(), ui.font_size()), (None, 6.));
         assert_eq!(Config::parse("[ui]\nfont_size = 500\n").unwrap().ui.font_size(), 72.);
+    }
+
+    #[test]
+    fn ui_style_defaults_to_native() {
+        assert_eq!(Config::default().ui.style, UiStyle::Native);
+        let ui = Config::parse("[ui]\nstyle = \"terminal\"\n").unwrap().ui;
+        assert_eq!(ui.style, UiStyle::Terminal);
+        assert_eq!(ui.style.toggled().name(), "native");
+        assert!(Config::parse("[ui]\nstyle = \"fancy\"\n").is_err());
     }
 
     #[test]

@@ -9,7 +9,10 @@
 //! cell size, so it sizes a new pane's PTY from the pixel areas the shell
 //! reports.
 
-use gpui::{AnyElement, InteractiveElement, IntoElement, ParentElement, SharedString, Styled, div, rems};
+use gpui::{
+    AnyElement, InteractiveElement, IntoElement, ParentElement, SharedString, Styled, div, prelude::FluentBuilder as _,
+    rems,
+};
 use tt_git_app::App;
 use tt_git_app::panes::PaneId;
 use tt_git_app::pty_pane::PtyPane;
@@ -128,8 +131,19 @@ fn floating_box(ui: &Ui, pane: &mut PtyPane, focused: bool, hint: &str) -> gpui:
         .flex_col()
         .overflow_hidden()
         .border_1()
-        .rounded(rems(0.25))
-        .border_color(theme.fg(border))
+        .map(|d| {
+            // Native: a rounded card, its border the focus or a hairline.
+            if ui.native() {
+                let s = &theme.surfaces;
+                d.rounded(crate::look::CARD_RADIUS).border_color(if focused {
+                    s.focus_border
+                } else {
+                    s.hairline_strong
+                })
+            } else {
+                d.rounded(rems(0.25)).border_color(theme.fg(border))
+            }
+        })
         .bg(theme.background)
         .shadow_lg()
         .child(

@@ -55,6 +55,7 @@ impl AppModel {
         app.enable_open_repository();
         app.enable_ui_zoom();
         app.enable_ui_fonts();
+        app.enable_ui_style();
         // The install scripts behind `tt-git update` only know the TUI's
         // archives: the app updates itself (crate::update).
         app.delegate_self_update();
@@ -161,6 +162,11 @@ impl AppModel {
             // Every window redraws at the new zoom (`Shell` watches it).
             let percent = crate::zoom::step(step, cx);
             self.app.ui_zoomed(percent);
+        }
+        if self.app.take_ui_style() {
+            // Every window redraws in it (`Shell` watches it).
+            let style = crate::look::toggle(cx);
+            self.app.ui_styled(style);
         }
         if self.app.take_font_picker() {
             let current = crate::font::ui_font(cx).family;

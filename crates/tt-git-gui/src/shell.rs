@@ -38,6 +38,8 @@ const ZOOM_WHEEL: &str = "zoom-wheel";
 #[derive(Debug, Clone, PartialEq)]
 struct FontKey {
     zoom: u16,
+    /// The style sets the line height.
+    style: crate::look::UiStyle,
     font: crate::font::UiFont,
     /// The family the font picker has highlighted while it's open
     /// (`Some(None)` for the default).
@@ -48,6 +50,7 @@ impl FontKey {
     fn now(model: &Entity<AppModel>, cx: &App) -> Self {
         Self {
             zoom: crate::zoom::percent(cx),
+            style: crate::look::style(cx),
             font: crate::font::ui_font(cx),
             preview: model.read(cx).app().font_preview().map(|f| f.map(str::to_string)),
         }
@@ -69,7 +72,7 @@ pub struct Shell {
 impl Shell {
     pub fn new(model: Entity<AppModel>, font: MonoFont, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let theme = GuiTheme::new(model.read(cx).app().theme());
-        theme.apply_to_components(&font, cx);
+        theme.apply_to_components(&font, crate::look::style(cx), cx);
         let focus = cx.focus_handle();
         window.focus(&focus, cx);
         let subscriptions = vec![
@@ -105,8 +108,10 @@ impl Shell {
             cx.observe_window_activation(window, |_, _, cx| cx.notify()),
             cx.observe_global::<crate::zoom::UiZoom>(|_, cx| cx.notify()),
             cx.observe_global::<crate::font::UiFont>(|_, cx| cx.notify()),
+            cx.observe_global::<crate::look::UiLook>(|_, cx| cx.notify()),
         ];
         let font_key = FontKey::now(&model, cx);
+        let style = font_key.style;
         ask_before_closing(&model, window, cx);
         // Where it opened counts too, if it's never moved.
         crate::window_state::remember_window(window, cx);
@@ -114,6 +119,7 @@ impl Shell {
             ui: Ui {
                 theme: Rc::new(theme),
                 font: Rc::new(font),
+                style,
                 measures: Measures::default(),
                 model: model.downgrade(),
             },
@@ -164,9 +170,9 @@ impl Shell {
         crate::update::check(window.window_handle(), self.model.downgrade(), cx);
     }
 
-    /// Picks up a new [zoom](crate::zoom), [font](crate::font::UiFont) or
-    /// font the picker is previewing: the font to match, and
-    /// gpui-component's theme with it.
+    /// Picks up a new [zoom](crate::zoom), [style](crate::look),
+    /// [font](crate::font::UiFont) or font the picker is previewing: the
+    /// font to match, and gpui-component's theme with it.
     fn sync_font(&mut self, cx: &mut Context<Self>) {
         let key = FontKey::now(&self.model, cx);
         if key != self.font_key {
@@ -174,8 +180,9 @@ impl Shell {
                 Some(family) => MonoFont::with_family(family.as_deref(), cx),
                 None => MonoFont::new(cx),
             };
-            self.ui.theme.apply_to_components(&font, cx);
+            self.ui.theme.apply_to_components(&font, key.style, cx);
             self.ui.font = Rc::new(font);
+            self.ui.style = key.style;
             self.font_key = key;
         }
     }
@@ -186,7 +193,7 @@ impl Shell {
         let app_theme = self.model.read(cx).app().theme();
         if app_theme != self.ui.theme.app_theme() {
             let theme = GuiTheme::new(app_theme);
-            theme.apply_to_components(&self.ui.font, cx);
+            theme.apply_to_components(&self.ui.font, self.ui.style, cx);
             self.ui.theme = Rc::new(theme);
         }
     }
@@ -249,6 +256,13 @@ impl Render for Shell {
             self.title = title;
         }
 
+        // Native: room around each pane, which makes the gutters between
+        // them, and as much again along the window's edges.
+        let pad = if ui.native() {
+            crate::look::half(crate::look::GUTTER).to_pixels(window.rem_size())
+        } else {
+            gpui::px(0.)
+        };
         let (main, help, overlays, shown, menu_specs) = self.model.update(cx, |model, _| {
             let app = model.app_mut();
             let menu_specs = menus::build(app);
@@ -257,20 +271,22 @@ impl Render for Shell {
             let placed = layout::placed(app);
             let shown = placed.as_ref().map(layout::panes).unwrap_or_default();
             let main = match (&placed, ui.measures.get(MAIN)) {
-                (Some(placed), Some(bounds)) => Some(layout::render(placed, bounds.size, &mut |pane| {
-                    let mut cx = PaneCx {
-                        app: &mut *app,
-                        ui: &ui,
-                        pane,
-                        focused: focus == pane,
-                    };
-                    if pane == PaneId::Details
-                        && let Some(split) = terminal::split(&mut cx)
-                    {
-                        return split;
-                    }
-                    panes::render(&mut cx)
-                })),
+                (Some(placed), Some(bounds)) => {
+                    Some(layout::render(placed, inset(bounds.size, pad), pad, &mut |pane| {
+                        let mut cx = PaneCx {
+                            app: &mut *app,
+                            ui: &ui,
+                            pane,
+                            focused: focus == pane,
+                        };
+                        if pane == PaneId::Details
+                            && let Some(split) = terminal::split(&mut cx)
+                        {
+                            return split;
+                        }
+                        panes::render(&mut cx)
+                    }))
+                }
                 // Measured first, so the panes start at the right size.
                 _ => None,
             };
@@ -312,7 +328,11 @@ impl Render for Shell {
             .size_full()
             .flex()
             .flex_col()
-            .bg(theme.background)
+            .bg(if ui.native() {
+                theme.surfaces.ground
+            } else {
+                theme.background
+            })
             .text_color(theme.foreground)
             .font_family(ui.font.family.clone())
             .text_size(ui.font.size)
@@ -326,7 +346,7 @@ impl Render for Shell {
                     .min_h_0()
                     .w_full()
                     .child(ui.measure(MAIN))
-                    .children(main)
+                    .children(main.map(|main| div().size_full().p(pad).child(main)))
                     .children(overlays),
             )
             .child(help)
@@ -335,6 +355,14 @@ impl Render for Shell {
             .child(report)
             .child(ctrl_wheel_zooms(&self.model, &ui))
     }
+}
+
+/// `size` less `pad` on every side.
+fn inset(size: gpui::Size<Pixels>, pad: Pixels) -> gpui::Size<Pixels> {
+    gpui::size(
+        (size.width - pad * 2.).max(gpui::px(0.)),
+        (size.height - pad * 2.).max(gpui::px(0.)),
+    )
 }
 
 /// ctrl+wheel zooms, as in a browser, wherever the pointer is: it's taken
@@ -514,8 +542,9 @@ mod tests {
         // The default layout: graph over status and branches, side by side,
         // in pixels inside the area above the help bar.
         assert!(main.width > 1000 && main.height > 500, "{main:?}");
+        // Native: less the gutters, 8 px at 100% either side.
         assert!(
-            graph.width >= main.width - 2 && graph.height > status.height,
+            graph.width >= main.width - 18 && graph.height > status.height,
             "{graph:?}"
         );
         assert!(

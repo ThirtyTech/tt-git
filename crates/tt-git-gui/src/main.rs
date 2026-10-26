@@ -69,6 +69,7 @@ fn main() -> Result<()> {
     // One zoom and font for every window, from the global file alone.
     let ui = global.config()?.ui;
     let zoom = ui.zoom();
+    let style = ui.style;
     let font = tt_git_gui::font::UiFont {
         family: ui.font().map(|f| f.to_string().into()),
         size: ui.font_size(),
@@ -149,6 +150,7 @@ fn main() -> Result<()> {
         tt_git_gui::init(cx);
         tt_git_gui::zoom::set(zoom, cx);
         tt_git_gui::font::set(font, cx);
+        tt_git_gui::look::set(style, cx);
         tt_git_gui::window_state::install(tt_git_gui::window_state::default_path(), cx);
         tt_git_gui::set_launcher(Rc::new(new_app), cx);
         tt_git_gui::windows::quit_when_last_closes(cx);

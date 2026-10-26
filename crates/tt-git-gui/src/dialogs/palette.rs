@@ -1,12 +1,12 @@
 //! The command palette and the pickers (`Modal::Palette`): what's typed,
 //! and the entries that match it, the highlighted one picked out.
 
-use gpui::{AnyElement, IntoElement, ParentElement, Styled, div};
+use gpui::{AnyElement, BoxShadow, IntoElement, ParentElement, Styled, div, point, px, rems};
 use tt_git_app::view::dialogs::DialogLook;
 use tt_git_app::view::{StyleRole, TextSpan};
 
 use super::DialogCx;
-use super::prompt::{blank, dialog_box, layer, list_row, screen_cols, single_line, title};
+use super::prompt::{blank, dialog_box, list_row, screen_cols, single_line, title};
 
 /// The id the palette is measured as.
 pub const ID: &str = "dialog:palette";
@@ -22,11 +22,36 @@ pub fn render(cx: &mut DialogCx) -> AnyElement {
         list = list.child(single_line(ui, &[TextSpan::new(empty, StyleRole::Muted)]));
     }
     list = list.children(view.rows.iter().map(|row| list_row(ui, row)));
+    let input = single_line(ui, &view.input);
+    // Native: what's typed in a field, in the focus colors.
+    let input = if ui.native() {
+        let s = &ui.theme.surfaces;
+        div()
+            .flex_none()
+            .flex()
+            .items_center()
+            .h(ui.font.line_height * 1.5)
+            .px(rems(0.5))
+            .rounded(rems(0.5))
+            .border_1()
+            .border_color(s.focus_border)
+            .bg(s.card)
+            .shadow(vec![BoxShadow {
+                color: s.ring,
+                offset: point(px(0.), px(0.)),
+                blur_radius: px(0.),
+                spread_radius: px(3.),
+                inset: false,
+            }])
+            .child(input)
+    } else {
+        input
+    };
     let dialog = dialog_box(ui, ID, look, view.width, title(ui, view.title, look).element())
-        .child(single_line(ui, &view.input))
+        .child(input)
         .child(blank(ui))
         .child(list);
-    layer(dialog).into_any_element()
+    super::prompt::layer(ui, dialog).into_any_element()
 }
 
 #[cfg(test)]

@@ -59,13 +59,26 @@ fn collect(placed: &Placed, out: &mut Vec<PaneId>) {
 /// by `pane`. Splits are resizable; a split's handles keep their place
 /// while the same panes show in it, and start again from the config's
 /// sizes when what it shows changes.
-pub fn render(placed: &Placed, size: Size<Pixels>, pane: &mut dyn FnMut(PaneId) -> AnyElement) -> AnyElement {
-    node(placed, size, String::new(), pane)
+///
+/// Each pane gets `pad` of room around it: the native style's gutters.
+pub fn render(
+    placed: &Placed,
+    size: Size<Pixels>,
+    pad: Pixels,
+    pane: &mut dyn FnMut(PaneId) -> AnyElement,
+) -> AnyElement {
+    node(placed, size, pad, String::new(), pane)
 }
 
-fn node(placed: &Placed, size: Size<Pixels>, path: String, pane: &mut dyn FnMut(PaneId) -> AnyElement) -> AnyElement {
+fn node(
+    placed: &Placed,
+    size: Size<Pixels>,
+    pad: Pixels,
+    path: String,
+    pane: &mut dyn FnMut(PaneId) -> AnyElement,
+) -> AnyElement {
     match placed {
-        Placed::Pane(p) => div().size_full().child(pane(*p)).into_any_element(),
+        Placed::Pane(p) => div().size_full().p(pad).child(pane(*p)).into_any_element(),
         Placed::Split(split, children) => {
             let axis = match split {
                 Split::Rows => Axis::Vertical,
@@ -89,7 +102,7 @@ fn node(placed: &Placed, size: Size<Pixels>, path: String, pane: &mut dyn FnMut(
                         height: share,
                     },
                 };
-                let element = node(child, child_size, format!("{path}.{i}"), pane);
+                let element = node(child, child_size, pad, format!("{path}.{i}"), pane);
                 resizable_panel().size(share.max(px(1.))).child(element)
             });
             KeptSplit {
@@ -189,10 +202,12 @@ mod tests {
         sb.commit_file("a.txt", "a", "first");
         let mut gui = Gui::open(cx, &sb);
         let status = gui.read(|app| app.pane_area(PaneId::Status).unwrap());
+        let branches = gui.read(|app| app.pane_area(PaneId::Branches).unwrap());
         let before = status.width;
-        // The handle between status and branches, on the boundary.
+        // The handle between status and branches, on the boundary (in the
+        // middle of the gutter between them, in the native style).
         let y = gpui::px(f32::from(status.y + status.height / 2));
-        let edge = gpui::px(f32::from(status.right()));
+        let edge = gpui::px((f32::from(status.right()) + f32::from(branches.x)) / 2.);
         let cx = &mut gui.cx;
         cx.simulate_mouse_move(point(edge, y), None, Modifiers::default());
         cx.simulate_mouse_down(point(edge, y), MouseButton::Left, Modifiers::default());

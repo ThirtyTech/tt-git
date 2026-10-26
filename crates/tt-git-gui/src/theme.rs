@@ -1,6 +1,6 @@
 //! The tt-git theme in GPUI's terms: [`Color`] as [`Hsla`], [`Style`] and
-//! every [`StyleRole`] as a [`HighlightStyle`], and gpui-component's theme
-//! set to match.
+//! every [`StyleRole`] as a [`HighlightStyle`], the native style's
+//! [`Surfaces`] mixed from it, and gpui-component's theme set to match.
 
 use gpui::component::{Theme as ComponentTheme, ThemeMode};
 use gpui::{App, FontStyle, FontWeight, HighlightStyle, Hsla, Rgba, StrikethroughStyle, UnderlineStyle, px};
@@ -9,6 +9,7 @@ use tt_git_app::theme::Theme;
 use tt_git_app::view::{StyleRole, TextSpan};
 
 use crate::font::MonoFont;
+use crate::look::UiStyle;
 
 /// The terminal's 16 named colors, as a dark terminal shows them (VS Code's
 /// integrated terminal), for the themes that use them. In order: black,
@@ -35,6 +36,75 @@ pub struct GuiTheme {
     pub background: Hsla,
     /// Text with no color of its own.
     pub foreground: Hsla,
+    /// What the native style draws on.
+    pub surfaces: Surfaces,
+}
+
+/// The native style's surfaces, mixed from a theme's background and text
+/// so every theme gets them: the panes are cards in the theme's background
+/// on a ground a little darker (a little nearer the text on a light theme),
+/// with hairlines and tints of the text color.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Surfaces {
+    /// Behind the cards: the window between and around the panes.
+    pub ground: Hsla,
+    /// A pane's card: the theme's background.
+    pub card: Hsla,
+    /// A dialog or popup, raised over the cards.
+    pub raised: Hsla,
+    /// A card's border.
+    pub hairline: Hsla,
+    /// A dialog's border.
+    pub hairline_strong: Hsla,
+    /// Behind a chip, an unpicked tab strip, an unfocused selection.
+    pub tint: Hsla,
+    /// The focused card's border, in the theme's focus color.
+    pub focus_border: Hsla,
+    /// The ring around the focused card.
+    pub ring: Hsla,
+    /// Over the panes while a dialog is open.
+    pub scrim: Hsla,
+    /// The shadow under a dialog.
+    pub shadow: Hsla,
+}
+
+impl Surfaces {
+    fn new(background: Hsla, foreground: Hsla, accent: Hsla) -> Self {
+        let dark = background.l < 0.5;
+        let black = gpui::black();
+        Self {
+            ground: if dark {
+                mix(background, black, 0.28)
+            } else {
+                mix(background, foreground, 0.07)
+            },
+            card: background,
+            raised: if dark {
+                mix(background, foreground, 0.06)
+            } else {
+                background
+            },
+            hairline: foreground.opacity(if dark { 0.09 } else { 0.12 }),
+            hairline_strong: foreground.opacity(if dark { 0.15 } else { 0.18 }),
+            tint: foreground.opacity(if dark { 0.07 } else { 0.06 }),
+            focus_border: accent.opacity(0.75),
+            ring: accent.opacity(0.2),
+            scrim: black.opacity(if dark { 0.38 } else { 0.16 }),
+            shadow: black.opacity(if dark { 0.5 } else { 0.18 }),
+        }
+    }
+}
+
+/// `a` mixed with `t` of `b`, in RGB.
+pub fn mix(a: Hsla, b: Hsla, t: f32) -> Hsla {
+    let (a, b) = (Rgba::from(a), Rgba::from(b));
+    let m = |x: f32, y: f32| x + (y - x) * t;
+    Hsla::from(Rgba {
+        r: m(a.r, b.r),
+        g: m(a.g, b.g),
+        b: m(a.b, b.b),
+        a: m(a.a, b.a),
+    })
 }
 
 impl GuiTheme {
@@ -45,11 +115,14 @@ impl GuiTheme {
         let foreground = theme
             .foreground
             .map_or(hex(DEFAULT_FOREGROUND), |c| color(c, hex(DEFAULT_FOREGROUND)));
-        Self {
+        let mut gui = Self {
             theme: theme.clone(),
             background,
             foreground,
-        }
+            surfaces: Surfaces::new(background, foreground, background),
+        };
+        gui.surfaces = Surfaces::new(background, foreground, gui.fg(StyleRole::BorderFocused));
+        gui
     }
 
     /// The tt-git theme this is made from.
@@ -127,9 +200,9 @@ impl GuiTheme {
     }
 
     /// Sets gpui-component's theme to match, so its components (resize
-    /// handles, scrollbars, and whatever the panes use) fit in, at the
-    /// app's [zoom](crate::zoom).
-    pub fn apply_to_components(&self, font: &MonoFont, cx: &mut App) {
+    /// handles, scrollbars, menus, and whatever the panes use) fit in, at
+    /// the app's [zoom](crate::zoom) and in its [style](crate::look).
+    pub fn apply_to_components(&self, font: &MonoFont, style: UiStyle, cx: &mut App) {
         let mode = if self.is_dark() {
             ThemeMode::Dark
         } else {
@@ -145,6 +218,16 @@ impl GuiTheme {
         let error = self.fg(StyleRole::Error);
         let (background, foreground) = (self.background, self.foreground);
         let scale = crate::zoom::scale(cx);
+        let native = style == UiStyle::Native;
+        let s = self.surfaces;
+        // Native menus and popups are raised; the border, which is also the
+        // resize handles' line, goes, so the gutters between the cards stay
+        // clear (a handle still shows its grip when hovered).
+        let (border, popover) = if native {
+            (gpui::transparent_black(), s.raised)
+        } else {
+            (border, background)
+        };
         ComponentTheme::update(cx, |t| {
             t.background = background;
             t.foreground = foreground;
@@ -157,7 +240,7 @@ impl GuiTheme {
             t.muted_foreground = muted;
             t.list_active = selection;
             t.list_active_border = accent;
-            t.popover = background;
+            t.popover = popover;
             t.popover_foreground = foreground;
             t.danger = error;
             // What's drawn on `danger`: the close button's X on hover, white
@@ -168,8 +251,8 @@ impl GuiTheme {
             t.mono_font_size = font.size;
             // The rem size, so gpui-component's sizes zoom with the font.
             t.font_size = px(16.) * scale;
-            t.radius = px(6.) * scale;
-            t.radius_lg = px(8.) * scale;
+            t.radius = px(if native { 8. } else { 6. }) * scale;
+            t.radius_lg = px(if native { 12. } else { 8. }) * scale;
         });
     }
 }
@@ -308,6 +391,40 @@ mod tests {
                 assert_eq!(theme.role(role), theme.style(app.role(role)), "{role:?}");
             }
         }
+    }
+
+    #[test]
+    fn every_theme_gets_native_surfaces_from_its_own_colors() {
+        let mut themes = vec![Theme::default()];
+        for (_, text) in tt_git_app::themes::BUILTIN {
+            themes.push(Theme::from_palette(&tt_git_app::themes::Palette::parse(text).unwrap()));
+        }
+        for app in &themes {
+            let theme = GuiTheme::new(app);
+            let s = theme.surfaces;
+            assert!(same(s.card, theme.background), "cards are the background");
+            // The ground sets the cards off: darker, or nearer the text on
+            // a light theme, but never far.
+            let step = s.card.l - s.ground.l;
+            assert!(step > 0.01 && step < 0.2, "{step} {:?}", app.background);
+            assert!(s.hairline.a > 0. && s.hairline.a < s.hairline_strong.a);
+            let focus = Hsla {
+                a: 1.,
+                ..s.focus_border
+            };
+            assert!(same(focus, theme.fg(StyleRole::BorderFocused)));
+            if theme.is_dark() {
+                assert!(s.raised.l > s.card.l, "dialogs lighter than the cards");
+            }
+        }
+    }
+
+    #[test]
+    fn mix_goes_between_two_colors() {
+        let (black, white) = (gpui::black(), gpui::white());
+        assert!(same(mix(black, white, 0.), black));
+        assert!(same(mix(black, white, 1.), white));
+        assert!((mix(black, white, 0.5).l - 0.5).abs() < 0.01);
     }
 
     #[test]

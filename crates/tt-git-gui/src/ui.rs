@@ -11,6 +11,7 @@ use gpui::{App, Bounds, IntoElement, Pixels, SharedString, Styled, WeakEntity, c
 use tt_git_app::mouse::MouseInput;
 
 use crate::font::{Fit, MonoFont};
+use crate::look::UiStyle;
 use crate::model::AppModel;
 use crate::theme::GuiTheme;
 
@@ -20,11 +21,18 @@ use crate::theme::GuiTheme;
 pub struct Ui {
     pub theme: Rc<GuiTheme>,
     pub font: Rc<MonoFont>,
+    /// The style the window draws in.
+    pub style: UiStyle,
     pub measures: Measures,
     pub model: WeakEntity<AppModel>,
 }
 
 impl Ui {
+    /// Whether the window draws in the native style.
+    pub fn native(&self) -> bool {
+        self.style == UiStyle::Native
+    }
+
     /// The columns and rows that fit where the element measured as `id`
     /// (with [`measure`](Self::measure)) was laid out last frame. Zero
     /// before its first frame; it's measured then, and the window draws

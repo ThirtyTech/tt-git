@@ -12,7 +12,7 @@ use tt_git_core::{
 
 use crate::action::{Action, RefsSnapshot};
 use crate::component::{Component, EventState};
-use crate::config::{Config, ZoomStep};
+use crate::config::{Config, UiStyle, ZoomStep};
 use crate::editor::{self, EditTarget, EditorLaunch};
 use crate::filter::FilterPanel;
 use crate::geom::Rect;
@@ -288,6 +288,10 @@ pub struct App {
     font_picker_wanted: bool,
     /// The font picked in the picker, for the front end to take.
     font_picked: Option<Option<String>>,
+    /// The front end has styles to switch between (the desktop app).
+    styles: bool,
+    /// [`Command::WindowStyle`] ran, for the front end to take.
+    style_wanted: bool,
     /// The front end updates itself (the desktop app, from its own
     /// download), so [`Command::SelfUpdate`] is handed to it rather than
     /// running `tt-git update`.
@@ -412,6 +416,8 @@ impl App {
             chooses_fonts: false,
             font_picker_wanted: false,
             font_picked: None,
+            styles: false,
+            style_wanted: false,
             open_repo_wanted: false,
             delegates_update: false,
             self_update_wanted: false,
@@ -533,6 +539,35 @@ impl App {
             Some(Err(e)) => self.error = Some(format!("couldn't save the zoom to {e}")),
             _ => self.notice = Some(format!("zoom {percent}%")),
         }
+    }
+
+    /// Says the front end can switch between a native and a terminal
+    /// style, which offers [`Command::WindowStyle`] in the palette.
+    pub fn enable_ui_style(&mut self) {
+        self.styles = true;
+    }
+
+    pub fn styles(&self) -> bool {
+        self.styles
+    }
+
+    /// Whether [`Command::WindowStyle`] ran since the last call: the front
+    /// end switches style and reports it with [`ui_styled`](Self::ui_styled).
+    pub fn take_ui_style(&mut self) -> bool {
+        std::mem::take(&mut self.style_wanted)
+    }
+
+    /// The front end switched to `style`: says so, and saves it as
+    /// `ui.style` in config.toml.
+    pub fn ui_styled(&mut self, style: UiStyle) {
+        self.config.ui.style = style;
+        let name = format!("{} style", style.name());
+        let value = toml::Value::String(style.name().to_string()).to_string();
+        match self.save_setting("ui", "style", &value) {
+            Some(Err(e)) => self.error = Some(format!("couldn't save the style to {e}")),
+            _ => self.notice = Some(name),
+        }
+        self.dirty = true;
     }
 
     /// Whether [`Command::OpenRepository`] ran since the last call: the
@@ -2939,6 +2974,10 @@ impl App {
             }
             Command::ZoomIn | Command::ZoomOut | Command::ResetZoom => {
                 self.notice = Some("zooming needs the desktop app: use your terminal's font size".into());
+            }
+            Command::WindowStyle if self.styles => self.style_wanted = true,
+            Command::WindowStyle => {
+                self.notice = Some("the window style is the desktop app's: the terminal draws its own".into());
             }
             Command::Font if self.chooses_fonts => self.font_picker_wanted = true,
             Command::Font => {

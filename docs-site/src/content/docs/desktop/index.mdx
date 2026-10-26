@@ -21,8 +21,10 @@ GPU (Direct3D 11 on Windows, Metal on macOS, Vulkan on Linux), so the graph,
 diffs and blame scroll smoothly, at any size and zoom. The title bar, menus
 and right-click menus come from
 [gpui-component](https://github.com/longbridge/gpui-kit); the panes are
-tt-git's own, in the same monospace look and [theme](/configuration/themes/)
-as the terminal app.
+tt-git's own, in the same [theme](/configuration/themes/) as the terminal
+app. By default they're drawn as rounded cards with headers in your system's
+UI font; the [terminal style](/desktop/using/#style) draws them in the same
+monospace boxes as the terminal app.
 
 GPUI only draws. What the app does, from the keymap to the git commands it
 runs, is shared with the terminal app, which is why the two can't drift

@@ -484,6 +484,9 @@ impl App {
         if self.chooses_fonts() {
             items.push(builtin(Command::Font));
         }
+        if self.styles() {
+            items.push(builtin(Command::WindowStyle));
+        }
         items
     }
 

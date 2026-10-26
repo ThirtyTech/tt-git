@@ -24,7 +24,7 @@ pub fn render(cx: &mut DialogCx) -> AnyElement {
         .flex()
         .w_full()
         .justify_between()
-        .child(StyledLine::new(theme, &[TextSpan::new(HELP_TITLE, look.title())], None).element())
+        .child(super::prompt::title(ui, HELP_TITLE, look).element())
         .child(StyledLine::new(theme, &[TextSpan::new(view.version.as_str(), StyleRole::Muted)], None).element());
     let mut body = div()
         .flex()
@@ -42,7 +42,7 @@ pub fn render(cx: &mut DialogCx) -> AnyElement {
         }
         body = body.children(view.rows.iter().map(|row| single_line(ui, row)));
     }
-    layer(dialog_box(ui, ID, look, view.width, title).child(body)).into_any_element()
+    layer(ui, dialog_box(ui, ID, look, view.width, title).child(body)).into_any_element()
 }
 
 #[cfg(test)]

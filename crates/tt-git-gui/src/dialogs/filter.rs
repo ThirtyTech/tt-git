@@ -99,7 +99,7 @@ pub fn render(cx: &mut DialogCx) -> AnyElement {
         .child(choices)
         .child(blank(ui))
         .child(single_line(ui, &[TextSpan::new(FILTER_HINT, StyleRole::Muted)]));
-    layer(panel)
+    layer(ui, panel)
         .on_mouse_down(MouseButton::Left, click(ui, FilterSpot::Outside))
         .into_any_element()
 }
