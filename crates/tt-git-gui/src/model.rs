@@ -13,13 +13,14 @@ use tt_git_app::app::TICK;
 use tt_git_app::editor::EditorLaunch;
 use tt_git_app::keymap::KeyCombo;
 use tt_git_app::mouse::MouseInput;
+use tt_git_app::new_commits::NewCommits;
 use tt_git_app::{Action, App};
 use tt_git_plugin::runtime::resolve_program;
 
 use crate::gpui_tokio::Tokio;
 
 /// What [`AppModel`] tells the window.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AppEvent {
     /// The app asked to quit: close the window.
     Quit,
@@ -27,6 +28,9 @@ pub enum AppEvent {
     OpenRepository,
     /// "Update tt-git" ran: check for updates as the app menu does.
     CheckForUpdates,
+    /// A fetch or pull brought these in (only with `[ui] notifications`
+    /// on, and never on the first load).
+    NewCommits(NewCommits),
 }
 
 /// tt-git's [`App`] as a GPUI entity. Input goes in through
@@ -177,6 +181,9 @@ impl AppModel {
         if let Some(family) = self.app.take_font_pick() {
             // Every window redraws in it (`Shell` watches it).
             crate::font::set_family(family, cx);
+        }
+        if let Some(new) = self.app.take_new_commits() {
+            cx.emit(AppEvent::NewCommits(new));
         }
         if let Some(text) = self.app.take_clipboard() {
             cx.write_to_clipboard(ClipboardItem::new_string(text));

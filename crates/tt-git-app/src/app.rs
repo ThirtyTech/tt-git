@@ -22,6 +22,7 @@ use crate::layout::View;
 use crate::loaders;
 use crate::modal::{GitOp, Modal, ModalOutcome, PaletteItem, PaletteTarget, PromptAction};
 use crate::mouse::{FilterSpot, MouseInput, MouseKind, MouseTarget};
+use crate::new_commits::{self, NewCommits, Tips};
 use crate::panes::{
     BlameView, BranchFocus, BranchTab, BranchesPane, DetailsPane, DetailsSubject, GraphPane, LoadToken, PaneId,
     SavedDetails, StatusPane,
@@ -319,6 +320,10 @@ pub struct App {
     clipboard: Option<String>,
     /// An editor waiting for the runner to start.
     editor: Option<EditorLaunch>,
+    /// The ref tips of the last refs load, to spot new commits by.
+    tips: Option<Tips>,
+    /// New commits waiting for the front end to take.
+    new_commits: Option<NewCommits>,
     should_quit: bool,
     pane_areas: Vec<(PaneId, Rect)>,
     /// The last left click on a pane's body: when, and which pane and row,
@@ -436,6 +441,8 @@ impl App {
             error: None,
             notice: None,
             clipboard: None,
+            tips: None,
+            new_commits: None,
             editor: None,
             should_quit: false,
             pane_areas: Vec::new(),
@@ -652,6 +659,13 @@ impl App {
     /// Takes the text a command copied, for the runner to send to the terminal.
     pub fn take_clipboard(&mut self) -> Option<String> {
         self.clipboard.take()
+    }
+
+    /// Takes the commits that arrived on remote-tracking branches since the
+    /// last call, when `[ui] notifications` is on. The first refs load
+    /// brings none: only later fetches and pulls do.
+    pub fn take_new_commits(&mut self) -> Option<NewCommits> {
+        self.new_commits.take()
     }
 
     /// Takes the editor a command asked for, for the runner to start. It
@@ -1211,6 +1225,7 @@ impl App {
                     self.graph.select_when_loaded(oid.to_string(), &self.ctx);
                 }
                 self.graph.set_refs(&snapshot);
+                self.note_tips(&snapshot.refs);
                 let RefsSnapshot {
                     head,
                     refs,
@@ -1275,6 +1290,11 @@ impl App {
             }
             Action::ResetPlanned { target, display, plan } => self.reset_planned(target, display, plan),
             Action::UpdateChecked(latest) => self.update_checked(latest),
+            Action::NewCommits(new) => {
+                if !new.branches.is_empty() {
+                    self.new_commits.get_or_insert_default().add(new);
+                }
+            }
             Action::OpDone { op, result, head } => self.op_done(op, result, head),
             Action::GoneFound(result) => self.gone_found(result),
             Action::BranchesDeleted { names, force, result } => self.branches_deleted(names, force, result),
@@ -1427,6 +1447,25 @@ impl App {
                 }
             }
         }
+    }
+
+    /// Keeps the tips of a refs load, and with `[ui] notifications` on
+    /// counts the commits on the remote-tracking branches that moved.
+    fn note_tips(&mut self, refs: &[tt_git_core::GitRef]) {
+        let tips = Tips::of(refs);
+        let Some(before) = self.tips.replace(tips.clone()) else {
+            return;
+        };
+        if !self.config.ui.notifications {
+            return;
+        }
+        let moved = tips.moved_since(&before);
+        if moved.is_empty() {
+            return;
+        }
+        let repo = self.repo.clone();
+        let before = before.all().to_vec();
+        self.ctx.spawn(move || new_commits::count_job(repo, moved, before));
     }
 
     /// Reloads refs, after the load running now if there is one.

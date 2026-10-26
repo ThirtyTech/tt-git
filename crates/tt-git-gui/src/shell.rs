@@ -91,6 +91,8 @@ impl Shell {
                 AppEvent::CheckForUpdates => {
                     crate::update::check(window.window_handle(), model.downgrade(), cx);
                 }
+                // Nothing shows them yet.
+                AppEvent::NewCommits(_) => {}
                 AppEvent::OpenRepository => {
                     let model = model.downgrade();
                     crate::windows::pick_repos(cx, move |result, cx| {

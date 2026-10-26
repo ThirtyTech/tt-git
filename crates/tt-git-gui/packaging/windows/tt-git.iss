@@ -60,9 +60,11 @@ Source: "{#StageDir}\tt-git-gui.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\tt-git.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#StageDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 
+; AppUserModelID is the app's own (src/app_id.rs): notifications from an
+; installed copy need it on the Start menu entry.
 [Icons]
-Name: "{autoprograms}\tt-git"; Filename: "{app}\tt-git-gui.exe"
-Name: "{autodesktop}\tt-git"; Filename: "{app}\tt-git-gui.exe"; Tasks: desktopicon
+Name: "{autoprograms}\tt-git"; Filename: "{app}\tt-git-gui.exe"; AppUserModelID: "ThirtyTech.tt-git"
+Name: "{autodesktop}\tt-git"; Filename: "{app}\tt-git-gui.exe"; AppUserModelID: "ThirtyTech.tt-git"; Tasks: desktopicon
 
 ; Explorer's "Open in tt-git", on a folder and on a folder's background.
 ; HKA is HKCU for a per-user install and HKLM for all users.

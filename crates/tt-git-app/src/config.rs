@@ -119,6 +119,10 @@ pub struct UiConfig {
     /// Look for a new tt-git release in the background, once a day, and
     /// say in the help bar when there is one.
     pub check_for_updates: bool,
+    /// Tell the desktop when new commits arrive while the window isn't
+    /// focused: a notification, and a badge on the app's icon where the
+    /// desktop has one.
+    pub notifications: bool,
 }
 
 impl Default for UiConfig {
@@ -129,6 +133,7 @@ impl Default for UiConfig {
             font_size: DEFAULT_FONT_SIZE,
             style: UiStyle::default(),
             check_for_updates: true,
+            notifications: false,
         }
     }
 }
@@ -728,6 +733,12 @@ zoom = 900
         let ui = Config::parse("[ui]\nfont = \"  \"\nfont_size = 2\n").unwrap().ui;
         assert_eq!((ui.font(), ui.font_size()), (None, 6.));
         assert_eq!(Config::parse("[ui]\nfont_size = 500\n").unwrap().ui.font_size(), 72.);
+    }
+
+    #[test]
+    fn ui_notifications_are_off_by_default() {
+        assert!(!Config::default().ui.notifications);
+        assert!(Config::parse("[ui]\nnotifications = true\n").unwrap().ui.notifications);
     }
 
     #[test]

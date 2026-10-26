@@ -83,6 +83,8 @@ pub enum Action {
     /// Boxed, being several times the size of any other action.
     RefsLoaded(Result<Box<RefsSnapshot>, String>),
     StatusLoaded(Result<Status, String>),
+    /// Commits a fetch or pull brought in, counted after a refs load.
+    NewCommits(crate::new_commits::NewCommits),
     /// Refs or status load `generation` finished with `result`, its
     /// `RefsLoaded` or `StatusLoaded`. These loads run one at a time each,
     /// and only the newest result is applied.
