@@ -160,6 +160,7 @@ fn main() -> Result<()> {
         tt_git_gui::font::set(font, cx);
         tt_git_gui::look::set(style, cx);
         tt_git_gui::window_state::install(tt_git_gui::window_state::default_path(), cx);
+        tt_git_gui::dock::install(cx);
         tt_git_gui::jump_list::install(cx);
         tt_git_gui::launcher_entry::install(cx);
         tt_git_gui::quick_look::install(cx);

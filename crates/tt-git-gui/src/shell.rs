@@ -67,7 +67,7 @@ pub struct Shell {
     /// What `ui.font` was made from.
     font_key: FontKey,
     /// The window's taskbar button (Windows) or launcher (Linux): progress
-    /// and the badge.
+    /// and the badge, which on macOS goes to the Dock.
     taskbar: crate::taskbar::Taskbar,
     _subscriptions: Vec<Subscription>,
 }
@@ -117,10 +117,13 @@ impl Shell {
             cx.observe_window_activation(window, |_, _, cx| cx.notify()),
             // Focused, the new commits on the taskbar's badge are seen.
             cx.observe_window_activation(window, |shell, window, cx| shell.taskbar.activated(window, cx)),
-            // Closed, it's off the launcher.
+            // Closed, it's off the launcher and its part of the Dock's badge goes.
             {
                 let id = window.window_handle().window_id();
-                cx.on_release(move |_, cx| crate::launcher_entry::forget(id, cx))
+                cx.on_release(move |_, cx| {
+                    crate::launcher_entry::forget(id, cx);
+                    crate::dock::set_badge(id, None, cx);
+                })
             },
             cx.observe_global::<crate::zoom::UiZoom>(|_, cx| cx.notify()),
             cx.observe_global::<crate::font::UiFont>(|_, cx| cx.notify()),
@@ -129,6 +132,9 @@ impl Shell {
         let font_key = FontKey::now(&model, cx);
         let style = font_key.style;
         ask_before_closing(&model, window, cx);
+        if model.read(cx).app().config().ui.notifications {
+            crate::notify::ask_permission(cx);
+        }
         // Where it opened counts too, if it's never moved.
         crate::window_state::remember_window(window, cx);
         Self {

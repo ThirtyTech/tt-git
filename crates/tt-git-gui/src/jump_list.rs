@@ -6,8 +6,9 @@
 //! anywhere; `tt_git_win::jump_list` hands it to Windows. It's
 //! rebuilt at startup and whenever the recent repositories change
 //! ([`window_state::remember_repo`], [`window_state::forget_repo`]). Only
-//! `main` calls [`install`], so tests never touch the shell. Elsewhere than
-//! Windows, [`refresh`] does nothing.
+//! `main` calls [`install`], so tests never touch the shell. On macOS the
+//! same entries make the Dock menu ([`crate::dock::set_menu`]); elsewhere
+//! [`refresh`] does nothing.
 //!
 //! The list uses the process's AppUserModelID (set at startup), so it stays
 //! with the same taskbar button as the windows.
@@ -149,7 +150,8 @@ pub fn install(cx: &mut App) {
 }
 
 /// Rebuilds the list if the recent repositories changed since it was last
-/// built. Does nothing without [`install`], or elsewhere than Windows.
+/// built. Does nothing without [`install`], or elsewhere than Windows and
+/// macOS.
 pub fn refresh(cx: &mut App) {
     let Some(list) = cx.try_global::<JumpList>() else {
         return;
@@ -216,7 +218,14 @@ fn build(recent: Vec<PathBuf>, cx: &mut App) -> Option<Vec<PathBuf>> {
     }
 }
 
-#[cfg(not(windows))]
+/// Hands the list to the Dock, as its menu.
+#[cfg(target_os = "macos")]
+fn build(recent: Vec<PathBuf>, cx: &mut App) -> Option<Vec<PathBuf>> {
+    crate::dock::set_menu(&recent, cx);
+    Some(recent)
+}
+
+#[cfg(not(any(windows, target_os = "macos")))]
 fn build(recent: Vec<PathBuf>, _: &mut App) -> Option<Vec<PathBuf>> {
     Some(recent)
 }

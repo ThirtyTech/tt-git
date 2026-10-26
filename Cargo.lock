@@ -8427,12 +8427,17 @@ name = "tt-git-gui"
 version = "0.9.0"
 dependencies = [
  "ashpd",
+ "block2 0.6.2",
  "clap",
  "color-eyre",
  "embed-resource",
  "futures",
  "gpui-kit",
  "image",
+ "objc2 0.6.5",
+ "objc2-app-kit 0.3.2",
+ "objc2-foundation 0.3.2",
+ "objc2-user-notifications",
  "raw-window-handle",
  "serde",
  "serde_json",

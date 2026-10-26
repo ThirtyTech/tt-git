@@ -52,9 +52,30 @@ ashpd = { version = "0.13", default-features = false, features = ["async-io", "n
 futures.workspace = true
 
 # The Quick Look panel and Finder's Open in tt-git (the services provider).
+# The Dock badge and asking to notify: the versions GPUI already uses, so
+# they aren't built twice; the calls used are safe ones.
 [target.'cfg(target_os = "macos")'.dependencies]
 # The Objective-C calls, kept out of this crate: it forbids unsafe code.
 tt-git-win.workspace = true
+block2 = "0.6"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "NSApplication",
+    "NSDockTile",
+    "NSResponder",
+] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "NSBundle",
+    "NSError",
+    "NSString",
+] }
+objc2-user-notifications = { version = "0.3", default-features = false, features = [
+    "std",
+    "block2",
+    "UNUserNotificationCenter",
+] }
 
 [build-dependencies]
 # The icon resource in the Windows executable (build.rs).

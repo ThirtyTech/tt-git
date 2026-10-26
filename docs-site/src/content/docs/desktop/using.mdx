@@ -269,6 +269,20 @@ On Linux, right-click tt-git in the dock or the app launcher for
 so it's there once tt-git is [installed](/desktop/install/#linux) and lists
 no recent repositories.
 
+### Dock menu
+
+On macOS, right-click tt-git in the Dock (or hold the click) for its menu:
+
+- **Recent repositories**: the ones you opened last, newest first, up to
+  ten, named as in the [jump list](#jump-list). Click one to open it in a new
+  window, or to bring its window forward if it's open already. Folders that
+  no longer exist are left out. If one can't be opened (it's no longer a
+  repository, say), the start window opens and says why.
+- **Open Repository…**: the folder picker, as in the Repository menu.
+
+The menu is updated whenever you open a repository. macOS adds its own
+items under it (Options, Show All Windows, Hide, Quit).
+
 ### Taskbar progress
 
 On Windows, while a repository's window pushes, pulls or fetches, its
@@ -332,6 +346,18 @@ as Flatpak. Otherwise, as with the AppImage or a build from source, tt-git
 sends it straight to the desktop's notification service
 (`org.freedesktop.Notifications`). A desktop with neither shows nothing.
 
+On macOS notifications come from tt-git.app, the app the
+[`.dmg`](/desktop/install/) installs, and land in Notification Center under
+its bundle ID, `net.thirtytech.tt-git`. The first time you open a
+repository window with `notifications = true`, macOS asks whether tt-git may
+send notifications; after that it remembers your answer, and **System
+Settings > Notifications > tt-git** changes it. A build run straight from
+the command line (`cargo run -p tt-git-gui`) isn't an app bundle, so it
+shows none and doesn't ask. macOS can also refuse a build that's only
+signed ad hoc (an unsigned release, or one you package yourself) without
+asking; the log, `tt-git-gui.log`, then says *Notifications are not
+allowed for this application*.
+
 ### The taskbar badge
 
 With notifications on, Windows also puts a small dot over the window's
@@ -354,6 +380,20 @@ dots, so it shows this instead:
 |---|---|---|
 | A number | New commits came in while the window wasn't the one you're in, added up over every window. | When you switch to the windows they came in. |
 | The icon marked urgent (Dash to Dock wiggles it, KDE highlights it) | Conflicts, or a merge, rebase, cherry-pick or revert that stopped, turned up while the window wasn't the one you're in, for example after a `git merge` in a terminal. | When you switch to the window. The conflicts themselves stay until you resolve them. |
+
+### The Dock badge
+
+On macOS, with notifications on, the badge is on tt-git's Dock icon
+instead. All windows share the icon, so it sums them up:
+
+| Badge | Means | Goes away |
+|---|---|---|
+| **!** | A repository has files with conflicts, or a merge, rebase, cherry-pick or revert stopped part way. | When no window has either. |
+| A number | That many new commits came in while their windows weren't the one you're in, added up over the windows. | Each window's count when you switch to it, or close it. |
+
+**!** comes before a number. The Dock's badge has one color, so conflicts
+and a stopped merge look the same; the window's title bar and status say
+which. The Dock shows no progress for a push, pull or fetch.
 
 ## Editing files
 

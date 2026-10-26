@@ -4,7 +4,9 @@
 //! merge or rebase ([`App::take_repo_alert`](tt_git_app::App::take_repo_alert)),
 //! or new commits that came in while the window wasn't focused, until it is
 //! again. The Win32 calls are in `tt-git-win`. On Linux the same goes to the
-//! app's launcher ([`launcher_entry`](crate::launcher_entry)).
+//! app's launcher ([`launcher_entry`](crate::launcher_entry)). On macOS the
+//! badge goes to the Dock icon, which every window shares ([`crate::dock`]);
+//! progress shows nowhere there.
 
 use gpui::{App, Window};
 use tt_git_app::app::{JobProgress, RepoAlert};
@@ -88,7 +90,7 @@ impl Taskbar {
     /// The repository's alert changed.
     pub fn alert(&mut self, window: &Window, alert: RepoAlert, cx: &mut App) {
         self.set_alert(alert, window.is_window_active());
-        self.show(window);
+        self.show(window, cx);
         self.report(window, cx);
     }
 
@@ -97,7 +99,7 @@ impl Taskbar {
     pub fn new_commits(&mut self, window: &Window, new: &NewCommits, cx: &mut App) {
         if !window.is_window_active() {
             self.new_commits += new.total();
-            self.show(window);
+            self.show(window, cx);
             self.report(window, cx);
         }
     }
@@ -107,7 +109,7 @@ impl Taskbar {
     pub fn activated(&mut self, window: &Window, cx: &mut App) {
         if window.is_window_active() && (self.new_commits > 0 || self.alert_unseen) {
             self.seen();
-            self.show(window);
+            self.show(window, cx);
             self.report(window, cx);
         }
     }
@@ -147,12 +149,13 @@ impl Taskbar {
         }
     }
 
-    fn show(&mut self, window: &Window) {
+    fn show(&mut self, window: &Window, cx: &mut App) {
         let badge = self.badge();
         if badge == self.shown {
             return;
         }
         self.shown = badge;
+        crate::dock::set_badge(window.window_handle().window_id(), badge, cx);
         #[cfg(windows)]
         {
             use tt_git_win::taskbar::Icon;
