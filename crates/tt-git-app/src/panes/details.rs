@@ -105,6 +105,9 @@ pub struct DetailsPane {
     pub search: LineSearch,
     /// The match `n` and `N` went to last, picked out in the text.
     pub found: Option<usize>,
+    /// The front end previews files with Quick Look, so the pane offers it
+    /// (see `App::enable_quick_look`).
+    pub quick_look: bool,
 }
 
 /// Everything the details pane shows, put aside to come back to.
@@ -562,6 +565,53 @@ impl DetailsPane {
         }
     }
 
+    /// The file to preview with Quick Look here, as `edit_target` picks it:
+    /// as of the commit, or before it when `old`. A deleted file's new
+    /// version is the one before. A working-tree file's new version is the
+    /// file itself (`rev` is `None`), its old one `HEAD`'s.
+    pub fn quick_look_target(&self, old: bool) -> Result<EditTarget, String> {
+        let nothing = || "no file to preview here".to_string();
+        let target = |path: String, rev: Option<String>| EditTarget { path, line: None, rev };
+        if self.blame.is_some() || self.stage.is_some() {
+            return Err(nothing());
+        }
+        let before = |oid: &str| Some(format!("{oid}^"));
+        match self.subject.as_ref().ok_or_else(nothing)? {
+            DetailsSubject::Text(_)
+            | DetailsSubject::Stage(_)
+            | DetailsSubject::Blame(_)
+            | DetailsSubject::Folder(_) => Err(nothing()),
+            DetailsSubject::File(path) => Ok(target(path.clone(), old.then(|| "HEAD".to_string()))),
+            DetailsSubject::CommitFiles(oid) if self.files.is_some() => {
+                let file = self.selected_file().ok_or_else(nothing)?;
+                if old && file.state == FileState::Added {
+                    return Err(format!("{} is new in this commit", file.path));
+                }
+                let path = if old {
+                    file.orig_path.as_ref().unwrap_or(&file.path)
+                } else {
+                    &file.path
+                };
+                let old = old || file.state == FileState::Deleted;
+                Ok(target(path.clone(), if old { before(oid) } else { Some(oid.clone()) }))
+            }
+            DetailsSubject::Commit(oid) | DetailsSubject::CommitFiles(oid) | DetailsSubject::Stash(oid) => {
+                let pos = diff_text_position(self.lines.as_slice(), self.cursor.offset);
+                match pos {
+                    Some(DiffPosition {
+                        path: Some(path),
+                        deleted,
+                        ..
+                    }) => {
+                        let old = old || deleted;
+                        Ok(target(path, if old { before(oid) } else { Some(oid.clone()) }))
+                    }
+                    _ => Err(nothing()),
+                }
+            }
+        }
+    }
+
     /// What to ask an agent about here: the staging view's selection, or
     /// the diff hunk at the top of the view (the line `e` opens). `None`
     /// for what isn't a diff (blame, plain text); an error when the diff
@@ -932,6 +982,25 @@ impl Component for DetailsPane {
                 Command::ToggleDates,
                 Command::OpenInEditor,
                 Command::Copy,
+                Command::CloseDetails,
+            ];
+        }
+        if self.quick_look {
+            return &[
+                Command::PageDown,
+                Command::PageUp,
+                Command::OpenLink,
+                Command::OpenInEditor,
+                Command::QuickLook,
+                Command::QuickLookOld,
+                Command::Blame,
+                Command::ToggleFiles,
+                Command::NewerCommit,
+                Command::OlderCommit,
+                Command::Search,
+                Command::SearchNext,
+                Command::SearchPrev,
+                Command::Agent,
                 Command::CloseDetails,
             ];
         }

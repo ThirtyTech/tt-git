@@ -291,6 +291,8 @@ pub struct App {
     opens_repos: bool,
     /// [`Command::OpenRepository`] ran, for the front end to take.
     open_repo_wanted: bool,
+    /// A file to preview with Quick Look, for the front end to take.
+    quick_look: Option<std::path::PathBuf>,
     /// The front end can zoom (the desktop app).
     zooms: bool,
     /// A zoom command ran, for the front end to take.
@@ -438,6 +440,7 @@ impl App {
             styles: false,
             style_wanted: false,
             open_repo_wanted: false,
+            quick_look: None,
             delegates_update: false,
             self_update_wanted: false,
             watcher: None,
@@ -595,6 +598,23 @@ impl App {
     /// front end then asks which repository to open.
     pub fn take_open_repository(&mut self) -> bool {
         std::mem::take(&mut self.open_repo_wanted)
+    }
+
+    /// Says the front end can preview files with Quick Look (on macOS),
+    /// which offers [`Command::QuickLook`] and [`Command::QuickLookOld`] in
+    /// the details pane. It takes the files with
+    /// [`take_quick_look`](Self::take_quick_look) and removes the copies
+    /// with [`quick_look::clean_up`](crate::quick_look::clean_up) when it
+    /// quits.
+    pub fn enable_quick_look(&mut self) {
+        self.details.quick_look = true;
+    }
+
+    /// The file a Quick Look command asked to preview since the last call:
+    /// a copy under [`quick_look::dir`](crate::quick_look::dir), or a file
+    /// in the working tree.
+    pub fn take_quick_look(&mut self) -> Option<std::path::PathBuf> {
+        self.quick_look.take()
     }
 
     pub fn focus(&self) -> PaneId {
@@ -1193,6 +1213,8 @@ impl App {
                 self.start_editor(&snap.file, snap.line);
             }
             Action::EditSnapshot(Err(e)) => self.error = Some(e),
+            Action::QuickLookReady(Ok(file)) => self.quick_look = Some(file),
+            Action::QuickLookReady(Err(e)) => self.error = Some(e),
             Action::AgentStarted(result) => self.agent_started(result),
             Action::EditorFinished(result) => {
                 match result {
@@ -2502,6 +2524,31 @@ impl App {
         }
     }
 
+    /// Previews the details pane's file, or its version before the commit
+    /// when `old`, with Quick Look: a working-tree file as it is, anything
+    /// else from a copy a job writes.
+    fn quick_look(&mut self, old: bool) {
+        let target = match self.details.quick_look_target(old) {
+            Ok(target) => target,
+            Err(why) => {
+                self.notice = Some(why);
+                return;
+            }
+        };
+        if target.rev.is_some() {
+            let repo = self.repo.clone();
+            self.ctx
+                .spawn(move || loaders::quick_look_copy(repo, crate::quick_look::dir(), target));
+            return;
+        }
+        let file = editor::abs_path(self.repo.root(), &target.path);
+        if file.exists() {
+            self.quick_look = Some(file);
+        } else {
+            self.notice = Some(format!("{} isn't in the working tree", target.path));
+        }
+    }
+
     /// Works out the editor command for `file` and leaves it for the
     /// runner to start.
     fn start_editor(&mut self, file: &std::path::Path, line: Option<u32>) {
@@ -3024,6 +3071,9 @@ impl App {
             Command::SelfUpdate if self.delegates_update => self.self_update_wanted = true,
             Command::SelfUpdate => self.check_update(),
             Command::OpenLink if self.focus == PaneId::Details => self.open_link(),
+            Command::QuickLook | Command::QuickLookOld if self.focus == PaneId::Details && self.details.quick_look => {
+                self.quick_look(cmd == Command::QuickLookOld)
+            }
             Command::ToggleFiles if self.focus == PaneId::Details => self.toggle_files(),
             Command::NewerCommit | Command::OlderCommit | Command::PrevFile | Command::NextFile
                 if self.focus == PaneId::Details =>

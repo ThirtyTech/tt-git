@@ -51,6 +51,11 @@ zbus = "5"
 ashpd = { version = "0.13", default-features = false, features = ["async-io", "notification"] }
 futures.workspace = true
 
+# The Quick Look panel.
+[target.'cfg(target_os = "macos")'.dependencies]
+# The Objective-C calls, kept out of this crate: it forbids unsafe code.
+tt-git-win.workspace = true
+
 [build-dependencies]
 # The icon resource in the Windows executable (build.rs).
 embed-resource = "3"

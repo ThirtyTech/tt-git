@@ -34,6 +34,7 @@ pub mod model;
 pub mod notify;
 pub mod overlay;
 pub mod panes;
+pub mod quick_look;
 pub mod rows;
 pub mod shell;
 pub mod start;

@@ -66,6 +66,12 @@ pub async fn run(
             };
             app.update(Action::EditorFinished(result));
         }
+        if let Some(_file) = app.take_quick_look() {
+            #[cfg(target_os = "macos")]
+            if let Err(e) = crate::quick_look::qlmanage(&_file) {
+                app.update(Action::Notify(e));
+            }
+        }
         // Skip frames nothing could have changed (key releases, mouse moves,
         // most ticks): they'd draw the same screen. A size change is caught
         // here too, in case it came without a resize event.

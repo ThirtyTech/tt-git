@@ -8,7 +8,7 @@ use tt_git_core::{
 
 use crate::action::{Action, RefsSnapshot};
 use crate::config::BranchesConfig;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::editor::{EditTarget, Snapshot, abs_path, write_snapshot};
 use crate::filter::{FilterTab, author_choices, file_choices};
@@ -683,10 +683,21 @@ pub fn status_edit_target(repo: Repo, entry: tt_git_core::StatusEntry) -> Action
 /// A read-only copy under `dir` of `target`'s file as of its commit, for a
 /// file that isn't in the working tree.
 pub fn edit_snapshot(repo: Repo, dir: PathBuf, target: EditTarget) -> Action {
+    Action::EditSnapshot(snapshot(&repo, &dir, target))
+}
+
+/// A read-only copy under `dir` of `target`'s file as of its commit, for
+/// Quick Look to preview.
+pub fn quick_look_copy(repo: Repo, dir: PathBuf, target: EditTarget) -> Action {
+    Action::QuickLookReady(snapshot(&repo, &dir, target).map(|snap| snap.file))
+}
+
+/// Writes `target`'s file as of its commit (`HEAD` when it has none) under
+/// `dir`, in a folder named after the commit, keeping its name.
+fn snapshot(repo: &Repo, dir: &Path, target: EditTarget) -> Result<Snapshot, String> {
     let rev = target.rev.as_deref().unwrap_or("HEAD");
     let path = target.path;
-    let result = repo
-        .file_at(rev, &path)
+    repo.file_at(rev, &path)
         .map_err(|e| {
             format!(
                 "couldn't read {path} from {rev}: {}",
@@ -694,7 +705,7 @@ pub fn edit_snapshot(repo: Repo, dir: PathBuf, target: EditTarget) -> Action {
             )
         })
         .and_then(|(contents, commit)| {
-            let file = write_snapshot(&dir, &commit, &path, &contents)
+            let file = write_snapshot(dir, &commit, &path, &contents)
                 .map_err(|e| format!("couldn't write a copy of {path}: {e}"))?;
             Ok(Snapshot {
                 path,
@@ -702,8 +713,7 @@ pub fn edit_snapshot(repo: Repo, dir: PathBuf, target: EditTarget) -> Action {
                 file,
                 line: target.line,
             })
-        });
-    Action::EditSnapshot(result)
+        })
 }
 
 /// Blames `path` as of `rev` (the working tree when `None`).

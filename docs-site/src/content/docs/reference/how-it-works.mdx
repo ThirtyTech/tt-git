@@ -486,6 +486,13 @@ deleted), then written read-only to
 `<temp>/tt-git/<repo>/<short id>/<path>`, where the editor opens it. A copy
 that's already there is reused.
 
+Quick Look (<kbd>v</kbd> <kbd>V</kbd> in details, macOS) reads a file from a
+commit the same way, with `<commit>^` for the version before it, and writes
+it read-only to `<temp>/tt-git-quicklook/<pid>/<short id>/<path>`. The
+desktop app shows it in its Quick Look panel (`QLPreviewPanel`); the
+terminal app runs `qlmanage -p <file>`. A working-tree file is previewed
+where it is. The folder is removed when tt-git quits.
+
 A terminal editor gets the real terminal: tt-git stops reading keys, leaves
 its alternate screen and raw mode, waits for the editor to exit, then
 restores all three, redraws and refreshes. A GUI editor is started with no

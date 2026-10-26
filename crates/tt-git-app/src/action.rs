@@ -173,6 +173,9 @@ pub enum Action {
     /// A copy of a file that isn't in the working tree, written to open in
     /// the editor, or why it couldn't be.
     EditSnapshot(Result<Snapshot, String>),
+    /// A copy of a file for Quick Look to preview, or why it couldn't be
+    /// written.
+    QuickLookReady(Result<std::path::PathBuf, String>),
     /// The editor from `OpenInEditor` exited (`Ok` with its exit code, when
     /// it has one) or, for one with a window of its own, started. `Err` says
     /// why it couldn't start.

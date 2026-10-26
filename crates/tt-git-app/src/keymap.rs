@@ -395,6 +395,11 @@ pub enum Command {
     /// Switches the desktop app between its native and terminal styles.
     /// Only the desktop app offers it (see `App::enable_ui_style`).
     WindowStyle,
+    /// Previews a file in the details pane with Quick Look: its version
+    /// after the commit. Only offered on macOS (see `App::enable_quick_look`).
+    QuickLook,
+    /// Previews the file's version before the commit.
+    QuickLookOld,
 }
 
 impl Command {
@@ -505,6 +510,8 @@ impl Command {
             Command::ResetZoom => "reset zoom",
             Command::Font => "font",
             Command::WindowStyle => "native/terminal style",
+            Command::QuickLook => "quick look",
+            Command::QuickLookOld => "quick look before",
         }
     }
 }
@@ -699,6 +706,8 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Details, Command::SearchNext, &["n"]),
     (Context::Details, Command::SearchPrev, &["N"]),
     (Context::Details, Command::Agent, &["A"]),
+    (Context::Details, Command::QuickLook, &["v"]),
+    (Context::Details, Command::QuickLookOld, &["V"]),
     (Context::Blame, Command::GoToLine, &["ctrl+g"]),
     (Context::Blame, Command::OpenCommit, &["enter"]),
     (Context::Blame, Command::ToggleDetails, &["space"]),
