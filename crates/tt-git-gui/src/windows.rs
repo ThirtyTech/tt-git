@@ -3,10 +3,11 @@
 //! ([`crate::start`]) when no repository is open.
 //!
 //! Every way of opening a repository comes here: the command line, the
-//! start window, "Open repository" (the native folder picker) and opening
-//! another worktree. A repository that already has a window gets that
-//! window brought forward instead of a second one. The app quits when its
-//! last window closes ([`quit_when_last_closes`]).
+//! start window, "Open repository" (the native folder picker), Finder's
+//! Open in tt-git ([`crate::services`]) and opening another worktree. A
+//! repository that already has a window gets that window brought forward
+//! instead of a second one. The app quits when its last window closes
+//! ([`quit_when_last_closes`]).
 
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -159,6 +160,33 @@ pub fn pick_repos(cx: &mut App, done: impl FnOnce(Result<usize, String>, &mut Ap
         });
     })
     .detach();
+}
+
+/// Opens the repositories at `paths` when another app asks (Finder's Open
+/// in tt-git), each as [`open_path`] does. Then a start window that's open
+/// closes, as it does when a repository opens from it. A folder that isn't
+/// in a repository is reported in the start window instead, opened for it
+/// if there isn't one.
+pub fn open_requested(paths: &[PathBuf], cx: &mut App) {
+    let errors: Vec<String> = paths.iter().filter_map(|path| open_path(path, cx).err()).collect();
+    let starts = crate::start::windows(cx);
+    if errors.is_empty() {
+        for start in starts {
+            let _ = start.update(cx, |_, window, _| window.remove_window());
+        }
+    } else {
+        let error = errors.join("\n\n");
+        tracing::warn!("{error}");
+        match starts.first() {
+            Some(&start) => crate::start::show_error(start, error, cx),
+            None => {
+                if let Err(e) = crate::start::open(Some(error), cx) {
+                    tracing::warn!("couldn't open the start window: {e}");
+                }
+            }
+        }
+    }
+    cx.activate(true);
 }
 
 /// `path` with symlinks resolved, so two spellings of one repository match.
@@ -346,6 +374,46 @@ mod tests {
         cx.run_until_parked();
         assert_eq!(roots(cx), [canonical(a.path())]);
         assert_eq!(cx.windows().len(), 1, "the start window closed");
+    }
+
+    fn start_error(start: WindowHandle<Root>, cx: &mut TestAppContext) -> Option<String> {
+        start
+            .update(cx, |root, _, cx| {
+                let view = root.view().clone().downcast::<crate::start::StartView>().unwrap();
+                view.read(cx).error().map(str::to_string)
+            })
+            .unwrap()
+    }
+
+    #[gpui::test]
+    fn a_requested_repo_opens_and_the_start_window_closes(cx: &mut TestAppContext) {
+        setup(cx);
+        let (a, b) = (sandbox("a.txt"), sandbox("b.txt"));
+        cx.update(|cx| crate::start::open(None, cx)).unwrap();
+        cx.update(|cx| open_requested(&[a.path().to_path_buf(), b.path().to_path_buf()], cx));
+        cx.run_until_parked();
+        assert_eq!(roots(cx), [canonical(a.path()), canonical(b.path())]);
+        assert_eq!(cx.windows().len(), 2, "the start window closed");
+    }
+
+    #[gpui::test]
+    fn a_requested_folder_outside_a_repo_shows_why_in_the_start_window(cx: &mut TestAppContext) {
+        setup(cx);
+        let a = sandbox("a.txt");
+        let elsewhere = tempfile::tempdir().unwrap();
+        open(cx, &a);
+        cx.update(|cx| open_requested(&[elsewhere.path().to_path_buf()], cx));
+        let starts = cx.update(crate::start::windows);
+        assert_eq!(starts.len(), 1, "a start window opened");
+        let error = start_error(starts[0], cx).unwrap_or_default();
+        assert!(error.starts_with("can't open "), "{error}");
+
+        // Another goes to the same start window.
+        cx.update(|cx| open_requested(&[elsewhere.path().join("missing")], cx));
+        assert_eq!(cx.update(crate::start::windows), starts);
+        assert_eq!(cx.windows().len(), 2);
+        let error = start_error(starts[0], cx).unwrap_or_default();
+        assert!(error.contains("missing"), "{error}");
     }
 
     #[gpui::test]

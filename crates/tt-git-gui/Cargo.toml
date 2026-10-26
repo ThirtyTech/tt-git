@@ -42,6 +42,10 @@ raw-window-handle = "0.6"
 # The Win32 calls, kept out of this crate: it forbids unsafe code.
 tt-git-win.workspace = true
 
+# Finder's Open in tt-git (the services provider).
+[target.'cfg(target_os = "macos")'.dependencies]
+tt-git-win.workspace = true
+
 [build-dependencies]
 # The icon resource in the Windows executable (build.rs).
 embed-resource = "3"

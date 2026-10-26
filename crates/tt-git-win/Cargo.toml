@@ -1,6 +1,6 @@
 [package]
 name = "tt-git-win"
-description = "The Win32 and COM calls behind tt-git-gui's Windows integration"
+description = "The OS calls behind tt-git-gui's Windows and macOS integration"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -22,6 +22,22 @@ windows = { version = "0.62", features = [
     "Win32_UI_Shell_Common",
     "Win32_UI_Shell_PropertiesSystem",
     "Win32_UI_WindowsAndMessaging",
+] }
+
+# The versions GPUI already uses.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "NSApplication",
+    "NSPasteboard",
+    "NSPasteboardItem",
+    "NSResponder",
+] }
+objc2-foundation = { version = "0.3.2", default-features = false, features = [
+    "std",
+    "NSString",
+    "NSURL",
 ] }
 
 # The workspace forbids unsafe code. This crate is the one place that allows

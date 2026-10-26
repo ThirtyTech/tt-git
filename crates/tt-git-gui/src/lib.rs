@@ -34,6 +34,7 @@ pub mod notify;
 pub mod overlay;
 pub mod panes;
 pub mod rows;
+pub mod services;
 pub mod shell;
 pub mod start;
 pub mod taskbar;

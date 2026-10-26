@@ -34,5 +34,28 @@
     <true/>
     <key>NSHumanReadableCopyright</key>
     <string>ThirtyTech. MIT license.</string>
+    <!-- Open in tt-git on folders in Finder (right-click, Quick Actions
+         or Services). macOS sends openFolder:userData:error: to the
+         running app (src/services.rs), starting it first if need be. -->
+    <key>NSServices</key>
+    <array>
+        <dict>
+            <key>NSMenuItem</key>
+            <dict>
+                <key>default</key>
+                <string>Open in tt-git</string>
+            </dict>
+            <key>NSMessage</key>
+            <string>openFolder</string>
+            <key>NSPortName</key>
+            <string>tt-git</string>
+            <key>NSRequiredContext</key>
+            <dict/>
+            <key>NSSendFileTypes</key>
+            <array>
+                <string>public.folder</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
