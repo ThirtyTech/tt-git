@@ -278,9 +278,10 @@ is in the window. Local work such as staging, committing or checking out
 is over too quickly to show.
 
 On Linux, a dock that shows app progress (Dash to Dock and Ubuntu Dock on
-GNOME, the task manager on KDE Plasma) shows an empty progress bar on
-tt-git's icon while any of its windows pushes, pulls or fetches. A failed
-job just clears it. tt-git sends it through the Unity launcher API on the
+GNOME, the task manager on KDE Plasma) shows a progress bar on tt-git's
+icon while any of its windows pushes, pulls or fetches. git doesn't say how
+far along it is, so the bar fills and starts again until the job is done.
+A failed job just clears it. tt-git sends it through the Unity launcher API on the
 session bus, for the installed `tt-git.desktop`, so a build from source
 with no `.desktop` file installed shows nothing. GNOME's own dash shows
 neither the progress nor the badge below.
