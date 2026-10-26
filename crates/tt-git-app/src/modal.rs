@@ -54,6 +54,12 @@ pub enum GitOp {
     PushTag {
         name: String,
     },
+    /// Push local branch `name`, which isn't checked out, to `upstream`
+    /// (`remote/branch`), or with none to the default remote, setting it.
+    PushBranch {
+        name: String,
+        upstream: Option<String>,
+    },
     RenameBranch {
         old: String,
         new: String,
@@ -212,6 +218,7 @@ impl GitOp {
             } => format!("delete tag {name} here and on {remote}"),
             GitOp::CreateTag { name, .. } => format!("create tag {name}"),
             GitOp::PushTag { name } => format!("push tag {name}"),
+            GitOp::PushBranch { name, .. } => format!("push {name}"),
             GitOp::RenameBranch { old, new } => format!("rename {old} → {new}"),
             GitOp::FetchAll => "fetch --all".into(),
             GitOp::PruneGone => "fetch --all and find gone branches".into(),

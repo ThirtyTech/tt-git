@@ -120,12 +120,13 @@ pub fn build(app: &tt_git_app::App) -> Vec<MenuSpec> {
     let context = app.keymap_context();
     let keymap = app.keymap();
     let enabled = app.modal().is_none() && app.error().is_none() && !app.shows_help();
-    let item = |cmd: Command| ItemSpec::Item {
-        label: sentence_case(cmd.label()),
+    let labelled = |cmd: Command, label: &str| ItemSpec::Item {
+        label: sentence_case(label),
         key: keymap.display_key_text(context, cmd).map(str::to_string),
         action: MenuAction::Command(cmd),
         enabled,
     };
+    let item = |cmd: Command| labelled(cmd, cmd.label());
     let groups = |groups: &[&[Command]]| -> Vec<ItemSpec> {
         let mut items = Vec::new();
         for (i, group) in groups.iter().enumerate() {
@@ -176,7 +177,11 @@ pub fn build(app: &tt_git_app::App) -> Vec<MenuSpec> {
         },
         MenuSpec {
             name: pane_menu_name(context).into(),
-            items: app.focused_commands().iter().map(|c| item(*c)).collect(),
+            items: app
+                .focused_commands()
+                .iter()
+                .map(|c| labelled(*c, app.focused_label(*c)))
+                .collect(),
         },
     ]
 }

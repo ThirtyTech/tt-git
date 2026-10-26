@@ -749,6 +749,7 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Worktrees, Command::RemoveWorktree, &["d"]),
     (Context::Worktrees, Command::NewBranch, &["n"]),
     (Context::Worktrees, Command::Copy, &["c"]),
+    (Context::Worktrees, Command::PushTag, &["P"]),
     (Context::Worktrees, Command::NextTab, &["]", "}"]),
     (Context::Worktrees, Command::PrevTab, &["[", "{"]),
     (Context::Worktrees, Command::Filter, &["/"]),

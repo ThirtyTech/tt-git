@@ -57,6 +57,7 @@ pub(super) fn is_network(op: &GitOp) -> bool {
             | GitOp::FetchAll
             | GitOp::PruneGone
             | GitOp::PushTag { .. }
+            | GitOp::PushBranch { .. }
             | GitOp::FastForward { .. }
             | GitOp::DeleteRemoteBranch { .. }
             | GitOp::DeleteTag { remote: Some(_), .. }
@@ -121,6 +122,10 @@ mod tests {
         assert!(is_network(&GitOp::Push));
         assert!(is_network(&GitOp::FetchAll));
         assert!(is_network(&GitOp::PushTag { name: "v1".into() }));
+        assert!(is_network(&GitOp::PushBranch {
+            name: "feature".into(),
+            upstream: None,
+        }));
         assert!(is_network(&GitOp::SelfUpdate { tag: "v9".into() }));
         assert!(is_network(&GitOp::DeleteTag {
             name: "v1".into(),

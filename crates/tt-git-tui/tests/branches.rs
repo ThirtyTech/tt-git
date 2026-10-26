@@ -745,3 +745,88 @@ fn prune_gone_never_offers_a_checked_out_branch() {
         Some("✓ fetched all remotes; only checked-out branches have a gone upstream: wt-gone")
     );
 }
+
+fn select(t: &mut TestDriver, name: &str) {
+    let idx = names(t).iter().position(|n| n == name).unwrap();
+    for _ in 0..idx {
+        t.press("j");
+    }
+}
+
+#[test]
+fn push_selected_branch_without_checking_it_out() {
+    let sb = repo_with_remote_branch();
+    let mut t = TestDriver::with_size(Config::default(), &sb, 240, 30);
+    t.press("3");
+    assert!(t.screen().contains("P push branch"), "{}", t.screen());
+    select(&mut t, "local-work");
+    t.press("P");
+    t.wait_idle();
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(t.app().notice(), Some("✓ pushed local-work"));
+    assert_eq!(sb.current_branch(), "main");
+    assert_eq!(
+        sb.git(&["rev-parse", "--abbrev-ref", "local-work@{upstream}"]),
+        "origin/local-work"
+    );
+    let pushes: Vec<String> = t
+        .app()
+        .repo()
+        .git()
+        .log()
+        .entries()
+        .iter()
+        .filter(|c| c.args.starts_with("push"))
+        .map(|c| c.args.clone())
+        .collect();
+    assert_eq!(pushes, ["push -u origin refs/heads/local-work"]);
+}
+
+#[test]
+fn push_on_a_remote_only_branch_says_why_not() {
+    let sb = repo_with_remote_branch();
+    let mut t = TestDriver::new(&sb);
+    t.press("3");
+    select(&mut t, "their-feature");
+    t.press("P");
+    assert_eq!(
+        t.app().notice(),
+        Some("their-feature is only on the remote (origin/their-feature); there's nothing local to push")
+    );
+}
+
+#[test]
+fn push_on_the_checked_out_branch_pushes_as_usual() {
+    let sb = repo_with_remote_branch();
+    sb.commit("more");
+    let mut t = TestDriver::new(&sb);
+    t.press("3");
+    select(&mut t, "main");
+    t.press("P");
+    t.wait_idle();
+    assert_eq!(t.app().notice(), Some("✓ pushed main → origin/main"));
+}
+
+#[test]
+fn push_from_the_worktrees_tab_pushes_its_branch() {
+    let sb = repo_with_remote_branch();
+    let path = sb.root().join("wt-local");
+    sb.git(&["worktree", "add", "-q", &path.to_string_lossy(), "local-work"]);
+    let mut t = TestDriver::with_size(Config::default(), &sb, 160, 30);
+    t.press("3");
+    while t.app().branches().tab() != BranchTab::Worktrees {
+        t.press("]");
+    }
+    let idx = t
+        .pane_lines(PaneId::Branches)
+        .iter()
+        .filter(|l| !l.trim().is_empty())
+        .position(|l| l.contains("local-work"))
+        .unwrap();
+    for _ in 0..idx {
+        t.press("j");
+    }
+    t.press("P");
+    t.wait_idle();
+    assert_eq!(t.app().notice(), Some("✓ pushed local-work"), "{}", t.screen());
+}
