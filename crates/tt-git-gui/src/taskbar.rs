@@ -3,15 +3,19 @@
 //! with `[ui] notifications` on a badge over the icon: conflicts, a stopped
 //! merge or rebase ([`App::take_repo_alert`](tt_git_app::App::take_repo_alert)),
 //! or new commits that came in while the window wasn't focused, until it is
-//! again. The Win32 calls are in `tt-git-win`; elsewhere this does nothing.
+//! again. The Win32 calls are in `tt-git-win`. On Linux the same goes to the
+//! app's launcher ([`launcher_entry`](crate::launcher_entry)).
 
-use gpui::Window;
+use gpui::{App, Window};
 use tt_git_app::app::{JobProgress, RepoAlert};
 use tt_git_app::new_commits::NewCommits;
 use tt_git_core::InProgress;
 
+use crate::launcher_entry::{self, WindowEntry};
+
 /// The badge's size in pixels: twice the taskbar's 16, so it stays sharp
 /// at 200%.
+#[cfg_attr(not(windows), allow(dead_code))]
 const ICON_SIZE: u32 = 32;
 
 /// What the badge over a window's taskbar button says, most pressing first.
@@ -34,6 +38,7 @@ impl Badge {
     }
 
     /// The dot's color: red, amber, blue.
+    #[cfg_attr(not(windows), allow(dead_code))]
     fn color(self) -> [u8; 3] {
         match self {
             Badge::Conflicts => [0xcf, 0x22, 0x2e],
@@ -48,14 +53,20 @@ impl Badge {
 #[derive(Debug, Default)]
 pub struct Taskbar {
     alert: RepoAlert,
+    /// The alert came while the window wasn't focused: urgent on the Linux
+    /// launcher until it is.
+    alert_unseen: bool,
     /// Commits that came in while the window wasn't focused.
     new_commits: usize,
+    busy: bool,
     shown: Option<Badge>,
 }
 
 impl Taskbar {
     /// Shows `progress` on `window`'s taskbar button.
-    pub fn progress(&self, window: &Window, progress: JobProgress) {
+    pub fn progress(&mut self, window: &Window, progress: JobProgress, cx: &mut App) {
+        self.busy = progress == JobProgress::Busy;
+        self.report(window, cx);
         #[cfg(windows)]
         {
             use tt_git_win::taskbar::Progress;
@@ -75,26 +86,55 @@ impl Taskbar {
     }
 
     /// The repository's alert changed.
-    pub fn alert(&mut self, window: &Window, alert: RepoAlert) {
-        self.alert = alert;
+    pub fn alert(&mut self, window: &Window, alert: RepoAlert, cx: &mut App) {
+        self.set_alert(alert, window.is_window_active());
         self.show(window);
+        self.report(window, cx);
     }
 
     /// `new` came in. It's badged only while the window isn't focused, as
     /// the notification is.
-    pub fn new_commits(&mut self, window: &Window, new: &NewCommits) {
+    pub fn new_commits(&mut self, window: &Window, new: &NewCommits, cx: &mut App) {
         if !window.is_window_active() {
             self.new_commits += new.total();
             self.show(window);
+            self.report(window, cx);
         }
     }
 
-    /// The window was focused or left: focused, the new commits are seen.
-    pub fn activated(&mut self, window: &Window) {
-        if window.is_window_active() && self.new_commits > 0 {
-            self.new_commits = 0;
+    /// The window was focused or left: focused, the new commits and the
+    /// alert are seen.
+    pub fn activated(&mut self, window: &Window, cx: &mut App) {
+        if window.is_window_active() && (self.new_commits > 0 || self.alert_unseen) {
+            self.seen();
             self.show(window);
+            self.report(window, cx);
         }
+    }
+
+    fn set_alert(&mut self, alert: RepoAlert, focused: bool) {
+        if alert != self.alert {
+            self.alert_unseen = alert != RepoAlert::None && !focused;
+        }
+        self.alert = alert;
+    }
+
+    fn seen(&mut self) {
+        self.new_commits = 0;
+        self.alert_unseen = false;
+    }
+
+    /// What the window puts on the Linux launcher.
+    pub fn launcher_entry(&self) -> WindowEntry {
+        WindowEntry {
+            new_commits: self.new_commits,
+            urgent: self.alert_unseen,
+            busy: self.busy,
+        }
+    }
+
+    fn report(&self, window: &Window, cx: &mut App) {
+        launcher_entry::set(window.window_handle().window_id(), self.launcher_entry(), cx);
     }
 
     /// The badge for what's known now, if any.
@@ -205,6 +245,33 @@ mod tests {
         taskbar.alert = RepoAlert::None;
         taskbar.new_commits = 0;
         assert_eq!(taskbar.badge(), None);
+    }
+
+    #[test]
+    fn an_alert_is_urgent_on_the_launcher_until_the_window_is_focused() {
+        let mut taskbar = Taskbar::default();
+        taskbar.set_alert(RepoAlert::Conflicts, true);
+        assert!(!taskbar.launcher_entry().urgent, "it came while focused");
+        taskbar.set_alert(RepoAlert::None, false);
+        taskbar.set_alert(RepoAlert::Stopped(InProgress::Merge), false);
+        taskbar.new_commits = 2;
+        assert_eq!(
+            taskbar.launcher_entry(),
+            WindowEntry {
+                new_commits: 2,
+                urgent: true,
+                busy: false
+            }
+        );
+        taskbar.set_alert(RepoAlert::Stopped(InProgress::Merge), false);
+        assert!(taskbar.launcher_entry().urgent, "the same alert again");
+        taskbar.seen();
+        assert_eq!(taskbar.launcher_entry(), WindowEntry::default());
+        assert_eq!(
+            taskbar.badge(),
+            Some(Badge::Stopped(InProgress::Merge)),
+            "the badge stays"
+        );
     }
 
     #[test]

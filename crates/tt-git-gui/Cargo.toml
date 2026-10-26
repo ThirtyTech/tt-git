@@ -42,6 +42,11 @@ raw-window-handle = "0.6"
 # The Win32 calls, kept out of this crate: it forbids unsafe code.
 tt-git-win.workspace = true
 
+# The launcher's badge and progress (launcher_entry.rs), over the session
+# bus. GPUI already builds zbus for the desktop portals.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5"
+
 [build-dependencies]
 # The icon resource in the Windows executable (build.rs).
 embed-resource = "3"
