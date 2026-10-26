@@ -124,7 +124,7 @@ command palette, which lists built-in commands and plugin actions.
 |---|---|---|
 | anywhere | `1` `2` `3` `4` / `tab` `shift+tab` | focus graph / status / branches / details |
 | | `ctrl+h` `ctrl+j` `ctrl+k` `ctrl+l` | focus the pane to the left / below / above / right |
-| | `+` | zoom: the graph, or details if focused, fullscreen and back |
+| | `+` | zoom: the graph, or details if focused, fullscreen and back; from status, status in a column beside the graph |
 | | `j` `k` `↑` `↓`, `ctrl+d` `ctrl+u`, `g` `G` | move, page, top/bottom |
 | | `P` / `p` | push (sets upstream on first push) / pull |
 | | `z` | undo the last checkout, commit, reset or rebase |

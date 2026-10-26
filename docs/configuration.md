@@ -208,7 +208,9 @@ below the diff.
 
 `+` zooms whichever layout you use: the focused pane (details, or else the
 graph) fills the screen, and the next `+` goes back. `space` in a fullscreen
-graph opens details below it at full width and closes it again.
+graph opens details below it at full width and closes it again. From the
+status pane, `+` instead puts status in a full-height column on the left (a
+sixth of the width) with the graph, and details once open, beside it.
 
 ## Key bindings
 

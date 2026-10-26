@@ -323,6 +323,22 @@ changes. On a folder in the [tree](#the-folder-tree), details shows everything c
   program, ignoring anything git ignores. See [Refreshing](/git/refreshing/).
 </Aside>
 
+## Zoom
+
+Press <kbd>+</kbd> in the status pane to turn it into a narrow column down the left of the screen,
+full height, a third of its usual width. The graph moves over to fill the rest, and the branches
+pane is hidden. Press <kbd>+</kbd> again to go back.
+
+<Screenshot name="status-zoom" alt="The status pane as a full-height column on the left, with the graph beside it" />
+
+Status keeps the focus, so the keys below all work as before. With the column showing:
+
+- <kbd>1</kbd> moves to the graph and keeps the column. <kbd>space</kbd> there opens details
+  under the graph.
+- <kbd>enter</kbd> on a file opens the [staging view](/panes/staging/) fullscreen as usual, and
+  <kbd>esc</kbd> comes back to the column.
+- Focusing the branches pane (<kbd>3</kbd>) puts the normal layout back.
+
 ## Keys
 
 | Key | Does |
@@ -344,3 +360,4 @@ changes. On a folder in the [tree](#the-folder-tree), details shows everything c
 | <kbd>-</kbd> <kbd>=</kbd> | Fold every folder in the tree / open them all |
 | <kbd>C</kbd> | Continue a merge, rebase, cherry-pick or revert |
 | <kbd>X</kbd> | Abort it (asks first) |
+| <kbd>+</kbd> | [Zoom](#zoom): status in a column beside the graph, and back |
