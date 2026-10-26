@@ -125,6 +125,13 @@ The filtered log adds:
 - for a message on the whole message, `%B` (the raw message) added to the
   log's format. tt-git matches the regex against it the same way, with
   `^` and `$` at each line.
+- for [hidden merge commits](/panes/graph/#hiding-merge-commits), nothing:
+  git lists them without `--max-count`, and tt-git leaves out each commit
+  with more than one parent, stopping once `max_commits` others are listed.
+  `--no-merges` would leave a commit's parent pointing at the merge it
+  hid, which breaks every line through one. Instead tt-git changes a
+  parent that was a hidden merge to that merge's first parent (through a
+  run of merges, to the first that isn't one).
 - for a message on the diff, `-G<regex>`, and `--regexp-ignore-case` when
   the regex has no capital letter. git keeps only the commits whose patch
   adds or removes a line matching it, so `--max-count` stays. `-G` reads

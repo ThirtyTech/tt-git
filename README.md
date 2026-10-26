@@ -139,6 +139,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `a` | all branches ↔ current branch |
 | | `t` | dates as age (`3h`) ↔ local date and time (`2026-10-17 01:30 PM`) |
 | | `L` | hide / show the lanes, so each row starts with its badges and subject |
+| | `m` | hide / show merge commits; the lines through them still join up |
 | | `f` | filter: only one author's commits, or the commits that changed a file or folder (`tab` in the panel switches between the two; both can be set) |
 | | `/` | filter by a regex on the commit subject, such as `^feat` (`tab` in the prompt fills in the next of the repo's most used prefixes; `ctrl+t` searches the whole message or the diff, `git log -G`, instead) |
 | | `.` | only the commits that changed the folder tt-git was started in (Status narrows too); again for everything |

@@ -82,6 +82,21 @@ their order stay the same; only the drawing goes.
 To start with the lanes hidden, set `lanes = false` under `[graph]` in the
 [configuration file](/configuration/).
 
+### Hiding merge commits
+
+Press <kbd>m</kbd> to hide merge commits, so the graph shows only the commits that made changes.
+The title says `no merges`, as in `Graph [all · no merges]`. Press <kbd>m</kbd> again to show
+them.
+
+The lines still join up. A commit made after a merge connects to the commit before the merge on
+the same branch, and a merged branch's last commit becomes the top of its own lane, which joins
+the branch it came from lower down.
+
+Hiding merges works with [the filters](#filtering-by-author-or-file) and with
+<kbd>a</kbd>. <kbd>esc</kbd> clears the filters but leaves merges hidden. The single branch the
+graph shows from the [Unmerged and Merged tabs](/panes/merged-unmerged/) always has its merges. Merges are shown again each
+time tt-git starts.
+
 ## Branch and tag badges
 
 <Screenshot name="graph-badges" alt="A close-up of the badges for the checked-out branch, a local branch, a remote branch and a tag" />
@@ -376,6 +391,7 @@ See [How tt-git uses git](/reference/how-it-works/#graph) for the details, and
 | <kbd>a</kbd> | All branches ↔ current branch |
 | <kbd>t</kbd> | Dates as age ↔ local date and time (also in [blame](/panes/blame/#dates)) |
 | <kbd>L</kbd> | Hide / show the lanes |
+| <kbd>m</kbd> | Hide / show merge commits |
 | <kbd>f</kbd> | Filter by author or file |
 | <kbd>/</kbd> | Filter by a regex on the commit subject, the whole message or the diff (<kbd>tab</kbd> in the prompt: next preset; <kbd>ctrl+t</kbd>: what to search) |
 | <kbd>.</kbd> | Only the commits that changed the folder tt-git was started in, and back |

@@ -248,7 +248,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `move_up`, `move_down`, `page_up`, `page_down`, `top`, `bottom` | `k`/`↑`, `j`/`↓`, `ctrl+u`, `ctrl+d`, `g`, `G` | global |
 | `refresh`, `push`, `pull` | `ctrl+r`, `P`, `p` | global |
 | `undo` | `z` | global |
-| `toggle_scope`, `toggle_dates`, `toggle_lanes`, `checkout`, `filter`, `new_branch`, `new_tag`, `merge`, `rebase`, `cherry_pick`, `revert`, `reset`, `select_range`, `agent` | `a`, `t`, `L`, `o`, `f`, `n`, `T`, `M`, `r`, `C`, `R`, `X`, `v`, `A` | graph |
+| `toggle_scope`, `toggle_dates`, `toggle_lanes`, `toggle_merges`, `checkout`, `filter`, `new_branch`, `new_tag`, `merge`, `rebase`, `cherry_pick`, `revert`, `reset`, `select_range`, `agent` | `a`, `t`, `L`, `m`, `o`, `f`, `n`, `T`, `M`, `r`, `C`, `R`, `X`, `v`, `A` | graph |
 | `filter_message` | `/` | graph |
 | `filter_folder` | `.` | graph, status |
 | `checkout`, `new_branch`, `new_tag`, `delete_branch`, `rename_branch`, `fetch`, `prune_gone`, `fast_forward`, `filter`, `merge`, `rebase`, `reset` | `enter`/`space`, `n`, `T`, `d`, `R`, `f`, `D`, `F`, `/`, `M`, `r`, `X` | branches |
