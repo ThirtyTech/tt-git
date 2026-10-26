@@ -78,6 +78,7 @@ pub fn init(cx: &mut App) {
     );
     menus::init(cx);
     notify::init(cx);
+    dock::init(cx);
 }
 
 /// Opens a window on `app`, which [`App::new`](tt_git_app::App::new) made

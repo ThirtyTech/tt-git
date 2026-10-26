@@ -1,5 +1,5 @@
 //! The app's Dock icon on macOS: with `[ui] notifications` on, a badge
-//! over it.
+//! over it, and its right-click menu.
 //!
 //! The Dock has one icon for every window, so each window's
 //! [`Taskbar`](crate::taskbar::Taskbar) hands its [`Badge`] here and the
@@ -8,14 +8,91 @@
 //! so the two can't differ by color as on Windows), or else the new
 //! commits that came in while their windows weren't focused, added up.
 //!
+//! The menu is the recent repositories (as the Windows jump list has them,
+//! [`jump_list::entries`]) and Open Repository…; macOS adds the open
+//! windows itself. [`jump_list::refresh`] builds it whenever the recent
+//! repositories change. Its items run in this process, through
+//! [`OpenRecent`] and [`PickRepositories`].
+//!
 //! Only `main` calls [`install`], so tests never touch the Dock; the badge
-//! is worked out and unit-tested here on every OS.
+//! and the menu are worked out and unit-tested here on every OS.
 
 use std::collections::HashMap;
+use std::path::PathBuf;
 
-use gpui::{App, Global, WindowId};
+use gpui::{App, Global, MenuItem, WindowId};
 
+use crate::jump_list::{self, Entry};
 use crate::taskbar::Badge;
+
+/// How many recent repositories the menu lists.
+pub const MENU_SLOTS: usize = 10;
+
+/// Opens a recent repository, or brings its window forward.
+#[derive(Debug, Clone, PartialEq, gpui::Action)]
+#[action(namespace = tt_git, no_json)]
+pub struct OpenRecent(pub PathBuf);
+
+gpui::actions!(
+    tt_git,
+    [
+        /// Asks for repositories with the folder picker and opens them.
+        PickRepositories
+    ]
+);
+
+/// Handles the menu's items. Call once, from [`crate::init`].
+pub fn init(cx: &mut App) {
+    cx.on_action(|open: &OpenRecent, cx| {
+        let path = open.0.clone();
+        // Deferred, as Quit is: it can come while a window is being updated.
+        cx.defer(move |cx| {
+            if let Err(e) = crate::windows::open_path(&path, cx) {
+                show_error(e, cx);
+            }
+        });
+    });
+    cx.on_action(|_: &PickRepositories, cx| {
+        crate::windows::pick_repos(cx, |result, cx| {
+            if let Err(e) = result {
+                show_error(e, cx);
+            }
+        });
+    });
+}
+
+/// Shows what went wrong in the start window, as starting in a folder that
+/// isn't a repository does.
+fn show_error(e: String, cx: &mut App) {
+    tracing::warn!("{e}");
+    if let Err(e) = crate::start::open(Some(e), cx) {
+        tracing::error!("couldn't open the start window: {e}");
+    }
+}
+
+/// The Dock menu for the recent repositories `entries`.
+pub fn menu(entries: &[Entry]) -> Vec<MenuItem> {
+    let mut items: Vec<MenuItem> = entries
+        .iter()
+        .map(|e| MenuItem::action(e.title.clone(), OpenRecent(e.path.clone())))
+        .collect();
+    if !items.is_empty() {
+        items.push(MenuItem::separator());
+    }
+    items.push(MenuItem::action("Open Repository…", PickRepositories));
+    items
+}
+
+/// Sets the Dock menu to the recent repositories `recent` (most recent
+/// first) that still exist. Does nothing without [`install`].
+pub fn set_menu(recent: &[PathBuf], cx: &mut App) {
+    if !cx.has_global::<Dock>() {
+        return;
+    }
+    let entries = jump_list::entries(recent, MENU_SLOTS, |p| p.is_dir());
+    tracing::debug!("dock menu: {} recent repositories", entries.len());
+    cx.set_dock_menu(menu(&entries));
+}
 
 /// The badge over the Dock icon for the windows' `badges`: "!" for any
 /// alert, or the new commits added up.
@@ -60,7 +137,8 @@ struct Dock(Badges);
 
 impl Global for Dock {}
 
-/// Starts showing the badge.
+/// Starts showing the badge and the menu (call before
+/// [`jump_list::install`], which builds the menu).
 pub fn install(cx: &mut App) {
     cx.set_global(Dock::default());
 }
@@ -126,6 +204,43 @@ mod tests {
         assert_eq!(badges.set(id(2), None), Some(Some("4".into())));
         assert_eq!(badges.set(id(1), None), Some(None));
         assert_eq!(badges.set(id(1), None), None);
+    }
+
+    /// What each item says, and the repository it opens.
+    fn items(menu: &[MenuItem]) -> Vec<(String, Option<PathBuf>)> {
+        menu.iter()
+            .map(|item| match item {
+                MenuItem::Separator => ("-".into(), None),
+                MenuItem::Action { name, action, .. } => (
+                    name.to_string(),
+                    action.as_any().downcast_ref::<OpenRecent>().map(|o| o.0.clone()),
+                ),
+                _ => panic!("unexpected item"),
+            })
+            .collect()
+    }
+
+    #[test]
+    fn the_menu_lists_the_recent_repositories_then_open_repository() {
+        let recent = [
+            PathBuf::from("/work/app"),
+            PathBuf::from("/gone"),
+            PathBuf::from("/home/app"),
+        ];
+        let entries = jump_list::entries(&recent, MENU_SLOTS, |p| p != std::path::Path::new("/gone"));
+        assert_eq!(
+            items(&menu(&entries)),
+            [
+                ("app (work)".into(), Some(PathBuf::from("/work/app"))),
+                ("app (home)".into(), Some(PathBuf::from("/home/app"))),
+                ("-".into(), None),
+                ("Open Repository…".into(), None),
+            ]
+        );
+        let MenuItem::Action { action, .. } = &menu(&[])[0] else {
+            panic!("no Open Repository…");
+        };
+        assert!(action.as_any().is::<PickRepositories>(), "alone with none recent");
     }
 
     #[gpui::test]
