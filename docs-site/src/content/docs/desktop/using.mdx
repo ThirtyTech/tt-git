@@ -1,6 +1,6 @@
 ---
 title: Menus, mouse and windows
-description: "What the desktop app does that the terminal app doesn't: menus, right-click menus, resizing panes, windows, editors, plugins, and what it can't do yet."
+description: "What the desktop app does that the terminal app doesn't: its native style, menus, right-click menus, resizing panes, windows, editors, plugins, and what it can't do yet."
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -8,6 +8,43 @@ import Screenshot from '../../../components/Screenshot.astro';
 
 The desktop app works like the [terminal app](/getting-started/tour/), with
 the same panes and keys. This page covers what's different.
+
+## Style
+
+The desktop app has two styles. Both have the same layout, panes and keys;
+only the borders, edges and spacing differ.
+
+- **Native**, the default, looks like a desktop app:
+  - Each pane is a card with rounded corners, with a gap between cards on
+    a slightly darker background.
+  - Each card has a header in your system's UI font, such as Segoe UI or
+    SF Pro. It shows the pane's number on a chip, the pane's name, then
+    the rest of its title.
+  - The focused pane has a border and a soft ring in the theme's focus
+    color. Other panes have a faint border and a dimmed title.
+  - The branches pane's tabs are a row of buttons in its header. Click one
+    to switch to it.
+  - The graph shows branches and tags as rounded labels, such as `main`,
+    instead of `[main]`.
+  - Rows are a little taller, and the selected row has rounded corners.
+  - The help bar is a status bar with each key on a chip.
+  - Dialogs have rounded corners and a shadow, and the panes behind them
+    are dimmed. The palette shows each command's key on a chip at the
+    right of its row.
+- **Terminal** looks as the terminal app does: bordered boxes titled
+  `[1] Graph`, a help bar of keys, and everything in one monospace font.
+
+To switch, choose *Native/terminal style* in the **tt-git** [menu](#menus)
+or the [palette](/git/palette/).
+Every window switches at once, and the help bar says *native style* or
+*terminal style*. It has no key, but you can
+[bind one](/configuration/keys/) to `window_style`.
+
+The style is saved as [`style` in `[ui]`](/configuration/#ui) in your
+global `config.toml`, so the app opens in it next time. The style doesn't
+change your [theme](/configuration/themes/): it uses the theme's
+background, text and focus colors for its cards, borders and focus ring, so
+every theme works in either style.
 
 ## Menus
 
@@ -19,7 +56,7 @@ item does exactly what pressing its key does.
 
 | Menu | Holds |
 |---|---|
-| **tt-git** | *About tt-git* (see [About](#about)), *Check for Updates…* (see [Updating](/desktop/install/#updating)), *Theme*, *Font*, *Plugin logs* and *Quit* |
+| **tt-git** | *About tt-git* (see [About](#about)), *Check for Updates…* (see [Updating](/desktop/install/#updating)), *Theme*, *Font*, *Native/terminal style* (see [Style](#style)), *Plugin logs* and *Quit* |
 | **Repository** | *Fetch*, *Prune gone*, *Pull*, *Push*, *Refresh*; *Continue merge/rebase*, *Abort merge/rebase*, *Undo*; *Ask agent*; *Open repository* |
 | **View** | Focus *Graph*, *Status*, *Branches* or *Details*; *Next pane*, *Prev pane*; *Zoom*; *Zoom in*, *Zoom out*, *Reset zoom*; *Commands* (the [palette](/git/palette/)) and *Help* |
 | The focused pane | Named after it (**Graph**, **Status**, **Branches**, **Details**, **Stage**, **Blame**, **Stash** or **Worktrees**): that pane's commands, the ones the [help popup](/getting-started/navigation/#getting-help) lists first |
@@ -37,7 +74,8 @@ Where the menus are depends on the system:
 
 The window's title bar starts with the tt-git icon (after the window
 buttons on macOS), then the menus on Windows and Linux, then the window's
-title.
+title. In the [native style](#style) the title bar has no line under it,
+and the title is dimmed after a divider.
 
 While a dialog, the help popup or an error is open, the command items are
 greyed out, since a key would go to that instead. *About tt-git*, *Check for
@@ -121,9 +159,12 @@ Not to be confused with *Zoom* (<kbd>+</kbd>), which shows one
 
 ## Font
 
-The desktop app draws everything in one font: the panes, the dialogs, the
-menus and the help bar. Out of the box it's your system's usual monospace
-font: Cascadia Mono (or Consolas) on Windows, SF Mono (or Menlo) on macOS,
+The desktop app draws the panes' text in one font. In the
+[terminal style](#style) it draws everything in that font: the dialogs,
+the menus and the help bar too. The [native style](#style) keeps it for the
+panes' text and the keys, and uses your system's UI font for the pane
+headers, the tabs, the status bar and the text in dialogs. Out of the box
+the panes' font is your system's usual monospace font: Cascadia Mono (or Consolas) on Windows, SF Mono (or Menlo) on macOS,
 and Noto Sans Mono, Liberation Mono or DejaVu Sans Mono on Linux.
 
 To pick another, choose *Font* in the **tt-git** menu or the

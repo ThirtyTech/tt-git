@@ -52,6 +52,7 @@ placement = "auto"              # "auto" (herdr tab inside herdr, else the detai
 zoom = 100                      # how big everything is drawn, in percent (50–300); ctrl+= / ctrl+- / ctrl+0 in the app save it here. Global config file only
 # font = "JetBrains Mono"       # the font everything is drawn in; unset: the OS's usual monospace font. Picking one in the app (Font) saves it here. Global config file only
 font_size = 13                  # the font size at 100% zoom, in pixels (6–72). Global config file only
+style = "native"                # "native": panes as cards, headers and dialogs in the OS's UI font; "terminal": as the TUI draws. Native/terminal style in the palette or the tt-git menu saves it here. Global config file only
 check_for_updates = true        # look for a new release once a day and say so in the help bar. Global config file only
 ```
 
@@ -276,6 +277,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `open_repository` | (palette and menu only; desktop app only, the TUI just says it needs the desktop app) | global |
 | `zoom_in`, `zoom_out`, `reset_zoom` | `ctrl+=` `ctrl++`, `ctrl+-`, `ctrl+0` (desktop app only, which also zooms with ctrl+wheel; the TUI just says they need the desktop app) | global |
 | `font` | (palette and menu only; desktop app only, the TUI just says it needs the desktop app) | global |
+| `window_style` | (palette and menu only; desktop app only, the TUI just says the terminal draws its own) | global |
 
 ### Plugin action bindings
 

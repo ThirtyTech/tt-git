@@ -29,7 +29,8 @@ here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
 | `src/model.rs` | `AppModel`, the GPUI entity that owns `tt_git_app::App`. A task applies the app's actions, a timer sends `Action::Tick` every 250 ms, and after every input it carries out what the app asks: `take_redraw` (notify), `take_clipboard` (system clipboard), `take_editor` (a windowed editor starts detached, a terminal one in a pane: see [Editors](#editors)), `should_quit` (close the window). |
 | `src/shell.rs` | `Shell`, the window's view. Draws the layout, the help bar and what opens over the panes, sends every key to tt-git's keymap, and reports where each pane went (`begin_frame`, `set_layout`), as the TUI's `draw_app` does. |
 | `src/keys.rs` | GPUI's `Keystroke` as tt-git's `KeyCombo`. tt-git's keymap resolves every key, text input included. There is no GPUI action per command. |
-| `src/theme.rs` | `GuiTheme`: tt-git's colors as `Hsla`, every `StyleRole` as a `HighlightStyle`, and gpui-component's theme set to match. |
+| `src/theme.rs` | `GuiTheme`: tt-git's colors as `Hsla`, every `StyleRole` as a `HighlightStyle`, the native style's `Surfaces` (ground, card, raised, hairlines, focus ring, scrim, mixed from the theme's background and text), and gpui-component's theme set to match. |
+| `src/look.rs` | `UiLook`, the window style (`[ui] style`: `UiStyle::Native`, the default, or `Terminal`), a GPUI global like the zoom, switched by `Command::WindowStyle`. It sets the line height (`line_spacing`: 1.6 native, 1.4 terminal), names the OS's UI font (`ui_font_family`), and holds the native sizes, in rems. |
 | `src/font.rs` | `UiFont`, the app-wide font (`[ui] font` and `font_size`, changed by the font picker), a GPUI global; the installed fonts the picker lists; and `MonoFont`: the font and its cell size, at the zoom. A font that isn't installed falls back to the OS's usual one. |
 | `src/zoom.rs` | `UiZoom`, the app-wide zoom (`[ui] zoom`), a GPUI global. The font scales with it, and so does gpui-component's `font_size`, which its `Root` makes each window's rem size. Size anything that isn't a number of cells in rems (or from `cx.theme().font_size`), not fixed pixels, so it zooms too. |
 | `src/layout.rs` | The `[layout]` tree as resizable splits. Dragging a handle resizes them; each split keeps its sizes for the session, by its place and what it shows (`split_sizes` reads them). |
@@ -43,6 +44,14 @@ here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
 | `src/gpui_tokio.rs` | Zed's tokio adapter, copied in. Jobs run on its runtime. |
 
 Things that work differently from the TUI, on purpose:
+
+- **Two styles.** The native style (the default) draws the panes as cards
+  with headers in the OS's UI font, a status bar of key chips and dialogs
+  with shadows; the terminal style draws as the TUI does. Only the chrome
+  differs: the panes' text is the same monospace text, fitted in columns,
+  in both. Draw through `PaneFrame`, `StyledRows` and the dialog helpers and
+  you get both; check `ui.native()` only for chrome of your own, and take
+  its colors from `GuiTheme` (`surfaces` for the native ones).
 
 - **Sizes are in pixels, text in columns.** `geom::Rect` holds logical pixels
   in the GUI. View models still fit text to a width in columns, so the GUI
@@ -115,13 +124,18 @@ target dir.
   `&mut tt_git_app::App` (for `set_viewport`, `note_drawn`), `ui` is the
   `Ui`, `pane` and `focused` say which pane and whether it has the focus.
   Dialogs get `DialogCx` (`app`, `ui`).
-- **`Ui`** (`ui.rs`): `theme` (`GuiTheme`), `font` (`MonoFont`),
+- **`Ui`** (`ui.rs`): `theme` (`GuiTheme`), `font` (`MonoFont`), `style`
+  (`UiStyle`; `ui.native()` says whether it's the native one),
   `fit(id)` (the columns and rows where the element measured as `id` was
   laid out), `measure(id)` (an element that records its parent's bounds as
   `id`; put it in a `.relative()` parent), and `send_mouse(MouseInput, cx)`.
   Clone it into event handlers.
 - **`PaneFrame`** (`frame.rs`): the bordered pane with `[n] title` on top,
-  in the focus colors when focused. `.title(text)` or `.title_spans(spans)`
+  in the focus colors when focused. In the native style it's a rounded card
+  with a header in the UI font: the number on a chip, the pane's name (a
+  `.title(text)` up to its first space or `:`), then the rest muted; focused,
+  a border and ring in the focus color. `title_cols` counts from after the
+  chip there. `.title(text)` or `.title_spans(spans)`
   (each span laid over the title look, like the branches tabs), then
   `.child(...)` for the body. It measures itself as `frame_id(pane)` (that's
   what the shell reports) and its body as `body_id(pane)`. A click or wheel
@@ -139,6 +153,9 @@ target dir.
   - `.bottom(left, right)`: a line along the bottom, under the body, for
     what the TUI writes on a pane's bottom border (the branches pane's
     conflicts and worktree sizes). Not drawn while both are empty.
+  - `.tabs(tabs)`: `FrameTab`s for the native header's tab strip (the
+    branches tabs), each clicked as its `target`. The terminal style
+    ignores them; give it the tabs in the title as spans instead.
   - A right-click menu (`context_menu.rs`), on every pane.
 - **`StyledRows`** (`rows.rs`): a list of one-line rows filling its parent.
   `StyledRows::new(ui, id, pane, rows)` measures itself as `id`, sends a
@@ -150,11 +167,16 @@ target dir.
 - **`StyledRow`** (`rows.rs`): one row. `StyledRow::new(theme, spans, row)`
   where `row` is the look of the whole row, laid under the spans as the TUI
   patches a line's style: `text::selection(picked, focused)` for a picked
-  row, or a role such as `StyleRole::DiffAddLine`.
+  row, or a role such as `StyleRole::DiffAddLine`. The native style rounds
+  a selection and insets the text (the list measures the inset width, so
+  `fit` stays right). `StyledRow::with_pills` draws the graph's ref labels
+  as pills, each in the columns its bracketed text had.
 - **`StyledLine`** (`text.rs`): a line of spans as GPUI text, for anything
   that isn't a list row (titles, headers, a prompt's input).
 - **`overlay::centered(content)`**: a layer over the main area with
-  `content` in its middle, for dialogs.
+  `content` in its middle, for dialogs. Dialogs use `prompt::layer(ui, …)`
+  and `prompt::dialog_box`, which add the native style's scrim, corners and
+  shadow; `help_bar::key_chip` draws a key as the native style does.
 - **`GuiTheme`** (`theme.rs`): `role(role)` and `span(span)` give a
   `HighlightStyle`; `fg(role)` and `bg(role)` give colors; `background` and
   `foreground` are the window's.
@@ -376,7 +398,7 @@ they run on every OS.
 
 The menus list tt-git's commands; the keymap stays the only place keys
 are bound. `menus::build(app)` makes them from the app as it is: tt-git
-(About, Check for Updates…, Theme, Plugin logs, Quit), Repository, View, and a
+(About, Check for Updates…, Theme, Font, Native/terminal style, Plugin logs, Quit), Repository, View, and a
 menu named after the focused pane's key context with its `commands()`
 (the help popup's first section). Each item shows the key
 `display_key_text` gives in the focused context, so a rebind shows.
