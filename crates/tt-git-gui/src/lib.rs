@@ -29,6 +29,7 @@ pub mod layout;
 pub mod look;
 pub mod menus;
 pub mod model;
+pub mod notify;
 pub mod overlay;
 pub mod panes;
 pub mod rows;
@@ -73,6 +74,7 @@ pub fn init(cx: &mut App) {
             .map(|key| KeyBinding::new(key, NoAction, Some(CONTEXT))),
     );
     menus::init(cx);
+    notify::init(cx);
 }
 
 /// Opens a window on `app`, which [`App::new`](tt_git_app::App::new) made
