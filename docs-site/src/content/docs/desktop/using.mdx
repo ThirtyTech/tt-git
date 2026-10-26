@@ -262,7 +262,7 @@ whichever copy started last (the installed one, the zip, or a build from
 source) writes it, and its entries start that copy.
 
 On Linux, right-click tt-git in the dock or the app launcher for
-**Open repository…**, which does the same. It comes from `tt-git.desktop`,
+**Open repository…**, which does the same. It comes from `ThirtyTech.tt-git.desktop`,
 so it's there once tt-git is [installed](/desktop/install/#linux) and lists
 no recent repositories.
 
@@ -282,7 +282,7 @@ GNOME, the task manager on KDE Plasma) shows a progress bar on tt-git's
 icon while any of its windows pushes, pulls or fetches. git doesn't say how
 far along it is, so the bar fills and starts again until the job is done.
 A failed job just clears it. tt-git sends it through the Unity launcher API on the
-session bus, for the installed `tt-git.desktop`, so a build from source
+session bus, for the installed `ThirtyTech.tt-git.desktop`, so a build from source
 with no `.desktop` file installed shows nothing. GNOME's own dash shows
 neither the progress nor the badge below.
 
@@ -392,7 +392,7 @@ there, as in the terminal app.
   stops every window's terminal editor without asking. Closing a window
   asks.
 - **No app icon on Wayland and macOS without the packaged files.** The icon
-  comes from `tt-git.desktop` and its icons on Wayland and from `tt-git.app`
+  comes from `ThirtyTech.tt-git.desktop` and its icons on Wayland and from `tt-git.app`
   on macOS, which the release downloads include, so a build from source
   shows none. Windows and X11 always show it.
 - **Pane sizes aren't saved.** Dragged split sizes last until the window
