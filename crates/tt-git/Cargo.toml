@@ -24,6 +24,10 @@ tt-git-plugin.workspace = true
 tt-git-tui.workspace = true
 serde_json.workspace = true
 
+[build-dependencies]
+# The icon resource in the Windows executable (build.rs).
+embed-resource = "3"
+
 [dev-dependencies]
 tempfile.workspace = true
 termlens.workspace = true

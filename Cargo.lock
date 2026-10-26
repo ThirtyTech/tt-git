@@ -8345,6 +8345,7 @@ dependencies = [
  "clap",
  "color-eyre",
  "crossterm",
+ "embed-resource",
  "ratatui",
  "serde_json",
  "tempfile",
