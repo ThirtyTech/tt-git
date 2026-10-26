@@ -217,6 +217,30 @@ such as plugin logs, tt-git says `no file to open here`.
 
 Which editor runs is set in [`[editor]`](/configuration/#editor).
 
+## Previewing a file with Quick Look
+
+On macOS, press <kbd>v</kbd> to preview the file you're looking at with Quick Look, as Finder's
+space bar does: images, PDFs and anything else a text diff only shows as `Binary files … differ`.
+Press <kbd>V</kbd> to preview it as it was before the commit. Which file is the same as for
+<kbd>e</kbd> above.
+
+| Showing | <kbd>v</kbd> previews | <kbd>V</kbd> previews |
+|---|---|---|
+| A commit or a stash | The file as of the commit | The file just before the commit |
+| A file's diff from the status pane | The file in your working tree | The file as of `HEAD` |
+
+A file the commit deleted previews as it was before the commit, with either key. For a file the
+commit added, <kbd>V</kbd> says `<file> is new in this commit`. With nothing to preview, such as
+plugin logs, tt-git says `no file to preview here`.
+
+Except for your working tree's own files, tt-git previews a read-only copy written to your temp
+directory, under `tt-git-quicklook/`, with the file's own name so Quick Look picks the right viewer.
+The copies are deleted when tt-git quits.
+
+The desktop app shows the preview in the Quick Look panel over its window, with *Open with* and
+*Share*. The terminal app opens it with `qlmanage -p`, in a window of its own. On Windows and Linux
+the keys do nothing and aren't listed.
+
 ## Blaming a file
 
 Press <kbd>b</kbd> to [blame](/panes/blame/) the file you're looking at: see who last changed each
@@ -260,6 +284,7 @@ says `no plugin handles …` rather than guessing which program should open it.
 | <kbd>]</kbd> <kbd>[</kbd> | [Next (older) / previous (newer) commit](#stepping-through-commits), stash, or status file |
 | <kbd>o</kbd> | Open the link in view with a plugin |
 | <kbd>e</kbd> | Open the file in view in your editor |
+| <kbd>v</kbd> <kbd>V</kbd> | [Quick Look](#previewing-a-file-with-quick-look) the file in view, as of the commit / before it (macOS) |
 | <kbd>b</kbd> | [Blame](/panes/blame/) the file in view, as of the commit |
 | <kbd>/</kbd> | [Search](#searching-the-diff) the text shown for a regex |
 | <kbd>n</kbd> <kbd>N</kbd> | Next / previous match |

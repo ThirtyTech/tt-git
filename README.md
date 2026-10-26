@@ -191,6 +191,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `]` / `[` | next (older) / previous (newer) commit in the graph, or stash in the Stash tab; on a file's diff, the next / previous file |
 | | `o` | open the link in view with a plugin link handler |
 | | `e` | open the file in view in your editor, at the line at the top of the diff |
+| | `v` / `V` | macOS: preview the file in view with Quick Look, as of the commit / just before it |
 | | `b` | blame the file in view as of that commit, at the line at the top of the diff |
 | | `/` | search the text shown with a regex, jumping as you type; `n` / `N` next / previous match, on through the files in the files view |
 | | `A` | ask an AI agent about the hunk at the top of the diff |

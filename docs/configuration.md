@@ -266,6 +266,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `older_commit`, `newer_commit` | `]`, `[` | details |
 | `search`, `search_next`, `search_prev` | `/`, `n`, `N` | details |
 | `open_in_editor` | `e` | status, details, stage, blame |
+| `quick_look`, `quick_look_old` | `v`, `V` (macOS only) | details |
 | `blame` | `b` | status, details |
 | `agent` | `A` | details, stage (the graph's is in the row above) |
 | `open_commit`, `toggle_details`, `blame_back`, `blame_forward`, `blame_older`, `blame_newer`, `search`, `search_next`, `search_prev`, `toggle_dates`, `close_details` | `enter`, `space`, `[`, `]`, `{`, `}`, `/`, `n`, `N`, `t`, `esc` | blame |
