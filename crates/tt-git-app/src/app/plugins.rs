@@ -336,6 +336,7 @@ impl App {
             }
             GitOp::Pull => ("pull.completed", json!({ "branch": branch, "head": head })),
             GitOp::Push => ("push.completed", json!({ "branch": branch })),
+            GitOp::PushBranch { name, .. } => ("push.completed", json!({ "branch": name })),
             GitOp::Stage(paths) => ("files.staged", json!({ "paths": paths })),
             GitOp::StageAll { folder: None } => ("files.staged", json!({ "paths": "all" })),
             GitOp::StageAll { folder: Some(f) } => ("files.staged", json!({ "paths": [f] })),
@@ -450,13 +451,13 @@ impl App {
     /// plugin actions offered in the focused context, then common built-ins.
     pub(super) fn palette_items(&self) -> Vec<PaletteItem> {
         let context = self.focused().context();
-        let builtin = |cmd: Command| {
+        let builtin = |cmd: Command, label: &str| {
             let hint = self
                 .keymap
                 .display_key(context, cmd)
                 .map(|k| k.to_string())
                 .unwrap_or_default();
-            let mut label = cmd.label().to_string();
+            let mut label = label.to_string();
             if let Some(first) = label.get_mut(0..1) {
                 first.make_ascii_uppercase();
             }
@@ -467,25 +468,28 @@ impl App {
             }
         };
         let pane_cmds = self.focused().commands();
-        let mut items: Vec<PaletteItem> = pane_cmds.iter().map(|c| builtin(*c)).collect();
+        let mut items: Vec<PaletteItem> = pane_cmds
+            .iter()
+            .map(|c| builtin(*c, self.focused().label(*c)))
+            .collect();
         items.extend(self.plugin_palette_items(context));
         items.extend(
             PALETTE_BUILTINS
                 .iter()
                 .filter(|c| !pane_cmds.contains(c))
-                .map(|c| builtin(*c)),
+                .map(|c| builtin(*c, c.label())),
         );
         if self.opens_repos() {
-            items.push(builtin(Command::OpenRepository));
+            items.push(builtin(Command::OpenRepository, Command::OpenRepository.label()));
         }
         if self.zooms() {
-            items.extend(super::ZOOM_COMMANDS.iter().map(|c| builtin(*c)));
+            items.extend(super::ZOOM_COMMANDS.iter().map(|c| builtin(*c, c.label())));
         }
         if self.chooses_fonts() {
-            items.push(builtin(Command::Font));
+            items.push(builtin(Command::Font, Command::Font.label()));
         }
         if self.styles() {
-            items.push(builtin(Command::WindowStyle));
+            items.push(builtin(Command::WindowStyle, Command::WindowStyle.label()));
         }
         items
     }

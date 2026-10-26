@@ -276,6 +276,31 @@ It refuses, with a message saying why, when:
 
 A remote-only branch has nothing local to move; check it out instead.
 
+## Pushing a branch
+
+<kbd>P</kbd> pushes the selected local branch to its remote, without
+checking it out. Use it for a branch with commits you haven't pushed yet
+(`↑` in the list) while you work on another one.
+
+- If the branch has an upstream, tt-git pushes to it:
+  `git push <remote> refs/heads/<branch>:<upstream branch>`. That works even
+  when the upstream has a different name, or is `gone`, which pushes it
+  again.
+- If it doesn't, tt-git pushes it to `origin` and sets that as its upstream:
+  `git push -u origin refs/heads/<branch>`. With no remote called `origin`,
+  it uses the first remote. With no remotes at all, it tells you there's
+  nothing to push to.
+- On the checked-out branch it does the usual [push](/git/remotes/#push).
+
+A branch checked out in another worktree is pushed the same way; pushing
+doesn't touch its files. It doesn't ask first. The help bar shows
+`pushing feature → origin/feature`, then `✓ pushed feature →
+origin/feature`. If git refuses, for example because the remote has
+commits the branch doesn't, the error box shows git's message.
+
+It says why there's nothing to push for a remote-only branch, and for a
+branch whose upstream is another local branch.
+
 ## Filtering the list
 
 <kbd>/</kbd> starts a filter on the current tab. The title shows what you've
@@ -325,6 +350,7 @@ OSC 52 clipboard support, so it also works over SSH.
 | <kbd>f</kbd> | `git fetch --all --prune` |
 | <kbd>D</kbd> | Fetch, then delete the local branches whose upstream is gone (asks; asks again before force-deleting unmerged) |
 | <kbd>F</kbd> | Fast-forward the selected branch to its upstream without checking it out |
+| <kbd>P</kbd> | Push the selected branch without checking it out (sets the upstream on the first push) |
 | <kbd>/</kbd> | Filter as you type (<kbd>esc</kbd> clears) |
 | <kbd>b</kbd> | Pick the base branch for the Unmerged, Merged and Tags tabs |
 | <kbd>M</kbd> | Merge the selection into the current branch |

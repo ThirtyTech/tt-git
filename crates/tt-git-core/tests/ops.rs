@@ -417,6 +417,102 @@ fn push_without_remote_errors() {
 }
 
 #[test]
+fn push_branch_that_is_not_checked_out() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let remote = sb.add_remote("origin");
+    sb.checkout_new("topic");
+    let work = sb.commit("topic work");
+    sb.git(&["switch", "-q", "main"]);
+    let repo = open(&sb);
+
+    // No upstream yet: it goes to origin and becomes topic's upstream.
+    repo.push_branch("topic").expect("first push sets upstream");
+    assert_eq!(sb.git_in(&remote, &["rev-parse", "topic"]), work);
+    assert_eq!(
+        sb.git(&["rev-parse", "--abbrev-ref", "topic@{upstream}"]),
+        "origin/topic"
+    );
+    assert_eq!(sb.current_branch(), "main", "HEAD stays put");
+
+    // With an upstream, later commits go to it, even under another name.
+    sb.git(&["push", "-q", "origin", "topic:renamed"]);
+    sb.git(&["branch", "-q", "--set-upstream-to=origin/renamed", "topic"]);
+    let more = sb.git(&["commit-tree", "topic^{tree}", "-p", "topic", "-m", "more"]);
+    sb.git(&["update-ref", "refs/heads/topic", &more]);
+    repo.push_branch("topic").unwrap();
+    assert_eq!(sb.git_in(&remote, &["rev-parse", "renamed"]), more);
+    assert_eq!(
+        sb.git_in(&remote, &["rev-parse", "topic"]),
+        work,
+        "the old remote branch is left alone"
+    );
+}
+
+#[test]
+fn push_branch_uses_the_first_remote_without_origin() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let remote = sb.add_remote("upstream");
+    sb.git(&["branch", "topic"]);
+    open(&sb).push_branch("topic").unwrap();
+    assert_eq!(sb.git_in(&remote, &["rev-parse", "topic"]), sb.rev_parse("topic"));
+    assert_eq!(
+        sb.git(&["rev-parse", "--abbrev-ref", "topic@{upstream}"]),
+        "upstream/topic"
+    );
+}
+
+#[test]
+fn push_branch_checked_out_in_another_worktree() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let remote = sb.add_remote("origin");
+    let repo = open(&sb);
+    repo.create_worktree("topic", "main").unwrap();
+    let wt = repo.worktree_path("topic");
+    sb.git_in(&wt, &["commit", "-q", "--allow-empty", "-m", "in the worktree"]);
+    let tip = sb.rev_parse("topic");
+    repo.push_branch("topic").unwrap();
+    assert_eq!(sb.git_in(&remote, &["rev-parse", "topic"]), tip);
+}
+
+#[test]
+fn push_branch_refusals() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    sb.git(&["branch", "topic"]);
+    let repo = open(&sb);
+    let err = repo.push_branch("topic").unwrap_err();
+    assert!(err.to_string().contains("no remote"), "{err}");
+
+    // Tracking a local branch: there's no remote to push it to.
+    sb.git(&["branch", "-q", "--set-upstream-to=main", "topic"]);
+    let err = repo.push_branch("topic").unwrap_err();
+    assert!(err.to_string().contains("tracks local branch main"), "{err}");
+}
+
+#[test]
+fn push_branch_rejected_when_the_remote_moved_on() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let remote = sb.add_remote("origin");
+    sb.git(&["branch", "topic"]);
+    let repo = open(&sb);
+    repo.push_branch("topic").unwrap();
+
+    let other = sb.clone_to(&remote, "other");
+    sb.git_in(&other, &["switch", "-q", "topic"]);
+    sb.git_in(&other, &["commit", "-q", "--allow-empty", "-m", "from elsewhere"]);
+    sb.git_in(&other, &["push", "-q"]);
+
+    let mine = sb.git(&["commit-tree", "topic^{tree}", "-p", "topic", "-m", "mine"]);
+    sb.git(&["update-ref", "refs/heads/topic", &mine]);
+    let err = repo.push_branch("topic").unwrap_err();
+    assert!(err.to_string().contains("rejected"), "{err}");
+}
+
+#[test]
 fn file_diffs() {
     let sb = Sandbox::new();
     sb.commit_file("f.txt", "one\n", "base");

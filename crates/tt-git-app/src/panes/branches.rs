@@ -873,6 +873,18 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
                 }
                 None => notify(format!("{name} has no commit to start from")),
             },
+            Command::PushTag => {
+                let entry = wt.branch.as_deref().and_then(|branch| {
+                    self.entries
+                        .iter()
+                        .find(|e| e.local.as_ref().is_some_and(|l| l.short_name == branch))
+                });
+                match entry.map(Self::push) {
+                    Some(Ok(op)) => ctx.emit(Action::Run(op)),
+                    Some(Err(why)) => notify(why),
+                    None => notify(format!("{name} has a detached HEAD; there's no branch to push")),
+                }
+            }
             // The absolute path, with Windows' own separators where git
             // printed forward slashes.
             Command::Copy => ctx.emit(Action::Copy(if cfg!(windows) {
@@ -990,12 +1002,43 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
                 Ok(op) => ctx.emit(Action::Run(op)),
                 Err(why) => ctx.emit(Action::Notify(why)),
             },
-            // `P` pushes the selected tag on the Tags tab, the current branch here.
-            Command::PushTag => ctx.emit(Action::Run(GitOp::Push)),
+            // `P` pushes the selected tag on the Tags tab, the selected branch here.
+            Command::PushTag => match Self::push(entry) {
+                Ok(op) => ctx.emit(Action::Run(op)),
+                Err(why) => ctx.emit(Action::Notify(why)),
+            },
             Command::Copy => ctx.emit(Action::Copy(entry.name.clone())),
             _ => return EventState::NotConsumed,
         }
         EventState::Consumed
+    }
+
+    /// The push of `entry`: the usual push for the checked-out branch, else
+    /// a push of that branch to its upstream (or to a new one), or why
+    /// there's nothing to push.
+    fn push(entry: &BranchEntry) -> Result<GitOp, String> {
+        if entry.is_head {
+            return Ok(GitOp::Push);
+        }
+        let Some(local) = &entry.local else {
+            let remotes: Vec<_> = entry.remotes.iter().map(|r| r.short_name.as_str()).collect();
+            return Err(format!(
+                "{} is only on the remote ({}); there's nothing local to push",
+                entry.name,
+                remotes.join(", ")
+            ));
+        };
+        let name = &local.short_name;
+        let upstream = local.upstream.as_deref();
+        if let Some(other) = upstream.and_then(|up| up.strip_prefix("refs/heads/")) {
+            return Err(format!(
+                "{name} tracks local branch {other}; there's no remote to push it to"
+            ));
+        }
+        Ok(GitOp::PushBranch {
+            name: name.clone(),
+            upstream: upstream.map(|up| up.strip_prefix("refs/remotes/").unwrap_or(up).to_string()),
+        })
     }
 
     /// The fast-forward of `entry` to its upstream, or why there's none.
@@ -1201,6 +1244,7 @@ impl Component for BranchesPane {
                 Command::OpenWorktree,
                 Command::NewBranch,
                 Command::RemoveWorktree,
+                Command::PushTag,
                 Command::Copy,
                 Command::NextTab,
                 Command::PrevTab,
@@ -1219,12 +1263,22 @@ impl Component for BranchesPane {
             Command::Fetch,
             Command::PruneGone,
             Command::FastForward,
+            Command::PushTag,
             Command::Filter,
             Command::Merge,
             Command::Rebase,
             Command::Reset,
             Command::Copy,
         ]
+    }
+
+    /// `P` pushes the selected tag on the Tags tab and the selected branch
+    /// everywhere else.
+    fn label(&self, cmd: Command) -> &'static str {
+        match cmd {
+            Command::PushTag if self.tab != BranchTab::Tags => "push branch",
+            _ => cmd.label(),
+        }
     }
 
     fn on_click(&mut self, row: usize, ctx: &Ctx) {

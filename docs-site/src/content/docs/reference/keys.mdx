@@ -174,7 +174,7 @@ On the Branches, Tags, Unmerged and Merged tabs.
 | <kbd>d</kbd> | Delete. Asks before force-deleting an unmerged branch, or deleting a remote branch or a tag. For a tag, <kbd>r</kbd> in the dialog deletes it on the remote too. |
 | <kbd>R</kbd> | Rename a local branch. |
 | <kbd>T</kbd> | New tag at the selection's commit. <kbd>tab</kbd> in the dialog makes it annotated. |
-| <kbd>P</kbd> | On the Tags tab: push the selected tag. Elsewhere: push the current branch. |
+| <kbd>P</kbd> | On the Tags tab: push the selected tag. Elsewhere: push the selected branch without checking it out, setting its upstream on the first push. |
 | <kbd>f</kbd> | `git fetch --all --prune`. |
 | <kbd>D</kbd> | Fetch, then delete the local branches whose upstream is gone. Lists them and asks first, then asks again before force-deleting unmerged ones. Not on the Tags tab. |
 | <kbd>F</kbd> | Fast-forward the selected local branch to its upstream without checking it out. Not on the Tags tab. |
@@ -220,6 +220,7 @@ branches pane's.
 | <kbd>enter</kbd> <kbd>space</kbd> | Open the worktree in place of this one. |
 | <kbd>n</kbd> | New branch in a new worktree, from the selected one. |
 | <kbd>d</kbd> | Remove the worktree (asks first; asks again before `--force` if it has changes). |
+| <kbd>P</kbd> | Push the worktree's branch. |
 | <kbd>c</kbd> | Copy its absolute path. |
 | <kbd>/</kbd> | Filter as you type. |
 | <kbd>]</kbd> <kbd>{'}'}</kbd> / <kbd>[</kbd> <kbd>{'{'}</kbd> | Next / previous tab. |

@@ -223,6 +223,7 @@ switch.
 | Merge | `git merge --no-edit <target>` |
 | Pull | `git pull --no-edit` |
 | Push | `git push`, or `git push -u <remote> HEAD` the first time, to set the upstream |
+| Push a branch that isn't checked out | `git push <remote> refs/heads/<branch>:<merge>`, with `<remote>` and `<merge>` from the branch's `branch.<branch>.remote` and `branch.<branch>.merge` config; with no upstream, `git push -u <remote> refs/heads/<branch>` to `origin` or the first remote. A branch tracking a local branch (`.`) is refused. |
 | Cherry-pick | `git cherry-pick <commit>`; a range is `git cherry-pick <oldest> … <newest>` in one call, so `--continue` applies the rest after a conflict |
 | Revert | `git revert --no-edit <commit>`, with `-m <parent>` for a merge commit |
 | Reset | `git rev-list --count <target>..HEAD` and `git diff --name-only HEAD` first, for what a hard reset would lose; then `git reset -q --<mode> <target>` (`--soft`, `--mixed` or `--hard`) with `GIT_REFLOG_ACTION` set to `reset --<mode> <target>`, so the reflog says which mode it was |

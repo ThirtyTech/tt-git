@@ -663,6 +663,11 @@ impl App {
         self.focused().commands()
     }
 
+    /// What the focused pane calls `cmd`, which can depend on what it shows.
+    pub fn focused_label(&self, cmd: Command) -> &'static str {
+        self.focused().label(cmd)
+    }
+
     pub fn modal(&self) -> Option<&Modal> {
         self.modal.as_ref()
     }
@@ -1129,11 +1134,16 @@ impl App {
             (Context::Global, font),
         ];
         let mut rows = Vec::new();
-        for (ctx, cmds) in sections {
+        for (i, (ctx, cmds)) in sections.into_iter().enumerate() {
             for cmd in cmds {
                 let keys = self.keymap.keys_text(ctx, *cmd);
                 if !keys.is_empty() {
-                    rows.push((keys.to_string(), cmd.label()));
+                    let label = if i == 0 {
+                        self.focused().label(*cmd)
+                    } else {
+                        cmd.label()
+                    };
+                    rows.push((keys.to_string(), label));
                 }
             }
         }
@@ -1768,6 +1778,7 @@ impl App {
                 | GitOp::FetchAll
                 | GitOp::PruneGone
                 | GitOp::PushTag { .. }
+                | GitOp::PushBranch { .. }
                 | GitOp::FastForward { .. }
         ) && self.busy.iter().any(|b| b.label == label)
         {
@@ -1840,6 +1851,13 @@ impl App {
                 both("fast-forwarding", "fast-forwarded", format!("{name} to {upstream}"))
             }
             GitOp::PushTag { name } => both("pushing", "pushed", format!("tag {name}")),
+            GitOp::PushBranch { name, upstream } => {
+                let what = match upstream {
+                    Some(up) => format!("{name} → {up}"),
+                    None => name.clone(),
+                };
+                both("pushing", "pushed", what)
+            }
             _ => (op.label(), op.label()),
         }
     }

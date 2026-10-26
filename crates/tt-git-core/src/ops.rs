@@ -238,14 +238,7 @@ impl Repo {
     /// diverged from its upstream. Returns [`FAST_FORWARD_UP_TO_DATE`] when
     /// the branch was already there.
     pub fn fast_forward_branch(&self, name: &str) -> Result<String> {
-        let config = |key: &str| {
-            self.git()
-                .run(&["config", "--get", &format!("branch.{name}.{key}")])
-                .ok()
-                .map(|out| out.stdout_str().trim().to_string())
-                .filter(|v| !v.is_empty())
-        };
-        let (Some(remote), Some(merge)) = (config("remote"), config("merge")) else {
+        let Some((remote, merge)) = self.upstream_config(name) else {
             return Err(GitError::Refused(format!("{name} has no upstream to fast-forward to")));
         };
         if let Some(wt) = self.worktrees()?.iter().find(|w| w.branch.as_deref() == Some(name)) {
@@ -280,6 +273,46 @@ impl Repo {
             return Ok(FAST_FORWARD_UP_TO_DATE.to_string());
         }
         Ok(text(out))
+    }
+
+    /// Local branch `name`'s `branch.<name>.remote` and `branch.<name>.merge`,
+    /// when both are set.
+    fn upstream_config(&self, name: &str) -> Option<(String, String)> {
+        let config = |key: &str| {
+            self.git()
+                .run(&["config", "--get", &format!("branch.{name}.{key}")])
+                .ok()
+                .map(|out| out.stdout_str().trim().to_string())
+                .filter(|v| !v.is_empty())
+        };
+        Some((config("remote")?, config("merge")?))
+    }
+
+    /// Pushes local branch `name` without checking it out: to its upstream
+    /// (`git push <remote> refs/heads/<name>:<merge>`), or when it has none
+    /// to the remote [`push`](Self::push) would pick, setting the upstream
+    /// (`git push -u <remote> refs/heads/<name>`). Refuses a branch whose
+    /// upstream is another local branch.
+    pub fn push_branch(&self, name: &str) -> Result<String> {
+        let local = format!("refs/heads/{name}");
+        match self.upstream_config(name) {
+            Some((remote, merge)) if remote == "." => {
+                let other = merge.strip_prefix("refs/heads/").unwrap_or(&merge);
+                Err(GitError::Refused(format!(
+                    "{name} tracks local branch {other}; there's no remote to push it to"
+                )))
+            }
+            Some((remote, merge)) => {
+                let refspec = format!("{local}:{merge}");
+                self.git().run(&["push", remote.as_str(), refspec.as_str()]).map(text)
+            }
+            None => {
+                let remote = self.push_remote()?;
+                self.git()
+                    .run(&["push", "-u", remote.as_str(), local.as_str()])
+                    .map(text)
+            }
+        }
     }
 
     /// Saves the base branch for this repo in its local git config, or with
