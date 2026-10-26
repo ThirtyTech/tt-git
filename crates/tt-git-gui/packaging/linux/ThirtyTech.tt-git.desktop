@@ -3,9 +3,10 @@ Type=Application
 Name=tt-git
 GenericName=Git Client
 Comment=Browse a git repository's history and work with its branches, stashes and changes
-# The file name (tt-git.desktop) is the app id tt-git-gui sets on Wayland
-# (app_id::DESKTOP_ID), which is how the compositor finds the icon and the
-# launcher badge finds the launcher.
+# The file name (ThirtyTech.tt-git.desktop) is the app id tt-git-gui sets on
+# Wayland (app_id::APP_ID), which is how the compositor finds the icon, the
+# launcher badge finds the launcher and the notification portal names the
+# app. The portal wants a dot in it.
 Exec=tt-git-gui %F
 Icon=tt-git
 Terminal=false
@@ -14,7 +15,7 @@ Keywords=git;repository;commit;branch;
 # Folders: "Open With tt-git" in the file manager opens the repository the
 # folder is in, or the start window outside one.
 MimeType=inode/directory;
-StartupWMClass=tt-git
+StartupWMClass=ThirtyTech.tt-git
 StartupNotify=true
 # The launcher's menu, as the Windows jump list's tasks.
 Actions=open-repository;

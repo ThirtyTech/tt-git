@@ -124,7 +124,7 @@ mod dbus {
 
     /// The launcher the entry is for, by its `.desktop` file.
     fn app_uri() -> String {
-        format!("application://{}.desktop", crate::app_id::DESKTOP_ID)
+        format!("application://{}.desktop", crate::app_id::APP_ID)
     }
 
     /// Where the signal comes from. Any path will do; docks go by the app
@@ -198,7 +198,7 @@ mod dbus {
     mod tests {
         #[test]
         fn the_entry_is_for_the_desktop_file() {
-            assert_eq!(super::app_uri(), "application://tt-git.desktop");
+            assert_eq!(super::app_uri(), "application://ThirtyTech.tt-git.desktop");
         }
     }
 }

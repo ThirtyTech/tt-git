@@ -36,7 +36,7 @@ trap 'rm -rf "$stage"' EXIT
 tree="$stage/$name"
 install -Dm755 "$bin_dir/tt-git-gui" "$tree/bin/tt-git-gui"
 install -Dm755 "$bin_dir/tt-git" "$tree/bin/tt-git"
-install -Dm644 "$here/tt-git.desktop" "$tree/share/applications/tt-git.desktop"
+install -Dm644 "$here/ThirtyTech.tt-git.desktop" "$tree/share/applications/ThirtyTech.tt-git.desktop"
 for size in "${sizes[@]}"; do
     install -Dm644 "$here/../icons/$size.png" "$tree/share/icons/hicolor/${size}x${size}/apps/tt-git.png"
 done
@@ -61,7 +61,7 @@ if [ -n "${APPIMAGETOOL:-}" ]; then
     appdir="$stage/tt-git.AppDir"
     mkdir -p "$appdir/usr"
     cp -a "$tree/bin" "$tree/share" "$appdir/usr/"
-    cp "$here/tt-git.desktop" "$appdir/tt-git.desktop"
+    cp "$here/ThirtyTech.tt-git.desktop" "$appdir/ThirtyTech.tt-git.desktop"
     cp "$here/../icons/256.png" "$appdir/tt-git.png"
     ln -s tt-git.png "$appdir/.DirIcon"
     ln -s usr/bin/tt-git-gui "$appdir/AppRun"

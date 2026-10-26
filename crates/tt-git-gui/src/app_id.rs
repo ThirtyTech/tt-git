@@ -1,18 +1,20 @@
 //! The app's identity to the OS. On Windows it's the AppUserModelID: the
 //! taskbar groups the windows under it, the jump list belongs to it, and
 //! notifications are sent as it. The installer gives the Start menu entry
-//! the same one. On Linux it's [`DESKTOP_ID`], the `.desktop` file's name.
+//! the same one. On Linux it's the app id, the `.desktop` file's name.
 
-/// The app's AppUserModelID. The installer (`packaging/windows/tt-git.iss`)
-/// has it too: change both together.
+/// The app's AppUserModelID on Windows. The installer
+/// (`packaging/windows/tt-git.iss`) has it too.
+///
+/// On Linux it's the app id: the Wayland app id and the X11 `WM_CLASS` of
+/// every window, the launcher badge's `application://ThirtyTech.tt-git.desktop`,
+/// and the name the notification portal knows the app by, which needs a dot
+/// in it. The compositor finds the launcher, and so the icon, by it, so it's
+/// the name of the `.desktop` file the packages install
+/// (`packaging/linux/ThirtyTech.tt-git.desktop`).
+///
+/// Change them all together.
 pub const APP_ID: &str = "ThirtyTech.tt-git";
-
-/// The app id on Linux: the Wayland app id and the X11 `WM_CLASS` of every
-/// window, and the launcher badge's `application://tt-git.desktop`. The
-/// compositor finds the launcher, and so the icon, by it, so it's the name
-/// of the `.desktop` file the packages install
-/// (`packaging/linux/tt-git.desktop`): change both together.
-pub const DESKTOP_ID: &str = "tt-git";
 
 /// The name the OS shows notifications under.
 pub const APP_NAME: &str = "tt-git";
@@ -30,15 +32,16 @@ mod tests {
 
     /// The `.desktop` file the Linux packages install.
     fn desktop_file() -> String {
-        let path = format!("{}/packaging/linux/{DESKTOP_ID}.desktop", env!("CARGO_MANIFEST_DIR"));
+        let path = format!("{}/packaging/linux/{APP_ID}.desktop", env!("CARGO_MANIFEST_DIR"));
         std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
     }
 
     #[test]
     fn the_desktop_file_is_named_for_the_app_id() {
         let file = desktop_file();
-        assert!(file.contains(&format!("\nStartupWMClass={DESKTOP_ID}\n")), "{file}");
-        assert!(file.contains(&format!("\nIcon={DESKTOP_ID}\n")), "{file}");
+        assert!(file.contains(&format!("\nStartupWMClass={APP_ID}\n")), "{file}");
+        // The icon keeps the hicolor files' name.
+        assert!(file.contains("\nIcon=tt-git\n"), "{file}");
     }
 
     #[test]

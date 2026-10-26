@@ -32,8 +32,8 @@ contents:
   - src: bin/tt-git
     dst: /usr/bin/tt-git
     file_info: { mode: 0755 }
-  - src: share/applications/tt-git.desktop
-    dst: /usr/share/applications/tt-git.desktop
+  - src: share/applications/ThirtyTech.tt-git.desktop
+    dst: /usr/share/applications/ThirtyTech.tt-git.desktop
   - src: share/icons/hicolor
     dst: /usr/share/icons/hicolor
     type: tree

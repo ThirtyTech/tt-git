@@ -5,7 +5,7 @@
 #   curl -fsSL https://github.com/ThirtyTech/tt-git/releases/latest/download/install-gui.sh | sh
 #
 # It unpacks the release's tt-git-gui-<version>-linux-<arch>.tar.gz into a
-# prefix: tt-git-gui and tt-git in bin/, tt-git.desktop in
+# prefix: tt-git-gui and tt-git in bin/, ThirtyTech.tt-git.desktop in
 # share/applications/, the icons in share/icons/hicolor/ and the README in
 # share/doc/tt-git/. To remove them again:
 #
@@ -39,11 +39,22 @@ sizes="16 32 48 64 128 256 512"
 files() {
     echo bin/tt-git-gui
     echo bin/tt-git
-    echo share/applications/tt-git.desktop
+    echo share/applications/ThirtyTech.tt-git.desktop
     for size in $sizes; do
         echo "share/icons/hicolor/${size}x${size}/apps/tt-git.png"
     done
     echo share/icons/hicolor/scalable/apps/tt-git.svg
+}
+
+# Removes the launcher earlier releases installed as tt-git.desktop,
+# before the app id became ThirtyTech.tt-git, if it's ours.
+remove_old_launcher() {
+    old="$prefix/share/applications/tt-git.desktop"
+    if [ -f "$old" ] && grep -q '^Exec=.*tt-git-gui' "$old"; then
+        rm -f "$old"
+        return 0
+    fi
+    return 1
 }
 
 # Tells the desktop about new or removed launchers and icons. Desktops that
@@ -67,6 +78,7 @@ if [ "$uninstall" = 1 ]; then
             removed=1
         fi
     done
+    remove_old_launcher && removed=1
     rm -rf "$prefix/share/doc/tt-git"
     [ "$removed" = 1 ] || err "tt-git-gui isn't installed in $prefix"
     refresh
@@ -123,9 +135,10 @@ for f in $(files); do
 done
 # The launcher starts tt-git-gui by its full path, so it works whether or
 # not <prefix>/bin is on the session's PATH.
-desktop="$prefix/share/applications/tt-git.desktop"
+desktop="$prefix/share/applications/ThirtyTech.tt-git.desktop"
 sed "s|^Exec=tt-git-gui |Exec=\"$prefix/bin/tt-git-gui\" |" "$desktop" > "$desktop.new"
 mv -f "$desktop.new" "$desktop"
+remove_old_launcher || true
 mkdir -p "$prefix/share/doc/tt-git"
 cp "$src"/share/doc/tt-git/* "$prefix/share/doc/tt-git/"
 refresh
