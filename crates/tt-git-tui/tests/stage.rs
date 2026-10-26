@@ -71,6 +71,25 @@ fn enter_opens_the_file_fullscreen() {
 }
 
 #[test]
+fn esc_from_staging_goes_back_to_the_status_column() {
+    let sb = two_hunks();
+    let mut t = TestDriver::new(&sb);
+    t.press("2").press("+");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    open(&mut t, "f.txt");
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Details));
+    t.press("esc");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    assert_eq!(t.app().focus(), PaneId::Status);
+
+    // Unzoomed again, staging goes back to the normal layout.
+    t.press("+");
+    open(&mut t, "f.txt");
+    t.press("esc");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+}
+
+#[test]
 fn stage_a_hunk_then_unstage_it() {
     let sb = two_hunks();
     let mut t = TestDriver::new(&sb);

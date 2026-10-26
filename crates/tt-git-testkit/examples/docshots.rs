@@ -69,6 +69,7 @@ fn main() {
             &["j", "j", "j", "j", "j", "j", "j", "j", "j", "j", "j", "j", "space"],
         ),
         ("status", &["2"]),
+        ("status-zoom", &["2", "+"]),
         ("staging", &["2", "j", "j", "j", "enter"]),
         ("staging-lines", &["2", "j", "j", "j", "enter", "a", "j", "v", "j"]),
         ("staging-discard", &["2", "j", "j", "j", "enter", "d"]),

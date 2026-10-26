@@ -492,6 +492,63 @@ fn space_in_a_fullscreen_graph_opens_details_below_it() {
 }
 
 #[test]
+fn zoom_from_status_puts_it_in_a_column_beside_the_graph() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "a\n", "first");
+    sb.write("new.txt", "hello\n");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 120, 24);
+    t.press("2").press("+");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    assert_eq!(t.app().focus(), PaneId::Status);
+
+    // Full height on the left, 27% of the width; graph beside it,
+    // with branches still under the graph.
+    let status = t.app().pane_area(PaneId::Status).unwrap();
+    let graph = t.app().pane_area(PaneId::Graph).unwrap();
+    let branches = t.app().pane_area(PaneId::Branches).unwrap();
+    assert_eq!((status.x, status.y, status.height), (0, 0, 23));
+    assert_eq!(status.width, 120 * 27 / 100);
+    assert_eq!((graph.x, graph.y), (status.width, 0));
+    assert_eq!(graph.x + graph.width, 120);
+    assert_eq!((branches.x, branches.y), (graph.x, graph.height));
+    assert_eq!(branches.width, graph.width);
+    assert_eq!(branches.y + branches.height, 23);
+    insta::assert_snapshot!(t.screen());
+
+    // Details opens in branches' place and keeps the column.
+    t.press("1").press("space");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    let details = t.app().pane_area(PaneId::Details).unwrap();
+    assert_eq!(details, branches);
+    assert_eq!(t.app().pane_area(PaneId::Status).unwrap(), status);
+
+    t.press("+");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+}
+
+#[test]
+fn the_status_column_stays_while_focus_moves_around() {
+    let sb = Sandbox::new();
+    let mut t = TestDriver::new(&sb);
+    t.press("2").press("+");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    t.press("1");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    t.press("3");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    assert_eq!(t.app().focus(), PaneId::Branches);
+    // Details opens in place of branches, so focusing it opens it there.
+    t.press("4");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    assert_eq!(t.app().focus(), PaneId::Details);
+    assert!(t.app().pane_area(PaneId::Branches).is_none());
+    // And focusing branches again closes details.
+    t.press("3");
+    assert_eq!(t.app().zoom(), Zoom::Status);
+    assert!(t.app().pane_area(PaneId::Details).is_none());
+}
+
+#[test]
 fn zoom_from_details_goes_straight_to_fullscreen() {
     let sb = Sandbox::new();
     let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);

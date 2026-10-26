@@ -160,7 +160,14 @@ pub struct View {
     pub details: bool,
     /// Only the graph and, if it's showing, details.
     pub wide: bool,
+    /// Status in a full-height column on the left, with the rest of the
+    /// layout beside it.
+    pub status_column: bool,
 }
+
+/// How much of the width the status column takes when status is zoomed, in
+/// percent.
+pub const STATUS_COLUMN_SIZE: u16 = 27;
 
 /// The layout tree with hidden panes pruned and sizes turned into fill
 /// weights: each child of a split takes its weight's share of the space.
@@ -183,6 +190,16 @@ impl Layout {
     /// The panes on screen in `view`, and how they share it; `None` when
     /// none are.
     pub fn resolve(&self, view: View) -> Option<Placed> {
+        if view.status_column {
+            let status = (STATUS_COLUMN_SIZE, Placed::Pane(PaneId::Status));
+            let Some(rest) = resolve(&self.root, view) else {
+                return Some(status.1);
+            };
+            return Some(Placed::Split(
+                Split::Columns,
+                vec![status, (100 - STATUS_COLUMN_SIZE, rest)],
+            ));
+        }
         resolve(&self.root, view)
     }
 
@@ -197,7 +214,9 @@ fn resolve(node: &Node, view: View) -> Option<Placed> {
         return Some(Placed::Pane(PaneId::Details));
     }
     if let Some(pane) = node.pane {
-        let hidden = view.wide && !matches!(pane, PaneId::Graph | PaneId::Details);
+        // The status column draws status itself, beside the rest of the layout.
+        let hidden = (view.wide && !matches!(pane, PaneId::Graph | PaneId::Details))
+            || (view.status_column && pane == PaneId::Status);
         return (!hidden).then_some(Placed::Pane(pane));
     }
     let sized: u16 = node.children.iter().filter_map(|c| c.size).sum();
@@ -253,6 +272,41 @@ mod tests {
         assert!(!default.shows(PaneId::Branches, wide));
         assert!(default.shows(PaneId::Graph, wide));
         assert!(classic().shows(PaneId::Details, View::default()));
+    }
+
+    #[test]
+    fn status_column_puts_status_left_of_the_rest_of_the_layout() {
+        let column = View {
+            status_column: true,
+            ..View::default()
+        };
+        let status = (27, Placed::Pane(PaneId::Status));
+        let rest = |bottom| {
+            Placed::Split(
+                Split::Rows,
+                vec![(70, Placed::Pane(PaneId::Graph)), (30, Placed::Pane(bottom))],
+            )
+        };
+        // Branches keeps its place under the graph, and details replaces it.
+        assert_eq!(
+            Layout::default().resolve(column),
+            Some(Placed::Split(
+                Split::Columns,
+                vec![status.clone(), (73, rest(PaneId::Branches))]
+            ))
+        );
+        let open = View {
+            details: true,
+            ..column
+        };
+        assert_eq!(
+            Layout::default().resolve(open),
+            Some(Placed::Split(Split::Columns, vec![status, (73, rest(PaneId::Details))]))
+        );
+        // Every other pane stays where the layout puts it.
+        for pane in [PaneId::Branches, PaneId::Graph, PaneId::Details] {
+            assert!(classic().shows(pane, column), "{pane:?}");
+        }
     }
 
     fn parse_err(layout: &str) -> String {
