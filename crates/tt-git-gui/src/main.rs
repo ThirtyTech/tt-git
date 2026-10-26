@@ -155,6 +155,7 @@ fn main() -> Result<()> {
     gpui::application().with_assets(tt_git_gui::Assets).run(move |cx| {
         tt_git_gui::init(cx);
         tt_git_gui::app_id::set(cx);
+        tt_git_gui::notify::install_portal(cx);
         tt_git_gui::zoom::set(zoom, cx);
         tt_git_gui::font::set(font, cx);
         tt_git_gui::look::set(style, cx);

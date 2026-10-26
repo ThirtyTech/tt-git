@@ -42,6 +42,12 @@ raw-window-handle = "0.6"
 # The Win32 calls, kept out of this crate: it forbids unsafe code.
 tt-git-win.workspace = true
 
+# The notifications through the desktop's Notification portal (notify/portal.rs).
+# async-io, as GPUI's own ashpd uses: zbus then needs no tokio runtime.
+[target.'cfg(target_os = "linux")'.dependencies]
+ashpd = { version = "0.13", default-features = false, features = ["async-io", "notification"] }
+futures.workspace = true
+
 [build-dependencies]
 # The icon resource in the Windows executable (build.rs).
 embed-resource = "3"

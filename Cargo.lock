@@ -8415,9 +8415,11 @@ dependencies = [
 name = "tt-git-gui"
 version = "0.9.0"
 dependencies = [
+ "ashpd",
  "clap",
  "color-eyre",
  "embed-resource",
+ "futures",
  "gpui-kit",
  "image",
  "raw-window-handle",
