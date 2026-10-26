@@ -54,7 +54,9 @@ Press <kbd>ctrl+r</kbd> to reload everything. You'd only need it with
 network drives and container mounts).
 
 Every git command tt-git runs itself, such as a commit, checkout or push,
-refreshes everything when it finishes.
+refreshes everything when it finishes. So does a [background
+fetch](/git/remotes/#background-fetch) that worked, even with
+`watch = false`, so the remote branches stay current either way.
 
 <Aside>
 	If several refreshes are asked for while one is running, they're combined

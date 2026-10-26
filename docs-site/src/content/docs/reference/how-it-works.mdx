@@ -213,6 +213,7 @@ switch.
 | Action | Runs |
 |---|---|
 | Fetch | `git fetch --all --prune` |
+| Background fetch, every `[fetch] interval` minutes | `git -c credential.interactive=never fetch --all --prune`, with `GIT_ASKPASS` empty, `SSH_ASKPASS_REQUIRE=never` and `GCM_INTERACTIVE=never` so nothing can ask for a password. Skipped when the repository has no remotes, when any worktree's `FETCH_HEAD` (or tt-git's last background attempt) is newer than the interval, or while another tt-git window holds the repository's lock in `<state dir>/fetch/`. See [Background fetch](/git/remotes/#background-fetch). |
 | Delete gone branches | `git fetch --all --prune`, then `git for-each-ref` and `git worktree list` to find local branches whose upstream is gone and that aren't checked out anywhere, then `git branch -d <branch>` for each one you agree to. Any git refuses as not fully merged get `git branch -D <branch>` if you agree again. |
 | Fast-forward a branch that isn't checked out | `git fetch <remote> <merge>:refs/heads/<branch>`, with `<remote>` and `<merge>` from the branch's `branch.<branch>.remote` and `branch.<branch>.merge` config (`.` for a local upstream). git refuses anything but a fast-forward. tt-git checks `git worktree list` first and refuses a branch checked out in any worktree. |
 | New branch | `git switch -c <name> <start>` |

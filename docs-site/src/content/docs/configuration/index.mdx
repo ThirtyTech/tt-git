@@ -63,6 +63,9 @@ unmerged_exclude = ["archive"]    # hide unmerged branches whose name contains a
 safe_branches = ["master", "main", "production", "prod"]  # never listed on the merged/unmerged tabs
 check_merges = true               # mark branches that would conflict with the base branch
 
+[fetch]
+interval = 5                      # minutes between background fetches; 0 turns them off
+
 [plugins]
 pane_release_keys = ["ctrl+\\", "f12"]   # leave or close plugin panes
 
@@ -129,6 +132,12 @@ See [Status](/panes/status/).
 | `check_merges` | `true` | Check in the background whether each branch and worktree would merge cleanly into the base branch, and mark the ones that conflict with `✗`. Set it to `false` in a repository with so many branches that the check gets in the way. See [Conflicts with the base branch](/panes/branches/#conflicts-with-the-base-branch). |
 
 See [Merged and unmerged](/panes/merged-unmerged/).
+
+### `[fetch]`
+
+| Setting | Default | What it does |
+|---|---|---|
+| `interval` | `5` | Minutes between the fetches tt-git makes on its own while a repository is open (`git fetch --all --prune`), in the terminal app and the desktop app. `0` turns them off. A repository's own config file can change it for that repository. See [Background fetch](/git/remotes/#background-fetch). |
 
 ### `[plugins]`
 

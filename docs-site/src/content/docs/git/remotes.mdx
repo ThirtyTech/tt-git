@@ -69,6 +69,42 @@ A fetch that brings nothing new doesn't reload the graph.
 The help bar shows `fetching all remotes` while it runs, then
 `✓ fetched all remotes`.
 
+## Background fetch
+
+While a repository is open, tt-git also fetches every remote on its own
+every 5 minutes, so the remote branches, the ahead and behind counts and the
+[new commit notifications](/desktop/using/#notifications) stay current
+without you pressing <kbd>f</kbd>. It runs the same
+`git fetch --all --prune`, in the terminal app and the desktop app. Set
+`interval` under [`[fetch]`](/configuration/#fetch) to change how often, or
+`0` to turn it off.
+
+A background fetch is quiet:
+
+- **Nothing on screen.** No spinner, no `✓` and no taskbar progress. The
+  branches and graph refresh when it brings something new.
+- **No sign-in.** It never asks for a password, not even through Git
+  Credential Manager's window or an SSH askpass program. A remote that
+  needs one makes the background fetch fail.
+- **Failures are only logged**, in tt-git's log file, never as an
+  **Error** box. It tries again at the next interval.
+
+It waits its turn:
+
+- **Any fetch counts.** The interval runs from the repository's last
+  fetch, whoever made it: you with <kbd>f</kbd>, `git fetch` in a terminal,
+  or your editor.
+- **One fetch per repository.** Several windows on one repository, or on
+  its worktrees, share one background fetch instead of each making their
+  own.
+- **Not while you're syncing.** It doesn't start while your own fetch, pull
+  or push runs. If you press <kbd>f</kbd> while a background fetch runs,
+  yours waits for it and shows its result, as if you'd started it. If the
+  background fetch failed, yours then runs as usual.
+
+Commits an agent makes in another [worktree](/git/worktrees/) are already in
+the repository, so they show without a fetch.
+
 ## Fast-forward a branch you aren't on
 
 Press <kbd>F</kbd> on a branch in the branches pane to bring it up to its
@@ -107,5 +143,6 @@ tt-git runs git with its terminal prompts turned off
 screen. Git still uses your credential helper (Git Credential Manager, the
 macOS keychain, `gh auth` and so on) and SSH still uses your `ssh-agent`.
 If git needs a credential it can't get on its own, the push, pull or fetch
-fails with git's message. Run the same command once in a terminal, or set up
+fails with git's message. A [background fetch](#background-fetch) never
+opens your credential helper's sign-in window either. Run the same command once in a terminal, or set up
 a credential helper, and it'll work from tt-git after that.
