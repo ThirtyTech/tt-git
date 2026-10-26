@@ -44,8 +44,12 @@ tt-git-win.workspace = true
 
 # The launcher's badge and progress (launcher_entry.rs), over the session
 # bus. GPUI already builds zbus for the desktop portals.
+# The notifications through the desktop's Notification portal (notify/portal.rs).
+# async-io, as GPUI's own ashpd uses: zbus then needs no tokio runtime.
 [target.'cfg(target_os = "linux")'.dependencies]
 zbus = "5"
+ashpd = { version = "0.13", default-features = false, features = ["async-io", "notification"] }
+futures.workspace = true
 
 [build-dependencies]
 # The icon resource in the Windows executable (build.rs).

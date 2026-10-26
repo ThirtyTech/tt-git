@@ -318,6 +318,17 @@ installed (the zip, or a build from source) still shows them: the first one
 registers the ID under `HKCU\Software\Classes\AppUserModelId`, without an
 icon, so its toasts show a generic one. Uninstalling removes that key.
 
+On Linux the notification comes from the desktop, under *tt-git*. When
+the desktop knows the app, tt-git sends it through the desktop portal
+(`xdg-desktop-portal`'s Notification portal), so it shows with tt-git's
+name and icon, and the desktop's own notification settings for tt-git
+apply. The desktop knows the app when its launcher,
+`ThirtyTech.tt-git.desktop`, is installed (the packages, the tarball and
+the install script put it in place) or when tt-git runs in a sandbox such
+as Flatpak. Otherwise, as with the AppImage or a build from source, tt-git
+sends it straight to the desktop's notification service
+(`org.freedesktop.Notifications`). A desktop with neither shows nothing.
+
 ### The taskbar badge
 
 With notifications on, Windows also puts a small dot over the window's

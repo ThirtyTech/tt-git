@@ -8,6 +8,9 @@
 //! window forward. Pull, offered when the commits are on what the
 //! checked-out branch tracks, runs the pull command in it as `p` does.
 //! GPUI hands the response to [`init`]'s handler on the main thread.
+//!
+//! On Linux they go through the desktop's Notification portal instead when
+//! the desktop knows the app (`portal.rs`, which [`install_portal`] starts).
 
 use std::path::{Path, PathBuf};
 
@@ -30,10 +33,23 @@ pub const PULL: &str = "pull";
 
 const TAG_PREFIX: &str = "new-commits:";
 
+#[cfg(target_os = "linux")]
+mod portal;
+
 /// Starts handling clicks on the notifications. Call once, from
 /// [`crate::init`].
 pub fn init(cx: &mut App) {
     cx.on_system_notification_response(respond);
+}
+
+/// Linux: sends the notifications through the desktop's Notification portal
+/// from now on, where it can. Elsewhere it does nothing. Only `main` calls
+/// it, so tests never touch D-Bus.
+pub fn install_portal(cx: &mut App) {
+    #[cfg(target_os = "linux")]
+    portal::install(cx);
+    #[cfg(not(target_os = "linux"))]
+    let _ = cx;
 }
 
 /// Shows `new` for `model`'s repository, unless its `window` is focused.
@@ -45,6 +61,10 @@ pub fn new_commits(new: &NewCommits, model: &Entity<AppModel>, window: &Window, 
     let repo = model.read(cx).app().repo();
     let notification = notification(&repo.name(), repo.root(), new);
     tracing::debug!("notifying: {}", notification.body);
+    #[cfg(target_os = "linux")]
+    if portal::show(&notification, cx) {
+        return;
+    }
     cx.show_system_notification(notification);
 }
 
