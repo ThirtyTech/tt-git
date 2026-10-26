@@ -38,6 +38,8 @@ unicode-width = "0.2"
 # The taskbar (jump list, progress, overlay badge) and toast notifications.
 # The version GPUI already uses, so it isn't built twice.
 [target.'cfg(windows)'.dependencies]
+# A window's HWND, for the taskbar; GPUI's `Window` gives it through this.
+raw-window-handle = "0.6"
 windows = { version = "0.62", features = [
     "Data_Xml_Dom",
     "Foundation",
