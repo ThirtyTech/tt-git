@@ -60,7 +60,7 @@ item does exactly what pressing its key does.
 
 | Menu | Holds |
 |---|---|
-| **tt-git** | *About tt-git* (see [About](#about)), *Check for Updates…* (see [Updating](/desktop/install/#updating)), *Theme*, *Font*, *Native/terminal style* (see [Style](#style)), *Plugin logs* and *Quit* |
+| **tt-git** | *About tt-git* (see [About](#about)), *Check for Updates…* (see [Updating](/desktop/install/#updating)), *Theme*, *Font*, *Native/terminal style* (see [Style](#style)), *Notifications* (see [Notifications](#notifications)), *Plugin logs* and *Quit* |
 | **Repository** | *Fetch*, *Prune gone*, *Pull*, *Push*, *Refresh*; *Continue merge/rebase*, *Abort merge/rebase*, *Undo*; *Ask agent*; *Open repository* |
 | **View** | Focus *Graph*, *Status*, *Branches* or *Details*; *Next pane*, *Prev pane*; *Zoom*; *Zoom in*, *Zoom out*, *Reset zoom*; *Commands* (the [palette](/git/palette/)) and *Help* |
 | The focused pane | Named after it (**Graph**, **Status**, **Branches**, **Details**, **Stage**, **Blame**, **Stash** or **Worktrees**): that pane's commands, the ones the [help popup](/getting-started/navigation/#getting-help) lists first |
@@ -306,25 +306,79 @@ neither the progress nor the badge below.
 ## Notifications
 
 The desktop app can tell you when new commits arrive while you're working
-in something else. It's off until you set `notifications = true` under
-[`[ui]`](/configuration/#ui) in `config.toml`.
+in something else, and badge its icon when a repository needs a hand.
+It's off until you turn it on.
 
-With it on, when a fetch or pull brings commits to a remote-tracking branch
-and the repository's window isn't the one you're in, a notification says
-so: the repository's name over *3 new commits on origin/main*, or *5 new
-commits on origin/main and 2 other branches*. Only commits that no branch
-or tag in the repository had before count, so pushing your own commits, or
-fetching what a local branch already has, says nothing. A newer
-notification for the same repository replaces the last one.
+### Turning them on and off
 
-- Click it, or **Open**, to bring the repository's window forward.
+Choose *Notifications* in the **tt-git** menu or the
+[palette](/git/palette/). It has no key, but you can
+[bind one](/configuration/keys/) to `notifications`. The picker lists:
+
+| Entry | What it turns on |
+|---|---|
+| **Notifications** | Everything below. Off, nothing shows, whatever the others say. |
+| **New commits on remote branches** | Counting commits a fetch or pull brings to a remote-tracking branch. |
+| **New commits on local branches and worktrees** | Counting commits made on a local branch from outside the window: in another worktree, a terminal, or by an agent. |
+| **New commits: system notification** | The notification for new commits. |
+| **New commits: count on the app icon** | The new commits on the [taskbar](#the-taskbar-badge), [dock](#the-taskbar-badge) or [Dock](#the-dock-badge) badge. |
+| **Conflicts: badge on the app icon** | The badge while files have conflicts. |
+| **Stopped merge or rebase: badge on the app icon** | The badge while a merge, rebase, cherry-pick or revert waits to be continued. |
+
+Each entry says *on* or *off* on the right; an alert that's on while
+**Notifications** is off says *on (notifications off)*. Type to narrow the
+list. <kbd>enter</kbd> flips the highlighted entry and the picker stays
+open on it, so you can flip several; <kbd>esc</kbd> closes it. The help
+bar says what changed, such as *notifications on, saved to
+&lt;config.toml&gt;*.
+
+The settings are one for the whole app: every open window uses the change
+at once. They're saved in your global `config.toml`,
+[`notifications`](/configuration/#ui) under `[ui]` and the alerts under
+[`[ui.alerts]`](/configuration/#uialerts), and only the lines that change
+are touched, so your comments and other settings stay. Everything but
+**Notifications** is on until you turn it off, so `notifications = true`
+on its own turns on every alert. The [terminal app](/getting-started/tour/)
+has no notifications, so it leaves *Notifications* out of its palette.
+
+### New commits
+
+With notifications on, when new commits turn up and the repository's
+window isn't the one you're in, a notification says so: the repository's
+name over *3 new commits on origin/main*, or *5 new commits on origin/main
+and 2 other branches*. Only commits that no branch or tag in the
+repository had before count, so pushing your own commits, or fetching what
+a local branch already has, says nothing. A commit that lands on a local
+branch and its remote-tracking branch between two refreshes counts once. A
+newer notification for the same repository replaces the last one.
+
+New commits come from two places:
+
+- **Remote branches.** A fetch or pull brings commits to a remote-tracking
+  branch. tt-git doesn't fetch in the background yet, so something else
+  has to: you, a plugin, or `git fetch` in a terminal.
+- **Local branches and worktrees.** Someone commits to a local branch from
+  outside this window: an agent working in another
+  [worktree](/panes/branches/#worktrees), you in a terminal, another
+  tt-git window. When the branch is checked out in another worktree, the
+  notification names it: *2 new commits on feature (worktree
+  .worktrees/feature)*, with the worktree's path from the main working
+  tree's folder, or just its folder's name when it's somewhere else.
+  Commits this window makes itself (committing, amending, rebasing,
+  resetting, cherry-picking, merging, pulling, undoing) don't count. An
+  agent can commit every few seconds, so after a branch notifies, its next
+  commits wait a minute and then come in one notification.
+
+The window refreshes when the repository changes, which is when it sees
+them. Opening a repository never notifies.
+
+- Click a notification, or **Open**, to bring the repository's window
+  forward.
 - **Pull** is there when the commits are on the branch the checked-out
   branch tracks. It brings the window forward and pulls, as <kbd>p</kbd>
   does.
 
-tt-git doesn't fetch in the background yet, so something else has to:
-you, a plugin, or `git fetch` in a terminal (the window refreshes when the
-repository changes). Opening a repository never notifies.
+### Where they show
 
 On Windows the notification is a toast from *tt-git*, with no sound.
 Windows' own settings (**Settings > System > Notifications**) can turn
@@ -349,8 +403,9 @@ sends it straight to the desktop's notification service
 On macOS notifications come from tt-git.app, the app the
 [`.dmg`](/desktop/install/) installs, and land in Notification Center under
 its bundle ID, `net.thirtytech.tt-git`. The first time you open a
-repository window with `notifications = true`, macOS asks whether tt-git may
-send notifications; after that it remembers your answer, and **System
+repository window with notifications on, or turn them on, macOS asks
+whether tt-git may send notifications; after that it remembers your
+answer, and **System
 Settings > Notifications > tt-git** changes it. A build run straight from
 the command line (`cargo run -p tt-git-gui`) isn't an app bundle, so it
 shows none and doesn't ask. macOS can also refuse a build that's only
@@ -361,7 +416,7 @@ allowed for this application*.
 ### The taskbar badge
 
 With notifications on, Windows also puts a small dot over the window's
-taskbar button:
+taskbar button, for each of them you [leave on](#turning-them-on-and-off):
 
 | Dot | Means | Goes away |
 |---|---|---|

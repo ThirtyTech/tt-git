@@ -81,7 +81,15 @@ zoom = 100           # desktop app only: how big everything is drawn, in percent
 font_size = 13       # desktop app only: the font size at 100% zoom, in pixels
 style = "native"     # desktop app only: "native" (cards, the system's UI font) or "terminal"
 check_for_updates = true  # desktop app only: look for a new release once a day
-notifications = false     # desktop app only: say when a fetch brings new commits, badge the taskbar or Dock
+notifications = false     # desktop app only: say when new commits arrive, badge the taskbar or Dock
+
+[ui.alerts]                # desktop app only: which alerts notifications turns on
+remote_commits = true      # new commits a fetch or pull brings
+local_commits = true       # new commits on local branches from outside the window (worktrees, agents)
+popup = true               # the system notification for new commits
+badge = true               # new commits counted on the app icon
+conflicts = true           # a badge while files have conflicts
+stopped = true             # a badge while a merge or rebase waits to be continued
 ```
 
 Two more tables, `[layout]` and `[keys]`, have pages of their own:
@@ -220,7 +228,23 @@ Settings for the [desktop app](/desktop/). The terminal app ignores them.
 | `font_size` | `13` | The desktop app's font size at 100% zoom, in pixels, from `6` to `72`; a value outside that is taken as the nearest end. The [zoom](/desktop/using/#zoom) scales it. Global config file only. |
 | `style` | `"native"` | How the desktop app draws its window. `"native"` draws each pane as a rounded card with a header in your system's UI font, a status bar of key chips, and dialogs with shadows. `"terminal"` draws it as the terminal app does, in bordered boxes. The layout, panes and keys are the same in both. *Native/terminal style* in the **tt-git** menu or the [palette](/git/palette/) switches it and saves it here. See [Style](/desktop/using/#style). Global config file only. |
 | `check_for_updates` | `true` | Look for a new tt-git release once a day and say in the help bar when there is one. `false` stops it; *Check for Updates…* still works. See [Updating](/desktop/install/#updating). Read from the global config file when the app starts. |
-| `notifications` | `false` | Show a system notification (a toast on Windows) when a fetch or pull brings new commits to a remote-tracking branch while the repository's window isn't focused. On Windows it also badges the window's taskbar button for those commits, conflicts, or a merge or rebase stopped part way, and on macOS the Dock icon. See [Notifications](/desktop/using/#notifications), [The taskbar badge](/desktop/using/#the-taskbar-badge) and [The Dock badge](/desktop/using/#the-dock-badge). A repository's own config file can turn it on or off for that repository. Read when the repository's window opens. |
+| `notifications` | `false` | Show a system notification (a toast on Windows) when new commits arrive while the repository's window isn't focused: from a fetch or pull, or committed to a local branch from outside the window, such as by an agent in another worktree. On Windows it also badges the window's taskbar button for those commits, conflicts, or a merge or rebase stopped part way, on Linux the dock's icon, and on macOS the Dock icon. The switch for every alert in [`[ui.alerts]`](#uialerts). *Notifications* in the **tt-git** menu or the [palette](/git/palette/) turns it and each alert on and off and saves them here. See [Notifications](/desktop/using/#notifications), [The taskbar badge](/desktop/using/#the-taskbar-badge) and [The Dock badge](/desktop/using/#the-dock-badge). A repository's own config file can turn it on or off for that repository. Read when the repository's window opens, and changed in every open window when you use the picker. |
+
+### `[ui.alerts]`
+
+Which alerts [`notifications`](#ui) turns on, one by one, for the
+[desktop app](/desktop/using/#notifications). They're all on until you
+turn one off, and none shows anything while `notifications` is off. The
+*Notifications* picker saves them here.
+
+| Setting | Default | What it does |
+|---|---|---|
+| `remote_commits` | `true` | Count the new commits a fetch or pull brings to a remote-tracking branch. |
+| `local_commits` | `true` | Count the new commits made on a local branch from outside the window: in another worktree, a terminal, or by an agent. Commits the window makes itself never count. |
+| `popup` | `true` | Show the system notification for new commits. |
+| `badge` | `true` | Count the new commits on the app's icon: the taskbar badge on Windows, the dock on Linux, the Dock on macOS. |
+| `conflicts` | `true` | Badge the app's icon while files have conflicts. |
+| `stopped` | `true` | Badge the app's icon while a merge, rebase, cherry-pick or revert waits to be continued. |
 
 ## Per-repository config
 
