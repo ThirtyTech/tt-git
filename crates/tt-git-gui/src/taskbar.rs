@@ -8,8 +8,14 @@
 //! app's launcher ([`launcher_entry`](crate::launcher_entry)). On macOS the
 //! badge goes to the Dock icon, which every window shares ([`crate::dock`]);
 //! progress shows nowhere there.
+//!
+//! The Windows taskbar stacks the app's windows on one button, which shows
+//! the overlay set last, whichever window set it, and keeps showing it after
+//! that window closes. So every window's overlay is sent again, in
+//! [`send_order`], whenever one changes, a window closes ([`forget`]) or one
+//! is focused.
 
-use gpui::{App, Window};
+use gpui::{App, Window, WindowId};
 use tt_git_app::app::{JobProgress, RepoAlert};
 use tt_git_app::new_commits::NewCommits;
 use tt_git_core::InProgress;
@@ -98,6 +104,12 @@ impl Taskbar {
     /// `new` came in. It's badged only while the window isn't focused, as
     /// the notification is.
     pub fn new_commits(&mut self, window: &Window, new: &NewCommits, cx: &mut App) {
+        tracing::debug!(
+            active = window.is_window_active(),
+            foreground = foreground(window),
+            commits = new.total(),
+            "taskbar: new commits"
+        );
         if !window.is_window_active() {
             self.new_commits += new.total();
             self.show(window, cx);
@@ -108,10 +120,27 @@ impl Taskbar {
     /// The window was focused or left: focused, the new commits and the
     /// alert are seen.
     pub fn activated(&mut self, window: &Window, cx: &mut App) {
-        if window.is_window_active() && (self.new_commits > 0 || self.alert_unseen) {
+        let active = window.is_window_active();
+        tracing::debug!(
+            active,
+            foreground = foreground(window),
+            new_commits = self.new_commits,
+            "taskbar: activation"
+        );
+        if !active {
+            return;
+        }
+        if self.new_commits > 0 || self.alert_unseen {
             self.seen();
             self.show(window, cx);
             self.report(window, cx);
+        }
+        // Even with nothing new here: the button may still show the badge
+        // of a window that's closed since. A window that's never had a
+        // badge is recorded here, when it's first focused.
+        #[cfg(windows)]
+        if let Some(hwnd) = hwnd(window) {
+            overlays::set(window.window_handle().window_id(), hwnd, self.shown, cx);
         }
     }
 
@@ -156,27 +185,95 @@ impl Taskbar {
             return;
         }
         self.shown = badge;
-        crate::dock::set_badge(window.window_handle().window_id(), badge, cx);
+        tracing::debug!(?badge, "taskbar: badge");
+        let id = window.window_handle().window_id();
+        crate::dock::set_badge(id, badge, cx);
         #[cfg(windows)]
-        {
-            use tt_git_win::taskbar::Icon;
-            let Some(hwnd) = hwnd(window) else {
-                return;
-            };
-            let icon = badge.map(|b| {
-                let icon = Icon {
-                    size: ICON_SIZE,
-                    bgra: dot(b.color(), ICON_SIZE),
-                };
-                (icon, b.description())
-            });
-            let overlay = icon.as_ref().map(|(icon, text)| (icon, text.as_str()));
-            if let Err(e) = tt_git_win::taskbar::set_overlay(hwnd, overlay) {
-                tracing::warn!("couldn't badge the taskbar button: {e}");
-            }
+        if let Some(hwnd) = hwnd(window) {
+            overlays::set(id, hwnd, badge, cx);
         }
-        #[cfg(not(windows))]
-        let _ = window;
+    }
+}
+
+/// `window` closed: on Windows the other windows' overlays are sent again,
+/// as the button they shared keeps showing the closed window's.
+pub fn forget(window: WindowId, cx: &mut App) {
+    #[cfg(windows)]
+    overlays::forget(window, cx);
+    #[cfg(not(windows))]
+    let _ = (window, cx);
+}
+
+/// The order to send the windows' overlays in, as `(hwnd, badge)`, so the
+/// button they share ends on the most pressing: the windows without a
+/// badge first, then new commits, a stopped merge or rebase, conflicts.
+/// Windows that tie go by `hwnd`, so the order holds from one send to the
+/// next.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn send_order(windows: impl IntoIterator<Item = (isize, Option<Badge>)>) -> Vec<(isize, Option<Badge>)> {
+    let urgency = |badge: Option<Badge>| match badge {
+        None => 0,
+        Some(Badge::NewCommits(_)) => 1,
+        Some(Badge::Stopped(_)) => 2,
+        Some(Badge::Conflicts) => 3,
+    };
+    let mut windows: Vec<_> = windows.into_iter().collect();
+    windows.sort_by_key(|&(hwnd, badge)| (urgency(badge), hwnd));
+    windows
+}
+
+/// Every window's badge, with its `HWND`, for the button they share.
+#[cfg(windows)]
+mod overlays {
+    use std::collections::HashMap;
+
+    use gpui::{App, Global, WindowId};
+    use tt_git_win::taskbar::Icon;
+
+    use super::{Badge, ICON_SIZE, dot, send_order};
+
+    #[derive(Default)]
+    struct Overlays(HashMap<WindowId, (isize, Option<Badge>)>);
+
+    impl Global for Overlays {}
+
+    /// `window`, at `hwnd`, shows `badge` now.
+    pub fn set(window: WindowId, hwnd: isize, badge: Option<Badge>, cx: &mut App) {
+        cx.default_global::<Overlays>().0.insert(window, (hwnd, badge));
+        send(cx);
+    }
+
+    /// `window` closed.
+    pub fn forget(window: WindowId, cx: &mut App) {
+        if cx.has_global::<Overlays>() && cx.global_mut::<Overlays>().0.remove(&window).is_some() {
+            send(cx);
+        }
+    }
+
+    /// Sends every window's overlay again.
+    pub fn send(cx: &App) {
+        let Some(overlays) = cx.try_global::<Overlays>() else {
+            return;
+        };
+        for (hwnd, badge) in send_order(overlays.0.values().copied()) {
+            overlay(hwnd, badge);
+        }
+    }
+
+    fn overlay(hwnd: isize, badge: Option<Badge>) {
+        let icon = badge.map(|b| {
+            let icon = Icon {
+                size: ICON_SIZE,
+                bgra: dot(b.color(), ICON_SIZE),
+            };
+            (icon, b.description())
+        });
+        let overlay = icon.as_ref().map(|(icon, text)| (icon, text.as_str()));
+        let start = std::time::Instant::now();
+        if let Err(e) = tt_git_win::taskbar::set_overlay(hwnd, overlay) {
+            tracing::warn!("couldn't badge the taskbar button: {e}");
+        }
+        tracing::debug!(hwnd, ?badge, elapsed = ?start.elapsed(), "taskbar: SetOverlayIcon");
     }
 }
 
@@ -200,6 +297,16 @@ pub fn dot(color: [u8; 3], size: u32) -> Vec<u8> {
         }
     }
     bgra
+}
+
+/// Whether `window` is the one the user is in, as the OS has it now, for
+/// the debug log to set beside GPUI's `is_window_active`. On Windows that's
+/// asked of Windows.
+fn foreground(window: &Window) -> bool {
+    #[cfg(windows)]
+    return hwnd(window).is_some_and(tt_git_win::taskbar::is_foreground);
+    #[cfg(not(windows))]
+    window.is_window_active()
 }
 
 /// The window's `HWND`.
@@ -234,6 +341,30 @@ mod tests {
         assert_eq!(pixel(&bgra, 32, 16, 1), [255, 255, 255, 255], "the ring");
         // Premultiplied: no channel above the alpha.
         assert!(bgra.chunks(4).all(|p| p[..3].iter().all(|&c| c <= p[3])));
+    }
+
+    #[test]
+    fn the_most_pressing_badge_is_sent_last() {
+        let stopped = Some(Badge::Stopped(InProgress::Merge));
+        let order = send_order([
+            (7, Some(Badge::NewCommits(2))),
+            (3, Some(Badge::Conflicts)),
+            (9, None),
+            (5, stopped),
+            (1, None),
+            (2, Some(Badge::NewCommits(1))),
+        ]);
+        assert_eq!(
+            order,
+            [
+                (1, None),
+                (9, None),
+                (2, Some(Badge::NewCommits(1))),
+                (7, Some(Badge::NewCommits(2))),
+                (5, stopped),
+                (3, Some(Badge::Conflicts)),
+            ]
+        );
     }
 
     #[test]

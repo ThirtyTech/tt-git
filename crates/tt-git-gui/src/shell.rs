@@ -125,12 +125,14 @@ impl Shell {
             cx.observe_window_activation(window, |_, _, cx| cx.notify()),
             // Focused, the new commits on the taskbar's badge are seen.
             cx.observe_window_activation(window, |shell, window, cx| shell.taskbar.activated(window, cx)),
-            // Closed, it's off the launcher and its part of the Dock's badge goes.
+            // Closed, it's off the launcher, its part of the Dock's badge
+            // goes, and the other windows' taskbar badges are sent again.
             {
                 let id = window.window_handle().window_id();
                 cx.on_release(move |_, cx| {
                     crate::launcher_entry::forget(id, cx);
                     crate::dock::set_badge(id, None, cx);
+                    crate::taskbar::forget(id, cx);
                 })
             },
             cx.observe_global::<crate::zoom::UiZoom>(|_, cx| cx.notify()),

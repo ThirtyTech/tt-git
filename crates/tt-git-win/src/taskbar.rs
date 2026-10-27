@@ -11,7 +11,7 @@ use windows::Win32::Foundation::HWND;
 use windows::Win32::Graphics::Gdi::{CreateBitmap, DeleteObject};
 use windows::Win32::System::Com::{CLSCTX_INPROC_SERVER, CoCreateInstance};
 use windows::Win32::UI::Shell::{ITaskbarList3, TBPF_ERROR, TBPF_INDETERMINATE, TBPF_NOPROGRESS, TaskbarList};
-use windows::Win32::UI::WindowsAndMessaging::{CreateIconIndirect, DestroyIcon, HICON, ICONINFO};
+use windows::Win32::UI::WindowsAndMessaging::{CreateIconIndirect, DestroyIcon, GetForegroundWindow, HICON, ICONINFO};
 use windows::core::{HSTRING, Result};
 
 /// What a taskbar button's progress bar shows.
@@ -89,6 +89,15 @@ pub fn set_overlay(hwnd: isize, badge: Option<(&Icon, &str)>) -> Result<()> {
     // SAFETY: `hicon` came from CreateIconIndirect and isn't used again.
     let _ = unsafe { DestroyIcon(hicon) };
     shown
+}
+
+/// Whether the window `hwnd` is the foreground window: the one the user is
+/// in, as Windows has it now, whatever the app last heard.
+pub fn is_foreground(hwnd: isize) -> bool {
+    // SAFETY: GetForegroundWindow takes nothing and returns a handle, null
+    // when no window is in the foreground.
+    let foreground = unsafe { GetForegroundWindow() };
+    foreground.0 as isize == hwnd
 }
 
 /// An `HICON` of `icon`'s pixels. The caller destroys it.

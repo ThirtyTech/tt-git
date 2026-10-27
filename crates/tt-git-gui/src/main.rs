@@ -244,19 +244,24 @@ fn finish_update(dir: &std::path::Path, installer: Option<&std::path::Path>) -> 
 }
 
 /// Logs to `<state_dir>/logs/tt-git-gui.log`; the level comes from
-/// `TTGIT_LOG` (an `EnvFilter` string, default `info`).
+/// `TTGIT_LOG` (an `EnvFilter` string, default `info`). A debug build also
+/// writes a backtrace to `borrow-trace.log` there for each window event
+/// GPUI drops because the app was busy ([`tt_git_gui::borrow_trace`]).
 fn init_tracing() -> Option<tracing_appender::non_blocking::WorkerGuard> {
     use tracing_subscriber::EnvFilter;
+    use tracing_subscriber::prelude::*;
 
     let dir = tt_git_core::paths::state_dir().join("logs");
     std::fs::create_dir_all(&dir).ok()?;
+    let borrow_trace =
+        cfg!(debug_assertions).then(|| tt_git_gui::borrow_trace::Layer::new(dir.join(tt_git_gui::borrow_trace::FILE)));
     let appender = tracing_appender::rolling::never(dir, "tt-git-gui.log");
     let (writer, guard) = tracing_appender::non_blocking(appender);
     let filter = EnvFilter::try_from_env("TTGIT_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .with_writer(writer)
-        .with_ansi(false)
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer().with_writer(writer).with_ansi(false))
+        .with(borrow_trace)
         .init();
     Some(guard)
 }
