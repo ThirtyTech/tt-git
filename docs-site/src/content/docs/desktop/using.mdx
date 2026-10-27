@@ -128,6 +128,26 @@ See [The mouse](/getting-started/navigation/#the-mouse). Setting
 Holding <kbd>ctrl</kbd> while you turn the wheel [zooms](#zoom) instead of
 scrolling.
 
+### Selecting text
+
+Drag over the text in the [details pane](/panes/details/) (a commit, a diff,
+plugin logs) to select it, and press <kbd>ctrl+c</kbd> (<kbd>cmd+c</kbd> on
+macOS) to copy it. While text is selected, <kbd>ctrl+c</kbd> copies rather
+than quits; with nothing selected it quits as usual. <kbd>c</kbd> and *Copy*
+in the right-click menu copy the selection too, or all of the text when
+nothing is selected. A click without a drag clears the selection, and so
+does showing other text. The selection stays where it is when you scroll.
+
+Selecting stops at the edges of the text: dragging past the top or bottom
+doesn't scroll, so scroll with the wheel while you hold the button.
+
+### Plugin errors
+
+When a plugin fails, the help bar shows `✗ plugin <id> <action>: <why>`,
+cut short if it's long. Click it to open
+[plugin logs](/plugins/#plugin-logs) in details, with the whole error and
+the plugin's output, ready to select or copy with <kbd>c</kbd>.
+
 ### Resizing panes
 
 Drag the border between two panes to resize them. Each split keeps the

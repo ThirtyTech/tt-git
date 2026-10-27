@@ -152,6 +152,17 @@ A commit opened from [blame](/panes/blame/) isn't the graph's selection, so ther
 from: the help bar says `this commit isn't selected in the graph: nothing to step from`. Press
 <kbd>esc</kbd> to go back to blame.
 
+## Copying the text
+
+Press <kbd>c</kbd> in details to copy all of the text it shows: a commit with its diff, the
+selected file's diff in the changed-files view, or [plugin logs](/plugins/#plugin-logs). The help bar
+says `copied 42 lines` rather than the text itself. <kbd>c</kbd> doesn't copy in the staging view,
+and in [blame](/panes/blame/) it copies the line's commit hash.
+
+In the [desktop app](/desktop/using/#selecting-text) you can also drag over the text to select part
+of it, and press <kbd>ctrl+c</kbd> (<kbd>cmd+c</kbd> on macOS) to copy what you selected. <kbd>c</kbd>
+then copies the selection too, rather than everything.
+
 ## Other things details shows
 
 - **A stash**: on the [Stash tab](/panes/stash/), details shows what the selected stash holds,
@@ -162,7 +173,8 @@ from: the help bar says `this commit isn't selected in the graph: nothing to ste
 - **Staging**: <kbd>enter</kbd> in the status pane turns details into the
   [staging view](/panes/staging/).
 - **Plugin logs**: *Plugin logs* in the [command palette](/git/palette/) lists recent plugin runs in
-  details.
+  details. In the desktop app, clicking a plugin's `✗ plugin …` notice in the help bar opens them
+  too. Press <kbd>c</kbd> to [copy](#copying-the-text) them.
 - **A plugin pane**: a plugin pane with the `split` placement takes details' place. See
   [Plugin panes](/panes/plugin-panes/).
 
@@ -289,8 +301,10 @@ says `no plugin handles …` rather than guessing which program should open it.
 | <kbd>/</kbd> | [Search](#searching-the-diff) the text shown for a regex |
 | <kbd>n</kbd> <kbd>N</kbd> | Next / previous match |
 | <kbd>A</kbd> | [Ask an AI agent](/git/agents/#asking-about-a-hunk) about the hunk at the top |
+| <kbd>c</kbd> | [Copy](#copying-the-text) the text shown, or the selection in the desktop app |
 | <kbd>esc</kbd> <kbd>space</kbd> | Close details |
 | <kbd>+</kbd> | Fullscreen and back |
 
 The mouse wheel scrolls details too. In the files view, click a file to show its diff; the wheel
-scrolls the diff over the diff and moves through the files over the list.
+scrolls the diff over the diff and moves through the files over the list. In the desktop app, drag
+over the text to select it and <kbd>ctrl+c</kbd> (<kbd>cmd+c</kbd> on macOS) copies it.

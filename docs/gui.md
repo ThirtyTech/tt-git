@@ -34,7 +34,7 @@ here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
 | `src/taskbar.rs` | The Windows taskbar button, one `Taskbar` per window in the shell (on Linux it reports to `launcher_entry.rs`; on macOS its badge goes to `dock.rs`). `App::take_job_progress` (a network job running, or failed for two seconds) comes out of `AppModel` as `AppEvent::JobProgress` and shows as indeterminate or red progress. With `[ui] notifications` on, the badge: `App::take_repo_alert` (`AppEvent::RepoAlert`: conflicts, a stopped merge or rebase, each as `[ui.alerts]` lets through) and the new commits from `AppEvent::NewCommits` that came while the window wasn't focused, cleared when it's activated. Which badge shows and its picture (`dot`, BGRA pixels) are worked out and unit-tested here on every OS; the Win32 calls are `tt_git_win::taskbar`. The taskbar stacks the windows on one button, which shows the overlay set last and keeps a closed window's, so `overlays` keeps every window's badge and sends them all again, in `send_order` (the most pressing last), when one changes, a window is focused, or one closes (`forget`, from the shell's `on_release`). |
 | `src/launcher_entry.rs` | The Linux dock's progress and badge. Each window's `Taskbar` hands it a `WindowEntry` (new commits, an alert that came while unfocused, a job running); the windows add up into one `Entry` for the app, sent as `com.canonical.Unity.LauncherEntry.Update` for `application://ThirtyTech.tt-git.desktop` with `zbus` from a thread of its own. Only `main` installs it, so tests never touch the session bus. |
 | `src/model.rs` | `AppModel`, the GPUI entity that owns `tt_git_app::App`. A task applies the app's actions, a timer sends `Action::Tick` every 250 ms, and after every input it carries out what the app asks: `take_redraw` (notify), `take_clipboard` (system clipboard), `take_new_commits` (`AppEvent::NewCommits`, see `notify.rs`), `take_job_progress` and `take_repo_alert` (see `taskbar.rs`), `take_editor` (a windowed editor starts detached, a terminal one in a pane: see [Editors](#editors)), `should_quit` (close the window). |
-| `src/shell.rs` | `Shell`, the window's view. Draws the layout, the help bar and what opens over the panes, sends every key to tt-git's keymap, and reports where each pane went (`begin_frame`, `set_layout`), as the TUI's `draw_app` does. |
+| `src/shell.rs` | `Shell`, the window's view. Draws the layout, the help bar and what opens over the panes, sends every key to tt-git's keymap (except ctrl+c, cmd+c on macOS, while the details pane has text selected: that's `Action::CopySelection`), and reports where each pane went (`begin_frame`, `set_layout`), as the TUI's `draw_app` does. |
 | `src/keys.rs` | GPUI's `Keystroke` as tt-git's `KeyCombo`. tt-git's keymap resolves every key, text input included. There is no GPUI action per command. |
 | `src/theme.rs` | `GuiTheme`: tt-git's colors as `Hsla`, every `StyleRole` as a `HighlightStyle`, the native style's `Surfaces` (ground, card, raised, hairlines, focus ring, scrim, mixed from the theme's background and text), and gpui-component's theme set to match. |
 | `src/look.rs` | `UiLook`, the window style (`[ui] style`: `UiStyle::Native`, the default, or `Terminal`), a GPUI global like the zoom, switched by `Command::WindowStyle`. It sets the line height (`line_spacing`: 1.6 native, 1.4 terminal), names the OS's UI font (`ui_font_family`), and holds the native sizes, in rems. |
@@ -44,7 +44,7 @@ here: `CARGO_TARGET_DIR=target/agent` on every cargo command, your own
 | `src/context_menu.rs` | The right-click menu every `PaneFrame` has: the focused pane's commands with their keys (`App::pane_commands`), each run as its key would. |
 | `src/ui.rs` | `Ui`, what every view draws with, and `Measures`. |
 | `src/frame.rs`, `src/rows.rs`, `src/text.rs`, `src/overlay.rs` | The building blocks (below). |
-| `src/help_bar.rs` | The help bar. |
+| `src/help_bar.rs` | The help bar. A plugin's failure in the notice (`App::notice_clickable`) is clicked as `Action::NoticeClicked`, which opens the plugin logs. |
 | `src/menus.rs`, `src/menus/` | The menus (below), the title bar (`bar.rs`) and the app icon (`icon.rs`, `assets/`, `build.rs`). |
 | `src/panes/`, `src/dialogs/`, `src/terminal.rs` | One file per area (below). |
 | `src/testing.rs` | The GPUI test harness. |
@@ -170,7 +170,13 @@ target dir.
   `MouseKind::RightClick`, before the pane's menu opens), and the wheel as
   scroll steps. `.first_body_row(k)` when the pane draws `k` lines above the
   list; `.on_target(|line| ...)` for a list that is a part of its own
-  (`PanePart::FileRow(line)` for the details file list).
+  (`PanePart::FileRow(line)` for the details file list). `.selectable()`
+  lets the mouse select its text: a press and each move with the button
+  down go to the app as `Action::SelectText` at the line and column under
+  the pointer, the release as `Action::SelectEnd`. The app keeps the
+  selection (`tt_git_app::panes::selection`, by line and column of the
+  text, so it survives scrolling); the details text draws it over the rows
+  with `GuiTheme::text_selection`.
 - **`StyledRow`** (`rows.rs`): one row. `StyledRow::new(theme, spans, row)`
   where `row` is the look of the whole row, laid under the spans as the TUI
   patches a line's style: `text::selection(picked, focused)` for a picked
