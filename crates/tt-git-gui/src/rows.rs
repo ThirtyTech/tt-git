@@ -21,13 +21,20 @@
 //! [`first_body_row`](StyledRows::first_body_row)); the wheel sends
 //! [`MouseKind::ScrollUp`] and [`MouseKind::ScrollDown`], one per notch
 //! ([`WHEEL_STEP_LINES`]), and the app scrolls as it does in the terminal.
+//!
+//! A [`selectable`](StyledRows::selectable) list (the details pane's text)
+//! also sends where the mouse went down and was dragged to, by line and
+//! column, as [`Action::SelectText`], and the release as
+//! [`Action::SelectEnd`]; the app keeps the selection.
 
 use std::rc::Rc;
 
 use gpui::{
-    AnyElement, App, Div, Hsla, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, ParentElement,
-    RenderOnce, ScrollDelta, ScrollWheelEvent, SharedString, Styled, Window, div, prelude::FluentBuilder,
+    AnyElement, App, Div, Hsla, InteractiveElement, IntoElement, MouseButton, MouseDownEvent, MouseMoveEvent,
+    ParentElement, Pixels, Point, RenderOnce, ScrollDelta, ScrollWheelEvent, SharedString, Styled, Window, div,
+    prelude::FluentBuilder,
 };
+use tt_git_app::Action;
 use tt_git_app::mouse::{MouseInput, MouseKind, MouseTarget};
 use tt_git_app::panes::PaneId;
 use tt_git_app::view::{StyleRole, TextSpan};
@@ -222,6 +229,7 @@ pub struct StyledRows {
     id: SharedString,
     rows: Vec<StyledRow>,
     target: TargetFn,
+    selectable: bool,
 }
 
 impl StyledRows {
@@ -237,6 +245,17 @@ impl StyledRows {
                 body_row: Some(line),
                 part: None,
             }),
+            selectable: false,
+        }
+    }
+
+    /// Lets the mouse select the text: a press starts a selection, a drag
+    /// extends it, both sent to the app as [`Action::SelectText`] at the
+    /// line and column under the pointer.
+    pub fn selectable(self) -> Self {
+        Self {
+            selectable: true,
+            ..self
         }
     }
 
@@ -264,7 +283,13 @@ impl StyledRows {
 
 impl RenderOnce for StyledRows {
     fn render(self, _: &mut Window, _: &mut App) -> impl IntoElement {
-        let Self { ui, id, rows, target } = self;
+        let Self {
+            ui,
+            id,
+            rows,
+            target,
+            selectable,
+        } = self;
         let inset = if ui.native() { look::ROW_INSET } else { gpui::rems(0.) };
         let click = {
             let (ui, id, target) = (ui.clone(), id.clone(), target.clone());
@@ -281,6 +306,37 @@ impl RenderOnce for StyledRows {
                     },
                     cx,
                 );
+                if selectable && !ev.modifiers.control {
+                    let (row, col) = cell_at(&ui, &id, ev.position);
+                    ui.send(
+                        Action::SelectText {
+                            row,
+                            col,
+                            extend: false,
+                        },
+                        cx,
+                    );
+                }
+            }
+        };
+        let drag = {
+            let (ui, id) = (ui.clone(), id.clone());
+            move |ev: &MouseMoveEvent, _: &mut Window, cx: &mut App| {
+                if ev.pressed_button != Some(MouseButton::Left) || !ui.selecting(cx) {
+                    return;
+                }
+                let (row, col) = cell_at(&ui, &id, ev.position);
+                ui.send(Action::SelectText { row, col, extend: true }, cx);
+            }
+        };
+        let release = {
+            let ui = ui.clone();
+            move |_: &gpui::MouseUpEvent, _: &mut Window, cx: &mut App| {
+                // Every release in the window comes here: only one ending a
+                // drag goes to the app.
+                if ui.selecting(cx) {
+                    ui.send(Action::SelectEnd, cx);
+                }
             }
         };
         let right_click = {
@@ -337,6 +393,12 @@ impl RenderOnce for StyledRows {
             .on_mouse_down(MouseButton::Left, click)
             .on_mouse_down(MouseButton::Right, right_click)
             .on_scroll_wheel(wheel)
+            .when(selectable, |d| {
+                d.cursor_text()
+                    .on_mouse_move(drag)
+                    .on_mouse_up(MouseButton::Left, release.clone())
+                    .on_mouse_up_out(MouseButton::Left, release)
+            })
             // Native rows keep their text clear of the highlight's edges:
             // the columns that fit are the ones inside.
             .child(
@@ -362,6 +424,19 @@ fn line_at(ui: &Ui, id: &str, y: gpui::Pixels) -> Option<usize> {
         return None;
     }
     Some(((y - bounds.top()) / ui.font.line_height).floor() as usize)
+}
+
+/// The line and column of list `id` nearest window point `at`: the column
+/// whose left edge is closest, with points above and below the list on its
+/// first and last line.
+fn cell_at(ui: &Ui, id: &str, at: Point<Pixels>) -> (usize, usize) {
+    let Some(bounds) = ui.measures.get(id) else {
+        return (0, 0);
+    };
+    let y = at.y.clamp(bounds.top(), bounds.bottom() - gpui::px(1.));
+    let line = ((y - bounds.top()) / ui.font.line_height).floor() as usize;
+    let col = ((at.x - bounds.left()) / ui.font.cell_width).round().max(0.) as usize;
+    (line, col)
 }
 
 #[cfg(test)]

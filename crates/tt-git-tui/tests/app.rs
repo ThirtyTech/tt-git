@@ -445,6 +445,64 @@ fn c_copies_the_commit_hash_or_branch_name() {
 }
 
 #[test]
+fn a_plugin_failure_notice_opens_the_logs_and_c_copies_them() {
+    let sb = Sandbox::new();
+    sb.commit("one");
+    let mut t = TestDriver::new(&sb);
+    t.send(tt_git_tui::Action::NoticeClicked);
+    assert_ne!(t.app().focus(), PaneId::Details, "an ordinary notice does nothing");
+
+    let log = tt_git_plugin::runtime::CommandLog {
+        log_id: 1,
+        plugin_id: "acme.pr".into(),
+        action_id: Some("refresh".into()),
+        event: None,
+        command: vec!["pr".into()],
+        status: tt_git_plugin::runtime::CommandStatus::Failed,
+        started_unix_ms: 0,
+        finished_unix_ms: Some(1),
+        exit_code: Some(2),
+        stdout: String::new(),
+        stderr: "token expired".into(),
+        error: None,
+    };
+    t.send(tt_git_tui::Action::PluginFinished(std::sync::Arc::new(log)));
+    assert_eq!(t.app().notice(), Some("✗ plugin acme.pr refresh: exit 2"));
+    assert!(t.app().notice_clickable());
+    t.send(tt_git_tui::Action::NoticeClicked);
+    assert_eq!(t.app().focus(), PaneId::Details);
+    assert_eq!(
+        t.app().details().subject(),
+        Some(&DetailsSubject::Text("plugin-logs".into()))
+    );
+
+    // c copies them.
+    t.press("c");
+    let text = t.app_mut().take_clipboard().expect("copied");
+    assert_eq!(text, t.app().details().lines().join("\n"));
+    assert!(!t.app().notice_clickable(), "another notice took its place");
+}
+
+#[test]
+fn c_in_details_copies_all_of_its_text() {
+    let sb = Sandbox::new();
+    sb.commit("one");
+    let mut t = TestDriver::new(&sb);
+    t.press("space").press("tab");
+    if t.app().details().commit_files().is_some() {
+        t.press("}");
+    }
+    assert_eq!(t.app().focus(), PaneId::Details);
+    t.press("c");
+    let text = t.app_mut().take_clipboard().expect("copied");
+    assert!(text.starts_with("commit "), "{text}");
+    assert_eq!(text, t.app().details().lines().join("\n"));
+    // Says how much rather than all of it.
+    let notice = format!("copied {} lines", text.lines().count());
+    assert_eq!(t.app().notice(), Some(notice.as_str()));
+}
+
+#[test]
 fn zoom_puts_the_graph_fullscreen_and_back() {
     let sb = Sandbox::new();
     let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);

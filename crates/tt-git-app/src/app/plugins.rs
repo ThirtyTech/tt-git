@@ -443,7 +443,9 @@ impl App {
                 (None, Some(code)) => format!("exit {code}"),
                 (None, None) => "killed".into(),
             };
-            self.notice = Some(format!("✗ plugin {} {what}: {why}", log.plugin_id));
+            let notice = format!("✗ plugin {} {what}: {why}", log.plugin_id);
+            self.plugin_notice = Some(notice.clone());
+            self.notice = Some(notice);
         }
     }
 

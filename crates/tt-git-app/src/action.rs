@@ -50,6 +50,22 @@ pub enum Action {
     Error(String),
     /// Put this text on the clipboard.
     Copy(String),
+    /// The mouse in the details pane's text, at its screen `row` and
+    /// column `col`: down (a new selection), or with `extend` moved while
+    /// down. See [`DetailsPane::select_text`](crate::panes::DetailsPane::select_text).
+    SelectText {
+        row: usize,
+        col: usize,
+        extend: bool,
+    },
+    /// The mouse came up after [`SelectText`](Self::SelectText).
+    SelectEnd,
+    /// Copy the details pane's selection, if there is one (the GUI's
+    /// ctrl+c or cmd+c).
+    CopySelection,
+    /// The notice in the help bar was clicked: a plugin's failure opens the
+    /// plugin logs.
+    NoticeClicked,
     /// Reload refs, status and the graph.
     Refresh,
     /// Reload only the graph (e.g. after changing its scope).

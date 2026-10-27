@@ -5,6 +5,7 @@ use tt_git_core::patch::{DiffPosition, diff_text_hunk, diff_text_position, diff_
 use tt_git_core::{CommitFile, FileState, StageSide, StatusEntry};
 
 use super::blame::BlameView;
+use super::selection::{TextPos, TextSelection};
 use super::stage::StageView;
 use crate::action::Action;
 use crate::agent::AgentHunk;
@@ -108,6 +109,8 @@ pub struct DetailsPane {
     /// The front end previews files with Quick Look, so the pane offers it
     /// (see `App::enable_quick_look`).
     pub quick_look: bool,
+    /// Text picked out with the mouse (the GUI's); see [`selection`](Self::selection).
+    select: Option<TextSelection>,
 }
 
 /// Everything the details pane shows, put aside to come back to.
@@ -139,6 +142,69 @@ impl DetailsPane {
 
     pub fn lines(&self) -> &[String] {
         &self.lines
+    }
+
+    /// Whether the text shown is the pane's own (a commit, a diff, plugin
+    /// logs), which it can select and copy, rather than staging or blame.
+    fn shows_text(&self) -> bool {
+        self.stage.is_none() && self.blame.is_none()
+    }
+
+    /// Starts a selection at the text's screen row `row` (from the top of
+    /// the text, as [`text_rows`](Self::text_rows) gives them) and column
+    /// `col`, or with `extend` moves the end of the one being dragged out there.
+    /// Rows past the last line are on the last line, past its end.
+    pub fn select_text(&mut self, row: usize, col: usize, extend: bool) {
+        if !self.shows_text() || self.lines.is_empty() {
+            self.select = None;
+            return;
+        }
+        let line = self.cursor.offset + row;
+        let at = match line.checked_sub(self.lines.len()) {
+            Some(_) => TextPos {
+                line: self.lines.len() - 1,
+                col: usize::MAX,
+            },
+            None => TextPos { line, col },
+        };
+        match &mut self.select {
+            Some(sel) if extend && sel.dragging && sel.is_for(&self.lines) => sel.extend(at),
+            // A drag that didn't start in the text.
+            _ if extend => {}
+            _ => self.select = Some(TextSelection::new(self.lines.clone(), at)),
+        }
+    }
+
+    /// Whether a selection is being dragged out: the mouse went down in the
+    /// text and hasn't come up.
+    pub fn selecting(&self) -> bool {
+        self.selection().is_some_and(|s| s.dragging)
+    }
+
+    /// The mouse came up: moves no longer extend the selection.
+    pub fn end_selection(&mut self) {
+        if let Some(sel) = &mut self.select {
+            sel.dragging = false;
+        }
+    }
+
+    /// The selection, while it's in the text shown and picks something out
+    /// (or is being dragged).
+    pub fn selection(&self) -> Option<&TextSelection> {
+        self.select
+            .as_ref()
+            .filter(|s| self.shows_text() && s.is_for(&self.lines) && (s.dragging || !s.is_empty()))
+    }
+
+    /// What `c` copies: the selection, or else all of the text.
+    pub fn copy_text(&self) -> Option<String> {
+        if !self.shows_text() {
+            return None;
+        }
+        if let Some(sel) = self.selection().filter(|s| !s.is_empty()) {
+            return Some(sel.text());
+        }
+        (!self.lines.is_empty()).then(|| self.lines.join("\n"))
     }
 
     /// The text rows currently on screen, top to bottom. In the files view
@@ -830,6 +896,12 @@ impl Component for DetailsPane {
             return view.on_command(cmd, ctx);
         }
         match cmd {
+            Command::Copy => {
+                if let Some(text) = self.copy_text() {
+                    ctx.emit(Action::Copy(text));
+                }
+                return EventState::Consumed;
+            }
             Command::OpenInEditor => {
                 ctx.emit(match self.edit_target() {
                     Ok(target) => Action::OpenInEditor(target),
@@ -1001,6 +1073,7 @@ impl Component for DetailsPane {
                 Command::SearchNext,
                 Command::SearchPrev,
                 Command::Agent,
+                Command::Copy,
                 Command::CloseDetails,
             ];
         }
@@ -1017,6 +1090,7 @@ impl Component for DetailsPane {
             Command::SearchNext,
             Command::SearchPrev,
             Command::Agent,
+            Command::Copy,
             Command::CloseDetails,
         ]
     }

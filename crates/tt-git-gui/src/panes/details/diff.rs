@@ -1,9 +1,13 @@
 //! The details pane's text (Phase B4): a commit, a diff or other text, or in
 //! the files view the selected file's diff, with syntax highlighting and
 //! search matches, from the details view model's
-//! [`text_rows`](tt_git_app::panes::DetailsPane::text_rows).
+//! [`text_rows`](tt_git_app::panes::DetailsPane::text_rows). The mouse
+//! selects it (the app keeps the selection, by line and column), for
+//! ctrl+c, cmd+c on macOS, or `c` to copy.
 
-use gpui::{AnyElement, HighlightStyle, IntoElement};
+use std::ops::Range;
+
+use gpui::{AnyElement, HighlightStyle, IntoElement, combine_highlights};
 use tt_git_app::mouse::{MouseTarget, PanePart};
 use tt_git_app::panes::{DetailsPane, PaneId};
 use tt_git_app::style::Style;
@@ -24,18 +28,38 @@ pub const TEXT: &str = "details:text";
 pub fn render(ui: &Ui, pane: &mut DetailsPane, first_body_row: usize, part: Option<PanePart>) -> AnyElement {
     let fit = ui.fit(TEXT);
     pane.set_viewport(fit.rows);
+    let first = pane.cursor.offset;
+    let selection = pane.selection().cloned();
     let rows = pane
         .text_rows(fit.rows, fit.cols)
         .iter()
-        .map(|row| text_row(&ui.theme, row))
+        .enumerate()
+        .map(|(i, row)| {
+            let mut row = text_row(&ui.theme, row);
+            if let Some(bytes) = selection.as_ref().and_then(|s| s.bytes_on(first + i)) {
+                select(&ui.theme, &mut row.line, bytes);
+            }
+            row
+        })
         .collect();
     StyledRows::new(ui, TEXT, PaneId::Details, rows)
+        .selectable()
         .on_target(move |line| MouseTarget::Pane {
             pane: PaneId::Details,
             body_row: Some(first_body_row + line),
             part,
         })
         .into_any_element()
+}
+
+/// Lays the selection's look over `bytes` of `line`.
+fn select(theme: &GuiTheme, line: &mut StyledLine, bytes: Range<usize>) {
+    let bytes = bytes.start.min(line.text.len())..bytes.end.min(line.text.len());
+    let look = HighlightStyle {
+        background_color: Some(theme.text_selection()),
+        ..HighlightStyle::default()
+    };
+    line.highlights = combine_highlights(std::mem::take(&mut line.highlights), [(bytes, look)]).collect();
 }
 
 /// A text row as the TUI draws it: the spans over the row's
