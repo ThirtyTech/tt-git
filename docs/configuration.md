@@ -35,7 +35,7 @@ safe_branches = ["master", "main", "production", "prod"]  # never list these on 
 check_merges = true             # mark branches that would conflict with the base branch (git 2.40+)
 
 [fetch]
-interval = 5                    # minutes between background fetches of every remote (git fetch --all --prune); 0 turns them off
+interval = 1                    # minutes between background fetches of every remote (git fetch --all --prune); 0 turns them off
 conserve = true                 # on battery fetch every 3x the interval; in battery saver or on a metered connection, not at all
 
 [plugins]

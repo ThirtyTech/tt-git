@@ -64,7 +64,7 @@ safe_branches = ["master", "main", "production", "prod"]  # never listed on the 
 check_merges = true               # mark branches that would conflict with the base branch
 
 [fetch]
-interval = 5                      # minutes between background fetches; 0 turns them off
+interval = 1                      # minutes between background fetches; 0 turns them off
 conserve = true                   # fetch less on battery, none when saving power or metered
 
 [plugins]
@@ -146,8 +146,8 @@ See [Merged and unmerged](/panes/merged-unmerged/).
 
 | Setting | Default | What it does |
 |---|---|---|
-| `interval` | `5` | Minutes between the fetches tt-git makes on its own while a repository is open (`git fetch --all --prune`), in the terminal app and the desktop app. `0` turns them off. A repository's own config file can change it for that repository. See [Background fetch](/git/remotes/#background-fetch). |
-| `conserve` | `true` | Go easy on battery and data: on battery, fetch every three times the interval (15 minutes at the default), and in battery saver, Low Power Mode, the power-saver profile or on a metered connection, don't fetch in the background at all. `false` fetches at the interval whatever the conditions. Fetches you start always run. See [On battery and metered connections](/git/remotes/#on-battery-and-metered-connections). |
+| `interval` | `1` | Minutes between the fetches tt-git makes on its own while a repository is open (`git fetch --all --prune`), in the terminal app and the desktop app. `0` turns them off. A repository's own config file can change it for that repository. See [Background fetch](/git/remotes/#background-fetch). |
+| `conserve` | `true` | Go easy on battery and data: on battery, fetch every three times the interval (3 minutes at the default), and in battery saver, Low Power Mode, the power-saver profile or on a metered connection, don't fetch in the background at all. `false` fetches at the interval whatever the conditions. Fetches you start always run. See [On battery and metered connections](/git/remotes/#on-battery-and-metered-connections). |
 
 ### `[plugins]`
 

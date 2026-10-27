@@ -74,7 +74,7 @@ The help bar shows `fetching all remotes` while it runs, then
 ## Background fetch
 
 While a repository is open, tt-git also fetches every remote on its own
-every 5 minutes, so the remote branches, the ahead and behind counts and the
+every minute, so the remote branches, the ahead and behind counts and the
 [new commit notifications](/desktop/using/#notifications) stay current
 without you pressing <kbd>f</kbd>. It runs the same
 `git fetch --all --prune`, in the terminal app and the desktop app. Set
@@ -115,8 +115,8 @@ Background fetches back off to save battery and data:
 
 | When | Background fetch |
 |---|---|
-| On mains power, on an unmetered connection | Every interval (5 minutes) |
-| On battery | Every three intervals (15 minutes) |
+| On mains power, on an unmetered connection | Every interval (1 minute) |
+| On battery | Every three intervals (3 minutes) |
 | Battery saver (Windows), Low Power Mode (macOS) or the power-saver profile (Linux) | Paused |
 | A metered connection | Paused |
 
