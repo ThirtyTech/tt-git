@@ -77,7 +77,9 @@ every 5 minutes, so the remote branches, the ahead and behind counts and the
 without you pressing <kbd>f</kbd>. It runs the same
 `git fetch --all --prune`, in the terminal app and the desktop app. Set
 `interval` under [`[fetch]`](/configuration/#fetch) to change how often, or
-`0` to turn it off.
+`0` to turn it off. On battery it fetches less often, and in battery saver or
+on a metered connection not at all: see [On battery and metered
+connections](#on-battery-and-metered-connections).
 
 A background fetch is quiet:
 
@@ -104,6 +106,33 @@ It waits its turn:
 
 Commits an agent makes in another [worktree](/git/worktrees/) are already in
 the repository, so they show without a fetch.
+
+### On battery and metered connections
+
+Background fetches back off to save battery and data:
+
+| When | Background fetch |
+|---|---|
+| On mains power, on an unmetered connection | Every interval (5 minutes) |
+| On battery | Every three intervals (15 minutes) |
+| Battery saver (Windows), Low Power Mode (macOS) or the power-saver profile (Linux) | Paused |
+| A metered connection | Paused |
+
+tt-git checks again every 30 seconds, so fetching picks up as soon as you
+plug in or join an unmetered network. Fetches you start with <kbd>f</kbd>,
+<kbd>p</kbd> or <kbd>D</kbd> always run.
+
+What counts as metered depends on the system:
+
+- **Windows**: a network set as metered (**Settings > Network & internet**),
+  or a connection that's roaming or over its data limit.
+- **macOS**: a connection the system marks expensive (a personal hotspot,
+  cellular) or one in Low Data Mode.
+- **Linux**: a connection NetworkManager says is metered, set by you or
+  guessed (a phone's hotspot).
+
+To fetch at the interval regardless, set `conserve = false` under
+[`[fetch]`](/configuration/#fetch).
 
 ## Fast-forward a branch you aren't on
 
