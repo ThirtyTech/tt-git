@@ -12,7 +12,7 @@ use tt_git_core::{
 
 use crate::action::{Action, RefsSnapshot};
 use crate::component::{Component, EventState};
-use crate::config::{Config, UiStyle, ZoomStep};
+use crate::config::{Alert, Config, UiStyle, ZoomStep};
 use crate::editor::{self, EditTarget, EditorLaunch};
 use crate::filter::FilterPanel;
 use crate::geom::Rect;
@@ -22,7 +22,7 @@ use crate::layout::View;
 use crate::loaders;
 use crate::modal::{GitOp, Modal, ModalOutcome, PaletteItem, PaletteTarget, PromptAction};
 use crate::mouse::{FilterSpot, MouseInput, MouseKind, MouseTarget};
-use crate::new_commits::{self, NewCommits, Tips};
+use crate::new_commits::{self, NewCommits, Pending, Tips, Watch};
 use crate::panes::{
     BlameView, BranchFocus, BranchTab, BranchesPane, DetailsPane, DetailsSubject, GraphPane, LoadToken, PaneId,
     SavedDetails, StatusPane,
@@ -32,6 +32,7 @@ use crate::view::dialogs::HelpTab;
 use crate::watcher::RepoWatcher;
 
 mod agent;
+mod alerts;
 mod editor_pane;
 mod fonts;
 mod pane_commands;
@@ -39,6 +40,7 @@ mod panes;
 mod plugins;
 mod taskbar;
 mod themes;
+pub use alerts::AlertSettings;
 pub use fonts::FontChoice;
 pub use pane_commands::PaneCommand;
 pub use panes::PaneRequest;
@@ -140,7 +142,19 @@ struct Busy {
     since: u64,
     /// It talks to a remote, so the taskbar shows it ([`App::take_job_progress`]).
     network: bool,
+    /// See [`moves_head`].
+    moves_head: bool,
 }
+
+/// Whether `op` can move the branch checked out here, so its new commits
+/// are this window's own rather than news.
+fn moves_head(op: &GitOp) -> bool {
+    !taskbar::is_network(op) || matches!(op, GitOp::Pull | GitOp::FastForward { .. })
+}
+
+/// How long a local branch that just notified holds its next new commits:
+/// a minute.
+const LOCAL_COMMITS_HOLD: u64 = 60 * TICKS_PER_SEC;
 
 /// A git load for the details pane's subject.
 #[derive(Debug, Clone, PartialEq)]
@@ -305,6 +319,11 @@ pub struct App {
     font_picked: Option<Option<String>>,
     /// The front end has styles to switch between (the desktop app).
     styles: bool,
+    /// The front end notifies (the desktop app).
+    notifies: bool,
+    /// A notifications setting changed in this window, for the front end
+    /// to take.
+    alerts_changed: bool,
     /// [`Command::WindowStyle`] ran, for the front end to take.
     style_wanted: bool,
     /// The front end updates itself (the desktop app, from its own
@@ -337,7 +356,11 @@ pub struct App {
     /// The ref tips of the last refs load, to spot new commits by.
     tips: Option<Tips>,
     /// New commits waiting for the front end to take.
-    new_commits: Option<NewCommits>,
+    new_commits: Pending,
+    /// This window is moving the branch checked out here (a commit, rebase,
+    /// reset): refs loads up to and including the first with at least this
+    /// generation don't count its new commits as news.
+    own_head_move: Option<u64>,
     should_quit: bool,
     pane_areas: Vec<(PaneId, Rect)>,
     /// The last left click on a pane's body: when, and which pane and row,
@@ -438,6 +461,8 @@ impl App {
             font_picker_wanted: false,
             font_picked: None,
             styles: false,
+            notifies: false,
+            alerts_changed: false,
             style_wanted: false,
             open_repo_wanted: false,
             quick_look: None,
@@ -459,7 +484,8 @@ impl App {
             notice: None,
             clipboard: None,
             tips: None,
-            new_commits: None,
+            new_commits: Pending::default(),
+            own_head_move: None,
             editor: None,
             should_quit: false,
             pane_areas: Vec::new(),
@@ -700,9 +726,10 @@ impl App {
         self.clipboard.take()
     }
 
-    /// Takes the commits that arrived on remote-tracking branches since the
-    /// last call, when `[ui] notifications` is on. The first refs load
-    /// brings none: only later fetches and pulls do.
+    /// Takes the commits that arrived since the last call, when
+    /// `[ui] notifications` is on: on remote-tracking branches, and on
+    /// local branches from outside this window, as `[ui.alerts]` picks.
+    /// The first refs load brings none: only later changes do.
     pub fn take_new_commits(&mut self) -> Option<NewCommits> {
         self.new_commits.take()
     }
@@ -1063,6 +1090,7 @@ impl App {
                 self.modal = None;
                 self.pick_font(family);
             }
+            ModalOutcome::Alert(alert) => self.toggle_alert(alert),
             ModalOutcome::Next(modal) => self.modal = Some(*modal),
             ModalOutcome::PluginAction(action) => {
                 self.modal = None;
@@ -1127,11 +1155,13 @@ impl App {
         let context = self.focused().context();
         let zoom: &[Command] = if self.zooms { ZOOM_COMMANDS } else { &[] };
         let font: &[Command] = if self.chooses_fonts { &[Command::Font] } else { &[] };
-        let sections: [(Context, &[Command]); 4] = [
+        let alerts: &[Command] = if self.notifies { &[Command::Notifications] } else { &[] };
+        let sections: [(Context, &[Command]); 5] = [
             (context, self.focused().commands()),
             (Context::Global, ALL_GLOBAL),
             (Context::Global, zoom),
             (Context::Global, font),
+            (Context::Global, alerts),
         ];
         let mut rows = Vec::new();
         for (i, (ctx, cmds)) in sections.into_iter().enumerate() {
@@ -1155,11 +1185,13 @@ impl App {
         let context = self.focused().context();
         let zoom: &[Command] = if self.zooms { ZOOM_COMMANDS } else { &[] };
         let font: &[Command] = if self.chooses_fonts { &[Command::Font] } else { &[] };
-        let sections: [(Context, &[Command]); 4] = [
+        let alerts: &[Command] = if self.notifies { &[Command::Notifications] } else { &[] };
+        let sections: [(Context, &[Command]); 5] = [
             (context, self.focused().commands()),
             (Context::Global, ALL_GLOBAL),
             (Context::Global, zoom),
             (Context::Global, font),
+            (Context::Global, alerts),
         ];
         sections
             .iter()
@@ -1194,6 +1226,7 @@ impl App {
             Action::Command(cmd) => self.run_command(cmd),
             Action::Tick => {
                 self.ticks += 1;
+                self.new_commits.release(self.ticks, LOCAL_COMMITS_HOLD);
                 self.poll_theme();
                 if self.poll_plugins() || self.cursor_shown || self.dates_stale() || self.help_bar_moving() {
                     self.dirty = true;
@@ -1272,7 +1305,7 @@ impl App {
                     self.graph.select_when_loaded(oid.to_string(), &self.ctx);
                 }
                 self.graph.set_refs(&snapshot);
-                self.note_tips(&snapshot.refs);
+                self.note_tips(&snapshot.refs, &snapshot.worktrees);
                 let RefsSnapshot {
                     head,
                     refs,
@@ -1339,7 +1372,7 @@ impl App {
             Action::UpdateChecked(latest) => self.update_checked(latest),
             Action::NewCommits(new) => {
                 if !new.branches.is_empty() {
-                    self.new_commits.get_or_insert_default().add(new);
+                    self.new_commits.arrived(new, self.ticks, LOCAL_COMMITS_HOLD);
                 }
             }
             Action::OpDone { op, result, head } => self.op_done(op, result, head),
@@ -1497,16 +1530,31 @@ impl App {
     }
 
     /// Keeps the tips of a refs load, and with `[ui] notifications` on
-    /// counts the commits on the remote-tracking branches that moved.
-    fn note_tips(&mut self, refs: &[tt_git_core::GitRef]) {
-        let tips = Tips::of(refs);
+    /// counts the commits on the branches that moved, as `[ui.alerts]`
+    /// picks. The branch checked out here doesn't count while this window
+    /// is the one moving it.
+    fn note_tips(&mut self, refs: &[tt_git_core::GitRef], worktrees: &[tt_git_core::Worktree]) {
+        let tips = Tips::of(refs, worktrees);
+        let skip_head = self.own_head_move.is_some();
+        if self
+            .own_head_move
+            .is_some_and(|after| self.refs_reload.applied() >= after)
+        {
+            self.own_head_move = None;
+        }
         let Some(before) = self.tips.replace(tips.clone()) else {
             return;
         };
-        if !self.config.ui.notifications {
+        let ui = &self.config.ui;
+        let watch = Watch {
+            remote: ui.alerts_on(Alert::RemoteCommits),
+            local: ui.alerts_on(Alert::LocalCommits),
+            skip_head,
+        };
+        if !watch.remote && !watch.local {
             return;
         }
-        let moved = tips.moved_since(&before);
+        let moved = tips.moved_since(&before, watch);
         if moved.is_empty() {
             return;
         }
@@ -1794,6 +1842,9 @@ impl App {
         if matches!(op, GitOp::Undo { .. }) {
             self.undo_pending = true;
         }
+        if moves_head(&op) {
+            self.own_head_move = Some(u64::MAX);
+        }
         // The help bar shows it running from here on.
         self.notice = None;
         self.busy.push(Busy {
@@ -1802,6 +1853,7 @@ impl App {
             done,
             since: self.ticks,
             network: taskbar::is_network(&op),
+            moves_head: moves_head(&op),
         });
         if let GitOp::SelfUpdate { tag } = op {
             self.ctx.spawn_streaming(move |ctx| loaders::self_update(ctx, tag));
@@ -2317,6 +2369,10 @@ impl App {
     fn op_done(&mut self, op: GitOp, result: Result<String, String>, head: Option<String>) {
         let label = op.label();
         let done = self.finish_busy(&op);
+        // Loads from here on see what it did.
+        if moves_head(&op) && !self.busy.iter().any(|b| b.moves_head) {
+            self.own_head_move = Some(self.refs_reload.requested() + 1);
+        }
         if result.is_err() {
             self.job_failed(&op);
         }
@@ -3123,6 +3179,10 @@ impl App {
             Command::WindowStyle if self.styles => self.style_wanted = true,
             Command::WindowStyle => {
                 self.notice = Some("the window style is the desktop app's: the terminal draws its own".into());
+            }
+            Command::Notifications if self.notifies => self.open_alerts_picker(),
+            Command::Notifications => {
+                self.notice = Some("notifications are the desktop app's: the terminal has none".into());
             }
             Command::Font if self.chooses_fonts => self.font_picker_wanted = true,
             Command::Font => {

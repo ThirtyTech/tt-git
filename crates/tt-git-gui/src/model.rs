@@ -65,6 +65,7 @@ impl AppModel {
         app.enable_ui_zoom();
         app.enable_ui_fonts();
         app.enable_ui_style();
+        app.enable_notifications();
         #[cfg(target_os = "macos")]
         app.enable_quick_look();
         // The install scripts behind `tt-git update` only know the TUI's
@@ -188,6 +189,10 @@ impl AppModel {
         if let Some(family) = self.app.take_font_pick() {
             // Every window redraws in it (`Shell` watches it).
             crate::font::set_family(family, cx);
+        }
+        if let Some(settings) = self.app.take_alert_settings() {
+            // Every window uses them (`Shell` watches them).
+            crate::notify::share_settings(settings, cx);
         }
         if let Some(new) = self.app.take_new_commits() {
             cx.emit(AppEvent::NewCommits(new));

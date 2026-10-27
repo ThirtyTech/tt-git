@@ -1,7 +1,8 @@
 //! The window's taskbar button on Windows: the progress of a network job
 //! ([`App::take_job_progress`](tt_git_app::App::take_job_progress)), and
-//! with `[ui] notifications` on a badge over the icon: conflicts, a stopped
-//! merge or rebase ([`App::take_repo_alert`](tt_git_app::App::take_repo_alert)),
+//! with `[ui] notifications` on a badge over the icon, for each alert
+//! `[ui.alerts]` lets through: conflicts, a stopped merge or rebase
+//! ([`App::take_repo_alert`](tt_git_app::App::take_repo_alert)),
 //! or new commits that came in while the window wasn't focused, until it is
 //! again. The Win32 calls are in `tt-git-win`. On Linux the same goes to the
 //! app's launcher ([`launcher_entry`](crate::launcher_entry)). On macOS the

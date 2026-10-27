@@ -121,8 +121,10 @@ pub struct UiConfig {
     pub check_for_updates: bool,
     /// Tell the desktop when new commits arrive while the window isn't
     /// focused: a notification, and a badge on the app's icon where the
-    /// desktop has one.
+    /// desktop has one. The switch for all of [`alerts`](Self::alerts).
     pub notifications: bool,
+    /// Which alerts [`notifications`](Self::notifications) turns on.
+    pub alerts: AlertsConfig,
 }
 
 impl Default for UiConfig {
@@ -134,6 +136,7 @@ impl Default for UiConfig {
             style: UiStyle::default(),
             check_for_updates: true,
             notifications: false,
+            alerts: AlertsConfig::default(),
         }
     }
 }
@@ -142,6 +145,12 @@ impl UiConfig {
     /// [`zoom`](Self::zoom), kept within [`ZOOM_LEVELS`].
     pub fn zoom(&self) -> u16 {
         clamp_zoom(self.zoom)
+    }
+
+    /// Whether `alert` is on: [`notifications`](Self::notifications) and
+    /// its own switch both are.
+    pub fn alerts_on(&self, alert: Alert) -> bool {
+        self.notifications && self.alerts.get(alert)
     }
 
     /// [`font`](Self::font), with an empty name as unset.
@@ -156,6 +165,110 @@ impl UiConfig {
             self.font_size.clamp(*FONT_SIZES.start(), *FONT_SIZES.end())
         } else {
             DEFAULT_FONT_SIZE
+        }
+    }
+}
+
+/// Each alert's own switch (`[ui.alerts]`), all on by default. None of them
+/// shows anything unless `[ui] notifications` is on too.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct AlertsConfig {
+    /// New commits on remote-tracking branches, from a fetch or pull.
+    pub remote_commits: bool,
+    /// New commits on local branches made outside this window: in another
+    /// worktree, a terminal, an agent.
+    pub local_commits: bool,
+    /// New commits as a system notification.
+    pub popup: bool,
+    /// New commits counted on the app's icon.
+    pub badge: bool,
+    /// A badge on the app's icon while files have conflicts.
+    pub conflicts: bool,
+    /// A badge while a merge, rebase, cherry-pick or revert is stopped.
+    pub stopped: bool,
+}
+
+impl Default for AlertsConfig {
+    fn default() -> Self {
+        Self {
+            remote_commits: true,
+            local_commits: true,
+            popup: true,
+            badge: true,
+            conflicts: true,
+            stopped: true,
+        }
+    }
+}
+
+impl AlertsConfig {
+    pub fn get(&self, alert: Alert) -> bool {
+        match alert {
+            Alert::RemoteCommits => self.remote_commits,
+            Alert::LocalCommits => self.local_commits,
+            Alert::Popup => self.popup,
+            Alert::Badge => self.badge,
+            Alert::Conflicts => self.conflicts,
+            Alert::Stopped => self.stopped,
+        }
+    }
+
+    pub fn set(&mut self, alert: Alert, on: bool) {
+        let slot = match alert {
+            Alert::RemoteCommits => &mut self.remote_commits,
+            Alert::LocalCommits => &mut self.local_commits,
+            Alert::Popup => &mut self.popup,
+            Alert::Badge => &mut self.badge,
+            Alert::Conflicts => &mut self.conflicts,
+            Alert::Stopped => &mut self.stopped,
+        };
+        *slot = on;
+    }
+}
+
+/// One of the alerts in [`AlertsConfig`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Alert {
+    RemoteCommits,
+    LocalCommits,
+    Popup,
+    Badge,
+    Conflicts,
+    Stopped,
+}
+
+impl Alert {
+    pub const ALL: [Alert; 6] = [
+        Alert::RemoteCommits,
+        Alert::LocalCommits,
+        Alert::Popup,
+        Alert::Badge,
+        Alert::Conflicts,
+        Alert::Stopped,
+    ];
+
+    /// Its key in `[ui.alerts]`.
+    pub fn key(self) -> &'static str {
+        match self {
+            Alert::RemoteCommits => "remote_commits",
+            Alert::LocalCommits => "local_commits",
+            Alert::Popup => "popup",
+            Alert::Badge => "badge",
+            Alert::Conflicts => "conflicts",
+            Alert::Stopped => "stopped",
+        }
+    }
+
+    /// What it is, in the notifications picker.
+    pub fn label(self) -> &'static str {
+        match self {
+            Alert::RemoteCommits => "New commits on remote branches",
+            Alert::LocalCommits => "New commits on local branches and worktrees",
+            Alert::Popup => "New commits: system notification",
+            Alert::Badge => "New commits: count on the app icon",
+            Alert::Conflicts => "Conflicts: badge on the app icon",
+            Alert::Stopped => "Stopped merge or rebase: badge on the app icon",
         }
     }
 }
@@ -733,6 +846,41 @@ zoom = 900
         let ui = Config::parse("[ui]\nfont = \"  \"\nfont_size = 2\n").unwrap().ui;
         assert_eq!((ui.font(), ui.font_size()), (None, 6.));
         assert_eq!(Config::parse("[ui]\nfont_size = 500\n").unwrap().ui.font_size(), 72.);
+    }
+
+    #[test]
+    fn alerts_are_on_with_notifications_unless_turned_off() {
+        let ui = Config::default().ui;
+        assert!(Alert::ALL.iter().all(|a| ui.alerts.get(*a)));
+        assert!(!Alert::ALL.iter().any(|a| ui.alerts_on(*a)), "notifications are off");
+
+        let ui = Config::parse("[ui]\nnotifications = true\n").unwrap().ui;
+        assert!(
+            Alert::ALL.iter().all(|a| ui.alerts_on(*a)),
+            "an old config gets them all"
+        );
+
+        let text = "[ui]\nnotifications = true\n\n[ui.alerts]\nlocal_commits = false\nconflicts = false\n";
+        let ui = Config::parse(text).unwrap().ui;
+        assert!(!ui.alerts_on(Alert::LocalCommits));
+        assert!(!ui.alerts_on(Alert::Conflicts));
+        assert!(ui.alerts_on(Alert::RemoteCommits));
+        assert!(Config::parse("[ui.alerts]\nfoo = true\n").is_err());
+    }
+
+    #[test]
+    fn an_alert_saves_to_its_own_table() {
+        let text = "# mine\n[ui]\nnotifications = true\nzoom = 120\n";
+        let text = set_in_table(text, "ui.alerts", Alert::Popup.key(), "false");
+        assert_eq!(
+            text,
+            "# mine\n[ui]\nnotifications = true\nzoom = 120\n\n[ui.alerts]\npopup = false\n"
+        );
+        let text = set_in_table(&text, "ui", "notifications", "false");
+        let ui = Config::parse(&text).unwrap().ui;
+        assert!(!ui.notifications);
+        assert!(!ui.alerts.popup);
+        assert_eq!(ui.zoom, 120);
     }
 
     #[test]

@@ -491,6 +491,9 @@ impl App {
         if self.styles() {
             items.push(builtin(Command::WindowStyle, Command::WindowStyle.label()));
         }
+        if self.notifies() {
+            items.push(builtin(Command::Notifications, Command::Notifications.label()));
+        }
         items
     }
 

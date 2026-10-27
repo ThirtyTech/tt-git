@@ -11,6 +11,7 @@ use gpui::{
     Window, canvas, div,
 };
 use tt_git_app::Action;
+use tt_git_app::config::Alert;
 use tt_git_app::geom::Rect;
 use tt_git_app::keymap::Command;
 use tt_git_app::layout::{Placed, Split};
@@ -95,8 +96,14 @@ impl Shell {
                     crate::update::check(window.window_handle(), model.downgrade(), cx);
                 }
                 AppEvent::NewCommits(new) => {
-                    shell.taskbar.new_commits(window, new, cx);
-                    crate::notify::new_commits(new, model, window, cx);
+                    let ui = &model.read(cx).app().config().ui;
+                    let (badge, popup) = (ui.alerts_on(Alert::Badge), ui.alerts_on(Alert::Popup));
+                    if badge {
+                        shell.taskbar.new_commits(window, new, cx);
+                    }
+                    if popup {
+                        crate::notify::new_commits(new, model, window, cx);
+                    }
                 }
                 AppEvent::OpenRepository => {
                     let model = model.downgrade();
@@ -128,6 +135,15 @@ impl Shell {
             cx.observe_global::<crate::zoom::UiZoom>(|_, cx| cx.notify()),
             cx.observe_global::<crate::font::UiFont>(|_, cx| cx.notify()),
             cx.observe_global::<crate::look::UiLook>(|_, cx| cx.notify()),
+            cx.observe_global::<crate::notify::UiAlerts>(|shell, cx| {
+                let settings = crate::notify::shared_settings(cx);
+                shell.model.update(cx, |m, cx| {
+                    if let Some(settings) = settings {
+                        m.app_mut().set_alert_settings(settings);
+                    }
+                    cx.notify();
+                });
+            }),
         ];
         let font_key = FontKey::now(&model, cx);
         let style = font_key.style;
@@ -156,6 +172,12 @@ impl Shell {
 
     pub fn model(&self) -> &Entity<AppModel> {
         &self.model
+    }
+
+    /// The badge the window's icon shows.
+    #[cfg(test)]
+    pub fn badge(&self) -> Option<crate::taskbar::Badge> {
+        self.taskbar.badge()
     }
 
     /// What the views draw with.

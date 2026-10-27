@@ -395,6 +395,10 @@ pub enum Command {
     /// Switches the desktop app between its native and terminal styles.
     /// Only the desktop app offers it (see `App::enable_ui_style`).
     WindowStyle,
+    /// Opens the notifications picker, to turn the desktop app's
+    /// notifications and each alert on and off. Only the desktop app
+    /// offers it (see `App::enable_notifications`).
+    Notifications,
     /// Previews a file in the details pane with Quick Look: its version
     /// after the commit. Only offered on macOS (see `App::enable_quick_look`).
     QuickLook,
@@ -510,6 +514,7 @@ impl Command {
             Command::ResetZoom => "reset zoom",
             Command::Font => "font",
             Command::WindowStyle => "native/terminal style",
+            Command::Notifications => "notifications",
             Command::QuickLook => "quick look",
             Command::QuickLookOld => "quick look before",
         }
