@@ -1,0 +1,4 @@
+# Linux packaging files stay LF on every checkout (Windows' core.autocrlf
+# would make them CRLF), so they're right wherever they're packaged and the
+# tests that read them match on any OS.
+crates/tt-git-gui/packaging/linux/** text eol=lf
