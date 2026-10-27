@@ -322,11 +322,11 @@ mod tests {
     fn porcelain() -> String {
         format!(
             "{A} 1 1 2\n\
-             author Ada Park\n\
-             author-mail <ada@lumen.dev>\n\
+             author Mario\n\
+             author-mail <mario@lumen.dev>\n\
              author-time 1700000000\n\
              author-tz +0000\n\
-             committer Ada Park\n\
+             committer Mario\n\
              summary Add the client\n\
              boundary\n\
              filename src/old.ts\n\
@@ -334,8 +334,8 @@ mod tests {
              {A} 2 2\n\
              \tsecond\n\
              {B} 3 3 1\n\
-             author Sam Rivera\n\
-             author-mail <sam@lumen.dev>\n\
+             author Cow\n\
+             author-mail <cow@lumen.dev>\n\
              author-time 1700001000\n\
              summary Retry on 5xx\n\
              previous {A} src/old.ts\n\
@@ -363,8 +363,8 @@ mod tests {
         let a = blame.commit_of(0).unwrap();
         assert_eq!(a.oid, A);
         assert_eq!(a.short(), "a996cfb");
-        assert_eq!(a.author, "Ada Park");
-        assert_eq!(a.author_mail, "ada@lumen.dev");
+        assert_eq!(a.author, "Mario");
+        assert_eq!(a.author_mail, "mario@lumen.dev");
         assert_eq!(a.author_time, 1_700_000_000);
         assert_eq!(a.summary, "Add the client");
         assert!(a.boundary);

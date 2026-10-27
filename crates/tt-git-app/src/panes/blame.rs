@@ -828,10 +828,10 @@ mod tests {
     #[test]
     fn an_author_keeps_their_color_without_a_clash() {
         let alone = Blame {
-            commits: vec![by('a', "Ada Park")],
+            commits: vec![by('a', "Mario")],
             ..Blame::default()
         };
         let slots = crate::theme::Theme::default().blame_authors.len();
-        assert_eq!(author_colors(&alone), vec![author_slot("Ada Park", slots)]);
+        assert_eq!(author_colors(&alone), vec![author_slot("Mario", slots)]);
     }
 }

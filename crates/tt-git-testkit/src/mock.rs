@@ -16,11 +16,11 @@ const HOUR: i64 = 3_600;
 const DAY: i64 = 86_400;
 
 type Person = (&'static str, &'static str);
-const ADA: Person = ("Ada Park", "ada@lumen.dev");
-const GRACE: Person = ("Grace Okafor", "grace@lumen.dev");
-const LINUS: Person = ("Linus Brandt", "linus@lumen.dev");
-const MIA: Person = ("Mia Chen", "mia@lumen.dev");
-const SAM: Person = ("Sam Rivera", "sam@lumen.dev");
+const MARIO: Person = ("Mario", "mario@lumen.dev");
+const PAULINE: Person = ("Pauline", "pauline@lumen.dev");
+const DK: Person = ("Donkey Kong", "dk@lumen.dev");
+const ROSALINA: Person = ("Rosalina", "rosalina@lumen.dev");
+const COW: Person = ("Cow", "cow@lumen.dev");
 
 /// Builds the mock project: a small web shop with a few months of history,
 /// five authors, feature branches merged in, releases tagged, and branches
@@ -76,7 +76,7 @@ impl<'a> Mock<'a> {
     fn switch(&self, ago: i64, args: &[&str]) {
         let mut all = vec!["switch", "-q"];
         all.extend_from_slice(args);
-        self.git(NOW - ago, ADA, &all);
+        self.git(NOW - ago, MARIO, &all);
     }
 
     fn merge(&self, ago: i64, who: Person, branch: &str) {
@@ -91,25 +91,25 @@ impl<'a> Mock<'a> {
     fn push(&self, ago: i64, args: &[&str]) {
         let mut all = vec!["push", "-q", "origin"];
         all.extend_from_slice(args);
-        self.git(NOW - ago, ADA, &all);
+        self.git(NOW - ago, MARIO, &all);
     }
 
     pub fn build(&self) {
         let d = DAY;
         self.git(
             NOW - 130 * d,
-            ADA,
+            MARIO,
             &["init", "-q", "--bare", "-b", "main", &self.remote.to_string_lossy()],
         );
         self.git(
             NOW - 130 * d,
-            ADA,
+            MARIO,
             &["remote", "add", "origin", &self.remote.to_string_lossy()],
         );
 
         self.commit(
             120 * d,
-            ADA,
+            MARIO,
             &[
                 ("README.md", "# Lumen\n\nThe Lumen storefront.\n"),
                 ("package.json", PACKAGE_JSON),
@@ -118,139 +118,153 @@ impl<'a> Mock<'a> {
             ],
             "Initial commit",
         );
-        self.work(118 * d, GRACE, "src/routes.tsx", "Add router and layout");
-        self.work(115 * d, ADA, ".github/workflows/ci.yml", "Set up CI");
-        self.tag(114 * d, ADA, "v1.0.0", "First public release");
+        self.work(118 * d, PAULINE, "src/routes.tsx", "Add router and layout");
+        self.work(115 * d, MARIO, ".github/workflows/ci.yml", "Set up CI");
+        self.tag(114 * d, MARIO, "v1.0.0", "First public release");
         self.push(114 * d - HOUR, &["-u", "--follow-tags", "main"]);
 
         self.switch(112 * d, &["-c", "feature/search"]);
-        self.work(111 * d, LINUS, "src/api/search.ts", "Add search API client");
+        self.work(111 * d, DK, "src/api/search.ts", "Add search API client");
         self.switch(110 * d + HOUR, &["main"]);
-        self.work(110 * d, GRACE, "src/components/Footer.tsx", "Fix footer links");
+        self.work(110 * d, PAULINE, "src/components/Footer.tsx", "Fix footer links");
         self.switch(109 * d + 2 * HOUR, &["feature/search"]);
-        self.work(109 * d + HOUR, LINUS, "src/pages/Search.tsx", "Search results page");
+        self.work(109 * d + HOUR, DK, "src/pages/Search.tsx", "Search results page");
         self.push(109 * d + 30 * MIN, &["feature/search"]);
         self.switch(109 * d + 10 * MIN, &["main"]);
-        self.merge(109 * d, ADA, "feature/search");
+        self.merge(109 * d, MARIO, "feature/search");
 
-        self.work(100 * d, MIA, "src/components/ProductCard.tsx", "Add product cards");
-        self.tag(99 * d, ADA, "v1.1.0", "Search and product cards");
+        self.work(100 * d, ROSALINA, "src/components/ProductCard.tsx", "Add product cards");
+        self.tag(99 * d, MARIO, "v1.1.0", "Search and product cards");
 
         self.switch(98 * d, &["-c", "feature/dark-mode"]);
-        self.work(97 * d, SAM, "src/styles/tokens.css", "Theme tokens");
+        self.work(97 * d, COW, "src/styles/tokens.css", "Theme tokens");
         self.switch(96 * d + HOUR, &["main"]);
-        self.work(96 * d, ADA, "src/api/client.ts", "Cache API responses");
+        self.work(96 * d, MARIO, "src/api/client.ts", "Cache API responses");
         self.switch(95 * d + HOUR, &["feature/dark-mode"]);
-        self.work(95 * d, SAM, "src/components/ThemeToggle.tsx", "Dark mode toggle");
+        self.work(95 * d, COW, "src/components/ThemeToggle.tsx", "Dark mode toggle");
         self.push(95 * d - 10 * MIN, &["feature/dark-mode"]);
         self.switch(94 * d + HOUR, &["main"]);
-        self.merge(94 * d, ADA, "feature/dark-mode");
+        self.merge(94 * d, MARIO, "feature/dark-mode");
 
         self.switch(93 * d + HOUR, &["-c", "fix/login-redirect"]);
-        self.work(93 * d, GRACE, "src/pages/Login.tsx", "Keep ?next= after login");
+        self.work(93 * d, PAULINE, "src/pages/Login.tsx", "Keep ?next= after login");
         self.push(93 * d - 10 * MIN, &["fix/login-redirect"]);
         self.switch(92 * d + HOUR, &["main"]);
-        self.merge(92 * d, GRACE, "fix/login-redirect");
-        self.tag(90 * d, ADA, "v1.2.0", "Dark mode");
+        self.merge(92 * d, PAULINE, "fix/login-redirect");
+        self.tag(90 * d, MARIO, "v1.2.0", "Dark mode");
 
-        self.work(80 * d, LINUS, "src/pages/Search.tsx", "Paginate search results");
-        self.work(75 * d, MIA, "src/pages/Product.tsx", "Product detail page");
-        self.tag(70 * d, ADA, "v1.3.0", "Product pages");
+        self.work(80 * d, DK, "src/pages/Search.tsx", "Paginate search results");
+        self.work(75 * d, ROSALINA, "src/pages/Product.tsx", "Product detail page");
+        self.tag(70 * d, MARIO, "v1.3.0", "Product pages");
 
         // A fix tagged on a release branch and never merged back.
         self.switch(66 * d, &["-c", "release/1.3"]);
-        self.work(65 * d, GRACE, "src/lib/price.ts", "Fix price rounding");
-        self.tag(65 * d - HOUR, GRACE, "v1.3.1", "Price rounding fix");
-        self.work(65 * d - 3 * HOUR, GRACE, "CHANGELOG.md", "Release notes for 1.3.1");
+        self.work(65 * d, PAULINE, "src/lib/price.ts", "Fix price rounding");
+        self.tag(65 * d - HOUR, PAULINE, "v1.3.1", "Price rounding fix");
+        self.work(65 * d - 3 * HOUR, PAULINE, "CHANGELOG.md", "Release notes for 1.3.1");
         self.push(65 * d - 4 * HOUR, &["-u", "release/1.3", "v1.3.1"]);
         self.switch(61 * d, &["main"]);
         // The local copy is a commit behind its upstream: `↓1`.
-        self.git(NOW - 61 * d, ADA, &["branch", "-f", "release/1.3", "v1.3.1^{}"]);
+        self.git(NOW - 61 * d, MARIO, &["branch", "-f", "release/1.3", "v1.3.1^{}"]);
 
         self.switch(60 * d + HOUR, &["-c", "feature/cart"]);
-        self.work(60 * d, SAM, "src/store/cart.ts", "Cart store");
-        self.work(58 * d, SAM, "src/components/CartDrawer.tsx", "Cart drawer");
+        self.work(60 * d, COW, "src/store/cart.ts", "Cart store");
+        self.work(58 * d, COW, "src/components/CartDrawer.tsx", "Cart drawer");
         self.switch(57 * d + HOUR, &["main"]);
-        self.work(57 * d, ADA, "package.json", "Bump dependencies");
+        self.work(57 * d, MARIO, "package.json", "Bump dependencies");
         self.switch(55 * d + HOUR, &["feature/cart"]);
-        self.work(55 * d, SAM, "src/components/CheckoutButton.tsx", "Checkout button");
+        self.work(55 * d, COW, "src/components/CheckoutButton.tsx", "Checkout button");
         self.push(55 * d - 10 * MIN, &["feature/cart"]);
         self.switch(54 * d + HOUR, &["main"]);
-        self.merge(54 * d, ADA, "feature/cart");
-        self.tag(50 * d, ADA, "v1.4.0", "Cart and checkout");
+        self.merge(54 * d, MARIO, "feature/cart");
+        self.tag(50 * d, MARIO, "v1.4.0", "Cart and checkout");
         self.push(50 * d - HOUR, &["--follow-tags", "main"]);
 
         self.switch(43 * d, &["-c", "feature/wishlist"]);
-        self.work(42 * d, MIA, "src/store/wishlist.ts", "Wishlist store");
-        self.work(40 * d, MIA, "src/pages/Wishlist.tsx", "Wishlist page");
+        self.work(42 * d, ROSALINA, "src/store/wishlist.ts", "Wishlist store");
+        self.work(40 * d, ROSALINA, "src/pages/Wishlist.tsx", "Wishlist page");
         self.push(40 * d - 10 * MIN, &["feature/wishlist"]);
         self.switch(38 * d + HOUR, &["main"]);
-        self.merge(38 * d, ADA, "feature/wishlist");
+        self.merge(38 * d, MARIO, "feature/wishlist");
 
         self.switch(36 * d, &["-c", "archive/old-nav"]);
-        self.work(35 * d, GRACE, "src/components/Nav.tsx", "Old navigation experiment");
+        self.work(35 * d, PAULINE, "src/components/Nav.tsx", "Old navigation experiment");
         self.push(35 * d - 10 * MIN, &["archive/old-nav"]);
         self.switch(34 * d, &["main"]);
 
-        self.work(30 * d, GRACE, "src/components/Form.tsx", "Accessibility pass on forms");
-        self.work(20 * d, LINUS, "src/pages/Search.tsx", "Search filters");
+        self.work(
+            30 * d,
+            PAULINE,
+            "src/components/Form.tsx",
+            "Accessibility pass on forms",
+        );
+        self.work(20 * d, DK, "src/pages/Search.tsx", "Search filters");
 
         // Pushed, then amended and not pushed again: `≠origin`.
         self.switch(19 * d, &["-c", "fix/search-debounce"]);
-        self.work(18 * d, LINUS, "src/pages/Search.tsx", "Debounce search input");
+        self.work(18 * d, DK, "src/pages/Search.tsx", "Debounce search input");
         self.push(18 * d - HOUR, &["fix/search-debounce"]);
         self.git(
             NOW - 17 * d,
-            LINUS,
+            DK,
             &["commit", "-q", "--amend", "-m", "Debounce search input by 300 ms"],
         );
         self.switch(17 * d - HOUR, &["main"]);
 
         self.switch(16 * d, &["-c", "spike/graphql"]);
-        self.work(15 * d, LINUS, "src/api/graphql.ts", "Try GraphQL for search");
+        self.work(15 * d, DK, "src/api/graphql.ts", "Try GraphQL for search");
         self.switch(14 * d, &["main"]);
 
         self.switch(13 * d, &["-c", "chore/deps"]);
-        self.work(13 * d - HOUR, ADA, "package.json", "Update dev dependencies");
+        self.work(13 * d - HOUR, MARIO, "package.json", "Update dev dependencies");
         // Pushed without setting an upstream: `=origin`.
         self.push(13 * d - 2 * HOUR, &["chore/deps"]);
         self.switch(12 * d + 2 * HOUR, &["main"]);
-        self.work(12 * d, ADA, "src/components/ProductGrid.tsx", "Speed up product grid");
+        self.work(12 * d, MARIO, "src/components/ProductGrid.tsx", "Speed up product grid");
 
         self.switch(11 * d, &["-c", "fix/typo-footer"]);
         self.work(
             11 * d - HOUR,
-            MIA,
+            ROSALINA,
             "src/components/Footer.tsx",
             "Fix typo in footer\n\n\"Contcat us\" → \"Contact us\".\n\nReported in https://github.com/lumen-dev/lumen-web/issues/42",
         );
         self.push(11 * d - 2 * HOUR, &["-u", "fix/typo-footer"]);
         self.switch(10 * d + HOUR, &["main"]);
-        self.merge(10 * d, MIA, "fix/typo-footer");
+        self.merge(10 * d, ROSALINA, "fix/typo-footer");
 
         self.switch(9 * d, &["-c", "feature/profile-page"]);
-        self.work(8 * d, MIA, "src/pages/Profile.tsx", "Profile page skeleton");
-        self.work(7 * d, MIA, "src/components/AvatarUpload.tsx", "Avatar upload");
+        self.work(8 * d, ROSALINA, "src/pages/Profile.tsx", "Profile page skeleton");
+        self.work(7 * d, ROSALINA, "src/components/AvatarUpload.tsx", "Avatar upload");
         self.push(7 * d - HOUR, &["-u", "feature/profile-page"]);
         self.switch(6 * d + HOUR, &["main"]);
-        self.work(6 * d, MIA, "src/components/LazyImage.tsx", "Fix image lazy loading");
+        self.work(
+            6 * d,
+            ROSALINA,
+            "src/components/LazyImage.tsx",
+            "Fix image lazy loading",
+        );
 
         self.switch(5 * d + 2 * HOUR, &["-c", "feature/checkout-v2"]);
-        self.work(5 * d, SAM, "src/pages/Checkout.tsx", "New checkout flow (WIP)");
-        self.work(4 * d, SAM, "src/components/AddressForm.tsx", "Address form");
+        self.work(5 * d, COW, "src/pages/Checkout.tsx", "New checkout flow (WIP)");
+        self.work(4 * d, COW, "src/components/AddressForm.tsx", "Address form");
         self.push(4 * d - HOUR, &["feature/checkout-v2"]);
         self.switch(3 * d + 2 * HOUR, &["main"]);
-        self.work(3 * d, SAM, "src/pages/Home.tsx", "Update copy on landing page");
+        self.work(3 * d, COW, "src/pages/Home.tsx", "Update copy on landing page");
         self.commit(
             3 * d - HOUR,
-            ADA,
+            MARIO,
             &[("docs/notes.md", "# Notifications\n\nWhat the bell shows and when.\n")],
             "Notes on notifications",
         );
 
-        self.tag(3 * d - 90 * MIN, ADA, "v1.5.0-beta.1", "Beta: wishlist, faster grid");
+        self.tag(3 * d - 90 * MIN, MARIO, "v1.5.0-beta.1", "Beta: wishlist, faster grid");
         self.push(3 * d - 2 * HOUR, &["--follow-tags", "main"]);
-        self.git(NOW - (3 * d - 3 * HOUR), ADA, &["remote", "set-head", "origin", "main"]);
+        self.git(
+            NOW - (3 * d - 3 * HOUR),
+            MARIO,
+            &["remote", "set-head", "origin", "main"],
+        );
         // Branches only on the remote: merged ones deleted locally, and
         // other people's.
         for b in [
@@ -262,20 +276,20 @@ impl<'a> Mock<'a> {
             "archive/old-nav",
             "feature/checkout-v2",
         ] {
-            self.git(NOW - (3 * d - 3 * HOUR), ADA, &["branch", "-q", "-D", b]);
+            self.git(NOW - (3 * d - 3 * HOUR), MARIO, &["branch", "-q", "-D", b]);
         }
         // Merged and deleted upstream: `gone`.
         self.push(2 * d + 2 * HOUR, &["--delete", "fix/typo-footer"]);
         // A local commit on top of what was pushed: `↑1`.
         self.switch(2 * d + HOUR, &["feature/profile-page"]);
-        self.work(2 * d, MIA, "src/pages/Profile.tsx", "Edit display name");
-        self.git(NOW - 2 * d + HOUR, ADA, &["fetch", "-q", "--prune", "origin"]);
+        self.work(2 * d, ROSALINA, "src/pages/Profile.tsx", "Edit display name");
+        self.git(NOW - 2 * d + HOUR, MARIO, &["fetch", "-q", "--prune", "origin"]);
 
         // The branch being worked on.
         self.switch(30 * HOUR + 30 * MIN, &["-c", "feature/notifications", "main"]);
         self.commit(
             30 * HOUR,
-            ADA,
+            MARIO,
             &[
                 ("src/components/NotificationBell.tsx", BELL),
                 ("src/styles/bell.css", BELL_CSS),
@@ -284,7 +298,7 @@ impl<'a> Mock<'a> {
         );
         self.commit(
             20 * HOUR,
-            ADA,
+            MARIO,
             &[("src/api/notifications.ts", NOTIFICATIONS_API)],
             "Poll for new notifications",
         );
@@ -292,7 +306,7 @@ impl<'a> Mock<'a> {
         let with_read = format!("{NOTIFICATIONS_API}{MARK_ALL_READ}");
         self.commit(
             5 * HOUR,
-            ADA,
+            MARIO,
             &[("src/api/notifications.ts", &with_read)],
             "Mark all as read",
         );
@@ -302,14 +316,14 @@ impl<'a> Mock<'a> {
             .write("src/styles/toast.css", ".toast {\n  position: fixed;\n}\n");
         self.git(
             NOW - 2 * HOUR,
-            ADA,
+            MARIO,
             &["stash", "push", "-q", "-u", "-m", "toast styles"],
         );
         self.sb
             .write("src/api/socket.ts", "export const socket = new WebSocket(URL);\n");
         self.git(
             NOW - 40 * MIN,
-            ADA,
+            MARIO,
             &["stash", "push", "-q", "-u", "-m", "try a websocket instead of polling"],
         );
     }
@@ -321,13 +335,13 @@ impl<'a> Mock<'a> {
         // Staged only.
         let api = format!("{NOTIFICATIONS_API}{MARK_ALL_READ}").replace("everyMs = 30_000", "everyMs = 15_000");
         self.sb.write("src/api/notifications.ts", &api);
-        self.git(t, ADA, &["add", "src/api/notifications.ts"]);
+        self.git(t, MARIO, &["add", "src/api/notifications.ts"]);
         // A rename, staged.
-        self.git(t, ADA, &["mv", "docs/notes.md", "docs/notifications.md"]);
+        self.git(t, MARIO, &["mv", "docs/notes.md", "docs/notifications.md"]);
         // Staged, then changed again.
         self.sb
             .write("src/styles/bell.css", &BELL_CSS.replace("#e5484d", "#d13438"));
-        self.git(t, ADA, &["add", "src/styles/bell.css"]);
+        self.git(t, MARIO, &["add", "src/styles/bell.css"]);
         self.sb.write(
             "src/styles/bell.css",
             &format!("{}{BELL_CSS_PULSE}", BELL_CSS.replace("#e5484d", "#d13438")),
@@ -398,15 +412,15 @@ impl<'a> Mock<'a> {
     pub fn blame_history(&self) {
         let d = DAY;
         let commits: [(char, i64, Person, &str); 6] = [
-            ('A', 60 * d, SAM, "Add API client"),
-            ('G', 30 * d, SAM, "Typed API errors"),
-            ('D', 21 * d, GRACE, "Retry API requests on 5xx responses"),
-            ('C', 14 * d, LINUS, "Search filters"),
-            ('F', 7 * d, MIA, "Refresh expired tokens once before failing"),
+            ('A', 60 * d, COW, "Add API client"),
+            ('G', 30 * d, COW, "Typed API errors"),
+            ('D', 21 * d, PAULINE, "Retry API requests on 5xx responses"),
+            ('C', 14 * d, DK, "Search filters"),
+            ('F', 7 * d, ROSALINA, "Refresh expired tokens once before failing"),
             (
                 'E',
                 4 * HOUR,
-                ADA,
+                MARIO,
                 "Let callers cancel polling\n\nAdd an AbortSignal option to the client so polling stops when the\nbell unmounts, and return { data } so callers match the old axios shape.",
             ),
         ];
@@ -457,7 +471,7 @@ impl<'a> Mock<'a> {
         );
         self.commit(
             3 * HOUR,
-            GRACE,
+            PAULINE,
             &[
                 ("src/components/NotificationBell.tsx", &redesign),
                 ("src/styles/bell.css", &BELL_CSS.replace("#e5484d", "#ff6369")),
@@ -471,19 +485,19 @@ impl<'a> Mock<'a> {
         );
         self.commit(
             HOUR,
-            ADA,
+            MARIO,
             &[
                 ("src/components/NotificationBell.tsx", &mine),
                 ("src/styles/bell.css", &BELL_CSS.replace("#e5484d", "#d13438")),
             ],
             "Cap the badge at 99+",
         );
-        self.git(NOW - 30 * MIN, ADA, &["merge", "feature/bell-redesign"]);
+        self.git(NOW - 30 * MIN, MARIO, &["merge", "feature/bell-redesign"]);
         // Resolve the stylesheet (taking neither side), leave the component
         // conflicted.
         self.sb
             .write("src/styles/bell.css", &BELL_CSS.replace("#e5484d", "#e0353b"));
-        self.git(NOW - 20 * MIN, ADA, &["add", "src/styles/bell.css"]);
+        self.git(NOW - 20 * MIN, MARIO, &["add", "src/styles/bell.css"]);
     }
 }
 

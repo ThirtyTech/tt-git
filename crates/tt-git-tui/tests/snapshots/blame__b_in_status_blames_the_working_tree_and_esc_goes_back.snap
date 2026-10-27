@@ -2,8 +2,8 @@
 source: crates/tt-git-tui/tests/blame.rs
 expression: "t.pane_lines(PaneId::Details).join(\"\\n\")"
 ---
- b757b32  Add f                     Ada Park  23h ▌  1 a
- b2f663f  Shout b                 Sam Rivera  23h ▌  2 B
- b757b32  Add f                     Ada Park  23h ▌  3 c
- 4fd273d  Shout d and add ot…       Mia Chen  23h ▌  4 D
+ a4db55a  Add f                        Mario  23h ▌  1 a
+ 563509c  Shout b                        Cow  23h ▌  2 B
+ a4db55a  Add f                        Mario  23h ▌  3 c
+ 4ed0049  Shout d and add ot…       Rosalina  23h ▌  4 D
  Not committed yet                       You  now ▌  5 E
