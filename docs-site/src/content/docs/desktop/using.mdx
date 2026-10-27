@@ -550,7 +550,8 @@ window.
 Plugins talk to tt-git by running `$TTGIT_BIN_PATH` (see
 [Environment](/plugins/environment/)). The desktop app has no subcommands,
 so it points `TTGIT_BIN_PATH` at the `tt-git` binary: the one in the same
-folder as `tt-git-gui`, else the first on your `PATH`. Without either,
+folder as `tt-git-gui` or in the `bin` folder beside it (where the Windows
+installer puts it), else the first on your `PATH`. Without any,
 plugins get no `TTGIT_BIN_PATH`, and the ones that call it fail.
 
 All the windows run in one process, which has one working directory: opening

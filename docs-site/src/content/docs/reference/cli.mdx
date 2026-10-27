@@ -251,9 +251,10 @@ remove backups once those copies have exited.
 It needs `curl`, plus `sh` on Linux and macOS or Windows PowerShell on
 Windows. All three come with the operating system. It refuses a tt-git that
 was built with cargo and run from its `target` folder; build that one again
-instead. On macOS it also refuses the `tt-git` inside the
-[desktop app](/desktop/install/#updating) (`tt-git.app/Contents/MacOS`),
-even run through a link: update the app from its download instead.
+instead. It also refuses the `tt-git` the
+[desktop app](/desktop/install/#updating) installed, which updates with the
+app: on macOS the one inside `tt-git.app/Contents/MacOS`, even run through
+a link, and on Windows the one in the installer's `bin` folder.
 
 ```sh
 tt-git update --check    # is there a newer release?

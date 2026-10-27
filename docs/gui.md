@@ -476,11 +476,12 @@ The release's `gui` job (`.github/workflows/release.yml`) builds
 `tt-git-gui` and `tt-git` and runs one script per OS from
 `crates/tt-git-gui/packaging/`. Every download is named
 `tt-git-gui-<tag>-<platform>.*`, apart from the TUI's archives, and carries
-`tt-git` next to `tt-git-gui`.
+`tt-git` next to `tt-git-gui` (the Windows installer puts it in `bin`
+beside it, the folder it adds to `PATH`).
 
 | Script | Makes |
 |---|---|
-| `windows/package.ps1` | the zip, and the installer from `windows/tt-git.iss` (Inno Setup 6): per user or all users, Start menu entry, optional desktop shortcut, Explorer's "Open in tt-git" on folders (`Directory\shell` and `Directory\Background\shell`), uninstall from Settings, a welcome page with the sidebar image (`windows/sidebar.svg`, rendered to `sidebar.bmp`). Never change its `AppId`. |
+| `windows/package.ps1` | the zip, and the installer from `windows/tt-git.iss` (Inno Setup 6): per user or all users, Start menu entry, optional desktop shortcut, Explorer's "Open in tt-git" on folders (`Directory\shell` and `Directory\Background\shell`), `tt-git.exe` in `bin` with that folder on `PATH` (the `path` task, ticked; `[Code]` adds and removes the entry, in HKCU or HKLM), uninstall from Settings, a welcome page with the sidebar image (`windows/sidebar.svg`, rendered to `sidebar.bmp`). Never change its `AppId`. |
 | `macos/package.sh` | `tt-git.app` (`Info.plist`, which also declares Finder's "Open in tt-git" service, and the `.icns` from `icons/`) in a `.dmg`, signed and notarized when the secrets are set. The `.dmg` comes from `macos/dmg.py` (dmgbuild, pinned in `dmg-requirements.txt`, installed into a venv, so the job needs `python3` and network access): the app and an Applications link at 128 points over `macos/dmg-background.svg`, rendered to `dmg-background.png` and `@2x.png`. The background is stored as an alias only; with dmgbuild's bookmark as well, macOS 26's Finder shows none. Finder draws the icon names in black on any picture background, so the background puts light tags under them. |
 | `linux/package.sh` | the prefix tarball; the AppImage with `APPIMAGETOOL`; the `.deb`, `.rpm` and `.pkg.tar.zst` with `NFPM` (`linux/nfpm.yaml`, all under `/usr`) |
 
@@ -522,8 +523,8 @@ The scripts run on CI only; to try the Linux ones locally, build in an
   directory: opening a repository changes it to that one (so plugins
   start there, as in the TUI). The API socket of a closed window keeps
   listening until the app quits.
-- `TTGIT_BIN_PATH` is the `tt-git` next to `tt-git-gui` or on `PATH`;
-  with neither, plugins get none.
+- `TTGIT_BIN_PATH` is the `tt-git` next to `tt-git-gui`, in `bin` beside
+  it, or on `PATH`; with none, plugins get none.
 - Quit (the menu's, or cmd+Q on macOS) doesn't ask about running
   terminal editors; closing their window does.
 - Wayland and macOS show no app icon when run from a cargo build: the

@@ -50,6 +50,11 @@ powershell -ExecutionPolicy Bypass -c "irm https://github.com/ThirtyTech/tt-git/
 It installs into `%LOCALAPPDATA%\Programs\tt-git\bin` and adds that to your
 user `PATH`. Open a new terminal afterwards.
 
+If you installed the [desktop app](/desktop/install/) with its installer,
+you already have `tt-git` there: the installer puts it in that folder and
+on your `PATH` unless you untick that. The script then stops with *the
+desktop app installed tt-git in …; it updates with the app*.
+
 You can update while older copies are still running, even across several
 updates. The installer moves the current binary to `tt-git.exe.old`, using
 a unique suffix if that backup is still in use. Running copies keep working.

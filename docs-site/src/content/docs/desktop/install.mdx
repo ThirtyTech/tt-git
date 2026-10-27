@@ -23,8 +23,9 @@ The desktop app is a download of its own on each
 `tt-git-gui-v0.10.0-linux-x64.tar.gz`. The terminal app's archives
 (`tt-git-<version>-<platform>`) don't contain it.
 
-Every desktop app download also carries `tt-git`, next to `tt-git-gui`.
-Plugins in the app run that one (see [Plugins](/desktop/using/#plugins)),
+Every desktop app download also carries `tt-git`: next to `tt-git-gui`,
+or in a `bin` folder beside it with the Windows installer. Plugins in the
+app run that one (see [Plugins](/desktop/using/#plugins)),
 so leave it where it is.
 
 <Aside type="caution">
@@ -42,12 +43,13 @@ Pick one of two downloads:
   first asks whether to install for you alone (no admin rights needed) or
   for all users (asks for admin rights). For you alone it installs into
   `%LOCALAPPDATA%\Programs\tt-git`; for all users into
-  `C:\Program Files\tt-git`. It adds **tt-git** to the Start menu.
+  `C:\Program Files\tt-git`. It adds **tt-git** to the Start menu, and
+  puts `tt-git.exe` in the `bin` folder inside.
 - **`tt-git-gui-<version>-windows-x64.zip`**, a folder holding
   `tt-git-gui.exe` and `tt-git.exe`. Unpack it anywhere and run
   `tt-git-gui.exe`.
 
-The installer's *Select Additional Tasks* page offers two extras:
+The installer's *Select Additional Tasks* page offers three extras:
 
 - **Create a desktop shortcut**, off unless you tick it.
 - **Add "Open in tt-git" to the menu of folders in Explorer**, on unless
@@ -56,12 +58,19 @@ The installer's *Select Additional Tasks* page offers two extras:
   Windows 11 the entry is under **Show more options**. A folder outside a
   repository opens the [start window](#the-start-window) with a message
   saying so.
+- **Add tt-git to PATH, to run it in a terminal**, on unless you untick
+  it. It adds the install's `bin` folder to your user `PATH`, or to the
+  system's for an install for all users, so `tt-git` runs the
+  [terminal app](/getting-started/install/) in a new terminal. Only
+  `tt-git.exe` is in that folder. Untick it when you upgrade and the
+  installer takes the folder off `PATH` again.
 
 <Screenshot name="gui-installer-tasks" alt="The installer's Select Additional Tasks page on Windows: Create a desktop shortcut, unticked, and Add &quot;Open in tt-git&quot; to the menu of folders in Explorer, ticked" />
 
 To uninstall, pick **tt-git** in **Settings → Apps → Installed apps** and
-choose **Uninstall**. That removes the app, its Start menu entry, the
-desktop shortcut, the Explorer entry and the registration
+choose **Uninstall**. That removes the app, `tt-git.exe` and its `PATH`
+entry, its Start menu entry, the desktop shortcut, the Explorer entry and
+the registration
 [notifications](/desktop/using/#notifications) use. Your settings and plugins in
 `%APPDATA%\tt-git` stay. If tt-git is running when you install a new
 version, the installer offers to close it first.
@@ -69,8 +78,15 @@ version, the installer offers to close it first.
 If the build is unsigned, SmartScreen stops the first run with *Windows
 protected your PC*. Click **More info**, then **Run anyway**.
 
-Neither puts `tt-git` on your `PATH`. For `tt-git` in a terminal, install
-the terminal app with the [install script](/getting-started/install/#install-script).
+For you alone, the installer's `bin` folder is the same
+`%LOCALAPPDATA%\Programs\tt-git\bin` the terminal app's
+[install script](/getting-started/install/#install-script) uses. If you
+ran the script before, the installer replaces its `tt-git.exe` with the
+app's, and uninstalling the app removes it. From then on `tt-git` updates
+with the app, and `tt-git update` and the script refuse to replace it.
+
+The zip doesn't put `tt-git` on your `PATH`. For `tt-git` in a terminal,
+add its folder yourself, or use the installer or the install script.
 
 </TabItem>
 <TabItem label="macOS">
@@ -279,10 +295,11 @@ two windows don't both go online. A check that fails (offline, say) waits
 a day too. To turn it off, set [`check_for_updates = false` in
 `[ui]`](/configuration/#ui).
 
-On macOS, `tt-git update` refuses to replace the `tt-git` inside the app,
-even through a link on your `PATH`: *tt-git is part of the desktop app
-(/Applications/tt-git.app); update the app from the release's download
-instead*.
+`tt-git update` refuses to replace the `tt-git` the app installed, as the
+app updates it: on macOS the one inside the app, even through a link on
+your `PATH`, and on Windows the one the installer put in `bin`. It says
+*tt-git is part of the desktop app (/Applications/tt-git.app); update the
+desktop app instead*.
 
 ### Linux
 

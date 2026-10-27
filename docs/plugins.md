@@ -74,7 +74,7 @@ Every plugin process gets these variables:
 | Variable | |
 |---|---|
 | `TTGIT_ENV` | `1` |
-| `TTGIT_BIN_PATH` | the running `tt-git` executable; under `tt-git-gui`, the `tt-git` next to it, else the first on `PATH` (unset with neither) |
+| `TTGIT_BIN_PATH` | the running `tt-git` executable; under `tt-git-gui`, the `tt-git` next to it or in `bin` beside it, else the first on `PATH` (unset with none) |
 | `TTGIT_SOCKET_PATH` | this instance's API socket |
 | `TTGIT_PLUGIN_ID`, `TTGIT_PLUGIN_ROOT` | the plugin's id and directory |
 | `TTGIT_PLUGIN_CONFIG_DIR` | for files the user edits (e.g. a `.env`); created, never touched |
