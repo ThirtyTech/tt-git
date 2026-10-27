@@ -125,7 +125,7 @@ impl FetchConfig {
 impl Default for FetchConfig {
     fn default() -> Self {
         Self {
-            interval: 5,
+            interval: 1,
             conserve: true,
         }
     }
@@ -688,7 +688,7 @@ mod tests {
     #[test]
     fn background_fetch_interval() {
         let minutes = |text| Config::parse(text).unwrap().fetch.background_interval();
-        assert_eq!(minutes(""), Some(std::time::Duration::from_secs(5 * 60)));
+        assert_eq!(minutes(""), Some(std::time::Duration::from_secs(60)));
         assert_eq!(
             minutes("[fetch]\ninterval = 30"),
             Some(std::time::Duration::from_secs(30 * 60))
