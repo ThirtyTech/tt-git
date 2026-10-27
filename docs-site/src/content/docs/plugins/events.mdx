@@ -93,7 +93,7 @@ Leave out `events` to get every event.
 | `tag.pushed` | A tag was pushed. | `{tag}` |
 | `tag.deleted` | A tag was deleted, locally or here and on a remote. | `{tag, remote}`. `remote` is `null` when only the local tag was deleted. |
 | `commit.created` | A commit was made or amended. | `{oid, amend, summary}` |
-| `fetch.completed` | A fetch finished. | `{}` |
+| `fetch.completed` | A fetch finished, one you started or a [background fetch](/git/remotes/#background-fetch) that worked. | `{background}`: `true` for a background fetch. |
 | `pull.completed` | A pull finished. | `{branch, head}` |
 | `push.completed` | A push finished. | `{branch}`: the branch that was pushed, which is the current branch unless it was pushed from the branches pane. |
 | `files.staged` | Files were staged. | `{paths}`, or `"all"` for stage all. Stage all while Status is [narrowed to a folder](/panes/status/#narrowing-to-a-folder) sends that folder as the only path, such as `["apps/web/"]`. `partial: true` when only some hunks or lines were staged. |

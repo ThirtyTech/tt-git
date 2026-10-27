@@ -33,6 +33,7 @@ use crate::watcher::RepoWatcher;
 
 mod agent;
 mod alerts;
+mod background_fetch;
 mod editor_pane;
 mod fonts;
 mod pane_commands;
@@ -286,6 +287,8 @@ pub struct App {
     undo_pending: bool,
     /// A check for a tt-git update is running.
     update_checking: bool,
+    /// Fetching on a timer (`[fetch] interval`).
+    background_fetch: background_fetch::BackgroundFetch,
     /// Worktree changes are being counted, and whether to count again
     /// when that's done (something changed meanwhile).
     worktree_count: (bool, bool),
@@ -448,6 +451,7 @@ impl App {
             select_head: false,
             undo_pending: false,
             update_checking: false,
+            background_fetch: background_fetch::BackgroundFetch::default(),
             worktree_count: (false, false),
             worktree_sizing: 0,
             merge_checking: false,
@@ -1228,6 +1232,7 @@ impl App {
                 self.ticks += 1;
                 self.new_commits.release(self.ticks, LOCAL_COMMITS_HOLD);
                 self.poll_theme();
+                self.poll_background_fetch();
                 if self.poll_plugins() || self.cursor_shown || self.dates_stale() || self.help_bar_moving() {
                     self.dirty = true;
                 }
@@ -1370,6 +1375,7 @@ impl App {
             }
             Action::ResetPlanned { target, display, plan } => self.reset_planned(target, display, plan),
             Action::UpdateChecked(latest) => self.update_checked(latest),
+            Action::BackgroundFetched(outcome) => self.background_fetched(outcome),
             Action::NewCommits(new) => {
                 if !new.branches.is_empty() {
                     self.new_commits.arrived(new, self.ticks, LOCAL_COMMITS_HOLD);
@@ -1855,6 +1861,9 @@ impl App {
             network: taskbar::is_network(&op),
             moves_head: moves_head(&op),
         });
+        if matches!(op, GitOp::FetchAll) && self.join_background_fetch() {
+            return;
+        }
         if let GitOp::SelfUpdate { tag } = op {
             self.ctx.spawn_streaming(move |ctx| loaders::self_update(ctx, tag));
             return;

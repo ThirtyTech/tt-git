@@ -1,22 +1,27 @@
 [package]
 name = "tt-git-win"
-description = "The OS calls behind tt-git-gui's Windows and macOS integration"
+description = "The OS calls behind tt-git-gui's Windows and macOS integration, and the power state for both apps"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 rust-version.workspace = true
 publish = false
 
+[dependencies]
+tracing.workspace = true
+
 # The version GPUI already uses, so it isn't built twice.
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
     "Data_Xml_Dom",
     "Foundation",
+    "Networking_Connectivity",
     "UI_Notifications",
     "Win32_Foundation",
     "Win32_Graphics_Gdi",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
+    "Win32_System_Power",
     "Win32_System_Variant",
     "Win32_UI_Shell",
     "Win32_UI_Shell_Common",
@@ -25,7 +30,9 @@ windows = { version = "0.62", features = [
 ] }
 
 # The versions GPUI already uses on macOS, so they aren't built twice.
+# block2 is for the network path monitor's update handler (power/macos.rs).
 [target.'cfg(target_os = "macos")'.dependencies]
+block2 = "0.6"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3.2", default-features = false, features = [
     "std",
@@ -38,6 +45,9 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
 ] }
 objc2-foundation = { version = "0.3.2", default-features = false, features = [
     "std",
+    "NSArray",
+    "NSEnumerator",
+    "NSProcessInfo",
     "NSString",
     "NSURL",
 ] }
@@ -47,6 +57,11 @@ objc2-quick-look-ui = { version = "0.3", default-features = false, features = [
     "QLPreviewPanel",
     "objc2-app-kit",
 ] }
+
+# The power and network state over the system bus (power/linux.rs), with
+# zbus's blocking API. The desktop app already builds zbus.
+[target.'cfg(target_os = "linux")'.dependencies]
+zbus = "5"
 
 # The workspace forbids unsafe code. This crate is the one place that allows
 # it, because every Win32, COM and Objective-C call is unsafe: the rest of tt-git stays at

@@ -34,6 +34,10 @@ unmerged_exclude = ["archive"]  # hide unmerged branches whose name contains any
 safe_branches = ["master", "main", "production", "prod"]  # never list these on the merged/unmerged tabs
 check_merges = true             # mark branches that would conflict with the base branch (git 2.40+)
 
+[fetch]
+interval = 5                    # minutes between background fetches of every remote (git fetch --all --prune); 0 turns them off
+conserve = true                 # on battery fetch every 3x the interval; in battery saver or on a metered connection, not at all
+
 [plugins]
 pane_release_keys = ["ctrl+\\", "f12"]   # leave/close plugin panes
 

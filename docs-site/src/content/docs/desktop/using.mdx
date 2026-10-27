@@ -292,7 +292,8 @@ branch or tag on a remote, pruning gone branches and updating tt-git show
 it too. git doesn't say how far along it is, so the bar has no value. If
 the job fails, the bar turns red for two seconds, then clears; the error
 is in the window. Local work such as staging, committing or checking out
-is over too quickly to show.
+is over too quickly to show, and a [background
+fetch](/git/remotes/#background-fetch) doesn't show either.
 
 On Linux, a dock that shows app progress (Dash to Dock and Ubuntu Dock on
 GNOME, the task manager on KDE Plasma) shows a progress bar on tt-git's
@@ -355,8 +356,9 @@ newer notification for the same repository replaces the last one.
 New commits come from two places:
 
 - **Remote branches.** A fetch or pull brings commits to a remote-tracking
-  branch. tt-git doesn't fetch in the background yet, so something else
-  has to: you, a plugin, or `git fetch` in a terminal.
+  branch. tt-git [fetches in the background](/git/remotes/#background-fetch)
+  every 5 minutes, so these show up without anyone fetching. A fetch from
+  you, a plugin or `git fetch` in a terminal brings them sooner.
 - **Local branches and worktrees.** Someone commits to a local branch from
   outside this window: an agent working in another
   [worktree](/panes/branches/#worktrees), you in a terminal, another

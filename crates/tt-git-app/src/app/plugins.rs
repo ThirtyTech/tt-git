@@ -330,7 +330,7 @@ impl App {
             ),
             GitOp::PushTag { name } => ("tag.pushed", json!({ "tag": name })),
             GitOp::DeleteTag { name, remote } => ("tag.deleted", json!({ "tag": name, "remote": remote })),
-            GitOp::FetchAll => ("fetch.completed", json!({})),
+            GitOp::FetchAll => ("fetch.completed", json!({ "background": false })),
             GitOp::FastForward { name, upstream } => {
                 ("branch.fast_forwarded", json!({ "branch": name, "upstream": upstream }))
             }

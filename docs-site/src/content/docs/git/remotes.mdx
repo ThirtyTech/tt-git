@@ -69,6 +69,71 @@ A fetch that brings nothing new doesn't reload the graph.
 The help bar shows `fetching all remotes` while it runs, then
 `✓ fetched all remotes`.
 
+## Background fetch
+
+While a repository is open, tt-git also fetches every remote on its own
+every 5 minutes, so the remote branches, the ahead and behind counts and the
+[new commit notifications](/desktop/using/#notifications) stay current
+without you pressing <kbd>f</kbd>. It runs the same
+`git fetch --all --prune`, in the terminal app and the desktop app. Set
+`interval` under [`[fetch]`](/configuration/#fetch) to change how often, or
+`0` to turn it off. On battery it fetches less often, and in battery saver or
+on a metered connection not at all: see [On battery and metered
+connections](#on-battery-and-metered-connections).
+
+A background fetch is quiet:
+
+- **Nothing on screen.** No spinner, no `✓` and no taskbar progress. The
+  branches and graph refresh when it brings something new.
+- **No sign-in.** It never asks for a password, not even through Git
+  Credential Manager's window or an SSH askpass program. A remote that
+  needs one makes the background fetch fail.
+- **Failures are only logged**, in tt-git's log file, never as an
+  **Error** box. It tries again at the next interval.
+
+It waits its turn:
+
+- **Any fetch counts.** The interval runs from the repository's last
+  fetch, whoever made it: you with <kbd>f</kbd>, `git fetch` in a terminal,
+  or your editor.
+- **One fetch per repository.** Several windows on one repository, or on
+  its worktrees, share one background fetch instead of each making their
+  own.
+- **Not while you're syncing.** It doesn't start while your own fetch, pull
+  or push runs. If you press <kbd>f</kbd> while a background fetch runs,
+  yours waits for it and shows its result, as if you'd started it. If the
+  background fetch failed, yours then runs as usual.
+
+Commits an agent makes in another [worktree](/git/worktrees/) are already in
+the repository, so they show without a fetch.
+
+### On battery and metered connections
+
+Background fetches back off to save battery and data:
+
+| When | Background fetch |
+|---|---|
+| On mains power, on an unmetered connection | Every interval (5 minutes) |
+| On battery | Every three intervals (15 minutes) |
+| Battery saver (Windows), Low Power Mode (macOS) or the power-saver profile (Linux) | Paused |
+| A metered connection | Paused |
+
+tt-git checks again every 30 seconds, so fetching picks up as soon as you
+plug in or join an unmetered network. Fetches you start with <kbd>f</kbd>,
+<kbd>p</kbd> or <kbd>D</kbd> always run.
+
+What counts as metered depends on the system:
+
+- **Windows**: a network set as metered (**Settings > Network & internet**),
+  or a connection that's roaming or over its data limit.
+- **macOS**: a connection the system marks expensive (a personal hotspot,
+  cellular) or one in Low Data Mode.
+- **Linux**: a connection NetworkManager says is metered, set by you or
+  guessed (a phone's hotspot).
+
+To fetch at the interval regardless, set `conserve = false` under
+[`[fetch]`](/configuration/#fetch).
+
 ## Fast-forward a branch you aren't on
 
 Press <kbd>F</kbd> on a branch in the branches pane to bring it up to its
@@ -107,5 +172,6 @@ tt-git runs git with its terminal prompts turned off
 screen. Git still uses your credential helper (Git Credential Manager, the
 macOS keychain, `gh auth` and so on) and SSH still uses your `ssh-agent`.
 If git needs a credential it can't get on its own, the push, pull or fetch
-fails with git's message. Run the same command once in a terminal, or set up
+fails with git's message. A [background fetch](#background-fetch) never
+opens your credential helper's sign-in window either. Run the same command once in a terminal, or set up
 a credential helper, and it'll work from tt-git after that.
