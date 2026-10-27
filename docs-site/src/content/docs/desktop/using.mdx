@@ -398,15 +398,17 @@ them. Opening a repository never notifies.
 ### Where they show
 
 On Windows the notification is a toast from *tt-git*, with tt-git's icon
-and no sound. Windows' own settings (**Settings > System > Notifications**)
-can turn tt-git's off or keep them out of sight. The installer gives the
-Start menu entry tt-git's AppUserModelID, `ThirtyTech.tt-git`, which toasts
-and the taskbar use. Each time it starts, tt-git registers that ID under
-`HKCU\Software\Classes\AppUserModelId\ThirtyTech.tt-git` with its name
-and icon, a copy of the app icon it keeps as `notification-icon.png` in
-`%APPDATA%\tt-git` (or `TTGIT_STATE_DIR`). So a copy that wasn't installed
-(the zip, or a build from source) shows the icon too. Uninstalling removes
-the key; the icon file stays with your settings.
+large beside the text, a small one by its name, and no sound. Windows' own
+settings (**Settings > System > Notifications**) can turn tt-git's off or
+keep them out of sight. The installer gives the Start menu entry tt-git's
+AppUserModelID, `ThirtyTech.tt-git`, which toasts and the taskbar use.
+Each time it starts, tt-git keeps two copies of the app icon in
+`%APPDATA%\tt-git` (or `TTGIT_STATE_DIR`): `notification-icon.png`, the
+large one each toast carries, and `notification-badge-<hash>.png`, a
+32-pixel one it registers under `HKCU\Software\Classes\AppUserModelId\ThirtyTech.tt-git`
+with its name. So a copy that wasn't installed (the zip, or a build from
+source) shows both icons too. Uninstalling removes the key; the icon files
+stay with your settings.
 
 On Linux the notification comes from the desktop, under *tt-git*. When
 the desktop knows the app, tt-git sends it through the desktop portal
