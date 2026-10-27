@@ -6,6 +6,13 @@
 //! toast for a repository replaces the last, and a click (or a button) goes
 //! to the same handler as GPUI's responses. Without the logo's file, or if
 //! Windows won't make a notifier, the toasts stay on GPUI's path.
+//!
+//! A toast goes out from a task of its own, after the update that asked for
+//! it. Making and showing one are calls to Windows' notification platform,
+//! in another process, and the thread pumps messages while it waits: a
+//! repaint of the window can come in there. Made during the update, it
+//! found the app borrowed, and GPUI dropped the frame (`RefCell already
+//! borrowed`); from the task, the app is free for it.
 
 use std::path::Path;
 
@@ -83,6 +90,7 @@ pub use toaster::{install, show};
 mod toaster {
     use std::cell::RefCell;
     use std::path::PathBuf;
+    use std::rc::Rc;
 
     use futures::StreamExt as _;
     use futures::channel::mpsc;
@@ -93,7 +101,7 @@ mod toaster {
 
     /// The toaster, once it's made, and the logo the toasts carry.
     struct Toasts {
-        toaster: RefCell<Toaster>,
+        toaster: Rc<RefCell<Toaster>>,
         logo: PathBuf,
         responses: mpsc::UnboundedSender<SystemNotificationResponse>,
     }
@@ -112,7 +120,7 @@ mod toaster {
         };
         let (responses, mut received) = mpsc::unbounded();
         cx.set_global(Toasts {
-            toaster: RefCell::new(toaster),
+            toaster: Rc::new(RefCell::new(toaster)),
             logo,
             responses,
         });
@@ -124,29 +132,35 @@ mod toaster {
         .detach();
     }
 
-    /// Shows `notification` as a toast with the logo. False when tt-git's
-    /// toasts aren't in use, for GPUI to show it instead.
+    /// Shows `notification` as a toast with the logo, from a task once the
+    /// current update is done (see the module's notes), or through GPUI if
+    /// Windows refuses it. False when tt-git's toasts aren't in use, for
+    /// GPUI to show it instead.
     pub fn show(notification: &SystemNotification, cx: &mut App) -> bool {
         let Some(toasts) = cx.try_global::<Toasts>() else {
             return false;
         };
         let xml = super::xml(notification, Some(&toasts.logo));
         let responses = toasts.responses.clone();
-        let tag: SharedString = notification.tag.clone();
-        let shown = toasts
-            .toaster
-            .borrow_mut()
-            .show(&notification.tag, &xml, move |action| {
+        let toaster = toasts.toaster.clone();
+        let notification = notification.clone();
+        cx.spawn(async move |cx| {
+            let tag: SharedString = notification.tag.clone();
+            let start = std::time::Instant::now();
+            let shown = toaster.borrow_mut().show(&notification.tag, &xml, move |action| {
                 let response = SystemNotificationResponse {
                     tag: tag.clone(),
                     action_id: action.map(Into::into),
                 };
                 responses.unbounded_send(response).ok();
             });
-        if let Err(e) = shown {
-            tracing::warn!("Windows refused a toast, so GPUI sends it: {e}");
-            return false;
-        }
+            tracing::debug!(elapsed = ?start.elapsed(), "toast: Show");
+            if let Err(e) = shown {
+                tracing::warn!("Windows refused a toast, so GPUI sends it: {e}");
+                cx.update(|cx| cx.show_system_notification(notification));
+            }
+        })
+        .detach();
         true
     }
 }
