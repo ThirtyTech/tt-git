@@ -30,13 +30,13 @@ fn commit_as(sb: &Sandbox, author: &str, msg: &[&str]) -> String {
 fn blamed() -> Repo {
     let sb = Sandbox::new();
     sb.write("f.ts", "a\nb\nc\nd\ne\n");
-    let add = commit_as(&sb, "Ada Park <ada@lumen.dev>", &["Add f"]);
+    let add = commit_as(&sb, "Mario <mario@lumen.dev>", &["Add f"]);
     sb.write("f.ts", "a\nB\nc\nd\ne\n");
-    let shout_b = commit_as(&sb, "Sam Rivera <sam@lumen.dev>", &["Shout b"]);
+    let shout_b = commit_as(&sb, "Cow <cow@lumen.dev>", &["Shout b"]);
     sb.write("f.ts", "a\nB\nc\nD\ne\n").write("other.txt", "more\n");
     let shout_d = commit_as(
         &sb,
-        "Mia Chen <mia@lumen.dev>",
+        "Rosalina <rosalina@lumen.dev>",
         &["Shout d and add other", "Other comes along for the ride."],
     );
     sb.write("f.ts", "a\nB\nc\nD\nE\n");
@@ -165,7 +165,7 @@ fn brackets_step_back_past_a_commit_and_forward_again() {
     let r = blamed();
     let mut t = TestDriver::with_size(Config::default(), &r.sb, 120, 20);
     blame_from_status(&mut t);
-    // Line 2 is "B", from Sam's commit: before it, line 2 was "b", from Ada's.
+    // Line 2 is "B", from Cow's commit: before it, line 2 was "b", from Mario's.
     t.press("j").press("[").wait_idle();
     let blame = t.app().details().blame().unwrap();
     assert_eq!(blame.depth(), 2);
@@ -178,15 +178,15 @@ fn brackets_step_back_past_a_commit_and_forward_again() {
         title.contains(&format!("Blame f.ts at {}^  ‹ working tree 2/5", short(&r.shout_b))),
         "{title}"
     );
-    // The file as Ada added it, a minute after the base time, and changed
-    // by Sam's and Mia's commits since.
+    // The file as Mario added it, a minute after the base time, and changed
+    // by Cow's and Rosalina's commits since.
     assert!(
         title.ends_with(" changed 2024-01-01 12:01 AM (23h ago) · 2 newer commits ╮"),
         "{title}"
     );
     t.assert_pane_contains(PaneId::Details, "▌  2 b");
 
-    // Ada's commit added the file: there's nothing before it.
+    // Mario's commit added the file: there's nothing before it.
     t.press("[");
     assert_eq!(t.app().details().blame().unwrap().depth(), 2);
     assert!(
@@ -219,11 +219,11 @@ fn braces_step_through_the_files_commits_one_at_a_time() {
     let mut t = TestDriver::with_size(Config::default(), &r.sb, 120, 20);
     blame_from_status(&mut t);
     let v = |depth: usize, label: &str, line: &str| (depth, label.to_string(), line.to_string());
-    // Line 2 ("B") last changed in Sam's commit, but { goes one commit of
+    // Line 2 ("B") last changed in Cow's commit, but { goes one commit of
     // the file at a time: the working tree has changes, so HEAD first.
     t.press("j").press("{").wait_idle();
     assert_eq!(at(&t), v(2, "HEAD", "B"));
-    // HEAD's version is Mia's; before it, Sam's, which still has "B".
+    // HEAD's version is Rosalina's; before it, Cow's, which still has "B".
     t.press("{").wait_idle();
     assert_eq!(at(&t), v(3, short(&r.shout_b), "B"));
     assert!(
@@ -253,11 +253,11 @@ fn close_brace_after_open_bracket_stops_at_each_commit_in_between() {
     let mut t = TestDriver::with_size(Config::default(), &r.sb, 120, 20);
     blame_from_status(&mut t);
     let v = |depth: usize, label: &str, line: &str| (depth, label.to_string(), line.to_string());
-    // Line 2 ("B") is Sam's: [ jumps from the working tree past Mia's
-    // commit and Sam's, to Ada's version...
+    // Line 2 ("B") is Cow's: [ jumps from the working tree past Rosalina's
+    // commit and Cow's, to Mario's version...
     t.press("j").press("[").wait_idle();
     assert_eq!(at(&t), v(2, &format!("{}^", short(&r.shout_b)), "b"));
-    // ...which } walks forward through, Sam's then Mia's, in place.
+    // ...which } walks forward through, Cow's then Rosalina's, in place.
     t.press("}").wait_idle();
     assert_eq!(at(&t), v(2, short(&r.shout_b), "B"));
     t.press("}").wait_idle();
@@ -272,10 +272,10 @@ fn t_switches_blame_and_the_graph_to_clock_times() {
     let r = blamed();
     let mut t = TestDriver::with_size(Config::default(), &r.sb, 120, 20);
     blame_from_status(&mut t);
-    t.assert_pane_contains(PaneId::Details, "Ada Park  23h");
+    t.assert_pane_contains(PaneId::Details, "Mario  23h");
     t.press("t");
     assert_eq!(t.app().graph().dates, DateStyle::Clock);
-    t.assert_pane_contains(PaneId::Details, "Ada Park 2024-01-01 12:01 AM");
+    t.assert_pane_contains(PaneId::Details, "Mario 2024-01-01 12:01 AM");
     t.press("esc");
     // The graph shows them the same way.
     assert_eq!(t.app().graph().dates, DateStyle::Clock);
@@ -289,7 +289,7 @@ fn space_shows_the_lines_commit_with_its_message() {
     t.press_all(&["j", "j", "j"]).press("space").wait_idle();
     t.assert_pane_contains(PaneId::Details, &format!("Commit {}", short(&r.shout_d)));
     t.assert_pane_contains(PaneId::Details, "Shout d and add other");
-    t.assert_pane_contains(PaneId::Details, "Mia Chen <mia@lumen.dev>");
+    t.assert_pane_contains(PaneId::Details, "Rosalina <rosalina@lumen.dev>");
     t.assert_pane_contains(PaneId::Details, "1 line in this file come from it");
     t.assert_pane_contains(PaneId::Details, "Other comes along for the ride.");
 
@@ -307,7 +307,7 @@ fn b_in_a_commit_blames_its_file_as_of_that_commit() {
     t.press("b").wait_idle();
     let blame = t.app().details().blame().expect("blame open");
     assert_eq!(blame.label(), short(&r.shout_d));
-    // As of that commit, line 5 is still Ada's "e".
+    // As of that commit, line 5 is still Mario's "e".
     assert_eq!(blame.blame().unwrap().lines[4].text, "e");
     let title = t.pane_title(PaneId::Details);
     assert!(title.contains(&format!("‹ Commit {}", short(&r.shout_d))), "{title}");
@@ -339,7 +339,7 @@ fn long_file() -> Sandbox {
     let sb = Sandbox::new();
     let text: String = (1..=60).map(|n| format!("line {n}\n")).collect();
     sb.write("long.txt", &text);
-    commit_as(&sb, "Ada Park <ada@lumen.dev>", &["Add long"]);
+    commit_as(&sb, "Mario <mario@lumen.dev>", &["Add long"]);
     sb.write("long.txt", &text.replacen("line 1\n", "LINE 1\n", 1));
     sb
 }
@@ -458,7 +458,7 @@ fn brackets_follow_the_line_by_its_text_and_keep_its_row() {
     let numbered = |i: usize| format!("line {i}");
     let v1: Vec<String> = (1..=60).map(numbered).collect();
     sb.write("f.ts", &(v1.join("\n") + "\n"));
-    commit_as(&sb, "Ada Park <ada@lumen.dev>", &["Add f"]);
+    commit_as(&sb, "Mario <mario@lumen.dev>", &["Add f"]);
     // Five lines added at the top, and line 40 changed.
     let mut v2: Vec<String> = (1..=5).map(|i| format!("new {i}")).collect();
     v2.extend(v1.iter().map(|l| {
@@ -469,7 +469,7 @@ fn brackets_follow_the_line_by_its_text_and_keep_its_row() {
         }
     }));
     sb.write("f.ts", &(v2.join("\n") + "\n"));
-    let change = commit_as(&sb, "Sam Rivera <sam@lumen.dev>", &["Change line 40"]);
+    let change = commit_as(&sb, "Cow <cow@lumen.dev>", &["Change line 40"]);
 
     let mut t = TestDriver::with_size(Config::default(), &sb, 120, 20);
     t.press("1")

@@ -454,7 +454,7 @@ export const shots = [
 		callouts: [
 			{ target: { find: '▌', nth: 0, h: 13 }, text: '**When**: hot is recent, cold is old', markerSide: 'below', tone: 'amber' },
 			{ target: { find: ' 1w ▌', nth: 0, dx: 2, w: 2 }, text: '**When**: its age, or with t the date', markerSide: 'above', tone: 'amber' },
-			{ target: { find: 'Mia Chen', nth: 0 }, text: '**Who**: on every line, a color each', markerSide: 'above', tone: 'green' },
+			{ target: { find: 'Rosalina', nth: 0 }, text: '**Who**: on every line, a color each', markerSide: 'above', tone: 'green' },
 			{ target: { find: '31a324f  Refresh', w: 39 }, text: '**Why**: the commit, where its lines start', markerSide: 'above' },
 		],
 	},
