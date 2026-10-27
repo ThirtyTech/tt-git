@@ -41,6 +41,8 @@ unicode-width = "0.2"
 raw-window-handle = "0.6"
 # The Win32 calls, kept out of this crate: it forbids unsafe code.
 tt-git-win.workspace = true
+# The notifications' icon (notify/icon.rs): the version GPUI already uses.
+windows-registry = "0.6"
 
 # The launcher's badge and progress (launcher_entry.rs), over the session
 # bus. GPUI already builds zbus for the desktop portals.

@@ -8455,6 +8455,7 @@ dependencies = [
  "tt-git-testkit",
  "tt-git-win",
  "unicode-width",
+ "windows-registry 0.6.1",
  "zbus",
 ]
 

@@ -36,6 +36,8 @@ pub enum AppEvent {
     /// A fetch or pull brought these in (only with `[ui] notifications`
     /// on, and never on the first load).
     NewCommits(NewCommits),
+    /// "Test notification" ran: show a sample one now.
+    TestNotification,
 }
 
 /// tt-git's [`App`] as a GPUI entity. Input goes in through
@@ -193,6 +195,9 @@ impl AppModel {
         if let Some(settings) = self.app.take_alert_settings() {
             // Every window uses them (`Shell` watches them).
             crate::notify::share_settings(settings, cx);
+        }
+        if self.app.take_test_notification() {
+            cx.emit(AppEvent::TestNotification);
         }
         if let Some(new) = self.app.take_new_commits() {
             cx.emit(AppEvent::NewCommits(new));

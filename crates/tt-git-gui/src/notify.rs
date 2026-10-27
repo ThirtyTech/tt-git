@@ -10,8 +10,15 @@
 //! checked-out branch tracks, runs the pull command in it as `p` does.
 //! GPUI hands the response to [`init`]'s handler on the main thread.
 //!
+//! "Test notification" ([`test`]) sends a sample the same way, focused or
+//! not and whatever the settings, under a tag of its own: a click on it,
+//! or either button, only brings the window forward.
+//!
 //! On Linux they go through the desktop's Notification portal instead when
 //! the desktop knows the app (`portal.rs`, which [`install_portal`] starts).
+//!
+//! On Windows the toasts show the app icon that [`install_icon`] registers
+//! for the app id (`icon.rs`).
 //!
 //! On macOS they go through `UNUserNotificationCenter`, which only works in
 //! an app bundle: GPUI leaves them off when the process has no bundle
@@ -40,7 +47,11 @@ pub const OPEN: &str = "open";
 pub const PULL: &str = "pull";
 
 const TAG_PREFIX: &str = "new-commits:";
+const TEST_TAG_PREFIX: &str = "test-notification:";
 
+// Only Windows registers it; the rest is shared so it is tested everywhere.
+#[cfg_attr(not(windows), allow(dead_code))]
+mod icon;
 #[cfg(target_os = "linux")]
 mod portal;
 
@@ -58,6 +69,15 @@ pub fn install_portal(cx: &mut App) {
     portal::install(cx);
     #[cfg(not(target_os = "linux"))]
     let _ = cx;
+}
+
+/// Windows: gives the toasts the app icon, kept in `state_dir`. Elsewhere it
+/// does nothing. Only `main` calls it, so tests never touch the registry.
+pub fn install_icon(state_dir: &Path) {
+    #[cfg(windows)]
+    icon::install(state_dir);
+    #[cfg(not(windows))]
+    let _ = state_dir;
 }
 
 /// Asks the OS for leave to notify, once per process: call when a window
@@ -135,12 +155,47 @@ pub fn new_commits(new: &NewCommits, model: &Entity<AppModel>, window: &Window, 
     }
     let repo = model.read(cx).app().repo();
     let notification = notification(&repo.name(), repo.root(), new);
+    show(notification, cx);
+}
+
+/// Shows a sample notification for `model`'s repository now, even with its
+/// window focused or notifications off.
+pub fn test(model: &Entity<AppModel>, cx: &mut App) {
+    ask_permission(cx);
+    let repo = model.read(cx).app().repo();
+    show(test_notification(&repo.name(), repo.root()), cx);
+}
+
+/// Sends `notification`: through the portal on Linux when it's in use, else
+/// GPUI.
+fn show(notification: SystemNotification, cx: &mut App) {
     tracing::debug!("notifying: {}", notification.body);
     #[cfg(target_os = "linux")]
     if portal::show(&notification, cx) {
         return;
     }
     cx.show_system_notification(notification);
+}
+
+/// The sample "Test notification" sends: a real one for 3 commits on
+/// `origin/main`, with Open and Pull, but its body says it's a test and its
+/// tag is [`TEST_TAG_PREFIX`]'s.
+pub fn test_notification(name: &str, root: &Path) -> SystemNotification {
+    let sample = NewCommits {
+        branches: vec![tt_git_app::new_commits::BranchCommits {
+            branch: "origin/main".into(),
+            count: 3,
+            head_upstream: true,
+            local: false,
+            worktree: None,
+        }],
+    };
+    let real = notification(name, root, &sample);
+    SystemNotification {
+        tag: format!("{TEST_TAG_PREFIX}{}", root.display()).into(),
+        body: format!("Test notification: {}", real.body).into(),
+        ..real
+    }
 }
 
 /// The notification for `new` in the repository `name` at `root`: the
@@ -164,13 +219,16 @@ pub fn notification(name: &str, root: &Path, new: &NewCommits) -> SystemNotifica
     }
 }
 
-/// The repository root a notification's tag names.
-fn tagged_root(tag: &str) -> Option<PathBuf> {
-    tag.strip_prefix(TAG_PREFIX).map(PathBuf::from)
+/// The repository root a notification's tag names, and whether it's a
+/// test.
+fn tagged_root(tag: &str) -> Option<(PathBuf, bool)> {
+    let real = tag.strip_prefix(TAG_PREFIX).map(|root| (root, false));
+    let test = || tag.strip_prefix(TEST_TAG_PREFIX).map(|root| (root, true));
+    real.or_else(test).map(|(root, test)| (PathBuf::from(root), test))
 }
 
 fn respond(response: SystemNotificationResponse, cx: &mut App) {
-    let Some(root) = tagged_root(&response.tag) else {
+    let Some((root, test)) = tagged_root(&response.tag) else {
         return;
     };
     let Some(window) = crate::windows::window_for(&root, cx) else {
@@ -179,6 +237,7 @@ fn respond(response: SystemNotificationResponse, cx: &mut App) {
     };
     let _ = window.update(cx, |_, window, _| window.activate_window());
     if response.action_id.as_deref() == Some(PULL)
+        && !test
         && let Some(model) = model_of(window, cx)
     {
         model.update(cx, |m, cx| m.send(Action::Command(Command::Pull), cx));
@@ -357,6 +416,67 @@ mod tests {
         assert!(gui.cx.update(|_, cx| cx.has_global::<Asked>()));
     }
 
+    #[gpui::test]
+    fn the_picker_sends_a_test_that_pull_leaves_alone(cx: &mut TestAppContext) {
+        let (mut gui, sb) = behind_origin(cx, 2);
+        gui.cx.update(|window, _| window.activate_window());
+        gui.cx.run_until_parked();
+        fetch(&mut gui, &sb);
+        assert!(gui.cx.shown_system_notifications().is_empty(), "focused");
+
+        // The picker's last entry, found by typing ("test" alone matches
+        // "New commits on local branches and worktrees" too).
+        gui.model
+            .update(&mut gui.cx, |m, cx| m.send(Action::Command(Command::Notifications), cx));
+        gui.wait_idle();
+        gui.press_all(&["t", "e", "s", "t", "space", "n", "o", "t", "enter"]);
+        let shown = gui.cx.delivered_system_notifications();
+        assert_eq!(shown.len(), 1, "{shown:?}");
+        assert_eq!(shown[0].title.as_ref(), "web");
+        assert_eq!(
+            shown[0].body.as_ref(),
+            "Test notification: 3 new commits on origin/main"
+        );
+        let actions: Vec<&str> = shown[0].actions.iter().map(|a| a.label.as_ref()).collect();
+        assert_eq!(actions, ["Open", "Pull"]);
+        assert_eq!(
+            gui.read(|app| app.notice().map(str::to_owned)).as_deref(),
+            Some("sent a test notification")
+        );
+
+        let tag = shown[0].tag.clone();
+        gui.cx
+            .simulate_system_notification_response(SystemNotificationResponse {
+                tag,
+                action_id: Some(PULL.into()),
+            });
+        gui.wait_idle();
+        assert_ne!(sb.rev_parse("main"), sb.rev_parse("origin/main"), "no pull");
+    }
+
+    #[gpui::test]
+    fn the_test_shows_with_notifications_off(cx: &mut TestAppContext) {
+        let sb = Sandbox::named("web");
+        sb.commit_file("a.txt", "1", "base");
+        cx.update(|cx| crate::app_id::set(cx));
+        let mut gui = Gui::with_config(cx, &sb, Config::default());
+        gui.model.update(&mut gui.cx, |m, cx| {
+            m.send(Action::Command(Command::TestNotification), cx)
+        });
+        gui.wait_idle();
+        assert_eq!(gui.cx.delivered_system_notifications().len(), 1);
+        let notice = gui.read(|app| app.notice().map(str::to_owned)).unwrap();
+        assert!(notice.contains("notifications are off"), "{notice}");
+    }
+
+    #[test]
+    fn a_test_is_tagged_as_one() {
+        let shown = test_notification("web", Path::new("/src/web"));
+        assert_eq!(tagged_root(&shown.tag), Some((PathBuf::from("/src/web"), true)));
+        let real = notification("web", Path::new("/src/web"), &NewCommits::default());
+        assert_ne!(shown.tag, real.tag, "a test doesn't replace a real one");
+    }
+
     #[test]
     fn only_commits_on_heads_upstream_offer_pull() {
         let new = NewCommits {
@@ -372,6 +492,6 @@ mod tests {
         assert_eq!(shown.body.as_ref(), "1 new commit on origin/feature");
         let actions: Vec<&str> = shown.actions.iter().map(|a| a.id.as_ref()).collect();
         assert_eq!(actions, [OPEN]);
-        assert_eq!(tagged_root(&shown.tag), Some(PathBuf::from("/src/web")));
+        assert_eq!(tagged_root(&shown.tag), Some((PathBuf::from("/src/web"), false)));
     }
 }

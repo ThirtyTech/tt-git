@@ -156,6 +156,7 @@ fn main() -> Result<()> {
         tt_git_gui::init(cx);
         tt_git_gui::app_id::set(cx);
         tt_git_gui::notify::install_portal(cx);
+        tt_git_gui::notify::install_icon(&tt_git_core::paths::state_dir());
         tt_git_gui::zoom::set(zoom, cx);
         tt_git_gui::font::set(font, cx);
         tt_git_gui::look::set(style, cx);

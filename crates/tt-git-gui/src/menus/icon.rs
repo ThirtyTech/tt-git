@@ -8,6 +8,8 @@
 //!   (`ThirtyTech.tt-git`) in an installed `ThirtyTech.tt-git.desktop`, which
 //!   packaging provides.
 //! - macOS: the `.app` bundle's icon, which packaging provides.
+//! - Windows notifications: a copy in the state folder, which the toasts'
+//!   app id names (`notify/icon.rs`).
 //!
 //! The title bar draws it too, at its left end ([`title_icon`]), and the
 //! About dialog at the top ([`about_icon`]).
@@ -16,7 +18,8 @@ use std::sync::{Arc, LazyLock};
 
 use gpui::{InteractiveElement as _, IntoElement, RenderImage, Styled as _, img, px};
 
-static PNG: &[u8] = include_bytes!("../../assets/icon.png");
+/// The PNG itself, which Windows notifications show too (`notify/icon.rs`).
+pub(crate) static PNG: &[u8] = include_bytes!("../../assets/icon.png");
 
 /// The icon for `WindowOptions::icon`, or `None` if it can't be decoded.
 pub fn window_icon() -> Option<Arc<image::RgbaImage>> {

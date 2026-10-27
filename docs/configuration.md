@@ -296,6 +296,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `font` | (palette and menu only; desktop app only, the TUI just says it needs the desktop app) | global |
 | `window_style` | (palette and menu only; desktop app only, the TUI just says the terminal draws its own) | global |
 | `notifications` | (palette and menu only; desktop app only, the TUI just says it has none) | global |
+| `test_notification` | (palette and the notifications picker only; desktop app only, the TUI just says it has none) | global |
 
 ### Plugin action bindings
 

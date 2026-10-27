@@ -91,6 +91,10 @@ const ALL_GLOBAL: &[Command] = &[
 /// that zooms (see [`App::enable_ui_zoom`]).
 pub const ZOOM_COMMANDS: &[Command] = &[Command::ZoomIn, Command::ZoomOut, Command::ResetZoom];
 
+/// Global commands listed in the help popup and the palette of a front end
+/// that notifies (see [`App::enable_notifications`]).
+pub const ALERT_COMMANDS: &[Command] = &[Command::Notifications, Command::TestNotification];
+
 /// How often the front end sends [`Action::Tick`].
 pub const TICK: Duration = Duration::from_millis(250);
 
@@ -327,6 +331,8 @@ pub struct App {
     /// A notifications setting changed in this window, for the front end
     /// to take.
     alerts_changed: bool,
+    /// [`Command::TestNotification`] ran, for the front end to take.
+    test_notification_wanted: bool,
     /// [`Command::WindowStyle`] ran, for the front end to take.
     style_wanted: bool,
     /// The front end updates itself (the desktop app, from its own
@@ -467,6 +473,7 @@ impl App {
             styles: false,
             notifies: false,
             alerts_changed: false,
+            test_notification_wanted: false,
             style_wanted: false,
             open_repo_wanted: false,
             quick_look: None,
@@ -1159,7 +1166,7 @@ impl App {
         let context = self.focused().context();
         let zoom: &[Command] = if self.zooms { ZOOM_COMMANDS } else { &[] };
         let font: &[Command] = if self.chooses_fonts { &[Command::Font] } else { &[] };
-        let alerts: &[Command] = if self.notifies { &[Command::Notifications] } else { &[] };
+        let alerts: &[Command] = if self.notifies { ALERT_COMMANDS } else { &[] };
         let sections: [(Context, &[Command]); 5] = [
             (context, self.focused().commands()),
             (Context::Global, ALL_GLOBAL),
@@ -1189,7 +1196,7 @@ impl App {
         let context = self.focused().context();
         let zoom: &[Command] = if self.zooms { ZOOM_COMMANDS } else { &[] };
         let font: &[Command] = if self.chooses_fonts { &[Command::Font] } else { &[] };
-        let alerts: &[Command] = if self.notifies { &[Command::Notifications] } else { &[] };
+        let alerts: &[Command] = if self.notifies { ALERT_COMMANDS } else { &[] };
         let sections: [(Context, &[Command]); 5] = [
             (context, self.focused().commands()),
             (Context::Global, ALL_GLOBAL),
@@ -3190,7 +3197,8 @@ impl App {
                 self.notice = Some("the window style is the desktop app's: the terminal draws its own".into());
             }
             Command::Notifications if self.notifies => self.open_alerts_picker(),
-            Command::Notifications => {
+            Command::TestNotification if self.notifies => self.want_test_notification(),
+            Command::Notifications | Command::TestNotification => {
                 self.notice = Some("notifications are the desktop app's: the terminal has none".into());
             }
             Command::Font if self.chooses_fonts => self.font_picker_wanted = true,

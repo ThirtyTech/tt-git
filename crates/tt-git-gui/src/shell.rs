@@ -105,6 +105,7 @@ impl Shell {
                         crate::notify::new_commits(new, model, window, cx);
                     }
                 }
+                AppEvent::TestNotification => crate::notify::test(model, cx),
                 AppEvent::OpenRepository => {
                     let model = model.downgrade();
                     crate::windows::pick_repos(cx, move |result, cx| {

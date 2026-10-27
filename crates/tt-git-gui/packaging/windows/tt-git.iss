@@ -75,8 +75,10 @@ Root: HKA; Subkey: "Software\Classes\Directory\shell\tt-git\command"; ValueType:
 Root: HKA; Subkey: "Software\Classes\Directory\Background\shell\tt-git"; ValueType: string; ValueName: ""; ValueData: "Open in tt-git"; Flags: uninsdeletekey; Tasks: explorer
 Root: HKA; Subkey: "Software\Classes\Directory\Background\shell\tt-git"; ValueType: string; ValueName: "Icon"; ValueData: """{app}\tt-git-gui.exe"",0"; Tasks: explorer
 Root: HKA; Subkey: "Software\Classes\Directory\Background\shell\tt-git\command"; ValueType: string; ValueName: ""; ValueData: """{app}\tt-git-gui.exe"" ""%V"""; Tasks: explorer
-; The app registers its AppUserModelID here the first time it shows a
-; notification (GPUI's set_app_identity); uninstalling removes it.
+; The app registers its AppUserModelID here: its icon (IconUri, a copy in
+; the state folder) at every start (src/notify/icon.rs), and its name the
+; first time it shows a notification (GPUI's set_app_identity).
+; Uninstalling removes it.
 Root: HKCU; Subkey: "Software\Classes\AppUserModelId\ThirtyTech.tt-git"; Flags: uninsdeletekey dontcreatekey
 
 [Run]

@@ -399,6 +399,9 @@ pub enum Command {
     /// notifications and each alert on and off. Only the desktop app
     /// offers it (see `App::enable_notifications`).
     Notifications,
+    /// Sends a sample notification now, to see how they look. Only the
+    /// desktop app offers it (see `App::enable_notifications`).
+    TestNotification,
     /// Previews a file in the details pane with Quick Look: its version
     /// after the commit. Only offered on macOS (see `App::enable_quick_look`).
     QuickLook,
@@ -515,6 +518,7 @@ impl Command {
             Command::Font => "font",
             Command::WindowStyle => "native/terminal style",
             Command::Notifications => "notifications",
+            Command::TestNotification => "test notification",
             Command::QuickLook => "quick look",
             Command::QuickLookOld => "quick look before",
         }

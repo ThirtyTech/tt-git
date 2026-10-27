@@ -1,10 +1,13 @@
 //! The notifications picker, for a front end that tells the desktop about
 //! the repository (the desktop app): `[ui] notifications`, the switch for
 //! them all, and each alert of `[ui.alerts]` on its own. `enter` flips the
-//! highlighted one, saves it in config.toml and leaves the picker open.
+//! highlighted one, saves it in config.toml and leaves the picker open. The
+//! last entry sends a test notification
+//! ([`Command::TestNotification`]).
 
 use super::App;
 use crate::config::{Alert, AlertsConfig};
+use crate::keymap::Command;
 use crate::modal::{Modal, PaletteItem, PaletteTarget};
 
 /// The notification settings, as one window hands them to the others.
@@ -58,6 +61,24 @@ impl App {
         })
     }
 
+    /// Whether [`Command::TestNotification`] ran since the last call: the
+    /// front end shows a sample notification.
+    pub fn take_test_notification(&mut self) -> bool {
+        std::mem::take(&mut self.test_notification_wanted)
+    }
+
+    /// Asks the front end for a test notification, which it sends whatever
+    /// the settings and the window's focus.
+    pub(super) fn want_test_notification(&mut self) {
+        self.test_notification_wanted = true;
+        self.notice = Some(if self.config.ui.notifications {
+            "sent a test notification".into()
+        } else {
+            "sent a test notification: notifications are off, so real ones don't show".into()
+        });
+        self.dirty = true;
+    }
+
     /// Opens the notifications picker, on the entry highlighted if it's
     /// open already, else on the first.
     pub(super) fn open_alerts_picker(&mut self) {
@@ -79,6 +100,11 @@ impl App {
                 (on, _) => state(on).into(),
             },
             target: PaletteTarget::Alert(Some(*a)),
+        }))
+        .chain(std::iter::once(PaletteItem {
+            label: "Test notification".into(),
+            hint: "sends one now".into(),
+            target: PaletteTarget::Command(Command::TestNotification),
         }))
         .collect::<Vec<_>>();
         let selected = items
