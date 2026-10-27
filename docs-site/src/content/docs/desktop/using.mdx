@@ -325,6 +325,7 @@ Choose *Notifications* in the **tt-git** menu or the
 | **New commits: count on the app icon** | The new commits on the [taskbar](#the-taskbar-badge), [dock](#the-taskbar-badge) or [Dock](#the-dock-badge) badge. |
 | **Conflicts: badge on the app icon** | The badge while files have conflicts. |
 | **Stopped merge or rebase: badge on the app icon** | The badge while a merge, rebase, cherry-pick or revert waits to be continued. |
+| **Test notification** | Nothing: it sends a test notification now. See [Testing them](#testing-them). |
 
 Each entry says *on* or *off* on the right; an alert that's on while
 **Notifications** is off says *on (notifications off)*. Type to narrow the
@@ -341,6 +342,20 @@ are touched, so your comments and other settings stay. Everything but
 **Notifications** is on until you turn it off, so `notifications = true`
 on its own turns on every alert. The [terminal app](/getting-started/tour/)
 has no notifications, so it leaves *Notifications* out of its palette.
+
+### Testing them
+
+To see how a notification looks, pick **Test notification**, the last
+entry in the picker, or *Test notification* in the palette (bind a key to
+`test_notification` if you want one). The picker closes and a notification
+shows at once, through the same path as real ones: the repository's name
+over *Test notification: 3 new commits on origin/main*, with **Open** and
+**Pull**. It shows even while the window is focused and even with
+**Notifications** off; then the help bar says *sent a test notification:
+notifications are off, so real ones don't show*. Clicking it, **Open** or
+**Pull** only brings the window forward: the test never pulls, and it
+doesn't replace a real notification for the repository. On macOS the first
+test asks whether tt-git may send notifications, if it hasn't asked yet.
 
 ### New commits
 
@@ -382,14 +397,16 @@ them. Opening a repository never notifies.
 
 ### Where they show
 
-On Windows the notification is a toast from *tt-git*, with no sound.
-Windows' own settings (**Settings > System > Notifications**) can turn
-tt-git's off or keep them out of sight. The installer gives the Start menu
-entry tt-git's AppUserModelID, `ThirtyTech.tt-git`, which toasts and the
-taskbar use, so installed toasts show tt-git's icon. A copy that wasn't
-installed (the zip, or a build from source) still shows them: the first one
-registers the ID under `HKCU\Software\Classes\AppUserModelId`, without an
-icon, so its toasts show a generic one. Uninstalling removes that key.
+On Windows the notification is a toast from *tt-git*, with tt-git's icon
+and no sound. Windows' own settings (**Settings > System > Notifications**)
+can turn tt-git's off or keep them out of sight. The installer gives the
+Start menu entry tt-git's AppUserModelID, `ThirtyTech.tt-git`, which toasts
+and the taskbar use. Each time it starts, tt-git registers that ID under
+`HKCU\Software\Classes\AppUserModelId\ThirtyTech.tt-git` with its name
+and icon, a copy of the app icon it keeps as `notification-icon.png` in
+`%APPDATA%\tt-git` (or `TTGIT_STATE_DIR`). So a copy that wasn't installed
+(the zip, or a build from source) shows the icon too. Uninstalling removes
+the key; the icon file stays with your settings.
 
 On Linux the notification comes from the desktop, under *tt-git*. When
 the desktop knows the app, tt-git sends it through the desktop portal
@@ -400,11 +417,12 @@ apply. The desktop knows the app when its launcher,
 the install script put it in place) or when tt-git runs in a sandbox such
 as Flatpak. Otherwise, as with the AppImage or a build from source, tt-git
 sends it straight to the desktop's notification service
-(`org.freedesktop.Notifications`). A desktop with neither shows nothing.
+(`org.freedesktop.Notifications`), under the name *tt-git* but without
+tt-git's icon. A desktop with neither shows nothing.
 
 On macOS notifications come from tt-git.app, the app the
 [`.dmg`](/desktop/install/) installs, and land in Notification Center under
-its bundle ID, `net.thirtytech.tt-git`. The first time you open a
+its bundle ID, `net.thirtytech.tt-git`, with the app's icon. The first time you open a
 repository window with notifications on, or turn them on, macOS asks
 whether tt-git may send notifications; after that it remembers your
 answer, and **System
