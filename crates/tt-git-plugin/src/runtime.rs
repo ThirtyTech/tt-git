@@ -201,10 +201,13 @@ fn search_path_windows(name: &str) -> Option<PathBuf> {
 }
 
 /// A `std::process::Command` for a plugin process, without stdio set up.
+/// It gets no console window, so an event command (say on each background
+/// fetch's `fetch.completed`) doesn't flash one up from the desktop app.
 pub fn build_command(host: &HostEnv, req: &CommandRequest) -> Result<Command, RunError> {
     let (program, args) = req.argv.split_first().ok_or(RunError::Empty)?;
     let mut cmd = Command::new(resolve_program(program, &req.plugin_root));
     cmd.args(args).current_dir(&req.plugin_root).envs(plugin_env(host, req));
+    tt_git_core::git::hide_console_window(&mut cmd);
     Ok(cmd)
 }
 
