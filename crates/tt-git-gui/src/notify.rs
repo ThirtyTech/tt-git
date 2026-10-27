@@ -13,6 +13,9 @@
 //! On Linux they go through the desktop's Notification portal instead when
 //! the desktop knows the app (`portal.rs`, which [`install_portal`] starts).
 //!
+//! On Windows the toasts show the app icon that [`install_icon`] registers
+//! for the app id (`icon.rs`).
+//!
 //! On macOS they go through `UNUserNotificationCenter`, which only works in
 //! an app bundle: GPUI leaves them off when the process has no bundle
 //! identifier (`cargo run`). macOS asks the user once whether tt-git may
@@ -41,6 +44,9 @@ pub const PULL: &str = "pull";
 
 const TAG_PREFIX: &str = "new-commits:";
 
+// Only Windows registers it; the rest is shared so it is tested everywhere.
+#[cfg_attr(not(windows), allow(dead_code))]
+mod icon;
 #[cfg(target_os = "linux")]
 mod portal;
 
@@ -58,6 +64,15 @@ pub fn install_portal(cx: &mut App) {
     portal::install(cx);
     #[cfg(not(target_os = "linux"))]
     let _ = cx;
+}
+
+/// Windows: gives the toasts the app icon, kept in `state_dir`. Elsewhere it
+/// does nothing. Only `main` calls it, so tests never touch the registry.
+pub fn install_icon(state_dir: &Path) {
+    #[cfg(windows)]
+    icon::install(state_dir);
+    #[cfg(not(windows))]
+    let _ = state_dir;
 }
 
 /// Asks the OS for leave to notify, once per process: call when a window
