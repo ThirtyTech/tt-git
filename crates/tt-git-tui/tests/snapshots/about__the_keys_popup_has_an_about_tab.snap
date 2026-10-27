@@ -2,7 +2,7 @@
 source: crates/tt-git-tui/tests/about.rs
 expression: without_version(&screen)
 ---
-╭[1] Graph [all] 1/1──────────────────────────╭ Keybindings ───────────────────────────── tt-git <version> ╮─────────────────────────────────────────────╮
+╭[1] Graph [all] 1/1──────────────────────────╭ Keybindings ───────────────────────── tt-git <version> ╮─────────────────────────────────────────────╮
 │●   main  first                              │ Keys · About   tab switch                              │                Test User         23h 5d8f116│
 │                                             │                                                        │                                             │
 │                                             │                    tt-git <version>                    │                                             │

@@ -10,8 +10,10 @@ fn sandbox() -> Sandbox {
 /// `screen` with the About dialog's version line written as
 /// `tt-git <version>`, centered in the box as the real one is, so the
 /// snapshot outlives a version bump. On a border (the keys popup's
-/// title), it's only swapped.
+/// title, right-aligned), the dashes before it give or take the
+/// difference in length, as they would for a version that long.
 fn without_version(screen: &str) -> String {
+    const PLACEHOLDER: &str = "tt-git <version>";
     let heading = concat!("tt-git ", env!("CARGO_PKG_VERSION"));
     screen
         .lines()
@@ -21,12 +23,23 @@ fn without_version(screen: &str) -> String {
             };
             // The box's borders either side of it.
             let Some(left) = line[..at].rfind('│') else {
-                return line.replace(heading, "tt-git <version>");
+                let before = line[..at].trim_end_matches(' ');
+                let dashes = before.len() - before.trim_end_matches('─').len();
+                let dashes = dashes / '─'.len_utf8();
+                let kept = (dashes + heading.len()).saturating_sub(PLACEHOLDER.len());
+                let start = before.len() - dashes * '─'.len_utf8();
+                return format!(
+                    "{}{}{}{PLACEHOLDER}{}",
+                    &line[..start],
+                    "─".repeat(kept),
+                    &line[before.len()..at],
+                    &line[at + heading.len()..]
+                );
             };
             let right = at + line[at..].find('│').expect("right border");
             let inside = line[left + '│'.len_utf8()..right].chars().count();
             // A column of padding each side, as the dialog has.
-            let text = format!(" {:^w$} ", "tt-git <version>", w = inside - 2);
+            let text = format!(" {PLACEHOLDER:^w$} ", w = inside - 2);
             format!("{}{text}{}", &line[..left + '│'.len_utf8()], &line[right..])
         })
         .collect::<Vec<_>>()
