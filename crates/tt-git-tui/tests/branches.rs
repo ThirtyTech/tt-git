@@ -769,17 +769,7 @@ fn push_selected_branch_without_checking_it_out() {
         sb.git(&["rev-parse", "--abbrev-ref", "local-work@{upstream}"]),
         "origin/local-work"
     );
-    let pushes: Vec<String> = t
-        .app()
-        .repo()
-        .git()
-        .log()
-        .entries()
-        .iter()
-        .filter(|c| c.args.starts_with("push"))
-        .map(|c| c.args.clone())
-        .collect();
-    assert_eq!(pushes, ["push -u origin refs/heads/local-work"]);
+    assert_eq!(pushes(&t), ["push -u origin refs/heads/local-work"]);
 }
 
 #[test]
@@ -828,5 +818,105 @@ fn push_from_the_worktrees_tab_pushes_its_branch() {
     }
     t.press("P");
     t.wait_idle();
+    assert_eq!(t.app().notice(), Some("✓ pushed local-work"), "{}", t.screen());
+}
+
+/// The `push` commands git ran, oldest first.
+fn pushes(t: &TestDriver) -> Vec<String> {
+    t.app()
+        .repo()
+        .git()
+        .log()
+        .entries()
+        .iter()
+        .filter(|c| c.args.starts_with("push"))
+        .map(|c| c.args.clone())
+        .collect()
+}
+
+/// `repo_with_remote_branch` with a commit on main to push, and `P` on
+/// local-work, which has never been pushed.
+fn ask_which_to_push(sb: &Sandbox) -> TestDriver {
+    sb.commit("more");
+    let mut t = TestDriver::with_size(Config::default(), sb, 160, 30);
+    t.press("3");
+    select(&mut t, "local-work");
+    t.press("P");
+    t
+}
+
+#[test]
+fn push_asks_which_branch_when_both_have_commits() {
+    let sb = repo_with_remote_branch();
+    let mut t = ask_which_to_push(&sb);
+    let Some(Modal::Confirm { title, message, .. }) = t.app().modal() else {
+        panic!("no confirm dialog: {}", t.screen());
+    };
+    assert_eq!(title, "Push");
+    assert_eq!(
+        message,
+        "local-work (not pushed yet) and main, the checked-out branch (↑1), both have commits to push.\n\
+         Push local-work?"
+    );
+    assert!(
+        t.screen().contains("y confirm · c push main · n/esc cancel"),
+        "{}",
+        t.screen()
+    );
+
+    // Enter pushes the selected branch.
+    t.press("enter").wait_idle();
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(t.app().notice(), Some("✓ pushed local-work"));
+    assert_eq!(pushes(&t), ["push -u origin refs/heads/local-work"]);
+}
+
+#[test]
+fn push_can_push_the_checked_out_branch_instead() {
+    let sb = repo_with_remote_branch();
+    let mut t = ask_which_to_push(&sb);
+    t.press("c").wait_idle();
+    assert!(t.app().error().is_none(), "{:?}", t.app().error());
+    assert_eq!(t.app().notice(), Some("✓ pushed main → origin/main"));
+    assert_eq!(sb.git(&["rev-parse", "origin/main"]), sb.rev_parse("main"));
+    assert!(sb.git(&["branch", "-r"]).lines().all(|l| !l.contains("local-work")));
+}
+
+#[test]
+fn push_dialog_cancels_with_n() {
+    let sb = repo_with_remote_branch();
+    let mut t = ask_which_to_push(&sb);
+    t.press("n").wait_idle();
+    assert!(t.app().modal().is_none());
+    assert!(pushes(&t).is_empty(), "{:?}", pushes(&t));
+}
+
+#[test]
+fn push_from_the_worktrees_tab_asks_too() {
+    let sb = repo_with_remote_branch();
+    sb.commit("more");
+    let path = sb.root().join("wt-local");
+    sb.git(&["worktree", "add", "-q", &path.to_string_lossy(), "local-work"]);
+    let mut t = TestDriver::with_size(Config::default(), &sb, 160, 30);
+    t.press("3");
+    while t.app().branches().tab() != BranchTab::Worktrees {
+        t.press("]");
+    }
+    let idx = t
+        .pane_lines(PaneId::Branches)
+        .iter()
+        .filter(|l| !l.trim().is_empty())
+        .position(|l| l.contains("local-work"))
+        .unwrap();
+    for _ in 0..idx {
+        t.press("j");
+    }
+    t.press("P");
+    assert!(
+        matches!(t.app().modal(), Some(Modal::Confirm { message, .. }) if message.ends_with("Push local-work?")),
+        "{:?}",
+        t.app().modal()
+    );
+    t.press("y").wait_idle();
     assert_eq!(t.app().notice(), Some("✓ pushed local-work"), "{}", t.screen());
 }

@@ -879,8 +879,8 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
                         .iter()
                         .find(|e| e.local.as_ref().is_some_and(|l| l.short_name == branch))
                 });
-                match entry.map(Self::push) {
-                    Some(Ok(op)) => ctx.emit(Action::Run(op)),
+                match entry.map(|e| self.push_action(e)) {
+                    Some(Ok(action)) => ctx.emit(action),
                     Some(Err(why)) => notify(why),
                     None => notify(format!("{name} has a detached HEAD; there's no branch to push")),
                 }
@@ -1003,14 +1003,51 @@ r also deletes it on {remote} (`git push {remote} --delete refs/tags/{name}`)."
                 Err(why) => ctx.emit(Action::Notify(why)),
             },
             // `P` pushes the selected tag on the Tags tab, the selected branch here.
-            Command::PushTag => match Self::push(entry) {
-                Ok(op) => ctx.emit(Action::Run(op)),
+            Command::PushTag => match self.push_action(entry) {
+                Ok(action) => ctx.emit(action),
                 Err(why) => ctx.emit(Action::Notify(why)),
             },
             Command::Copy => ctx.emit(Action::Copy(entry.name.clone())),
             _ => return EventState::NotConsumed,
         }
         EventState::Consumed
+    }
+
+    /// What `P` on `entry` does: push it, or, when the checked-out branch
+    /// has commits to push too, ask which one to push (`y` this one, `c`
+    /// the checked-out one).
+    fn push_action(&self, entry: &BranchEntry) -> Result<Action, String> {
+        let op = Self::push(entry)?;
+        let Some(head) = self.entries.iter().find(|e| e.is_head && !entry.is_head) else {
+            return Ok(Action::Run(op));
+        };
+        let (Some(selected), Some(current)) = (
+            entry.local.as_ref().and_then(Self::unpushed),
+            head.local.as_ref().and_then(Self::unpushed),
+        ) else {
+            return Ok(Action::Run(op));
+        };
+        let (name, head) = (&entry.name, &head.name);
+        Ok(Action::OpenModal(
+            Modal::confirm(
+                "Push",
+                format!(
+                    "{name} ({selected}) and {head}, the checked-out branch ({current}), both have commits to push.\nPush {name}?"
+                ),
+                op,
+            )
+            .confirm_or('c', format!("push {head}"), GitOp::Push),
+        ))
+    }
+
+    /// What `local` has to push, `↑n` or "not pushed yet", or `None`
+    /// when it's level with its upstream or tracks a local branch.
+    fn unpushed(local: &GitRef) -> Option<String> {
+        match local.upstream.as_deref() {
+            None => Some("not pushed yet".into()),
+            Some(up) if up.starts_with("refs/heads/") => None,
+            Some(_) => (local.ahead > 0).then(|| format!("↑{}", local.ahead)),
+        }
     }
 
     /// The push of `entry`: the usual push for the checked-out branch, else
