@@ -44,6 +44,68 @@ impl Policy for AsConfigured {
     }
 }
 
+/// How much slower background fetching goes on battery.
+pub const ON_BATTERY: u32 = 3;
+
+/// What [`Conserve`] goes by.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Conditions {
+    pub on_battery: bool,
+    /// Battery saver, Low Power Mode or the power-saver profile.
+    pub saving_power: bool,
+    pub metered: bool,
+}
+
+/// The interval to fetch at given `conditions` (`[fetch] conserve`): none
+/// while saving power or on a metered connection, [`ON_BATTERY`] times as
+/// long on battery, else `base`.
+pub fn conserve(base: Duration, conditions: Conditions) -> Option<Duration> {
+    if conditions.metered || conditions.saving_power {
+        None
+    } else if conditions.on_battery {
+        Some(base * ON_BATTERY)
+    } else {
+        Some(base)
+    }
+}
+
+/// [`conserve`] with the conditions `probe` reads.
+pub struct Conserve(pub fn() -> Conditions);
+
+impl Conserve {
+    /// Reading the OS's own power and network state.
+    pub fn system() -> Self {
+        Self(system_conditions)
+    }
+}
+
+impl Policy for Conserve {
+    fn interval(&self, base: Duration) -> Option<Duration> {
+        let conditions = (self.0)();
+        let interval = conserve(base, conditions);
+        if interval != Some(base) {
+            tracing::debug!(?conditions, ?interval, "background fetch: conserving");
+        }
+        interval
+    }
+}
+
+/// The power and network state, as far as this OS says.
+#[cfg(any(windows, target_os = "macos", target_os = "linux"))]
+fn system_conditions() -> Conditions {
+    let state = tt_git_win::power::state();
+    Conditions {
+        on_battery: state.on_battery,
+        saving_power: state.saving_power,
+        metered: state.metered,
+    }
+}
+
+#[cfg(not(any(windows, target_os = "macos", target_os = "linux")))]
+fn system_conditions() -> Conditions {
+    Conditions::default()
+}
+
 /// What a check came to.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
@@ -317,6 +379,55 @@ mod tests {
         assert_eq!(run(&repo, MINUTE, &Doubled, &store, now + MINUTE), Outcome::NotDue);
         assert!(matches!(
             run(&repo, MINUTE, &Doubled, &store, now + MINUTE * 2),
+            Outcome::Fetched(Ok(_))
+        ));
+    }
+
+    #[test]
+    fn conserving_stretches_on_battery_and_pauses_when_saving_or_metered() {
+        let at = |on_battery, saving_power, metered| {
+            conserve(
+                MINUTE,
+                Conditions {
+                    on_battery,
+                    saving_power,
+                    metered,
+                },
+            )
+        };
+        assert_eq!(at(false, false, false), Some(MINUTE));
+        assert_eq!(at(true, false, false), Some(MINUTE * 3));
+        assert_eq!(at(true, true, false), None);
+        assert_eq!(at(false, true, false), None);
+        assert_eq!(at(false, false, true), None);
+        assert_eq!(at(true, false, true), None);
+    }
+
+    #[test]
+    fn conserve_reads_the_conditions_at_each_check() {
+        let (sb, repo) = with_remote();
+        let store = store(&sb, &repo);
+        let metered = Conserve(|| Conditions {
+            metered: true,
+            ..Conditions::default()
+        });
+        assert_eq!(run(&repo, MINUTE, &metered, &store, SystemTime::now()), Outcome::Paused);
+        assert!(!fetched(&sb));
+        let on_battery = Conserve(|| Conditions {
+            on_battery: true,
+            ..Conditions::default()
+        });
+        assert!(matches!(
+            run(&repo, MINUTE, &on_battery, &store, SystemTime::now()),
+            Outcome::Fetched(Ok(_))
+        ));
+        let now = SystemTime::now();
+        assert_eq!(
+            run(&repo, MINUTE, &on_battery, &store, now + MINUTE * 2),
+            Outcome::NotDue
+        );
+        assert!(matches!(
+            run(&repo, MINUTE, &on_battery, &store, now + MINUTE * 3),
             Outcome::Fetched(Ok(_))
         ));
     }

@@ -11,13 +11,15 @@ use serde_json::json;
 
 use super::{App, TICKS_PER_SEC};
 use crate::action::Action;
-use crate::bg_fetch::{self, AsConfigured, Outcome, Policy, Store};
+use crate::bg_fetch::{self, AsConfigured, Conserve, Outcome, Policy, Store};
 use crate::modal::GitOp;
 
 pub(super) struct BackgroundFetch {
     /// Where the lock and the time of the last attempt go.
     dir: PathBuf,
-    policy: Arc<dyn Policy>,
+    /// Set by [`App::set_fetch_policy`]; otherwise it follows
+    /// `[fetch] conserve`.
+    policy: Option<Arc<dyn Policy>>,
     /// [`App::ticks`] of the next check.
     next_check: u64,
     /// A check is running.
@@ -31,7 +33,7 @@ impl Default for BackgroundFetch {
     fn default() -> Self {
         Self {
             dir: tt_git_core::paths::state_dir().join("fetch"),
-            policy: Arc::new(AsConfigured),
+            policy: None,
             next_check: bg_fetch::FIRST_CHECK.as_secs() * TICKS_PER_SEC,
             running: false,
             joined: false,
@@ -46,9 +48,10 @@ impl App {
         self.background_fetch.dir = dir;
     }
 
-    /// Stretches or pauses background fetching by `policy`.
+    /// Stretches or pauses background fetching by `policy` instead of
+    /// `[fetch] conserve`'s.
     pub fn set_fetch_policy(&mut self, policy: Arc<dyn Policy>) {
-        self.background_fetch.policy = policy;
+        self.background_fetch.policy = Some(policy);
     }
 
     /// On a tick: starts a check when one is due, unless one is running
@@ -67,7 +70,11 @@ impl App {
         }
         bg.running = true;
         let repo = self.repo.clone();
-        let policy = bg.policy.clone();
+        let policy: Arc<dyn Policy> = match &bg.policy {
+            Some(policy) => policy.clone(),
+            None if self.config.fetch.conserve => Arc::new(Conserve::system()),
+            None => Arc::new(AsConfigured),
+        };
         let store = Store::new(&bg.dir, self.repo.common_dir());
         self.ctx
             .spawn(move || Action::BackgroundFetched(bg_fetch::run(&repo, base, &*policy, &store, SystemTime::now())));

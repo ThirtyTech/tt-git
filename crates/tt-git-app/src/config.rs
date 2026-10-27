@@ -110,6 +110,9 @@ pub struct FetchConfig {
     /// Minutes between the fetches of every remote tt-git makes in the
     /// background (`git fetch --all --prune`); `0` turns them off.
     pub interval: u32,
+    /// Fetch less often on battery, and not at all in battery saver or
+    /// on a metered connection. Fetches the user starts always run.
+    pub conserve: bool,
 }
 
 impl FetchConfig {
@@ -121,7 +124,10 @@ impl FetchConfig {
 
 impl Default for FetchConfig {
     fn default() -> Self {
-        Self { interval: 5 }
+        Self {
+            interval: 5,
+            conserve: true,
+        }
     }
 }
 
@@ -575,6 +581,8 @@ mod tests {
             Some(std::time::Duration::from_secs(30 * 60))
         );
         assert_eq!(minutes("[fetch]\ninterval = 0"), None);
+        assert!(Config::default().fetch.conserve);
+        assert!(!Config::parse("[fetch]\nconserve = false").unwrap().fetch.conserve);
     }
 
     #[test]
