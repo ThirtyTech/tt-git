@@ -44,8 +44,8 @@ cd apps/web && tt-git --filter-to-cwd   # just this project's commits and files
 ## tt-git-gui
 
 ```sh
-tt-git-gui [PATH]... [--config FILE] [--no-plugins] [--filter-to-cwd | --no-filter-to-cwd]
-tt-git-gui --open-repository
+tt-git-gui [PATH]... [--config FILE] [--no-plugins] [--filter-to-cwd | --no-filter-to-cwd] [--new-instance]
+tt-git-gui --open-repository [--new-instance]
 ```
 
 Opens the [desktop app](/desktop/) on a repository. It takes the same
@@ -55,6 +55,13 @@ the [start window](/desktop/install/#the-start-window) instead of exiting.
 `--open-repository` opens the start window with the folder picker already
 showing, as the [jump list](/desktop/using/#jump-list)'s *Open repository…*
 does; it doesn't take a `PATH`.
+
+If the app is running already, `tt-git-gui` hands its folders (or the folder
+picker) to that copy and exits; see
+[One copy of the app](/desktop/using/#one-copy-of-the-app).
+`--new-instance` starts a separate copy instead. So do `--config`,
+`--no-plugins`, `--filter-to-cwd` and `--no-filter-to-cwd`, which the running
+copy can't apply.
 It logs to `<state>/logs/tt-git-gui.log`. It updates itself from its
 **Check for Updates…** menu item: see [Updating](/desktop/install/#updating).
 `tt-git update` updates only the terminal app.

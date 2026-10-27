@@ -216,6 +216,34 @@ macOS, so does **Open in tt-git** on a folder in Finder (see the macOS tab
 of [Download a release](/desktop/install/#download-a-release)).
 It goes to the tt-git that's running and starts one if none is.
 
+### One copy of the app
+
+The app runs one copy at a time. Start `tt-git-gui` again while it's open
+(from a terminal, the Start menu, the jump list, Explorer's **Open in
+tt-git** or the file manager's **Open With**) and the new copy hands its
+folders to the one that's running and exits. That copy opens each folder's
+repository in a window, or brings its window forward if it's open already.
+With no folder named, it opens the repository the command was started in,
+or brings the start window forward outside one. A folder that isn't in a
+repository shows why in the start window.
+
+To run a second copy anyway (to test something, say), start it with
+`--new-instance`. A copy started with `--config`, `--no-plugins`,
+`--filter-to-cwd` or `--no-filter-to-cwd` also runs on its own, since the
+running copy has its own config and plugins. Such a copy doesn't take hand-offs
+from later ones either. If the running copy doesn't answer within two
+seconds, the new one starts on its own too.
+
+The copies find each other through the
+[state folder](/configuration/#logs): `gui-handoff.lock` and a socket
+next to it (a named pipe on Windows). A copy with a different state
+folder (`TTGIT_STATE_DIR`) is a separate app as far as this goes.
+
+On Windows the window that's brought forward takes the focus. On Wayland
+the compositor may leave it behind (GNOME says the app is ready instead):
+it gives the focus to the process that was started, and the desktop app
+can't pass that on to the running copy yet.
+
 [Opening a worktree](/git/worktrees/#opening-a-worktree) from the Worktrees
 tab, or [checking out a branch another worktree has](/git/worktrees/#checking-out-a-branch-another-worktree-has), replaces the window, as it replaces the screen in the terminal app: a
 window on the worktree opens and this one closes.
@@ -233,7 +261,8 @@ The desktop app keeps a small file, `gui.json`, in the
   [start window](/desktop/install/#the-start-window).
 
 Two more things live in the state folder, for
-[updating](/desktop/install/#updating): `gui-update.json`, when the app last
+[updating](/desktop/install/#updating) (and `gui-handoff.lock`, for
+[one copy of the app](#one-copy-of-the-app)): `gui-update.json`, when the app last
 looked for a new release, and the `gui-instances` folder, where each running
 copy of the app notes itself so an update can restart them all.
 
@@ -249,7 +278,8 @@ menu, for its jump list:
   [start window](/desktop/install/#the-start-window) lists them. Each shows
   its folder's name (with its parent folder's when two have the same name)
   and the whole path when you rest the pointer on it. Click one to open it
-  in a new copy of tt-git. Folders that no longer exist are left out.
+  in the copy that's running (see [One copy of the app](#one-copy-of-the-app)),
+  or start tt-git on it. Folders that no longer exist are left out.
 - **Open repository…**, under Tasks: starts tt-git with the folder picker
   showing (`tt-git-gui --open-repository`). Cancel it and the start window
   stays open.
