@@ -95,7 +95,7 @@ jobs:
             cp "target/${{ matrix.target }}/release/tt-git" "$name"/
             tar -czf "$name.tar.gz" "$name"
           fi
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.name }}
           # Not tt-git-*.*: the dots in the version would match the staging
@@ -199,7 +199,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "couldn't install Inno Setup" }
           ./crates/tt-git-gui/packaging/windows/package.ps1 `
             "target/${{ matrix.target }}/release" $env:GITHUB_REF_NAME "${{ matrix.name }}"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: gui-${{ matrix.name }}
           path: |
@@ -223,7 +223,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

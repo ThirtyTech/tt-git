@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: plugins/azure-devops/go.mod
       - run: test -z "$(gofmt -l .)" || { gofmt -l .; exit 1; }
@@ -45,7 +45,7 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version-file: plugins/azure-devops/go.mod
       - name: Tag matches the manifest version
