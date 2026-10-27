@@ -492,7 +492,7 @@ impl App {
             items.push(builtin(Command::WindowStyle, Command::WindowStyle.label()));
         }
         if self.notifies() {
-            items.push(builtin(Command::Notifications, Command::Notifications.label()));
+            items.extend(super::ALERT_COMMANDS.iter().map(|c| builtin(*c, c.label())));
         }
         items
     }

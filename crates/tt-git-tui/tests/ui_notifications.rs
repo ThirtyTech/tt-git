@@ -1,7 +1,8 @@
 //! The notifications picker is the desktop app's: the TUI leaves it out of
 //! the palette, and running the command only says so. A front end that
 //! notifies offers it, and each entry flips a setting and saves it to
-//! config.toml, keeping what else is there.
+//! config.toml, keeping what else is there. The last sends a test
+//! notification, as the "test notification" command does.
 
 use tt_git_app::config::Alert;
 use tt_git_testkit::{Sandbox, TestDriver};
@@ -23,6 +24,38 @@ fn the_tui_leaves_notifications_out_of_the_palette() {
         t.app().notice(),
         Some("notifications are the desktop app's: the terminal has none")
     );
+
+    t.send(Action::Command(Command::TestNotification));
+    assert!(!t.app_mut().take_test_notification());
+    assert_eq!(
+        t.app().notice(),
+        Some("notifications are the desktop app's: the terminal has none")
+    );
+}
+
+#[test]
+fn the_picker_and_the_palette_send_a_test_notification() {
+    let sb = Sandbox::new();
+    let mut t = TestDriver::new(&sb);
+    t.app_mut().enable_notifications();
+
+    t.press(":").type_text("notifications").press("enter");
+    t.type_text("test notif").press("enter");
+    assert!(t.app().modal().is_none(), "the picker closes");
+    assert!(t.app_mut().take_test_notification());
+    assert!(!t.app_mut().take_test_notification(), "taken once");
+    assert_eq!(
+        t.app().notice(),
+        Some("sent a test notification: notifications are off, so real ones don't show")
+    );
+
+    let mut config = t.app().config().clone();
+    config.ui.notifications = true;
+    let mut t = TestDriver::with_config(config, &sb);
+    t.app_mut().enable_notifications();
+    t.press(":").type_text("test notification").press("enter");
+    assert!(t.app_mut().take_test_notification());
+    assert_eq!(t.app().notice(), Some("sent a test notification"));
 }
 
 #[test]
@@ -46,6 +79,7 @@ fn the_picker_flips_and_saves_each_setting() {
         "New commits on local branches and worktrees",
         "Conflicts: badge on the app icon",
         "on (notifications off)",
+        "Test notification",
     ] {
         assert!(screen.contains(line), "{line}: {screen}");
     }
