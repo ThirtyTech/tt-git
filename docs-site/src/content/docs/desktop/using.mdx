@@ -417,8 +417,9 @@ apply. The desktop knows the app when its launcher,
 the install script put it in place) or when tt-git runs in a sandbox such
 as Flatpak. Otherwise, as with the AppImage or a build from source, tt-git
 sends it straight to the desktop's notification service
-(`org.freedesktop.Notifications`), under the name *tt-git* but without
-tt-git's icon. A desktop with neither shows nothing.
+(`org.freedesktop.Notifications`), without tt-git's icon. GNOME then
+names it after the window's app id, *ThirtyTech.tt-git*, with a generic
+icon. A desktop with neither shows nothing.
 
 On macOS notifications come from tt-git.app, the app the
 [`.dmg`](/desktop/install/) installs, and land in Notification Center under
