@@ -261,8 +261,10 @@ items* setting allows, and none when that's off; *Open repository…* is
 always there.
 
 The jump list belongs to tt-git's AppUserModelID, `ThirtyTech.tt-git`, so
-whichever copy started last (the installed one, the zip, or a build from
-source) writes it, and its entries start that copy.
+whichever copy started last (the installed one, the zip, or a release build
+from source) writes it, and its entries start that copy. A debug build
+(`cargo run -p tt-git-gui`) runs as `ThirtyTech.tt-git.dev` instead, with a
+taskbar button and jump list of its own.
 
 On Linux, right-click tt-git in the dock or the app launcher for
 **Open repository…**, which does the same. It comes from `ThirtyTech.tt-git.desktop`,
@@ -408,7 +410,9 @@ large one each toast carries, and `notification-badge-<hash>.png`, a
 32-pixel one it registers under `HKCU\Software\Classes\AppUserModelId\ThirtyTech.tt-git`
 with its name. So a copy that wasn't installed (the zip, or a build from
 source) shows both icons too. Uninstalling removes the key; the icon files
-stay with your settings.
+stay with your settings. A debug build sends its toasts as
+`ThirtyTech.tt-git.dev` and registers that key instead, so it leaves the
+installed tt-git's alone.
 
 On Linux the notification comes from the desktop, under *tt-git*. When
 the desktop knows the app, tt-git sends it through the desktop portal
@@ -450,6 +454,11 @@ taskbar button, for each of them you [leave on](#turning-them-on-and-off):
 Only one shows at a time: red over amber over blue. A screen reader says
 what it means, such as *3 new commits*. The dot has a white ring, so it
 shows on a light taskbar and a dark one.
+
+Windows stacks tt-git's windows on one taskbar button, which shows the most
+pressing dot of them all. So a blue dot for new commits in one repository
+stays while you're in another's window, until you switch to the window they
+came in or close it.
 
 On Linux the dock has one icon for all of tt-git's windows and no colored
 dots, so it shows this instead:
