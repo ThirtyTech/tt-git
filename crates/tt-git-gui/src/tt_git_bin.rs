@@ -3,8 +3,10 @@
 //! Plugins call `$TTGIT_BIN_PATH <subcommand>` (`ui`, `api`, `events`,
 //! `status`…), which talk to the window's app through `TTGIT_SOCKET_PATH`.
 //! `tt-git-gui` has no subcommands of its own, so it points them at the
-//! TUI's `tt-git`: the one installed next to it, else the first on `PATH`.
-//! With neither, plugins get no `TTGIT_BIN_PATH`, as before.
+//! TUI's `tt-git`: the one installed with it (next to it, as the zip and the
+//! Linux and macOS packages have it, or in `bin` beside it, where the Windows
+//! installer puts it), else the first on `PATH`. With none, plugins get no
+//! `TTGIT_BIN_PATH`, as before.
 
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
@@ -12,7 +14,7 @@ use std::path::{Path, PathBuf};
 /// The binary's file name on this OS.
 pub const NAME: &str = if cfg!(windows) { "tt-git.exe" } else { "tt-git" };
 
-/// `tt-git` next to the running `tt-git-gui`, else on `PATH`.
+/// `tt-git` installed with the running `tt-git-gui`, else on `PATH`.
 pub fn find() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok();
     let found = find_in(
@@ -21,15 +23,19 @@ pub fn find() -> Option<PathBuf> {
     );
     match &found {
         Some(path) => tracing::debug!("plugins get TTGIT_BIN_PATH={}", path.display()),
-        None => tracing::info!("no {NAME} next to tt-git-gui or on PATH: plugins get no TTGIT_BIN_PATH"),
+        None => tracing::info!("no {NAME} beside tt-git-gui or on PATH: plugins get no TTGIT_BIN_PATH"),
     }
     found
 }
 
-/// [`NAME`] in `exe_dir`, else in the first directory of `path` (a `PATH`
-/// value) that has it.
+/// [`NAME`] in `exe_dir` or its `bin`, else in the first directory of
+/// `path` (a `PATH` value) that has it.
 pub fn find_in(exe_dir: Option<&Path>, path: Option<&OsStr>) -> Option<PathBuf> {
-    let beside = exe_dir.map(|d| d.join(NAME)).filter(|p| p.is_file());
+    let beside = exe_dir.and_then(|d| {
+        [d.join(NAME), d.join("bin").join(NAME)]
+            .into_iter()
+            .find(|p| p.is_file())
+    });
     beside.or_else(|| std::env::split_paths(path?).map(|d| d.join(NAME)).find(|p| p.is_file()))
 }
 
@@ -38,7 +44,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn prefers_the_binary_next_to_the_gui_then_path() {
+    fn prefers_the_binary_beside_the_gui_then_path() {
         let dir = tempfile::tempdir().unwrap();
         let (gui, on_path, empty) = (dir.path().join("gui"), dir.path().join("bin"), dir.path().join("empty"));
         for d in [&gui, &on_path, &empty] {
@@ -48,6 +54,10 @@ mod tests {
         let path = std::env::join_paths([&empty, &on_path]).unwrap();
 
         assert_eq!(find_in(Some(&gui), Some(&path)), Some(on_path.join(NAME)));
+        // The Windows installer's layout.
+        std::fs::create_dir(gui.join("bin")).unwrap();
+        std::fs::write(gui.join("bin").join(NAME), "").unwrap();
+        assert_eq!(find_in(Some(&gui), Some(&path)), Some(gui.join("bin").join(NAME)));
         std::fs::write(gui.join(NAME), "").unwrap();
         assert_eq!(find_in(Some(&gui), Some(&path)), Some(gui.join(NAME)));
         assert_eq!(find_in(Some(&empty), None), None);

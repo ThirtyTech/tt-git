@@ -28,10 +28,10 @@ pub enum UpdateError {
     )]
     CargoBuild(PathBuf),
     #[error(
-        "tt-git is part of the desktop app ({}); update the app from the release's download instead",
+        "tt-git is part of the desktop app ({}); update the desktop app instead",
         .0.display()
     )]
-    AppBundle(PathBuf),
+    DesktopApp(PathBuf),
     #[error("couldn't run {program}: {source}")]
     Spawn {
         program: &'static str,
@@ -54,9 +54,10 @@ fn exit_detail(code: Option<i32>) -> String {
 /// The folder to install into: the running binary's own, so the copy that
 /// is actually run gets replaced. Refuses a binary the script wouldn't
 /// replace (another name), a cargo build directory, so `cargo run` and
-/// tests never overwrite a build, and the copy inside the macOS app bundle
-/// (`tt-git.app/Contents/MacOS`), where replacing it would break the app's
-/// signature.
+/// tests never overwrite a build, and the copy the desktop app installed:
+/// inside the macOS app bundle (`tt-git.app/Contents/MacOS`), where
+/// replacing it would break the app's signature, or with the Windows
+/// installer's copy of the app, which would then be out of step with it.
 pub fn install_dir(exe: &Path) -> Result<PathBuf, UpdateError> {
     let named_tt_git = exe.file_stem().is_some_and(|s| s == "tt-git");
     let dir = exe.parent().unwrap_or(Path::new("."));
@@ -67,10 +68,18 @@ pub fn install_dir(exe: &Path) -> Result<PathBuf, UpdateError> {
     if dir.join(".fingerprint").is_dir() {
         return Err(UpdateError::CargoBuild(dir.to_path_buf()));
     }
-    if let Some(app) = app_bundle(dir) {
-        return Err(UpdateError::AppBundle(app.to_path_buf()));
+    if let Some(app) = app_bundle(dir).or_else(|| windows_installer(dir)) {
+        return Err(UpdateError::DesktopApp(app.to_path_buf()));
     }
     Ok(dir.to_path_buf())
+}
+
+/// The folder the desktop app's Windows installer installed into, if `dir`
+/// is its `bin` (or the folder itself, where earlier releases put `tt-git`).
+fn windows_installer(dir: &Path) -> Option<&Path> {
+    let installed = |d: &Path| d.join("unins000.exe").is_file() && d.join("tt-git-gui.exe").is_file();
+    let parent = dir.ends_with("bin").then(|| dir.parent()).flatten();
+    [Some(dir), parent].into_iter().flatten().find(|d| installed(d))
 }
 
 /// The `.app` bundle `dir` is the executables folder of, if it is one.
@@ -357,12 +366,29 @@ mod tests {
     fn refuses_the_copy_in_the_app_bundle() {
         let app = Path::new("/Applications/tt-git.app");
         let err = install_dir(&app.join("Contents/MacOS/tt-git")).unwrap_err();
-        assert!(matches!(&err, UpdateError::AppBundle(p) if p == app), "{err}");
+        assert!(matches!(&err, UpdateError::DesktopApp(p) if p == app), "{err}");
         assert!(err.to_string().contains("desktop app"), "{err}");
 
         // Only an .app's own Contents/MacOS.
         let dir = Path::new("/opt/Contents/MacOS");
         assert_eq!(install_dir(&dir.join("tt-git")).unwrap(), dir);
+    }
+
+    #[test]
+    fn refuses_the_copy_the_windows_installer_put_in() {
+        let dir = tempfile::tempdir().unwrap();
+        let (app, bin) = (dir.path().join("tt-git"), dir.path().join("tt-git/bin"));
+        std::fs::create_dir_all(&bin).unwrap();
+        // The install script's own folder, with no desktop app around it.
+        assert_eq!(install_dir(&bin.join("tt-git.exe")).unwrap(), bin);
+
+        std::fs::write(app.join("tt-git-gui.exe"), "").unwrap();
+        std::fs::write(app.join("unins000.exe"), "").unwrap();
+        let err = install_dir(&bin.join("tt-git.exe")).unwrap_err();
+        assert!(matches!(&err, UpdateError::DesktopApp(p) if *p == app), "{err}");
+        // Where earlier releases put it.
+        let err = install_dir(&app.join("tt-git.exe")).unwrap_err();
+        assert!(matches!(&err, UpdateError::DesktopApp(p) if *p == app), "{err}");
     }
 
     #[test]

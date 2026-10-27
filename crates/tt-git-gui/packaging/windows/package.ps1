@@ -11,8 +11,9 @@
 #   tt-git-gui-<tag>-<platform>-setup.exe  an installer, when Inno Setup's
 #                                          ISCC.exe is installed
 #
-# tt-git.exe sits next to tt-git-gui.exe, where the GUI looks for the binary
-# it gives plugins as TTGIT_BIN_PATH.
+# In the zip, tt-git.exe sits next to tt-git-gui.exe; the installer puts it
+# in bin beside it, the folder it adds to PATH. The GUI looks in both for the
+# binary it gives plugins as TTGIT_BIN_PATH.
 #
 # Authenticode signing, from the environment (the release workflow passes
 # its secrets):

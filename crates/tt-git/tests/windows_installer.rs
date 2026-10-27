@@ -35,6 +35,21 @@ impl Drop for Running {
 }
 
 fn install(sb: &Sandbox) {
+    let out = run_installer(sb, &sb.root().join("installed"));
+    assert!(
+        out.status.success(),
+        "installer failed:\n{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        std::fs::read(sb.root().join("installed/tt-git.exe")).unwrap(),
+        INSTALLED
+    );
+}
+
+/// Runs the installer into `dir`.
+fn run_installer(sb: &Sandbox, dir: &Path) -> std::process::Output {
     let script = sb.root().join("run-installer.ps1");
     // Exercise the real download/checksum/extract/install flow. The final PATH
     // registration is deliberately excluded so tests never edit the registry.
@@ -69,19 +84,26 @@ function Invoke-WebRequest($Uri, $OutFile, [switch]$UseBasicParsing) {
         .env_remove("PSModulePath") // Let Windows PowerShell find its own built-in modules.
         .env("FIXTURE_ROOT", sb.root())
         .env("TTGIT_VERSION", "v99.0.0")
-        .env("TTGIT_INSTALL_DIR", sb.root().join("installed"));
+        .env("TTGIT_INSTALL_DIR", dir);
     sb.apply_env(&mut cmd);
-    let out = cmd.output().expect("run Windows installer");
-    assert!(
-        out.status.success(),
-        "installer failed:\n{}{}",
-        String::from_utf8_lossy(&out.stdout),
-        String::from_utf8_lossy(&out.stderr)
-    );
-    assert_eq!(
-        std::fs::read(sb.root().join("installed/tt-git.exe")).unwrap(),
-        INSTALLED
-    );
+    cmd.output().expect("run Windows installer")
+}
+
+#[test]
+fn leaves_the_desktop_apps_copy_alone() {
+    let sb = Sandbox::without_repo();
+    let app = sb.root().join("tt-git");
+    let bin = app.join("bin");
+    std::fs::create_dir_all(&bin).unwrap();
+    for exe in ["tt-git-gui.exe", "unins000.exe", "bin/tt-git.exe"] {
+        std::fs::write(app.join(exe), b"desktop app").unwrap();
+    }
+
+    let out = run_installer(&sb, &bin);
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert!(!out.status.success(), "installed over the desktop app's tt-git");
+    assert!(stdout.contains("the desktop app installed tt-git"), "{stdout}");
+    assert_eq!(std::fs::read(bin.join("tt-git.exe")).unwrap(), b"desktop app");
 }
 
 #[test]

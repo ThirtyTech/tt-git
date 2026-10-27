@@ -18,6 +18,13 @@ function Fail($msg) {
     throw $msg
 }
 
+# The desktop app's installer puts its own tt-git.exe in bin, and on PATH.
+# It updates with the app, so leave it alone.
+$appDir = Split-Path $installDir
+if ($appDir -and (Test-Path -LiteralPath (Join-Path $appDir 'unins000.exe')) -and (Test-Path -LiteralPath (Join-Path $appDir 'tt-git-gui.exe'))) {
+    Fail "the desktop app installed tt-git in $installDir; it updates with the app (tt-git > Check for Updates...)"
+}
+
 # The OS architecture, not the process's: x64 PowerShell on an ARM machine reports AMD64.
 $osArch = try {
     [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
