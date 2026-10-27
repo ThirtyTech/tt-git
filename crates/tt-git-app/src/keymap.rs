@@ -705,6 +705,7 @@ const DEFAULTS: &[(Context, Command, &[&str])] = &[
     (Context::Status, Command::Continue, &["C"]),
     (Context::Status, Command::Abort, &["X"]),
     (Context::Details, Command::OpenLink, &["o"]),
+    (Context::Details, Command::Copy, &["c"]),
     (Context::Details, Command::CloseDetails, &["esc", "space"]),
     (Context::Details, Command::ToggleFiles, &["}"]),
     (Context::Details, Command::NewerCommit, &["["]),

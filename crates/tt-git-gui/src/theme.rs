@@ -194,6 +194,12 @@ impl GuiTheme {
         self.role(role).color.unwrap_or(self.foreground)
     }
 
+    /// Behind text picked out with the mouse: the focus color, see-through
+    /// so the text's own colors and a diff line's tint show.
+    pub fn text_selection(&self) -> Hsla {
+        self.fg(StyleRole::BorderFocused).opacity(0.35)
+    }
+
     /// The background of `role`, if it has one.
     pub fn bg(&self, role: StyleRole) -> Option<Hsla> {
         self.role(role).background_color

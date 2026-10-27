@@ -194,6 +194,25 @@ impl Shell {
         if !self.focus.is_focused(window) {
             return;
         }
+        // ctrl+c (cmd+c on macOS) copies text selected with the mouse
+        // rather than quitting, as in a terminal.
+        let keystroke = &event.keystroke;
+        if keystroke.key == "c"
+            && keystroke.modifiers.secondary()
+            && !keystroke.modifiers.shift
+            && !keystroke.modifiers.alt
+            && self
+                .model
+                .read(cx)
+                .app()
+                .details()
+                .selection()
+                .is_some_and(|s| !s.is_empty())
+        {
+            cx.stop_propagation();
+            self.model.update(cx, |m, cx| m.send(Action::CopySelection, cx));
+            return;
+        }
         if let Some(key) = keys::key_combo(&event.keystroke, event.prefer_character_input) {
             cx.stop_propagation();
             self.model.update(cx, |m, cx| m.key(key, cx));

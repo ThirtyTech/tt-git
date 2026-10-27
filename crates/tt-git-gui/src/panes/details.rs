@@ -153,7 +153,9 @@ fn files_view(ui: &Ui, pane: &mut DetailsPane, focused: bool, layout: FilesLayou
 
 #[cfg(test)]
 mod tests {
-    use gpui::{Bounds, Modifiers, Pixels, ScrollDelta, ScrollWheelEvent, TestAppContext, TouchPhase, point, px};
+    use gpui::{
+        Bounds, Modifiers, MouseButton, Pixels, ScrollDelta, ScrollWheelEvent, TestAppContext, TouchPhase, point, px,
+    };
     use tt_git_app::panes::DetailsSubject;
     use tt_git_testkit::Sandbox;
 
@@ -174,9 +176,11 @@ mod tests {
     }
 
     fn bounds(gui: &Gui, id: &str) -> Bounds<Pixels> {
-        gui.shell
-            .read_with(&gui.cx, |shell, _| shell.ui().measures.get(id))
-            .unwrap_or_else(|| panic!("{id} was drawn"))
+        gui.shell.read_with(&gui.cx, |shell, _| bounds_of(shell.ui(), id))
+    }
+
+    fn bounds_of(ui: &Ui, id: &str) -> Bounds<Pixels> {
+        ui.measures.get(id).unwrap_or_else(|| panic!("{id} was drawn"))
     }
 
     fn texts(gui: &mut Gui) -> Vec<String> {
@@ -304,6 +308,64 @@ mod tests {
         });
         assert!(found, "a match on screen");
         assert!(gui.read(|app| app.details().frame_title()).contains("/line 1"));
+    }
+
+    #[gpui::test]
+    fn dragging_selects_text_and_ctrl_c_copies_it(cx: &mut TestAppContext) {
+        let sb = sandbox();
+        let mut gui = Gui::open(cx, &sb);
+        gui.press("space");
+        gui.press("tab");
+        if gui.read(|app| app.details().commit_files().is_some()) {
+            gui.press("}");
+        }
+        let shown = texts(&mut gui);
+        assert!(shown[0].starts_with("commit "), "{shown:#?}");
+        let (text, cell, line) = gui.shell.read_with(&gui.cx, |shell, _| {
+            let ui = shell.ui();
+            (bounds_of(ui, diff::TEXT), ui.font.cell_width, ui.font.line_height)
+        });
+        let at = |row: f32, col: f32| point(text.left() + cell * col, text.top() + line * (row + 0.5));
+
+        // From the start of the first line to the end of "commit", then on
+        // to the second line's first two columns.
+        gui.cx
+            .simulate_mouse_down(at(0., 0.), MouseButton::Left, Modifiers::none());
+        gui.cx
+            .simulate_mouse_move(at(0., 6.), MouseButton::Left, Modifiers::none());
+        gui.wait_idle();
+        assert_eq!(gui.read(|app| app.focus()), PaneId::Details);
+        let picked = |gui: &Gui| gui.read(|app| app.details().selection().map(|s| s.text()));
+        assert_eq!(picked(&gui).as_deref(), Some("commit"));
+        gui.cx
+            .simulate_mouse_move(at(1., 2.), MouseButton::Left, Modifiers::none());
+        gui.cx
+            .simulate_mouse_up(at(1., 2.), MouseButton::Left, Modifiers::none());
+        gui.wait_idle();
+        let second: String = shown[1].chars().take(2).collect();
+        assert_eq!(picked(&gui), Some(format!("{}\n{second}", shown[0])));
+        // Moving without the button down leaves it as it is.
+        gui.cx.simulate_mouse_move(at(0., 3.), None, Modifiers::none());
+        gui.wait_idle();
+        assert_eq!(picked(&gui), Some(format!("{}\n{second}", shown[0])));
+
+        // ctrl+c (cmd+c on macOS) copies it rather than quitting.
+        gui.keystrokes(if cfg!(target_os = "macos") { "cmd-c" } else { "ctrl-c" });
+        assert!(gui.is_open(), "still open");
+        let copied = gui.cx.read_from_clipboard().and_then(|c| c.text());
+        assert_eq!(copied, Some(format!("{}\n{second}", shown[0])));
+        assert_eq!(
+            gui.read(|app| app.notice().map(str::to_string)).as_deref(),
+            Some("copied 2 lines")
+        );
+
+        // A click without a drag clears it, and c copies all of the text.
+        gui.cx.simulate_click(at(0., 3.), Modifiers::none());
+        gui.wait_idle();
+        assert_eq!(picked(&gui), None);
+        gui.press("c");
+        let all = gui.read(|app| app.details().lines().join("\n"));
+        assert_eq!(gui.cx.read_from_clipboard().and_then(|c| c.text()), Some(all));
     }
 
     #[gpui::test]

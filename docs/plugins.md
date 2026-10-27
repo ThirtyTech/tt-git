@@ -273,4 +273,5 @@ Plugin state lives in `<state>/plugins/<id>/`.
 
 Run `tt-git plugin link .` from your plugin directory, start `tt-git`, and
 open *Plugin logs* from the palette to see every run's exit code, stdout
-and stderr. `tt-git events` shows the events your hooks would receive.
+and stderr (`c` copies them; in the desktop app, clicking a plugin's
+failure in the help bar opens them). `tt-git events` shows the events your hooks would receive.

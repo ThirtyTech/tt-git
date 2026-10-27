@@ -195,6 +195,7 @@ command palette, which lists built-in commands and plugin actions.
 | | `b` | blame the file in view as of that commit, at the line at the top of the diff |
 | | `/` | search the text shown with a regex, jumping as you type; `n` / `N` next / previous match, on through the files in the files view |
 | | `A` | ask an AI agent about the hunk at the top of the diff |
+| | `c` | copy the text shown (in the desktop app, the text selected by dragging; `ctrl+c` / `cmd+c` copies it too) |
 | | `esc` `space` | close details |
 | staging | `j` / `k` | next / previous hunk (or changed line) |
 | | `space` | stage the selection, or unstage it on the staged side |

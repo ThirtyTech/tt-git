@@ -8,6 +8,7 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use gpui::{App, Bounds, IntoElement, Pixels, SharedString, Styled, WeakEntity, canvas};
+use tt_git_app::Action;
 use tt_git_app::mouse::MouseInput;
 
 use crate::font::{Fit, MonoFont};
@@ -68,6 +69,20 @@ impl Ui {
     pub fn send_mouse(&self, input: MouseInput, cx: &mut App) {
         if let Some(model) = self.model.upgrade() {
             model.update(cx, |model, cx| model.mouse(input, cx));
+        }
+    }
+
+    /// Whether a selection is being dragged out in the details pane's text.
+    pub fn selecting(&self, cx: &App) -> bool {
+        self.model
+            .upgrade()
+            .is_some_and(|model| model.read(cx).app().details().selecting())
+    }
+
+    /// Sends the app an action, as if a job had sent it.
+    pub fn send(&self, action: Action, cx: &mut App) {
+        if let Some(model) = self.model.upgrade() {
+            model.update(cx, |model, cx| model.send(action, cx));
         }
     }
 }

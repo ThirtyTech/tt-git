@@ -286,7 +286,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `agent` | `A` | details, stage (the graph's is in the row above) |
 | `open_commit`, `toggle_details`, `blame_back`, `blame_forward`, `blame_older`, `blame_newer`, `search`, `search_next`, `search_prev`, `toggle_dates`, `close_details` | `enter`, `space`, `[`, `]`, `{`, `}`, `/`, `n`, `N`, `t`, `esc` | blame |
 | `go_to_line` | `ctrl+g` | blame |
-| `copy` (commit hash / branch name / absolute worktree path) | `c` | graph, branches, worktrees, blame |
+| `copy` (commit hash / branch name / absolute worktree path / the details text) | `c` | graph, branches, worktrees, blame, details |
 | `plugin_logs` | (palette only) | global |
 | `theme` | (palette only) | global |
 | `self_update` | (palette only) | global |

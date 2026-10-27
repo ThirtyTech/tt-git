@@ -4,6 +4,7 @@ pub mod blame;
 pub mod branches;
 pub mod details;
 pub mod graph;
+pub mod selection;
 pub mod stage;
 pub mod status;
 
@@ -11,6 +12,7 @@ pub use blame::BlameView;
 pub use branches::{BranchTab, BranchesPane, DECORATION_WIDTH};
 pub use details::{DetailsPane, DetailsSubject, SavedDetails};
 pub use graph::{BranchFocus, DateStyle, GraphPane, GraphScope, LabelKind, LoadToken, RefLabel, build_labels};
+pub use selection::{TextPos, TextSelection};
 pub use stage::{StageSideId, StageView};
 pub use status::StatusPane;
 

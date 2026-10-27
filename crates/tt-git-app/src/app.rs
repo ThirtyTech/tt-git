@@ -358,6 +358,9 @@ pub struct App {
     help_tab: HelpTab,
     error: Option<String>,
     notice: Option<String>,
+    /// The notice a plugin's failure put up, which opens the plugin logs
+    /// when clicked while it's showing.
+    plugin_notice: Option<String>,
     /// Text waiting for the runner to put on the clipboard.
     clipboard: Option<String>,
     /// An editor waiting for the runner to start.
@@ -493,6 +496,7 @@ impl App {
             help_tab: HelpTab::Keys,
             error: None,
             notice: None,
+            plugin_notice: None,
             clipboard: None,
             tips: None,
             new_commits: Pending::default(),
@@ -723,6 +727,12 @@ impl App {
 
     pub fn notice(&self) -> Option<&str> {
         self.notice.as_deref()
+    }
+
+    /// Whether clicking the notice does something: it's a plugin's failure,
+    /// and opens the plugin logs.
+    pub fn notice_clickable(&self) -> bool {
+        self.notice.is_some() && self.notice == self.plugin_notice
     }
 
     /// Whether a new frame could differ from the last one, clearing the flag.
@@ -1251,8 +1261,28 @@ impl App {
             Action::Notify(msg) => self.notice = Some(msg),
             Action::Error(msg) => self.error = Some(msg),
             Action::Copy(text) => {
-                self.notice = Some(format!("copied {text}"));
+                self.notice = Some(match text.lines().count() {
+                    0 | 1 => format!("copied {text}"),
+                    n => format!("copied {n} lines"),
+                });
                 self.clipboard = Some(text);
+            }
+            Action::SelectText { row, col, extend } => {
+                if !extend {
+                    self.focus = PaneId::Details;
+                }
+                self.details.select_text(row, col, extend);
+            }
+            Action::SelectEnd => self.details.end_selection(),
+            Action::CopySelection => {
+                if let Some(text) = self.details.selection().filter(|s| !s.is_empty()).map(|s| s.text()) {
+                    self.update(Action::Copy(text));
+                }
+            }
+            Action::NoticeClicked => {
+                if self.notice_clickable() {
+                    self.show_plugin_logs();
+                }
             }
             Action::Refresh => {
                 self.load_refs();

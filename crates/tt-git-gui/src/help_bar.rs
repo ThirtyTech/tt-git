@@ -2,12 +2,16 @@
 //! global ones, and on the right the notice and any git operation running.
 //! It fits them to its width in columns as the TUI's does. The native style
 //! draws it as a status bar: each key on a chip, the labels in the UI font.
+//! A plugin's failure in the notice opens the plugin logs when clicked.
 
-use gpui::{AnyElement, Div, FontWeight, InteractiveElement, IntoElement, ParentElement, Styled, div, rems};
-use tt_git_app::App;
+use gpui::{
+    AnyElement, Div, FontWeight, InteractiveElement, IntoElement, MouseButton, ParentElement, Stateful, Styled, div,
+    prelude::FluentBuilder, rems,
+};
 use tt_git_app::app::StatusLook;
 use tt_git_app::view::{StyleRole, TextSpan};
 use tt_git_app::widgets::truncate;
+use tt_git_app::{Action, App};
 use unicode_width::UnicodeWidthStr;
 
 use crate::look;
@@ -20,8 +24,9 @@ pub const ID: &str = "help-bar";
 pub fn render(app: &App, ui: &Ui) -> AnyElement {
     let width = ui.fit(ID).cols;
     let (keys, status) = spans(app, width);
+    let status = status_slot(ui, &status, app.notice_clickable());
     if ui.native() {
-        return status_bar(ui, &keys, &status);
+        return status_bar(ui, &keys, status);
     }
     div()
         .id(ID)
@@ -41,17 +46,29 @@ pub fn render(app: &App, ui: &Ui) -> AnyElement {
                 .overflow_hidden()
                 .child(StyledLine::new(&ui.theme, &keys, None).element()),
         )
-        .child(
-            div()
-                .flex_none()
-                .child(StyledLine::new(&ui.theme, &status, None).element()),
-        )
+        .child(status)
         .into_any_element()
+}
+
+/// The notice and what's running; clicked, a plugin's failure opens the
+/// plugin logs, where the whole of it is to read and copy.
+fn status_slot(ui: &Ui, status: &[TextSpan], clickable: bool) -> Stateful<Div> {
+    let ui = ui.clone();
+    div()
+        .id("help-bar:status")
+        .flex_none()
+        .child(StyledLine::new(&ui.theme, status, None).element())
+        .when(clickable, |d| {
+            d.cursor_pointer().on_mouse_down(MouseButton::Left, move |_, _, cx| {
+                cx.stop_propagation();
+                ui.send(Action::NoticeClicked, cx);
+            })
+        })
 }
 
 /// The native help bar: the hints as key chips and labels, the status on
 /// the right.
-fn status_bar(ui: &Ui, keys: &[TextSpan], status: &[TextSpan]) -> AnyElement {
+fn status_bar(ui: &Ui, keys: &[TextSpan], status: Stateful<Div>) -> AnyElement {
     let theme = &ui.theme;
     let mut items: Vec<Div> = Vec::new();
     let mut key = None;
@@ -97,11 +114,7 @@ fn status_bar(ui: &Ui, keys: &[TextSpan], status: &[TextSpan]) -> AnyElement {
                 .gap(rems(1.))
                 .children(items),
         )
-        .child(
-            div()
-                .flex_none()
-                .child(StyledLine::new(&ui.theme, status, None).element()),
-        )
+        .child(status)
         .into_any_element()
 }
 
