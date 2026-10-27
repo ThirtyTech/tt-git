@@ -17,8 +17,9 @@
 //! On Linux they go through the desktop's Notification portal instead when
 //! the desktop knows the app (`portal.rs`, which [`install_portal`] starts).
 //!
-//! On Windows the toasts show the app icon that [`install_icon`] registers
-//! for the app id (`icon.rs`).
+//! On Windows tt-git sends the toasts itself (`toast.rs`), so they carry the
+//! app icon as their large logo, and registers a small copy as the app id's
+//! badge (`icon.rs`). [`install_toasts`] starts both.
 //!
 //! On macOS they go through `UNUserNotificationCenter`, which only works in
 //! an app bundle: GPUI leaves them off when the process has no bundle
@@ -49,11 +50,13 @@ pub const PULL: &str = "pull";
 const TAG_PREFIX: &str = "new-commits:";
 const TEST_TAG_PREFIX: &str = "test-notification:";
 
-// Only Windows registers it; the rest is shared so it is tested everywhere.
+// Only Windows uses them; the rest is shared so it is tested everywhere.
 #[cfg_attr(not(windows), allow(dead_code))]
 mod icon;
 #[cfg(target_os = "linux")]
 mod portal;
+#[cfg_attr(not(windows), allow(dead_code))]
+mod toast;
 
 /// Starts handling clicks on the notifications. Call once, from
 /// [`crate::init`].
@@ -71,13 +74,16 @@ pub fn install_portal(cx: &mut App) {
     let _ = cx;
 }
 
-/// Windows: gives the toasts the app icon, kept in `state_dir`. Elsewhere it
-/// does nothing. Only `main` calls it, so tests never touch the registry.
-pub fn install_icon(state_dir: &Path) {
+/// Windows: sends the toasts from now on, with the app icon (kept in
+/// `state_dir`) as their logo and badge. Elsewhere it does nothing. Only
+/// `main` calls it, so tests never touch the registry.
+pub fn install_toasts(state_dir: &Path, cx: &mut App) {
     #[cfg(windows)]
-    icon::install(state_dir);
+    if let Some(logo) = icon::install(state_dir) {
+        toast::install(logo, cx);
+    }
     #[cfg(not(windows))]
-    let _ = state_dir;
+    let _ = (state_dir, cx);
 }
 
 /// Asks the OS for leave to notify, once per process: call when a window
@@ -166,12 +172,16 @@ pub fn test(model: &Entity<AppModel>, cx: &mut App) {
     show(test_notification(&repo.name(), repo.root()), cx);
 }
 
-/// Sends `notification`: through the portal on Linux when it's in use, else
-/// GPUI.
+/// Sends `notification`: through the portal on Linux or tt-git's toasts on
+/// Windows when they're in use, else GPUI.
 fn show(notification: SystemNotification, cx: &mut App) {
     tracing::debug!("notifying: {}", notification.body);
     #[cfg(target_os = "linux")]
     if portal::show(&notification, cx) {
+        return;
+    }
+    #[cfg(windows)]
+    if toast::show(&notification, cx) {
         return;
     }
     cx.show_system_notification(notification);

@@ -43,6 +43,8 @@ raw-window-handle = "0.6"
 tt-git-win.workspace = true
 # The notifications' icon (notify/icon.rs): the version GPUI already uses.
 windows-registry = "0.6"
+# The toasts' clicks, from Windows' thread to the main one (notify/toast.rs).
+futures.workspace = true
 
 # The launcher's badge and progress (launcher_entry.rs), over the session
 # bus. GPUI already builds zbus for the desktop portals.

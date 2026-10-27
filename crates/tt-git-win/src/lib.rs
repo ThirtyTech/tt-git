@@ -19,3 +19,5 @@ pub mod quick_look;
 pub mod services;
 #[cfg(windows)]
 pub mod taskbar;
+#[cfg(windows)]
+pub mod toast;
