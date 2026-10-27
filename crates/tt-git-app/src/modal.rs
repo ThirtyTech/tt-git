@@ -7,6 +7,7 @@ use tt_git_core::{
 };
 
 use crate::agent::{AgentAction, AgentHunk, AgentRequest};
+use crate::config::Alert;
 use crate::filter::FilterPanel;
 use crate::keymap::{Command, KeyCode, KeyCombo, KeyModifiers};
 
@@ -447,6 +448,9 @@ pub enum PaletteTarget {
     Theme(String),
     /// A font family, by name; `None` for the default.
     Font(Option<String>),
+    /// A notifications setting to flip: an alert, or `None` for all of
+    /// them (`[ui] notifications`).
+    Alert(Option<Alert>),
     /// Another dialog, such as a confirm before something that can't be
     /// taken back.
     Modal(Box<Modal>),
@@ -595,6 +599,8 @@ pub enum ModalOutcome {
     Theme(String),
     /// Keep this font (`None` for the default).
     Font(Option<String>),
+    /// Flip this notifications setting, leaving the picker open.
+    Alert(Option<Alert>),
     /// Close this modal and open that one.
     Next(Box<Modal>),
 }
@@ -742,6 +748,7 @@ impl Modal {
                                 PaletteTarget::Op(op) => ModalOutcome::Run(op.clone()),
                                 PaletteTarget::Theme(name) => ModalOutcome::Theme(name.clone()),
                                 PaletteTarget::Font(family) => ModalOutcome::Font(family.clone()),
+                                PaletteTarget::Alert(alert) => ModalOutcome::Alert(*alert),
                                 PaletteTarget::Modal(modal) => ModalOutcome::Next(modal.clone()),
                             },
                             None => ModalOutcome::Open,

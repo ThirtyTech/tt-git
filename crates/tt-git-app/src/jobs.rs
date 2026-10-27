@@ -231,6 +231,16 @@ impl Reload {
         self.job.started(generation, done);
     }
 
+    /// The newest load asked for.
+    pub fn requested(&self) -> u64 {
+        self.requested
+    }
+
+    /// The newest load applied.
+    pub fn applied(&self) -> u64 {
+        self.applied
+    }
+
     /// Load `generation` reported back. Returns whether to apply its result
     /// (it's newer than any applied), and the waiting load to start next.
     pub fn finished(&mut self, generation: u64) -> (bool, Option<u64>) {

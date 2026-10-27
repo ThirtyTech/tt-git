@@ -7,7 +7,9 @@
 //! repository needs a hand: [`App::take_repo_alert`].
 
 use super::{App, TICKS_PER_SEC};
-use tt_git_core::InProgress;
+use tt_git_core::{InProgress, Status};
+
+use crate::config::Alert;
 
 use crate::modal::GitOp;
 
@@ -37,6 +39,21 @@ pub enum RepoAlert {
     Stopped(InProgress),
     /// Files with conflicts.
     Conflicts,
+}
+
+/// What `status` warns of, with the conflicts and stopped alerts on as
+/// given. A conflicted rebase with only `stopped` on shows as stopped.
+fn repo_alert(status: Option<&Status>, conflicts: bool, stopped: bool) -> RepoAlert {
+    let Some(st) = status else {
+        return RepoAlert::None;
+    };
+    if conflicts && st.entries.iter().any(|e| e.is_conflicted()) {
+        return RepoAlert::Conflicts;
+    }
+    match st.in_progress {
+        Some(op) if stopped => RepoAlert::Stopped(op),
+        _ => RepoAlert::None,
+    }
 }
 
 /// What the taskbar was last told, and when a network job last failed.
@@ -89,15 +106,16 @@ impl App {
     }
 
     /// The repository's alert if it changed since the last call: conflicts,
-    /// or an operation stopped part way, as the last status load found.
-    /// Always [`RepoAlert::None`] with `[ui] notifications` off.
+    /// or an operation stopped part way, as the last status load found and
+    /// `[ui.alerts]` lets through. Always [`RepoAlert::None`] with
+    /// `[ui] notifications` off.
     pub fn take_repo_alert(&mut self) -> Option<RepoAlert> {
-        let status = self.status.status().filter(|_| self.config.ui.notifications);
-        let now = match status {
-            Some(st) if st.entries.iter().any(|e| e.is_conflicted()) => RepoAlert::Conflicts,
-            Some(st) => st.in_progress.map_or(RepoAlert::None, RepoAlert::Stopped),
-            None => RepoAlert::None,
-        };
+        let ui = &self.config.ui;
+        let now = repo_alert(
+            self.status.status(),
+            ui.alerts_on(Alert::Conflicts),
+            ui.alerts_on(Alert::Stopped),
+        );
         if now == self.jobs.alert {
             return None;
         }
@@ -136,5 +154,25 @@ mod tests {
             remote: None,
         }));
         assert!(!is_network(&GitOp::Stage(vec!["a.txt".into()])));
+    }
+
+    #[test]
+    fn each_repo_alert_can_be_turned_off() {
+        use tt_git_core::{FileState, StatusEntry};
+        let status = Status {
+            entries: vec![StatusEntry {
+                path: "a.txt".into(),
+                orig_path: None,
+                index: FileState::Unmerged,
+                worktree: FileState::Unmerged,
+            }],
+            in_progress: Some(InProgress::Rebase),
+            ..Status::default()
+        };
+        let st = Some(&status);
+        assert_eq!(repo_alert(st, true, true), RepoAlert::Conflicts);
+        assert_eq!(repo_alert(st, false, true), RepoAlert::Stopped(InProgress::Rebase));
+        assert_eq!(repo_alert(st, false, false), RepoAlert::None);
+        assert_eq!(repo_alert(None, true, true), RepoAlert::None);
     }
 }

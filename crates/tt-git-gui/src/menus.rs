@@ -109,7 +109,13 @@ const VIEW: &[&[Command]] = &[
 
 /// The app's settings and tools, in the app menu between About and Quit.
 /// "Check for Updates…" stands for [`Command::SelfUpdate`].
-const APP: &[Command] = &[Command::Theme, Command::Font, Command::WindowStyle, Command::PluginLogs];
+const APP: &[Command] = &[
+    Command::Theme,
+    Command::Font,
+    Command::WindowStyle,
+    Command::Notifications,
+    Command::PluginLogs,
+];
 
 /// The menus for `app` as it is now: the app menu, Repository, View, and a
 /// menu named after the focused pane listing its commands (the help

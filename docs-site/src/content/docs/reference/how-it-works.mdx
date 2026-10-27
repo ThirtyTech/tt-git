@@ -158,13 +158,17 @@ refresh is 6 to 8 git processes however many branches and tags you have.
 ### New commits
 
 With [notifications](/desktop/using/#notifications) on, the desktop app
-compares each refresh's remote-tracking branches with the last one's. For
-each one that moved or is new, it counts the commits no ref had before:
-`git rev-list --count --ignore-missing --stdin`, given the branch's new tip
-and `^<tip>` for every ref's tip at the last refresh. Your own pushed
-commits and ones a local branch already had count none. A refresh where no
-remote-tracking branch moved runs nothing more. With notifications off it
-runs nothing.
+compares each refresh's branches with the last one's: the remote-tracking
+branches and the local ones, as [`[ui.alerts]`](/configuration/#uialerts)
+picks. While the window runs a git operation of its own, and for the first
+refresh after it, the branch checked out in its worktree is left out. For
+each branch that moved or is new, local ones first, it counts the commits
+no ref had before: `git rev-list --count --ignore-missing --stdin`, given
+the branch's new tip and `^<tip>` for every ref's tip at the last refresh
+and every branch already counted, so a commit is counted once. Your own
+pushed commits and ones a local branch already had count none. A refresh
+where no branch moved runs nothing more. With notifications off, or both
+kinds of branch turned off, it runs nothing.
 
 ### Grouping and sorting
 

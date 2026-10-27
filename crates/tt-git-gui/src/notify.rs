@@ -1,7 +1,8 @@
-//! Desktop notifications (`[ui] notifications`, off by default): new
-//! commits a fetch or pull brought in, shown through GPUI's system
-//! notifications (a toast on Windows) while the repository's window isn't
-//! focused.
+//! Desktop notifications (`[ui] notifications`, off by default, and
+//! `[ui.alerts] popup`): new commits a fetch or pull brought in, or that
+//! were committed from outside the window (another worktree, an agent),
+//! shown through GPUI's system notifications (a toast on Windows) while the
+//! repository's window isn't focused.
 //!
 //! Each notification is tagged with its repository's root, so a newer one
 //! replaces the last, and a click on it (or its Open button) brings that
@@ -25,6 +26,7 @@ use gpui::{
     AnyWindowHandle, App, Entity, SystemNotification, SystemNotificationAction, SystemNotificationResponse, Window,
 };
 use tt_git_app::Action;
+use tt_git_app::app::AlertSettings;
 use tt_git_app::keymap::Command;
 use tt_git_app::new_commits::NewCommits;
 
@@ -69,6 +71,26 @@ pub fn ask_permission(cx: &mut App) {
     cx.set_global(Asked);
     #[cfg(target_os = "macos")]
     macos::ask_permission();
+}
+
+/// The notification settings last changed in a window, for every window
+/// to use (`Shell` watches it).
+pub struct UiAlerts(AlertSettings);
+
+impl gpui::Global for UiAlerts {}
+
+/// Hands `settings`, changed in one window, to every window, and asks
+/// leave to notify if they turned notifications on.
+pub fn share_settings(settings: AlertSettings, cx: &mut App) {
+    if settings.notifications {
+        ask_permission(cx);
+    }
+    cx.set_global(UiAlerts(settings));
+}
+
+/// The settings [`share_settings`] last handed out.
+pub fn shared_settings(cx: &App) -> Option<AlertSettings> {
+    cx.try_global::<UiAlerts>().map(|s| s.0)
 }
 
 /// [`ask_permission`] has asked.
@@ -178,6 +200,7 @@ fn model_of(window: AnyWindowHandle, cx: &mut App) -> Option<Entity<AppModel>> {
 mod tests {
     use gpui::TestAppContext;
     use tt_git_app::Config;
+    use tt_git_app::config::Alert;
     use tt_git_testkit::Sandbox;
 
     use super::*;
@@ -269,6 +292,71 @@ mod tests {
         assert!(!gui.cx.update(|_, cx| cx.has_global::<Asked>()));
     }
 
+    #[gpui::test]
+    fn the_popup_can_be_off_with_the_badge_on(cx: &mut TestAppContext) {
+        let sb = Sandbox::named("web");
+        sb.commit_file("a.txt", "1", "base");
+        sb.git(&["branch", "-q", "feature"]);
+        let wt = sb.root().join("feature-wt");
+        sb.git(&["worktree", "add", "-q", wt.to_str().unwrap(), "feature"]);
+        let mut config = Config::default();
+        config.ui.notifications = true;
+        config.ui.alerts.set(Alert::Popup, false);
+        let mut gui = Gui::with_config(cx, &sb, config);
+        gui.cx.deactivate_window();
+        std::fs::write(wt.join("b.txt"), "x").unwrap();
+        sb.git_in(&wt, &["add", "."]);
+        sb.git_in(&wt, &["commit", "-q", "-m", "agent"]);
+        gui.model.update(&mut gui.cx, |m, cx| m.send(Action::Refresh, cx));
+        gui.wait_idle();
+        assert!(gui.cx.shown_system_notifications().is_empty());
+        let badge = gui.shell.read_with(&gui.cx, |shell, _| shell.badge());
+        assert_eq!(badge, Some(crate::taskbar::Badge::NewCommits(1)));
+    }
+
+    #[gpui::test]
+    fn a_commit_in_another_worktree_notifies(cx: &mut TestAppContext) {
+        let sb = Sandbox::named("web");
+        sb.commit_file("a.txt", "1", "base");
+        sb.git(&["branch", "-q", "feature"]);
+        let wt = sb.root().join("feature-wt");
+        sb.git(&["worktree", "add", "-q", wt.to_str().unwrap(), "feature"]);
+        let mut config = Config::default();
+        config.ui.notifications = true;
+        config.ui.alerts.set(Alert::Badge, false);
+        cx.update(|cx| crate::app_id::set(cx));
+        let mut gui = Gui::with_config(cx, &sb, config);
+        gui.cx.deactivate_window();
+        std::fs::write(wt.join("b.txt"), "x").unwrap();
+        sb.git_in(&wt, &["add", "."]);
+        sb.git_in(&wt, &["commit", "-q", "-m", "agent"]);
+        gui.model.update(&mut gui.cx, |m, cx| m.send(Action::Refresh, cx));
+        gui.wait_idle();
+        let shown = gui.cx.delivered_system_notifications();
+        assert_eq!(shown.len(), 1, "{shown:?}");
+        assert_eq!(shown[0].body.as_ref(), "1 new commit on feature (worktree feature-wt)");
+        let actions: Vec<&str> = shown[0].actions.iter().map(|a| a.id.as_ref()).collect();
+        assert_eq!(actions, [OPEN]);
+        let badge = gui.shell.read_with(&gui.cx, |shell, _| shell.badge());
+        assert_eq!(badge, None, "the badge is off");
+    }
+
+    #[gpui::test]
+    fn turning_notifications_on_shares_them_and_asks_leave(cx: &mut TestAppContext) {
+        let sb = Sandbox::new();
+        sb.commit_file("a.txt", "1", "base");
+        let mut gui = Gui::with_config(cx, &sb, Config::default());
+        assert!(!gui.cx.update(|_, cx| cx.has_global::<Asked>()));
+        gui.model
+            .update(&mut gui.cx, |m, cx| m.send(Action::Command(Command::Notifications), cx));
+        gui.wait_idle();
+        gui.press("enter");
+        assert!(gui.read(|app| app.config().ui.notifications));
+        let shared = gui.cx.update(|_, cx| shared_settings(cx));
+        assert_eq!(shared.map(|s| s.notifications), Some(true));
+        assert!(gui.cx.update(|_, cx| cx.has_global::<Asked>()));
+    }
+
     #[test]
     fn only_commits_on_heads_upstream_offer_pull() {
         let new = NewCommits {
@@ -276,6 +364,8 @@ mod tests {
                 branch: "origin/feature".into(),
                 count: 1,
                 head_upstream: false,
+                local: false,
+                worktree: None,
             }],
         };
         let shown = notification("web", Path::new("/src/web"), &new);

@@ -54,7 +54,15 @@ zoom = 100                      # how big everything is drawn, in percent (50–
 font_size = 13                  # the font size at 100% zoom, in pixels (6–72). Global config file only
 style = "native"                # "native": panes as cards, headers and dialogs in the OS's UI font; "terminal": as the TUI draws. Native/terminal style in the palette or the tt-git menu saves it here. Global config file only
 check_for_updates = true        # look for a new release once a day and say so in the help bar. Global config file only
-notifications = false           # a system notification (a toast on Windows) when a fetch brings new commits and the window isn't focused; on Windows also a taskbar badge for them, conflicts, or a stopped merge or rebase; on macOS a Dock badge
+notifications = false           # a system notification (a toast on Windows) when new commits arrive (a fetch, or a commit from another worktree or an agent) and the window isn't focused; on Windows also a taskbar badge for them, conflicts, or a stopped merge or rebase; the dock on Linux; on macOS a Dock badge. The switch for [ui.alerts]. Notifications in the palette or the tt-git menu saves it and the alerts
+
+[ui.alerts]                     # which alerts notifications turns on; all on by default
+remote_commits = true           # new commits a fetch or pull brings to a remote-tracking branch
+local_commits = true            # new commits on local branches made outside the window (another worktree, a terminal, an agent); the window's own never count; a busy branch notifies once a minute
+popup = true                    # the system notification for new commits
+badge = true                    # new commits counted on the app icon (taskbar, dock, Dock)
+conflicts = true                # a badge while files have conflicts
+stopped = true                  # a badge while a merge, rebase, cherry-pick or revert waits to be continued
 ```
 
 ## Themes
@@ -283,6 +291,7 @@ Write keys as `q`, `Q`, `shift+q`, `ctrl+c`, `alt+enter`, `shift+tab`,
 | `zoom_in`, `zoom_out`, `reset_zoom` | `ctrl+=` `ctrl++`, `ctrl+-`, `ctrl+0` (desktop app only, which also zooms with ctrl+wheel; the TUI just says they need the desktop app) | global |
 | `font` | (palette and menu only; desktop app only, the TUI just says it needs the desktop app) | global |
 | `window_style` | (palette and menu only; desktop app only, the TUI just says the terminal draws its own) | global |
+| `notifications` | (palette and menu only; desktop app only, the TUI just says it has none) | global |
 
 ### Plugin action bindings
 
