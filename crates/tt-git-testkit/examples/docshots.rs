@@ -84,6 +84,7 @@ fn main() {
         ("branches-new", &["3", "j", "j", "n", "tab", "text:fix/footer-links"]),
         ("branches-delete", &["3", "j", "j", "j", "j", "j", "j", "d"]),
         ("branches-prune-gone", &["3", "D"]),
+        ("branches-push-which", &["3", "/", "text:fpp", "enter", "P"]),
         ("tags", &["3", "]", "j"]),
         ("tags-new", &["3", "]", "T", "tab", "text:v1.6.0"]),
         ("tags-delete", &["3", "]", "j", "d"]),

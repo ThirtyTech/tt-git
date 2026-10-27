@@ -293,7 +293,20 @@ checking it out. Use it for a branch with commits you haven't pushed yet
 - On the checked-out branch it does the usual [push](/git/remotes/#push).
 
 A branch checked out in another worktree is pushed the same way; pushing
-doesn't touch its files. It doesn't ask first. The help bar shows
+doesn't touch its files.
+
+It only asks first when the checked-out branch has commits to push too
+(it's ahead of its upstream, or has never been pushed). Then a **Push**
+dialog names both branches and what each has to push:
+
+- <kbd>y</kbd> or <kbd>enter</kbd> pushes the selected branch.
+- <kbd>c</kbd> pushes the checked-out branch instead, as <kbd>P</kbd> does
+  in any other pane.
+- <kbd>n</kbd> or <kbd>esc</kbd> pushes nothing.
+
+<Screenshot name="branches-push-which" alt="The Push dialog asking whether to push feature/profile-page or the checked-out feature/notifications" />
+
+The help bar shows
 `pushing feature → origin/feature`, then `✓ pushed feature →
 origin/feature`. If git refuses, for example because the remote has
 commits the branch doesn't, the error box shows git's message.
@@ -352,7 +365,7 @@ OSC 52 clipboard support, so it also works over SSH.
 | <kbd>f</kbd> | `git fetch --all --prune` |
 | <kbd>D</kbd> | Fetch, then delete the local branches whose upstream is gone (asks; asks again before force-deleting unmerged) |
 | <kbd>F</kbd> | Fast-forward the selected branch to its upstream without checking it out |
-| <kbd>P</kbd> | Push the selected branch without checking it out (sets the upstream on the first push) |
+| <kbd>P</kbd> | Push the selected branch without checking it out (sets the upstream on the first push; asks which branch when the checked-out one has commits to push too) |
 | <kbd>/</kbd> | Filter as you type (<kbd>esc</kbd> clears) |
 | <kbd>b</kbd> | Pick the base branch for the Unmerged, Merged and Tags tabs |
 | <kbd>M</kbd> | Merge the selection into the current branch |

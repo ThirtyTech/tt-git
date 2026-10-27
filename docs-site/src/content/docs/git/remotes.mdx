@@ -31,7 +31,9 @@ don't, the error box shows git's message. Pull, then push again.
 In the branches pane, <kbd>P</kbd> pushes the selected branch instead, so
 you can push a branch without checking it out; see
 [Pushing a branch](/panes/branches/#pushing-a-branch). On the Worktrees tab
-it pushes the selected worktree's branch.
+it pushes the selected worktree's branch. If the current branch has commits
+to push as well, it asks which one to push: <kbd>y</kbd> the selected
+branch, <kbd>c</kbd> the current one.
 
 Pushing a branch doesn't push tags. On the branches pane's Tags tab,
 <kbd>P</kbd> pushes the selected tag instead; see [Tags](/panes/tags/#pushing-a-tag).

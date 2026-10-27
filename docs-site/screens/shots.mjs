@@ -536,6 +536,16 @@ export const shots = [
 		],
 	},
 	{
+		name: 'branches-push-which',
+		capture: 'branches-push-which',
+		view: { region: { box: 'Push' } },
+		callouts: [
+			{ target: { find: 'feature/profile-page (↑1)', w: 56, h: 2 }, text: 'Both branches have **commits to push**', markerSide: 'left' },
+			{ target: { find: 'y confirm' }, text: '**y** or **enter** pushes the selected branch', markerSide: 'left' },
+			{ target: { find: 'c push feature/notifications' }, text: '**c** pushes the checked-out one', markerSide: 'right' },
+		],
+	},
+	{
 		name: 'branches-filter',
 		capture: 'branches-filter',
 		view: { region: { cells: [95, 35, 95, 3] } },
