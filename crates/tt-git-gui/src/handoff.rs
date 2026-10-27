@@ -22,6 +22,9 @@
 use std::fs::File;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use gpui::component::Root;
@@ -119,6 +122,9 @@ pub fn address(state_dir: &Path) -> String {
 pub struct Listener {
     address: String,
     requests: Option<UnboundedReceiver<Request>>,
+    /// Set to have the accepting thread stop at its next connection.
+    stop: Arc<AtomicBool>,
+    accepting: Option<JoinHandle<()>>,
     _lock: File,
 }
 
@@ -131,6 +137,24 @@ impl Listener {
 
 impl Drop for Listener {
     fn drop(&mut self) {
+        // Stop accepting and close the socket before the lock goes, so the
+        // next copy to take the lock can listen at the same address (on
+        // Windows a pipe name can't be reused while it's still open).
+        self.stop.store(true, Ordering::SeqCst);
+        if let Some(accepting) = self.accepting.take() {
+            // A connection of our own wakes the thread to see `stop`. It's
+            // held open until the thread ends: on Windows a connection
+            // that's already gone is skipped and accepting carries on.
+            let wake = self
+                .address
+                .as_str()
+                .to_fs_name::<GenericFilePath>()
+                .and_then(Stream::connect);
+            if wake.is_ok() || accepting.is_finished() {
+                let _ = accepting.join();
+            }
+            drop(wake);
+        }
         if !cfg!(windows) {
             let _ = std::fs::remove_file(&self.address);
         }
@@ -194,10 +218,15 @@ fn claim(state_dir: &Path) -> std::io::Result<Option<Listener>> {
     let name = address.as_str().to_fs_name::<GenericFilePath>()?;
     let listener = ListenerOptions::new().name(name).try_overwrite(true).create_sync()?;
     let (tx, rx) = unbounded_channel();
-    std::thread::Builder::new()
+    let stop = Arc::new(AtomicBool::new(false));
+    let stopping = stop.clone();
+    let accepting = std::thread::Builder::new()
         .name("tt-git-gui-handoff".into())
         .spawn(move || {
             for conn in listener.incoming() {
+                if stopping.load(Ordering::SeqCst) {
+                    break;
+                }
                 let Ok(conn) = conn else { continue };
                 let tx = tx.clone();
                 let _ = std::thread::Builder::new()
@@ -213,6 +242,8 @@ fn claim(state_dir: &Path) -> std::io::Result<Option<Listener>> {
     Ok(Some(Listener {
         address,
         requests: Some(rx),
+        stop,
+        accepting: Some(accepting),
         _lock: lock,
     }))
 }
@@ -354,7 +385,6 @@ fn start_window(cx: &mut App) -> Option<WindowHandle<Root>> {
 #[cfg(test)]
 mod tests {
     use std::rc::Rc;
-    use std::sync::Arc;
 
     use gpui::TestAppContext;
     use tt_git_app::{App as TtApp, Config};
