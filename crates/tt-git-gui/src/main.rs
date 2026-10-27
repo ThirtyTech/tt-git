@@ -36,6 +36,11 @@ struct Cli {
     #[arg(long, overrides_with = "no_filter_to_cwd")]
     filter_to_cwd: bool,
 
+    /// Start a separate process even if tt-git-gui is running already,
+    /// rather than handing the paths to it.
+    #[arg(long)]
+    new_instance: bool,
+
     /// Start with the whole repository shown, even if `graph.filter_to_cwd`
     /// is set.
     #[arg(long, overrides_with = "filter_to_cwd")]
@@ -68,6 +73,25 @@ fn main() -> Result<()> {
     if let Some(dir) = &args.finish_update {
         return finish_update(dir, args.installer.as_deref());
     }
+    // A copy that's running opens these instead. The options it couldn't
+    // honor (its config and plugins are its own) start one of their own.
+    let alone =
+        args.new_instance || args.config.is_some() || args.no_plugins || args.filter_to_cwd || args.no_filter_to_cwd;
+    let handoff = if alone {
+        None
+    } else {
+        use tt_git_gui::handoff::{self, Request, Start};
+        let cwd = std::env::current_dir().unwrap_or_default();
+        let request = Request::new(&args.paths, cwd, args.open_repository, args.start_window);
+        match handoff::start(&tt_git_core::paths::state_dir(), &request, handoff::WAIT) {
+            Start::Primary(listener) => Some(listener),
+            Start::HandedOff(pid) => {
+                tracing::info!("handed {request:?} to the running copy ({pid})");
+                return Ok(());
+            }
+            Start::Alone => None,
+        }
+    };
 
     let config_path = args.config.unwrap_or_else(tt_git_core::paths::config_file);
     let global = GlobalConfig::load(&config_path)?;
@@ -168,6 +192,9 @@ fn main() -> Result<()> {
         tt_git_gui::set_launcher(Rc::new(new_app), cx);
         tt_git_gui::windows::quit_when_last_closes(cx);
         tt_git_gui::services::install(cx);
+        if let Some(listener) = handoff {
+            tt_git_gui::handoff::serve(listener, cx);
+        }
         start_updates(check_for_updates, cx);
         let opened = match first {
             Some((app, rx)) => tt_git_gui::open_window(app, rx, cx).map(|_| ()),

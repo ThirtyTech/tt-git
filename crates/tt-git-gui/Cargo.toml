@@ -20,7 +20,11 @@ clap.workspace = true
 color-eyre.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-# Checks a downloaded update against the release's SHA256SUMS.txt.
+# The hand-off to the running copy (handoff.rs): the version the plugin
+# socket uses.
+interprocess = "2.4.6"
+# Checks a downloaded update against the release's SHA256SUMS.txt, and
+# names the hand-off socket.
 sha2 = "0.10"
 thiserror.workspace = true
 # The window icon on X11 (`WindowOptions::icon`), decoded from assets/icon.png.

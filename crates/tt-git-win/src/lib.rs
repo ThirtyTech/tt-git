@@ -10,6 +10,8 @@
 //! use with the same `cfg`.
 
 #[cfg(windows)]
+pub mod foreground;
+#[cfg(windows)]
 pub mod jump_list;
 #[cfg(any(windows, target_os = "macos", target_os = "linux"))]
 pub mod power;
