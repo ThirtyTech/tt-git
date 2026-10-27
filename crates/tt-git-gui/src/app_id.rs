@@ -3,7 +3,7 @@
 //! notifications are sent as it. The installer gives the Start menu entry
 //! the same one. On Linux it's the app id, the `.desktop` file's name.
 
-/// The app's AppUserModelID on Windows. The installer
+/// The app's AppUserModelID on Windows, as released. The installer
 /// (`packaging/windows/tt-git.iss`) has it too.
 ///
 /// On Linux it's the app id: the Wayland app id and the X11 `WM_CLASS` of
@@ -14,7 +14,19 @@
 /// (`packaging/linux/ThirtyTech.tt-git.desktop`).
 ///
 /// Change them all together.
-pub const APP_ID: &str = "ThirtyTech.tt-git";
+pub const RELEASE_APP_ID: &str = "ThirtyTech.tt-git";
+
+/// The id this build runs as: [`RELEASE_APP_ID`], except that a debug build
+/// on Windows is `ThirtyTech.tt-git.dev`. So a `cargo run` window gets a
+/// taskbar button of its own instead of stacking with the installed app's,
+/// and its toasts, toast icon and jump list don't replace the installed
+/// app's. Linux keeps the one id, which has to match the installed
+/// `.desktop` file.
+pub const APP_ID: &str = if cfg!(all(windows, debug_assertions)) {
+    "ThirtyTech.tt-git.dev"
+} else {
+    RELEASE_APP_ID
+};
 
 /// The name the OS shows notifications under.
 pub const APP_NAME: &str = "tt-git";
@@ -32,14 +44,17 @@ mod tests {
 
     /// The `.desktop` file the Linux packages install.
     fn desktop_file() -> String {
-        let path = format!("{}/packaging/linux/{APP_ID}.desktop", env!("CARGO_MANIFEST_DIR"));
+        let path = format!(
+            "{}/packaging/linux/{RELEASE_APP_ID}.desktop",
+            env!("CARGO_MANIFEST_DIR")
+        );
         std::fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path}: {e}"))
     }
 
     #[test]
     fn the_desktop_file_is_named_for_the_app_id() {
         let file = desktop_file();
-        assert!(file.contains(&format!("\nStartupWMClass={APP_ID}\n")), "{file}");
+        assert!(file.contains(&format!("\nStartupWMClass={RELEASE_APP_ID}\n")), "{file}");
         // The icon keeps the hicolor files' name.
         assert!(file.contains("\nIcon=tt-git\n"), "{file}");
     }

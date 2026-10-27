@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn the_registry_names_the_app_and_its_badge() {
-        assert_eq!(registry_key(), r"Software\Classes\AppUserModelId\ThirtyTech.tt-git");
+        assert_eq!(registry_key(), format!(r"Software\Classes\AppUserModelId\{APP_ID}"));
         let badge = Path::new(r"C:\Users\u\AppData\Roaming\tt-git\notification-badge-0123abcd.png");
         assert_eq!(
             registry_values(badge),
@@ -166,12 +166,13 @@ mod tests {
     }
 
     /// The installer removes the key on uninstall, and names it for
-    /// [`APP_ID`].
+    /// [`RELEASE_APP_ID`].
     #[test]
     fn the_installer_removes_the_key() {
         let path = format!("{}/packaging/windows/tt-git.iss", env!("CARGO_MANIFEST_DIR"));
         let iss = std::fs::read_to_string(&path).unwrap();
-        let line = format!(r#"Subkey: "{}"; Flags: uninsdeletekey dontcreatekey"#, registry_key());
+        let key = format!(r"Software\Classes\AppUserModelId\{}", crate::app_id::RELEASE_APP_ID);
+        let line = format!(r#"Subkey: "{key}"; Flags: uninsdeletekey dontcreatekey"#);
         assert!(iss.contains(&line), "{line} isn't in {path}");
     }
 }
