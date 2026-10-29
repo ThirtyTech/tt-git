@@ -53,8 +53,7 @@ export const shots = [
 		callouts: [
 			{ target: { find: '[1] Graph [all] 1/47' }, text: '**Title**: all branches; commit 1 of 47', markerSide: 'right' },
 			{ target: { find: 'feature/notifications ', nth: 0, dx: -1, w: 23 }, text: '**Checked out**: on green', markerSide: 'top-right' },
-			{ target: { find: '[main]' }, text: '**[local]** branch', markerSide: 'below' },
-			{ target: { find: '[origin/main]' }, text: '**[origin/…]** remote branch', markerSide: 'below' },
+			{ target: { find: '[main 🔗 ]' }, text: '**[local 🔗]** branch at its remote: one badge for both', markerSide: 'below' },
 			{ target: { find: '<v1.5.0-beta.1>' }, text: '**<tag>**', markerSide: 'below' },
 		],
 	},
@@ -126,8 +125,7 @@ export const shots = [
 		view: { region: { cells: [0, 0, 56, 5] } },
 		callouts: [
 			{ target: { find: 'feature/notifications ', nth: 0, dx: -1, w: 23 }, text: '**Checked out**: green, no brackets', markerSide: 'top-right' },
-			{ target: { find: '[main]' }, text: '**[local]** branch', markerSide: 'below' },
-			{ target: { find: '[origin/main]' }, text: '**[origin/…]** remote branch', markerSide: 'below' },
+			{ target: { find: '[main 🔗 ]' }, text: '**[local 🔗]** branch at its remote: one badge for both', markerSide: 'below' },
 			{ target: { find: '<v1.5.0-beta.1>' }, text: '**<tag>**', markerSide: 'below' },
 		],
 	},
@@ -455,7 +453,7 @@ export const shots = [
 			{ target: { find: '▌', nth: 0, h: 13 }, text: '**When**: hot is recent, cold is old', markerSide: 'below', tone: 'amber' },
 			{ target: { find: ' 1w ▌', nth: 0, dx: 2, w: 2 }, text: '**When**: its age, or with t the date', markerSide: 'above', tone: 'amber' },
 			{ target: { find: 'Rosalina', nth: 0 }, text: '**Who**: on every line, a color each', markerSide: 'above', tone: 'green' },
-			{ target: { find: '31a324f  Refresh', w: 39 }, text: '**Why**: the commit, where its lines start', markerSide: 'above' },
+			{ target: { find: '76dda86  Refresh', w: 39 }, text: '**Why**: the commit, where its lines start', markerSide: 'above' },
 		],
 	},
 	{ name: 'blame-overview', capture: 'blame' },
@@ -562,7 +560,7 @@ export const shots = [
 		callouts: [
 			{ target: { find: '[1] Graph [origin/feature/profile-page]', w: 44 }, text: 'The graph shows **only the selected branch**', markerSide: 'right' },
 			{ target: { find: '(branched off origin/main)' }, text: 'Where it **branched off** the base', markerSide: 'right' },
-			{ target: { find: '[main] [origin/main]', dx: -2, w: 24 }, text: 'The **base\'s tip** today', markerSide: 'right' },
+			{ target: { find: '[main 🔗 ]', dx: -2, w: 13 }, text: 'The **base\'s tip** today', markerSide: 'right' },
 			{ target: { find: 'Unmerged 6', in: 'branches' }, text: '**Unmerged** tab, against origin/main', markerSide: 'above' },
 			{ target: { find: '  feature/profile-page', in: 'branches', row: true }, text: 'The **selected** branch', markerSide: 'left' },
 		],
@@ -659,7 +657,7 @@ export const shots = [
 		callouts: [
 			{ target: { find: 'Worktrees 3', in: 'branches' }, text: 'The **Worktrees** tab, once there is a linked worktree', markerSide: 'above' },
 			{ target: { find: '* .', in: 'branches' }, text: 'The worktree tt-git is **running in**; paths are from here', markerSide: 'left' },
-			{ target: { find: '(detached f33b691)', in: 'branches' }, text: 'Its **branch**, or the commit it has detached', markerSide: 'below' },
+			{ target: { find: '(detached 580c81e)', in: 'branches' }, text: 'Its **branch**, or the commit it has detached', markerSide: 'below' },
 			{ target: { find: '↑1 · 1 changed', in: 'branches' }, text: '**Commits** the base lacks, and **changed files**', markerSide: 'left' },
 			{ target: { find: ' KB', in: 'branches', dx: -4, w: 7 }, text: 'The **disk space** each takes', markerSide: 'right' },
 			{ target: { find: 'total', in: 'branches', w: 13 }, text: 'All of them **together**', markerSide: 'below' },

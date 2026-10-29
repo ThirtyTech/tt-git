@@ -109,7 +109,12 @@ Badges sit between the lanes and the subject:
 | ` HEAD ` on red | A detached HEAD |
 | `[feature]` (green) | A local branch |
 | `[origin/main]` (magenta) | A remote branch |
+| `[feature 🔗]` | A branch at the same commit as its upstream |
 | `<v1.0>` (yellow) | A tag |
+
+When a branch and its upstream point at the same commit, the upstream gets no badge of its own.
+The branch's badge takes a 🔗 instead, so ` main 🔗 ` replaces ` main ` `[origin/main]`. Once
+either side moves on, the two badges come back on their own commits.
 
 Symbolic refs like `origin/HEAD` are left out, since they only repeat another badge. When a row is
 too narrow for everything, badges are dropped before the subject is.
