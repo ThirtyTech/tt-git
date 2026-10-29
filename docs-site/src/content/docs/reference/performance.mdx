@@ -28,7 +28,8 @@ of commits and hundreds of branches.
   files directly, without git.
 - **Quiet watching.** File changes in paths git ignores (`node_modules/`,
   `dist/`, `target/`) don't trigger a reload, and a fetch that brings
-  nothing new doesn't reload the graph. See [Refreshing](/git/refreshing/).
+  nothing new doesn't reload the graph. On Linux those folders aren't
+  watched at all. See [Refreshing](/git/refreshing/).
 
 What each pane runs, and why, is in [How tt-git uses
 git](/reference/how-it-works/).

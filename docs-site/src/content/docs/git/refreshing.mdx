@@ -22,6 +22,15 @@ build writing into `node_modules/`, `dist/` or `target/` doesn't keep
 reloading the status pane. When you edit a `.gitignore`, tt-git picks up the
 new rules.
 
+On Linux, a watch covers one folder, so tt-git watches each folder on its
+own and leaves out the ones git ignores. A repository with a big
+`node_modules/` opens as fast as one without, rather than waiting seconds for
+tens of thousands of folders to be watched. The ignore rules are read when
+tt-git starts. New folders are watched as they appear, and a folder that
+stops being ignored is watched from then on. If the system runs out of
+watches (`fs.inotify.max_user_watches`), tt-git logs it and keeps the ones it
+has. On Windows and macOS one watch covers the whole tree.
+
 To turn watching off, set this in your [configuration file](/configuration/):
 
 ```toml
