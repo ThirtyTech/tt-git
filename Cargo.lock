@@ -8395,6 +8395,7 @@ dependencies = [
  "two-face",
  "unicode-width",
  "vt100 0.17.0",
+ "walkdir",
 ]
 
 [[package]]

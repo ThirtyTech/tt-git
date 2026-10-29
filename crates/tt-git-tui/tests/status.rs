@@ -1,8 +1,8 @@
 use std::time::Duration;
 
 use tt_git_testkit::{Sandbox, TestDriver};
-use tt_git_tui::Config;
 use tt_git_tui::panes::{DetailsSubject, PaneId};
+use tt_git_tui::{App, Config};
 
 fn codes(t: &TestDriver) -> Vec<(String, String)> {
     t.app()
@@ -270,6 +270,48 @@ fn watcher_refreshes_on_external_changes() {
             .commits()
             .first()
             .is_some_and(|c| &*c.summary == "made outside")
+    });
+}
+
+/// Where inotify watches folders one by one (Linux), folders made or
+/// stopped being ignored after the start are watched too.
+#[test]
+fn watcher_sees_into_folders_made_or_unignored_later() {
+    let sb = Sandbox::new();
+    sb.write(".gitignore", "build/\n");
+    sb.git(&["add", ".gitignore"]);
+    sb.commit_staged("base");
+    sb.write("build/out.txt", "x");
+    let mut t = TestDriver::with_watcher(Config::default(), &sb);
+    let shows = |path: &'static str| move |app: &App| app.status().entries().iter().any(|e| e.path == path);
+
+    // A new folder, then a file in a new folder in it once that's settled.
+    sb.write("src/a.txt", "a\n");
+    t.wait_until(Duration::from_secs(10), shows("src/a.txt"));
+    std::fs::create_dir(sb.path().join("src/deep")).unwrap();
+    std::thread::sleep(Duration::from_millis(800));
+    t.wait_idle();
+    sb.write("src/deep/b.txt", "b\n");
+    t.wait_until(Duration::from_secs(10), shows("src/deep/b.txt"));
+
+    // build/ stops being ignored, then a file in it changes.
+    sb.write(".gitignore", "");
+    t.wait_until(Duration::from_secs(10), shows("build/out.txt"));
+    std::thread::sleep(Duration::from_millis(800));
+    t.wait_idle();
+    sb.write("build/later.txt", "x");
+    t.wait_until(Duration::from_secs(10), shows("build/later.txt"));
+
+    // A branch in a new folder under refs/heads, then another in it.
+    sb.git(&["branch", "feature/one"]);
+    t.wait_until(Duration::from_secs(10), |app| {
+        app.branches().entries().iter().any(|b| b.name == "feature/one")
+    });
+    std::thread::sleep(Duration::from_millis(800));
+    t.wait_idle();
+    sb.git(&["branch", "feature/two"]);
+    t.wait_until(Duration::from_secs(10), |app| {
+        app.branches().entries().iter().any(|b| b.name == "feature/two")
     });
 }
 

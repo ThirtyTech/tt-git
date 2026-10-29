@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 use std::ffi::OsString;
 use std::path::{Component, Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard, Weak};
 use std::time::Duration;
 
 use notify_debouncer_mini::notify::event::{AccessKind, AccessMode};
@@ -22,7 +23,16 @@ const DEBOUNCE: Duration = Duration::from_millis(300);
 
 /// Keeps the watch alive; dropping it stops watching.
 pub struct RepoWatcher {
-    _debouncer: Debouncer<WriteWatcher>,
+    _debouncer: Shared,
+}
+
+/// Shared with the handler (weakly, so dropping the [`RepoWatcher`] still
+/// stops it), which watches folders as they appear (see
+/// [`watches_folders`]).
+type Shared = Arc<Mutex<Debouncer<WriteWatcher>>>;
+
+fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
+    mutex.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 /// The platform's watcher, minus reads. Linux reports files being opened,
@@ -146,19 +156,38 @@ struct Watch {
     rules: Rules,
     /// The linked worktrees, as their folders under `common_dir/worktrees` say.
     worktrees: Vec<Linked>,
+    /// The watcher, when it watches folders one at a time (see
+    /// [`watches_folders`]).
+    folders: Option<Weak<Mutex<Debouncer<WriteWatcher>>>>,
+}
+
+/// inotify (Linux) watches one folder at a time, so a recursive watch is a
+/// walk adding a watch to every folder, `node_modules/` and `target/`
+/// included: tens of thousands of them, which takes seconds. With inotify,
+/// the watcher walks the tree itself instead, leaving out the folders whose
+/// changes it would drop anyway, and watches folders as they appear.
+/// Elsewhere one watch covers a whole tree.
+fn watches_folders() -> bool {
+    RecommendedWatcher::kind() == WatcherKind::Inotify
 }
 
 impl Watch {
     /// Changes git ignores (and doesn't track) are dropped, so a build
     /// writing into `target/` doesn't reload the status over and over.
+    ///
+    /// When it [watches folders](watches_folders), it also watches the
+    /// folders that appeared, or all of them again when the rules changed.
     fn batch<'a>(&mut self, paths: impl IntoIterator<Item = &'a Path>) -> Change {
+        let mut rescan = false;
         if matches!(&self.rules, Rules::Loaded(r) if r.stale()) {
             self.rules = Rules::Unknown;
+            rescan = true;
         }
         let mut real_dirs = HashMap::new();
         let mut change = Change::default();
         let mut reload_rules = false;
         let mut worktrees_touched = false;
+        let mut appeared = Vec::new();
         for raw in paths {
             let path = self.resolve(raw);
             let c = classify(&path, &self.root, &self.git_dir, &self.common_dir);
@@ -185,6 +214,9 @@ impl Watch {
                 // What's tracked may have changed.
                 reload_rules = true;
             }
+            if self.folders.is_some() && path.is_dir() {
+                appeared.push(path.into_owned());
+            }
             change.refs |= c.refs;
             change.status |= c.status;
         }
@@ -201,6 +233,18 @@ impl Watch {
             if now != self.worktrees {
                 self.worktrees = now;
                 change.refs = true;
+                rescan = true;
+            }
+        }
+        if self.folders.is_some() {
+            if rescan || reload_rules {
+                // Folders the rules ignored may count now, and so may the
+                // way to a new worktree.
+                appeared.retain(|dir| self.in_git_dirs(dir));
+                appeared.push(self.root.clone());
+            }
+            for dir in appeared {
+                self.watch_folders(&dir);
             }
         }
         change
@@ -241,6 +285,65 @@ impl Watch {
         match std::fs::canonicalize(raw) {
             Ok(path) => Cow::Owned(path),
             Err(_) => Cow::Borrowed(raw),
+        }
+    }
+
+    fn in_git_dirs(&self, path: &Path) -> bool {
+        path.starts_with(&self.git_dir) || path.starts_with(&self.common_dir)
+    }
+
+    /// Watches `top` and the folders under it, each on its own, leaving
+    /// out those whose changes are dropped: folders git ignores (with
+    /// nothing tracked in them), the git dirs' `objects`, and, under the
+    /// root, the git dirs, which are walked from their own top. Ignored
+    /// folders a linked worktree is in are watched, though not the
+    /// worktree, so deleting it by hand is seen.
+    fn watch_folders(&mut self, top: &Path) {
+        let Some(debouncer) = self.folders.as_ref().and_then(Weak::upgrade) else {
+            return;
+        };
+        let in_git = self.in_git_dirs(top);
+        if !in_git {
+            self.rules();
+        }
+        let rules = match &self.rules {
+            Rules::Loaded(rules) if !in_git => Some(&**rules),
+            _ => None,
+        };
+        let objects = [self.git_dir.join("objects"), self.common_dir.join("objects")];
+        let mut real_dirs = HashMap::new();
+        let mut skip = |path: &Path| {
+            if objects.iter().any(|o| path == o) {
+                return true;
+            }
+            if in_git {
+                return false;
+            }
+            let on_the_way = |root: &Path| root != path && root.starts_with(path);
+            path == self.git_dir
+                || path == self.common_dir
+                || rules.is_some_and(|r| {
+                    r.hides(path)
+                        && real_parent(path, &mut real_dirs).is_some_and(|real| r.hides(&real))
+                        && !self.worktrees.iter().any(|w| w.root.as_deref().is_some_and(on_the_way))
+                })
+        };
+        let mut debouncer = lock(&debouncer);
+        let watcher = debouncer.watcher();
+        let folders = walkdir::WalkDir::new(top)
+            .follow_links(true)
+            .into_iter()
+            .filter_entry(|entry| entry.file_type().is_dir() && !skip(entry.path()));
+        for folder in folders.filter_map(Result::ok) {
+            match watcher.watch(folder.path(), RecursiveMode::NonRecursive) {
+                Ok(()) => {}
+                Err(e) if matches!(e.kind, notify::ErrorKind::MaxFilesWatch) => {
+                    tracing::warn!("not watching every folder: {e}");
+                    return;
+                }
+                // Gone already.
+                Err(_) => {}
+            }
         }
     }
 }
@@ -303,26 +406,30 @@ fn real_parent(path: &Path, cache: &mut HashMap<PathBuf, Option<PathBuf>>) -> Op
 
 /// Starts watching `repo`'s working tree (recursively, which includes a
 /// `.git` inside it), git dir and shared git dir, emitting
-/// `Action::RepoChanged` after changes settle.
+/// `Action::RepoChanged` after changes settle. With inotify, the folders
+/// are watched one by one, without the ignored ones (see
+/// [`watches_folders`]).
 pub fn watch(repo: Repo, ctx: Ctx) -> notify_debouncer_mini::notify::Result<RepoWatcher> {
     let canonical = |p: &Path| std::fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
     let root_buf = canonical(repo.root());
     let git_buf = canonical(repo.git_dir());
     let common_buf = canonical(repo.common_dir());
-    let mut state = Watch {
+    let state = Arc::new(Mutex::new(Watch {
         root: root_buf.clone(),
         git_dir: git_buf.clone(),
         worktrees: linked_worktrees(&common_buf),
         common_dir: common_buf.clone(),
         repo,
         rules: Rules::Unknown,
-    };
+        folders: None,
+    }));
+    let handler_state = Arc::clone(&state);
     let config = Config::default().with_timeout(DEBOUNCE);
     let mut debouncer = new_debouncer_opt::<_, WriteWatcher>(config, move |res: DebounceEventResult| {
         let Ok(events) = res else {
             return;
         };
-        let change = state.batch(events.iter().map(|ev| ev.path.as_path()));
+        let change = lock(&handler_state).batch(events.iter().map(|ev| ev.path.as_path()));
         if change.refs || change.status {
             ctx.emit(Action::RepoChanged {
                 refs: change.refs,
@@ -330,6 +437,20 @@ pub fn watch(repo: Repo, ctx: Ctx) -> notify_debouncer_mini::notify::Result<Repo
             });
         }
     })?;
+    if watches_folders() {
+        let debouncer = Arc::new(Mutex::new(debouncer));
+        let mut state = lock(&state);
+        state.folders = Some(Arc::downgrade(&debouncer));
+        // The root's walk leaves out the git dirs. A linked worktree's git
+        // dir is inside the shared one.
+        state.watch_folders(&root_buf);
+        state.watch_folders(&common_buf);
+        if !git_buf.starts_with(&common_buf) {
+            state.watch_folders(&git_buf);
+        }
+        drop(state);
+        return Ok(RepoWatcher { _debouncer: debouncer });
+    }
     // Each folder once: a linked worktree's git dir is inside the shared one.
     let mut dirs = vec![root_buf, git_buf, common_buf];
     dirs.sort_by_key(|d| d.as_os_str().len());
@@ -340,7 +461,9 @@ pub fn watch(repo: Repo, ctx: Ctx) -> notify_debouncer_mini::notify::Result<Repo
             watched.push(dir);
         }
     }
-    Ok(RepoWatcher { _debouncer: debouncer })
+    Ok(RepoWatcher {
+        _debouncer: Arc::new(Mutex::new(debouncer)),
+    })
 }
 
 #[cfg(test)]
@@ -477,6 +600,7 @@ mod tests {
                 root: root.clone(),
                 repo,
                 rules: Rules::Unknown,
+                folders: None,
             };
             Self { sb, root, watch }
         }

@@ -25,6 +25,7 @@ tt-git-plugin.workspace = true
 two-face.workspace = true
 unicode-width = "0.2"
 vt100 = "0.17.0"
+walkdir = "2.5.0"
 
 # The power and network state background fetching goes by (bg_fetch.rs).
 [target.'cfg(any(windows, target_os = "macos", target_os = "linux"))'.dependencies]
