@@ -8351,7 +8351,7 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tt-git"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "clap",
  "color-eyre",
@@ -8374,7 +8374,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-app"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "notify-debouncer-mini",
  "portable-pty",
@@ -8400,7 +8400,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-core"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "chrono",
  "etcetera",
@@ -8417,7 +8417,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-graph"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "criterion",
  "insta",
@@ -8426,7 +8426,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-gui"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "ashpd",
  "block2 0.6.2",
@@ -8463,7 +8463,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-plugin"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "interprocess",
  "regex",
@@ -8479,7 +8479,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-testkit"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "crossterm",
  "ratatui",
@@ -8494,7 +8494,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-tui"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "crossterm",
  "futures",
@@ -8513,7 +8513,7 @@ dependencies = [
 
 [[package]]
 name = "tt-git-win"
-version = "0.11.0"
+version = "0.12.0"
 dependencies = [
  "block2 0.6.2",
  "objc2 0.6.5",
