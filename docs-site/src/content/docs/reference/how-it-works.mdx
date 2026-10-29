@@ -56,8 +56,8 @@ other lines start and end.
   joins a lane already waiting for it, or opens a new one.
 - A column freed in a row isn't reused in that same row, so a line never
   looks like it passes straight through a merge.
-- Each new tip and merge lane gets the next of 8 colors. Merges are `◉`,
-  other commits `●`.
+- Each new tip and merge lane gets the next of 8 colors. Merge commits
+  are `◉`, other commits `●`.
 - Only `max_lanes` columns (default 16) are drawn and stored; anything wider
   collapses into `…`. Rows are packed at 2 bytes a column.
 
@@ -129,9 +129,11 @@ The filtered log adds:
   git lists them without `--max-count`, and tt-git leaves out each commit
   with more than one parent, stopping once `max_commits` others are listed.
   `--no-merges` would leave a commit's parent pointing at the merge it
-  hid, which breaks every line through one. Instead tt-git changes a
-  parent that was a hidden merge to that merge's first parent (through a
-  run of merges, to the first that isn't one).
+  hid, which breaks every line through one. Instead tt-git draws a commit
+  whose parent was a hidden merge joined to that merge's parents, first
+  parent first (through a run of merges, to the commits that aren't
+  merges), so a merged branch's lane still ends where it was merged. The
+  commit keeps its real parents for everything else.
 - for a message on the diff, `-G<regex>`, and `--regexp-ignore-case` when
   the regex has no capital letter. git keeps only the commits whose patch
   adds or removes a line matching it, so `--max-count` stays. `-G` reads
