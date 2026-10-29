@@ -36,6 +36,11 @@ pub struct TestDriver {
     screen: Screen,
     rx: UnboundedReceiver<Action>,
     terminal: Terminal<TestBackend>,
+    /// The last frame drawn, whole. The backend's own buffer only takes the
+    /// cells that changed, and ratatui leaves out the cell a wide character
+    /// covers, so it can keep a stale character there where a terminal
+    /// wouldn't.
+    frame: Buffer,
 }
 
 impl TestDriver {
@@ -141,6 +146,7 @@ impl TestDriver {
             screen: Screen::default(),
             rx,
             terminal,
+            frame: Buffer::empty(Rect::new(0, 0, width, height)),
         };
         driver.wait_idle();
         driver
@@ -374,8 +380,9 @@ impl TestDriver {
     pub fn render(&mut self) -> &Buffer {
         let (app, screen) = (&mut self.app, &mut self.screen);
         let _guard = self.runtime.enter();
-        self.terminal.draw(|f| screen.draw(app, f)).expect("draw");
-        self.terminal.backend().buffer()
+        let frame = self.terminal.draw(|f| screen.draw(app, f)).expect("draw");
+        self.frame = frame.buffer.clone();
+        &self.frame
     }
 
     pub fn resize(&mut self, width: u16, height: u16) -> &mut Self {
@@ -386,7 +393,7 @@ impl TestDriver {
     }
 
     pub fn buffer(&self) -> &Buffer {
-        self.terminal.backend().buffer()
+        &self.frame
     }
 
     /// The whole screen as text, one line per row, trailing spaces trimmed.
