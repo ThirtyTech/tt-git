@@ -1,5 +1,5 @@
 use tt_git_core::{
-    BranchHistory, FileState, GitCli, GitError, Head, LogFilter, LogScope, Recency, RefKind, Repo, SearchIn,
+    BranchHistory, FileState, GitCli, GitError, Head, LogFilter, LogScope, Oid, Recency, RefKind, Repo, SearchIn,
     message_prefixes,
 };
 use tt_git_testkit::{BASE_TIME, Sandbox};
@@ -681,7 +681,7 @@ Co-authored-by: Ann <ann@example.com>",
 }
 
 #[test]
-fn leaves_out_merges_joining_their_children_to_the_first_parent() {
+fn leaves_out_merges_drawing_their_children_joined_to_their_parents() {
     let sb = Sandbox::new();
     let c1 = sb.commit_file("a.txt", "1\n", "c1");
     sb.checkout_new("side");
@@ -693,7 +693,7 @@ fn leaves_out_merges_joining_their_children_to_the_first_parent() {
     let c2 = sb.commit_file("a.txt", "2\n", "c2");
     // Two merges in a row: c3's parent passes through both.
     sb.merge("side");
-    sb.merge("other");
+    let other_merge = sb.merge("other");
     let c3 = sb.commit_file("a.txt", "3\n", "c3");
     let repo = open(&sb);
     let no_merges = LogFilter {
@@ -702,18 +702,28 @@ fn leaves_out_merges_joining_their_children_to_the_first_parent() {
     };
     assert!(!no_merges.is_empty());
 
-    let commits = repo.filtered_commits(&LogScope::All, &no_merges, 100).unwrap();
+    let log = repo.filtered_log(&LogScope::All, &no_merges, 100).unwrap();
+    let commits = &log.commits;
     let mut got: Vec<String> = commits.iter().map(|c| c.oid.to_string()).collect();
     got.sort();
-    let mut want = vec![c1.clone(), s1.clone(), o1, c2.clone(), c3.clone()];
+    let mut want = vec![c1.clone(), s1.clone(), o1.clone(), c2.clone(), c3.clone()];
     want.sort();
     assert_eq!(got, want, "no merges listed");
-    let parents = |oid: &str| {
-        let commit = commits.iter().find(|c| c.oid == oid).unwrap();
-        commit.parents.iter().map(|p| p.to_string()).collect::<Vec<_>>()
-    };
-    assert_eq!(parents(&c3), vec![c2]);
-    assert_eq!(parents(&s1), vec![c1], "a side branch keeps its own parent");
+    let strings = |parents: &[Oid]| parents.iter().map(|p| p.to_string()).collect::<Vec<_>>();
+    let commit = |oid: &str| commits.iter().find(|c| c.oid == oid).unwrap();
+    let c3 = commit(&c3);
+    assert_eq!(strings(&c3.parents), vec![other_merge], "keeps its own parent");
+    assert_eq!(
+        strings(&log.drawn_parents[&c3.oid]),
+        vec![c2, s1.clone(), o1],
+        "drawn joined to both merges' parents, first parents first"
+    );
+    assert_eq!(
+        strings(&commit(&s1).parents),
+        vec![c1],
+        "a side branch keeps its own parent"
+    );
+    assert_eq!(log.drawn_parents.len(), 1, "only c3's parent was a merge");
 
     // The limit counts the commits kept, not the merges passed over.
     assert_eq!(repo.filtered_commits(&LogScope::All, &no_merges, 2).unwrap().len(), 2);

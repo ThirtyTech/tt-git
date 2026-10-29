@@ -1,5 +1,6 @@
 //! Plain data types produced by the parsers.
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use serde::Serialize;
@@ -56,6 +57,17 @@ pub struct BranchHistory {
     pub fork: Option<Oid>,
     /// The base commit that merged the branch in.
     pub merge: Option<Oid>,
+}
+
+/// The commits a filtered log lists, and how the graph joins them.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FilteredLog {
+    /// In topological order, each with its own parents.
+    pub commits: Vec<Commit>,
+    /// The parents to draw a commit joined to, for each one whose parents
+    /// include a merge the log left out: that merge's parents stand in for
+    /// it, so a branch merged in still joins the line where it was merged.
+    pub drawn_parents: HashMap<Oid, Parents>,
 }
 
 /// [`Commit::short_oid`]: up to 7 hex digits, on the stack.

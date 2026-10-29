@@ -1313,8 +1313,11 @@ impl App {
             Action::GraphBatch {
                 generation,
                 commits,
+                drawn_parents,
                 done,
-            } => self.graph.apply_batch(generation, commits, done, &self.ctx),
+            } => self
+                .graph
+                .apply_drawn_batch(generation, commits, &drawn_parents, done, &self.ctx),
             Action::BranchHistoryLoaded { generation, history } => {
                 self.graph.apply_history(generation, history, &self.ctx);
                 self.history_finished(generation);

@@ -1,0 +1,8 @@
+---
+source: crates/tt-git-tui/tests/graph_merges.rs
+expression: "t.pane_lines(PaneId::Graph)[..4].join(\"\\n\")"
+---
+●─╮   main  three                                                    Test User         23h bab280b
+│ ●  [side] side one                                                 Test User         23h 8a274dc
+● │  two                                                             Test User         23h 493e2dc
+●─╯  one                                                             Test User         23h 47ba5bd

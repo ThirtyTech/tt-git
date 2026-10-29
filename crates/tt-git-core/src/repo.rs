@@ -9,7 +9,9 @@ use regex::{Regex, RegexBuilder};
 
 use crate::branches::AheadBehind;
 use crate::git::{GitCli, GitError, Result};
-use crate::model::{BranchHistory, Checkout, Commit, CommitFile, GitRef, Head, Oid, Stash, Status, Worktree};
+use crate::model::{
+    BranchHistory, Checkout, Commit, CommitFile, FilteredLog, GitRef, Head, Oid, Parents, Stash, Status, Worktree,
+};
 use crate::parse;
 
 /// Repo-local git config key holding the picked base branch.
@@ -39,8 +41,9 @@ pub struct LogFilter {
     pub message: Option<String>,
     /// What `message` is matched against.
     pub search_in: SearchIn,
-    /// Leaves out merge commits. A listed commit whose parent was one gets
-    /// the merge's first parent instead.
+    /// Leaves out merge commits. A listed commit whose parent was one is
+    /// drawn joined to the merge's parents instead (see
+    /// [`FilteredLog::drawn_parents`]).
     pub no_merges: bool,
 }
 
@@ -774,6 +777,12 @@ impl Repo {
     /// commit that changed the path, and an author or message filter keeps
     /// the real ones, so they may name commits not in the result.
     pub fn filtered_commits(&self, scope: &LogScope, filter: &LogFilter, limit: usize) -> Result<Vec<Commit>> {
+        self.filtered_log(scope, filter, limit).map(|log| log.commits)
+    }
+
+    /// [`filtered_commits`](Self::filtered_commits), with the parents to
+    /// draw the commits whose parents include a merge left out joined to.
+    pub fn filtered_log(&self, scope: &LogScope, filter: &LogFilter, limit: usize) -> Result<FilteredLog> {
         let diff = filter.message.as_deref().filter(|_| filter.search_in == SearchIn::Diff);
         let pattern = filter.message.as_deref().filter(|_| diff.is_none());
         let message = match pattern.map(|p| message_matcher(p, filter.search_in)).transpose() {
@@ -816,16 +825,16 @@ impl Repo {
             args.push("--parents".into());
         }
         if !self.push_scope(&mut args, scope)? {
-            return Ok(Vec::new());
+            return Ok(FilteredLog::default());
         }
         args.push("--".into());
         args.extend(filter.path.clone());
         let mut commits = Vec::new();
-        // Each merge left out, and the first parent it stands for.
-        let mut merges: HashMap<Oid, Oid> = HashMap::new();
+        // Each merge left out, and the parents it stands for.
+        let mut merges: HashMap<Oid, Parents> = HashMap::new();
         self.stream_log(&args, |mut c| {
             if filter.no_merges && c.is_merge() {
-                merges.insert(c.oid, c.parents[0]);
+                merges.insert(c.oid, c.parents);
                 return true;
             }
             let matched = match &message {
@@ -843,19 +852,13 @@ impl Repo {
             }
             commits.len() < limit
         })?;
-        if !merges.is_empty() {
-            // Children come before their parents, so this waits for the
-            // merges: a parent that was one becomes its first parent, through
-            // any run of merges, keeping the line through it joined.
-            for commit in &mut commits {
-                for parent in commit.parents.iter_mut() {
-                    while let Some(first) = merges.get(parent) {
-                        *parent = *first;
-                    }
-                }
-            }
-        }
-        Ok(commits)
+        // Children come before their parents, so this waits for the merges.
+        let drawn_parents = commits
+            .iter()
+            .filter(|c| c.parents.iter().any(|p| merges.contains_key(p)))
+            .map(|c| (c.oid, through_merges(&c.parents, &merges)))
+            .collect();
+        Ok(FilteredLog { commits, drawn_parents })
     }
 
     /// Adds the revisions for `scope` to a log command line. `false` when
@@ -1356,6 +1359,27 @@ fn ref_pattern_matches(pattern: &str, refname: &str) -> bool {
     refname
         .strip_prefix(pattern)
         .is_some_and(|rest| rest.is_empty() || rest.starts_with('/') || pattern.ends_with('/'))
+}
+
+/// `parents` with each one in `merges` replaced by that merge's parents,
+/// through any run of merges, first parent first and each once.
+fn through_merges(parents: &[Oid], merges: &HashMap<Oid, Parents>) -> Parents {
+    let mut out = Parents::new();
+    let mut seen = HashSet::new();
+    let mut todo: Vec<Oid> = parents.iter().rev().copied().collect();
+    while let Some(oid) = todo.pop() {
+        match merges.get(&oid) {
+            // A merge reached twice was replaced the first time.
+            Some(theirs) => {
+                if seen.insert(oid) {
+                    todo.extend(theirs.iter().rev());
+                }
+            }
+            None if !out.contains(&oid) => out.push(oid),
+            None => {}
+        }
+    }
+    out
 }
 
 /// `git log` in topological order with [`parse::LOG_FORMAT`], up to `limit`.

@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tt_git_core::time::SharedClock;
-use tt_git_core::{BranchHistory, CheckoutPlan, Commit, GitRef, Head, LogFilter, Oid, RefKind};
+use tt_git_core::{BranchHistory, CheckoutPlan, Commit, GitRef, Head, LogFilter, Oid, Parents, RefKind};
 use tt_git_graph::{GraphBuilder, NodeId, Rows};
 
 use super::DrawnDates;
@@ -151,8 +151,8 @@ pub struct GraphPane {
     pub dates: DateStyle,
     /// Draws the branch lanes left of each commit.
     pub lanes: bool,
-    /// Lists merge commits; hiding them joins each line through a merge to
-    /// its first parent (see [`LogFilter::no_merges`]).
+    /// Lists merge commits; hiding them draws each merge's child joined to
+    /// the merge's parents (see [`LogFilter::no_merges`]).
     pub merges: bool,
     /// Commit limit of the current load; reaching it means more may exist.
     pub limit: usize,
@@ -417,6 +417,19 @@ impl GraphPane {
 
     /// Appends a batch from load `generation`; stale batches are ignored.
     pub fn apply_batch(&mut self, generation: u64, commits: Vec<Commit>, done: bool, ctx: &Ctx) {
+        self.apply_drawn_batch(generation, commits, &HashMap::new(), done, ctx);
+    }
+
+    /// [`apply_batch`](Self::apply_batch), drawing each commit in
+    /// `drawn_parents` joined to those parents instead of its own.
+    pub fn apply_drawn_batch(
+        &mut self,
+        generation: u64,
+        commits: Vec<Commit>,
+        drawn_parents: &HashMap<Oid, Parents>,
+        done: bool,
+        ctx: &Ctx,
+    ) {
         if generation != self.generation {
             return;
         }
@@ -432,8 +445,9 @@ impl GraphPane {
             let id = intern(&mut self.ids, commit.oid);
             parents.clear();
             parents.extend(
-                commit
-                    .parents
+                drawn_parents
+                    .get(&commit.oid)
+                    .unwrap_or(&commit.parents)
                     .iter()
                     .filter(|p| listed.as_ref().is_none_or(|l| l.contains(p)))
                     .map(|p| intern(&mut self.ids, *p)),

@@ -33,9 +33,12 @@ fn m_hides_and_shows_merge_commits() {
     t.press("m");
     assert_eq!(summaries(&t), ["three", "side one", "two", "one"]);
     assert!(t.pane_title(PaneId::Graph).contains("Graph [all · no merges]"));
-    // The line through the merge joins its first parent.
+    // three keeps its own parent, the merge, but is drawn joined to the
+    // merge's parents: side's line still comes in where it was merged.
     let commits = t.app().graph().commits();
-    assert_eq!(*commits[0].parents, [commits[2].oid]);
+    assert!(!commits[0].is_merge());
+    assert_ne!(*commits[0].parents, [commits[2].oid]);
+    insta::assert_snapshot!(t.pane_lines(PaneId::Graph)[..4].join("\n"));
 
     // It stays hidden through a filter, and esc clears only the filter.
     t.press("f").press("tab").type_text("a.txt").press("enter");

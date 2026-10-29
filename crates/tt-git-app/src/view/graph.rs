@@ -174,8 +174,10 @@ impl LaneCell {
     }
 }
 
-/// `row` in `lanes` columns: past that, one column marks the rest.
-fn lane_row(row: RowRef, lanes: usize) -> LaneRow {
+/// `row` in `lanes` columns: past that, one column marks the rest. `merge`
+/// is the commit's, since a graph without merges can draw one with a
+/// single parent joined to several.
+fn lane_row(row: RowRef, lanes: usize, merge: bool) -> LaneRow {
     let overflow = row.width() > lanes;
     let shown = if overflow { lanes.saturating_sub(1) } else { row.width() };
     let cells = (0..shown)
@@ -194,7 +196,7 @@ fn lane_row(row: RowRef, lanes: usize) -> LaneRow {
                 LaneOverflow::More
             }
         }),
-        merge: row.is_merge(),
+        merge,
         node_color: row.node_color(),
     }
 }
@@ -245,7 +247,7 @@ fn row_parts(
 
     // Graph columns.
     let lane_row = if lanes > 0 {
-        lane_row(row, lanes)
+        lane_row(row, lanes, commit.is_merge())
     } else {
         LaneRow::default()
     };

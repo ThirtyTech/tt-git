@@ -160,6 +160,7 @@ fn superseded_graph_load_stops_streaming() {
             generation,
             commits,
             done,
+            ..
         } => {
             assert_eq!(generation, old.generation());
             assert!(commits.is_empty(), "stopped at the first commit");
