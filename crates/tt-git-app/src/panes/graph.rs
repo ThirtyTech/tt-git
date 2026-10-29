@@ -99,6 +99,9 @@ pub enum LabelKind {
 pub struct RefLabel {
     pub name: String,
     pub kind: LabelKind,
+    /// A branch whose upstream points at the same commit. The upstream
+    /// gets no label of its own.
+    pub synced: bool,
 }
 
 /// One graph load, as handed to its background job: batches carry its
@@ -720,17 +723,33 @@ fn intern(ids: &mut HashMap<Oid, NodeId>, oid: Oid) -> NodeId {
 }
 
 /// Labels per commit: HEAD first, then local branches, remotes and tags,
-/// each alphabetical.
+/// each alphabetical. A branch at the same commit as its upstream takes
+/// the upstream's label into its own.
 pub fn build_labels(head: &Head, refs: &[GitRef]) -> HashMap<String, Vec<RefLabel>> {
     let mut labels: HashMap<String, Vec<RefLabel>> = HashMap::new();
     if let Head::Detached { oid } = head {
         labels.entry(oid.clone()).or_default().push(RefLabel {
             name: "HEAD".into(),
             kind: LabelKind::DetachedHead,
+            synced: false,
         });
     }
+    let targets: HashMap<&str, &str> = refs
+        .iter()
+        .filter(|r| r.symref.is_none() && matches!(r.kind, RefKind::RemoteBranch { .. }))
+        .map(|r| (r.full_name.as_str(), r.target.as_str()))
+        .collect();
+    // The upstream's full name, if `r` is a branch at the same commit.
+    fn synced_upstream<'a>(r: &'a GitRef, targets: &HashMap<&str, &str>) -> Option<&'a str> {
+        let upstream = r.upstream.as_deref()?;
+        (r.kind == RefKind::LocalBranch && targets.get(upstream) == Some(&r.target.as_str())).then_some(upstream)
+    }
+    let folded: HashSet<&str> = refs.iter().filter_map(|r| synced_upstream(r, &targets)).collect();
     let head_branch = head.branch();
-    for r in refs.iter().filter(|r| r.symref.is_none()) {
+    for r in refs
+        .iter()
+        .filter(|r| r.symref.is_none() && !folded.contains(r.full_name.as_str()))
+    {
         let kind = match &r.kind {
             RefKind::LocalBranch if Some(r.short_name.as_str()) == head_branch => LabelKind::Head,
             RefKind::LocalBranch => LabelKind::Local,
@@ -741,6 +760,7 @@ pub fn build_labels(head: &Head, refs: &[GitRef]) -> HashMap<String, Vec<RefLabe
         labels.entry(r.target.clone()).or_default().push(RefLabel {
             name: r.short_name.clone(),
             kind,
+            synced: synced_upstream(r, &targets).is_some(),
         });
     }
     for list in labels.values_mut() {
@@ -979,6 +999,33 @@ mod tests {
             ]
         );
         assert_eq!(labels["b"][0].kind, LabelKind::Local);
+    }
+
+    #[test]
+    fn a_branch_at_its_upstream_takes_the_upstream_label() {
+        let head = Head::Branch {
+            name: "main".into(),
+            oid: "a".into(),
+        };
+        let tracking = |full: &str, target: &str, upstream: &str| GitRef {
+            upstream: Some(upstream.into()),
+            ..r(full, target)
+        };
+        let refs = vec![
+            tracking("refs/heads/main", "a", "refs/remotes/origin/main"),
+            r("refs/remotes/origin/main", "a"),
+            tracking("refs/heads/ahead", "b", "refs/remotes/origin/ahead"),
+            r("refs/remotes/origin/ahead", "c"),
+            // Same commit, but not feat's upstream.
+            tracking("refs/heads/feat", "d", "refs/remotes/origin/feat"),
+            r("refs/remotes/origin/other", "d"),
+        ];
+        let labels = build_labels(&head, &refs);
+        let at = |oid: &str| -> Vec<(&str, bool)> { labels[oid].iter().map(|l| (l.name.as_str(), l.synced)).collect() };
+        assert_eq!(at("a"), [("main", true)]);
+        assert_eq!(at("b"), [("ahead", false)]);
+        assert_eq!(at("c"), [("origin/ahead", false)]);
+        assert_eq!(at("d"), [("feat", false), ("origin/other", false)]);
     }
 
     fn commit(oid: &str, parents: &[&str]) -> Commit {

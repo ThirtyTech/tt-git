@@ -334,11 +334,15 @@ fn push_fit<'a>(spans: &mut Vec<TextSpan<'a>>, s: &'a str, width: usize, role: S
     }
 }
 
+/// Marks a branch label whose upstream is at the same commit.
+const SYNCED: &str = " 🔗";
+
 fn label_text(label: &RefLabel) -> (String, StyleRole) {
+    let synced = if label.synced { SYNCED } else { "" };
     match label.kind {
-        LabelKind::Head => (format!(" {} ", label.name), StyleRole::LabelHead),
+        LabelKind::Head => (format!(" {}{synced} ", label.name), StyleRole::LabelHead),
         LabelKind::DetachedHead => (" HEAD ".to_string(), StyleRole::LabelDetached),
-        LabelKind::Local => (format!("[{}]", label.name), StyleRole::LabelLocal),
+        LabelKind::Local => (format!("[{}{synced}]", label.name), StyleRole::LabelLocal),
         LabelKind::Remote => (format!("[{}]", label.name), StyleRole::LabelRemote),
         LabelKind::Tag => (format!("<{}>", label.name), StyleRole::LabelTag),
     }

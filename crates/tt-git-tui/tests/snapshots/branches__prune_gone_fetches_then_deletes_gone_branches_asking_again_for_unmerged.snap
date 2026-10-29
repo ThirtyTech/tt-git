@@ -4,7 +4,7 @@ expression: t.screen()
 ---
 ╭[1] Graph [all] 1/2───────────────────────────────────────────────────────────────────────────────────────────────────╮
 │●  [unmerged-gone] unmerged work                                                         Test User         23h 1bb92cd│
-│●   main  [kept] [lonely] [merged-gone] [wt-gone] [origin/kept] [origin/main] base       Test User         23h b290cb5│
+│●   main 🔗  [kept 🔗] [lonely] [merged-gone] [wt-gone] base                             Test User         23h b290cb5│
 │                                                                                                                      │
 │                                                                                                                      │
 │                                                                                                                      │
