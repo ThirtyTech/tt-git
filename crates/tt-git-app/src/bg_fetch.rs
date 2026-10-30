@@ -114,8 +114,17 @@ pub enum Outcome {
     NotDue,
     /// The policy paused fetching for now.
     Paused,
-    /// Fetched; git's output or error text.
-    Fetched(Result<String, String>),
+    /// Fetched, or git's error text.
+    Fetched(Result<Fetched, String>),
+}
+
+/// A fetch that worked.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Fetched {
+    /// git's output.
+    pub output: String,
+    /// A ref moved, or there's no telling (see [`Repo::ref_fingerprint`]).
+    pub refs_moved: bool,
 }
 
 /// The lock and the time of the last attempt for one repository, in
@@ -190,9 +199,6 @@ impl Drop for Lock {
 
 /// Fetches `repo` if a fetch is due at `now` (see the module docs).
 pub fn run(repo: &Repo, base: Duration, policy: &dyn Policy, store: &Store, now: SystemTime) -> Outcome {
-    if repo.remotes().is_ok_and(|r| r.is_empty()) {
-        return Outcome::NotDue;
-    }
     let Some(interval) = policy.interval(base) else {
         return Outcome::Paused;
     };
@@ -207,7 +213,15 @@ pub fn run(repo: &Repo, base: Duration, policy: &dyn Policy, store: &Store, now:
         return Outcome::NotDue;
     }
     store.record_attempt(now);
-    Outcome::Fetched(repo.fetch_all_quietly().map_err(|e| e.to_string()))
+    if repo.remotes().is_ok_and(|r| r.is_empty()) {
+        return Outcome::NotDue;
+    }
+    let before = repo.ref_fingerprint();
+    let result = repo.fetch_all_quietly().map_err(|e| e.to_string());
+    Outcome::Fetched(result.map(|output| Fetched {
+        output,
+        refs_moved: before.is_none() || repo.ref_fingerprint() != before,
+    }))
 }
 
 /// Whether a fetch last made at `last` is `interval` old at `now`.
@@ -437,7 +451,36 @@ mod tests {
         let sb = Sandbox::new();
         sb.commit("base");
         let repo = Repo::discover(sb.path(), &GitCli::new(sb.path()).with_env(sb.env())).unwrap();
+        let store = store(&sb, &repo);
+        let now = SystemTime::now();
+        assert_eq!(run(&repo, MINUTE, &AsConfigured, &store, now), Outcome::NotDue);
+
+        // Asked once per interval, not at every check.
+        let asked = repo.git().log().entries().len();
+        assert_eq!(run(&repo, MINUTE, &AsConfigured, &store, now), Outcome::NotDue);
+        assert_eq!(repo.git().log().entries().len(), asked);
+    }
+
+    #[test]
+    fn a_check_that_finds_no_fetch_due_runs_no_git() {
+        let (sb, repo) = with_remote();
+        sb.git(&["fetch", "-q", "origin", "main"]);
+        let ran = repo.git().log().entries().len();
         let out = run(&repo, MINUTE, &AsConfigured, &store(&sb, &repo), SystemTime::now());
         assert_eq!(out, Outcome::NotDue);
+        assert_eq!(repo.git().log().entries().len(), ran);
+    }
+
+    #[test]
+    fn says_whether_the_fetch_moved_a_ref() {
+        let (sb, repo) = with_remote();
+        let store = store(&sb, &repo);
+        let moved = |out: Outcome| match out {
+            Outcome::Fetched(Ok(fetched)) => fetched.refs_moved,
+            other => panic!("{other:?}"),
+        };
+        let now = SystemTime::now();
+        assert!(moved(run(&repo, MINUTE, &AsConfigured, &store, now)));
+        assert!(!moved(run(&repo, MINUTE, &AsConfigured, &store, now + MINUTE * 2)));
     }
 }

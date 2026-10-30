@@ -92,7 +92,7 @@ impl App {
         self.background_fetch.running = false;
         if std::mem::take(&mut self.background_fetch.joined) {
             match outcome {
-                Outcome::Fetched(Ok(out)) => self.op_done(GitOp::FetchAll, Ok(out), None),
+                Outcome::Fetched(Ok(fetched)) => self.op_done(GitOp::FetchAll, Ok(fetched.output), None),
                 // No fetch, or a quiet one that failed: the user's fetch
                 // runs now as any other does (and may ask to sign in).
                 _ => {
@@ -103,9 +103,13 @@ impl App {
             return;
         }
         match outcome {
-            Outcome::Fetched(Ok(_)) => {
+            Outcome::Fetched(Ok(fetched)) => {
                 self.emit_event("fetch.completed", json!({ "background": true }));
-                self.update(Action::Refresh);
+                // The watcher reloads when refs move, so this would be a
+                // second reload of the same thing.
+                if fetched.refs_moved && self.watcher.is_none() {
+                    self.update(Action::Refresh);
+                }
             }
             Outcome::Fetched(Err(e)) => tracing::warn!("background fetch failed: {e}"),
             Outcome::NotDue | Outcome::Paused => {}

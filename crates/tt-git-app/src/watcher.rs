@@ -114,7 +114,9 @@ pub fn classify(path: &Path, root: &Path, git_dir: &Path, common_dir: &Path) -> 
             // Another worktree's index.
             Some("index") if !own => Change::default(),
             Some("index") => STATUS_ONLY,
-            Some("refs") | Some("HEAD") | Some("packed-refs") | Some("logs") | Some("FETCH_HEAD")
+            // Not FETCH_HEAD: a fetch rewrites it even when it brings nothing,
+            // and refs it moved are reported themselves.
+            Some("refs") | Some("reftable") | Some("HEAD") | Some("packed-refs") | Some("logs") | Some("shallow")
             | Some("ORIG_HEAD") | Some("MERGE_HEAD") => Change {
                 refs: true,
                 status: true,
@@ -507,6 +509,12 @@ mod tests {
         assert_eq!(c("/r/.git/index.lock"), Change::default());
         assert_eq!(c("/r/.git/refs/heads/main.lock"), Change::default());
         assert_eq!(c("/elsewhere/x"), Change::default());
+
+        // A fetch writes FETCH_HEAD whatever it brings; deepening a shallow
+        // history moves no ref, and a reftable has no ref files to report.
+        assert_eq!(c("/r/.git/FETCH_HEAD"), Change::default());
+        assert_eq!(c("/r/.git/shallow"), BOTH);
+        assert_eq!(c("/r/.git/reftable/tables.list"), BOTH);
 
         // Adding, removing, moving and locking a linked worktree.
         assert_eq!(c("/r/.git/worktrees/side/gitdir"), REFS_ONLY);

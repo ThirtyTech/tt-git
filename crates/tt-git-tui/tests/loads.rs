@@ -116,7 +116,7 @@ fn deepening_a_shallow_history_reloads_the_graph() {
     let mut t = TestDriver::new(&sb);
     assert_eq!(messages(&t), ["third", "second"]);
 
-    // As `git fetch --deepen` does: no tip moves, and FETCH_HEAD (a refs
+    // As `git fetch --deepen` does: no tip moves, and `shallow` (a refs
     // change to the watcher) is written.
     let start = commands(&t).len();
     std::fs::write(&shallow, format!("{first}\n")).unwrap();

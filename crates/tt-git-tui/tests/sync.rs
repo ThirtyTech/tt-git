@@ -199,13 +199,17 @@ fn behind_a_push_elsewhere() -> Sandbox {
     let sb = ahead_of_origin();
     let other = sb.clone_to(&sb.root().join("remotes").join("origin.git"), "other");
     sb.git_in(&other, &["push", "-q", "origin", "HEAD:theirs"]);
+    last_fetched_an_hour_ago(&sb);
+    sb
+}
+
+fn last_fetched_an_hour_ago(sb: &Sandbox) {
     let hour_ago = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
     std::fs::File::options()
         .write(true)
         .open(sb.path().join(".git").join("FETCH_HEAD"))
         .and_then(|f| f.set_modified(hour_ago))
         .expect("FETCH_HEAD");
-    sb
 }
 
 /// Ticks to the app's first background fetch check.
@@ -224,6 +228,20 @@ fn a_background_fetch_says_nothing() {
     assert!(t.app().notice().is_none(), "{:?}", t.app().notice());
     assert!(t.app().error().is_none(), "{:?}", t.app().error());
     assert!(t.screen().contains("theirs"), "{}", t.screen());
+}
+
+#[test]
+fn a_background_fetch_that_brings_nothing_reloads_nothing() {
+    let sb = ahead_of_origin();
+    last_fetched_an_hour_ago(&sb);
+    let mut t = TestDriver::with_background_fetch(Config::default(), &sb);
+    let start = t.app().repo().git().log().entries().len();
+    t.tick(FIRST_CHECK).wait_idle();
+    let ran: Vec<String> = t.app().repo().git().log().entries()[start..]
+        .iter()
+        .map(|c| c.args.clone())
+        .collect();
+    assert_eq!(ran, ["remote", "-c credential.interactive=never fetch --all --prune"]);
 }
 
 #[test]
