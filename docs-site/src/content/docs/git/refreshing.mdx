@@ -43,18 +43,18 @@ watch = false
 |---|---|
 | A file in the working tree (not ignored) | Status |
 | `.git/index` (something was staged or unstaged) | Status |
-| `HEAD`, `refs/`, `packed-refs`, `logs/` or `FETCH_HEAD` (a commit, checkout, fetch, branch change) | Branches and status, and the graph if the branches and tags it starts from actually moved |
+| `HEAD`, `refs/`, `reftable/`, `packed-refs`, `logs/` or `shallow` (a commit, checkout, fetch, branch change) | Branches and status, and the graph if the branches and tags it starts from actually moved |
 | A worktree added, removed, moved, locked, unlocked or pruned (`.git/worktrees/`), or a worktree's folder deleted | Branches, including the Worktrees tab |
 | Another worktree's index or logs (staging or committing there) | Nothing more than the branches it moves |
-| Lock files, `objects/`, hooks | Nothing |
+| Lock files, `objects/`, hooks, `FETCH_HEAD` | Nothing |
 
 Opened in a linked worktree, tt-git watches the main repository's `.git`
 too, so a branch or worktree made from the main checkout shows up there
 as well.
 
-A fetch that brings nothing new leaves the graph alone. While the graph
-reloads, the old rows stay on screen until the new ones arrive, so it never
-flashes empty.
+A fetch from a terminal or your editor that brings nothing new reloads
+nothing. While the graph reloads, the old rows stay on screen until the new
+ones arrive, so it never flashes empty.
 
 ## Refreshing by hand
 
@@ -63,9 +63,11 @@ Press <kbd>ctrl+r</kbd> to reload everything. You'd only need it with
 network drives and container mounts).
 
 Every git command tt-git runs itself, such as a commit, checkout or push,
-refreshes everything when it finishes. So does a [background
-fetch](/git/remotes/#background-fetch) that worked, even with
-`watch = false`, so the remote branches stay current either way.
+refreshes everything when it finishes. A [background
+fetch](/git/remotes/#background-fetch) is the exception: one that moves
+nothing reloads nothing, and one that moves a branch or tag reloads once,
+through the watcher, or on its own with `watch = false`, so the remote
+branches stay current either way.
 
 <Aside>
 	If several refreshes are asked for while one is running, they're combined
