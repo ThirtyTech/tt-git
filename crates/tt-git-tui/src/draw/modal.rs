@@ -123,13 +123,15 @@ pub(super) fn draw_error_popup(frame: &mut Frame, area: Rect, msg: &str, theme: 
         .iter()
         .map(|l| line_text(l).chars().count().div_ceil(inner_width).max(1))
         .sum();
-    let popup = centered(area, view.width as u16, text_lines as u16 + 2);
+    let popup = centered(area, view.width as u16, text_lines as u16 + 4);
     frame.render_widget(Clear, popup);
     let block = Block::bordered()
         .border_type(BorderType::Rounded)
         .border_style(theme.role(view.look.border()))
         .title(Span::styled(format!(" {} ", view.title), theme.role(view.look.title())));
-    let lines: Vec<Line> = view.body.into_iter().map(|l| line(l, theme)).collect();
+    let mut lines: Vec<Line> = view.body.into_iter().map(|l| line(l, theme)).collect();
+    lines.push(Line::raw(""));
+    lines.push(Line::styled(view.hint.unwrap_or_default(), theme.muted));
     frame.render_widget(Paragraph::new(lines).wrap(Wrap { trim: false }).block(block), popup);
 }
 

@@ -194,20 +194,14 @@ impl Shell {
         if !self.focus.is_focused(window) {
             return;
         }
-        // ctrl+c (cmd+c on macOS) copies text selected with the mouse
-        // rather than quitting, as in a terminal.
+        // ctrl+c (cmd+c on macOS) copies text selected with the mouse, or
+        // the error popup's message, rather than quitting, as in a terminal.
         let keystroke = &event.keystroke;
         if keystroke.key == "c"
             && keystroke.modifiers.secondary()
             && !keystroke.modifiers.shift
             && !keystroke.modifiers.alt
-            && self
-                .model
-                .read(cx)
-                .app()
-                .details()
-                .selection()
-                .is_some_and(|s| !s.is_empty())
+            && self.model.read(cx).app().can_copy_selection()
         {
             cx.stop_propagation();
             self.model.update(cx, |m, cx| m.send(Action::CopySelection, cx));

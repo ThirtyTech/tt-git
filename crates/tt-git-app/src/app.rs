@@ -1,5 +1,6 @@
 //! Top-level application state, update and draw.
 
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use tokio::sync::mpsc::{self, UnboundedReceiver};
@@ -25,7 +26,7 @@ use crate::mouse::{FilterSpot, MouseInput, MouseKind, MouseTarget};
 use crate::new_commits::{self, NewCommits, Pending, Tips, Watch};
 use crate::panes::{
     BlameView, BranchFocus, BranchTab, BranchesPane, DetailsPane, DetailsSubject, GraphPane, LoadToken, PaneId,
-    SavedDetails, StatusPane,
+    SavedDetails, StatusPane, TextPos, TextSelection,
 };
 use crate::theme::Theme;
 use crate::view::dialogs::HelpTab;
@@ -357,6 +358,9 @@ pub struct App {
     /// The help popup's tab: its keys or About.
     help_tab: HelpTab,
     error: Option<String>,
+    /// Text picked out of the error popup with the mouse; see
+    /// [`error_selection`](Self::error_selection).
+    error_select: Option<TextSelection>,
     notice: Option<String>,
     /// The notice a plugin's failure put up, which opens the plugin logs
     /// when clicked while it's showing.
@@ -495,6 +499,7 @@ impl App {
             help_query: String::new(),
             help_tab: HelpTab::Keys,
             error: None,
+            error_select: None,
             notice: None,
             plugin_notice: None,
             clipboard: None,
@@ -723,6 +728,44 @@ impl App {
 
     pub fn error(&self) -> Option<&str> {
         self.error.as_deref()
+    }
+
+    /// The selection in the error popup, while it's in the message shown and
+    /// picks something out (or is being dragged).
+    pub fn error_selection(&self) -> Option<&TextSelection> {
+        let message = self.error.as_deref()?;
+        self.error_select
+            .as_ref()
+            .filter(|s| s.is_of(message) && (s.dragging || !s.is_empty()))
+    }
+
+    /// Whether a selection is being dragged out, in the details pane's text
+    /// or the error popup.
+    pub fn selecting(&self) -> bool {
+        self.details.selecting() || self.error_selection().is_some_and(|s| s.dragging)
+    }
+
+    /// Whether [`Action::CopySelection`] has something to copy: the error
+    /// popup always does, and otherwise text selected in the details pane.
+    pub fn can_copy_selection(&self) -> bool {
+        self.error.is_some() || self.details.selection().is_some_and(|s| !s.is_empty())
+    }
+
+    fn select_error(&mut self, at: TextPos, extend: bool) {
+        let Some(message) = self.error.as_deref() else {
+            return;
+        };
+        match &mut self.error_select {
+            Some(sel) if extend && sel.dragging && sel.is_of(message) => sel.extend(at),
+            // A drag that didn't start in the message.
+            _ if extend => {}
+            slot => {
+                *slot = Some(TextSelection::new(
+                    Arc::new(message.lines().map(str::to_string).collect()),
+                    at,
+                ))
+            }
+        }
     }
 
     pub fn notice(&self) -> Option<&str> {
@@ -1038,6 +1081,10 @@ impl App {
         if self.error.is_some() {
             if matches!(combo.code, KeyCode::Esc | KeyCode::Enter) || combo == KeyCombo::char('q') {
                 self.error = None;
+                self.error_select = None;
+            } else if combo == KeyCombo::char('c') || combo == KeyCombo::new(KeyCode::Char('c'), KeyModifiers::CONTROL)
+            {
+                self.update(Action::CopySelection);
             }
             return;
         }
@@ -1273,9 +1320,23 @@ impl App {
                 }
                 self.details.select_text(row, col, extend);
             }
-            Action::SelectEnd => self.details.end_selection(),
+            Action::SelectError { at, extend } => self.select_error(at, extend),
+            Action::SelectEnd => {
+                self.details.end_selection();
+                if let Some(sel) = &mut self.error_select {
+                    sel.dragging = false;
+                }
+            }
             Action::CopySelection => {
-                if let Some(text) = self.details.selection().filter(|s| !s.is_empty()).map(|s| s.text()) {
+                let text = match &self.error {
+                    Some(message) => Some(
+                        self.error_selection()
+                            .filter(|s| !s.is_empty())
+                            .map_or_else(|| message.clone(), |s| s.text()),
+                    ),
+                    None => self.details.selection().filter(|s| !s.is_empty()).map(|s| s.text()),
+                };
+                if let Some(text) = text {
                     self.update(Action::Copy(text));
                 }
             }
