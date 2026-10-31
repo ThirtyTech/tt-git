@@ -59,6 +59,11 @@ header.header {
 	border-radius: 22%;
 }
 
+/* Starlight sizes these icons at 1em. */
+.social-icons {
+	font-size: 1.5rem;
+}
+
 /* Splash hero: a soft cyan glow behind the logo, like the merge node. */
 .hero > img,
 .hero > picture img {
