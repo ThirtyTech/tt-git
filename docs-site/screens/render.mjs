@@ -359,10 +359,19 @@ function draw(capture, shot, geo) {
 			<feDropShadow dx="0" dy="6" stdDeviation="10" flood-color="#000" flood-opacity="0.55"/>
 		</filter>`;
 
-	const ACCENT = { cyan: '#4bc0eb', green: '#7bd938', amber: '#f2b84b', pink: '#ff7ab6' };
+	const ACCENT = {
+		cyan: '#4bc0eb', green: '#7bd938', amber: '#f2b84b', pink: '#ff7ab6',
+		purple: '#c4a7ff', orange: '#ff9366', blue: '#8aaaff', silver: '#d5dee8',
+	};
+	// Reserve explicit tones (for example destructive-action pink), then give
+	// each remaining callout a distinct color shared by its marker and legend.
+	const reserved = new Set((shot.callouts ?? []).map((c) => c.tone).filter(Boolean));
+	const palette = Object.keys(ACCENT).filter((tone) => !reserved.has(tone));
+	let nextTone = 0;
 	const hl = (shot.highlights ?? []).map((h) => ({ ...h, rect: toPx(h.target, h.pad ?? 4) }));
 	const callouts = (shot.callouts ?? []).map((c, i) => ({
 		...c,
+		tone: c.tone ?? palette[nextTone++ % palette.length] ?? 'cyan',
 		n: c.n ?? i + 1,
 		rect: c.target ? toPx(c.target, c.pad ?? 4) : null,
 	}));

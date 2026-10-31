@@ -82,6 +82,12 @@ a zoomed region, and callouts that point at text found on screen (so they
 survive small layout changes). After a UI change, run both steps and look
 over the images before committing them.
 
+Numbered callouts use distinct colors, with the same color on each target,
+number and legend entry. Numbers remain visible so color is not the only way
+to match them. An explicit `tone` keeps a meaningful color, such as pink for
+a destructive action. For annotation-only changes, rerun the render step
+using the existing captures.
+
 ### The desktop app
 
 `docshots` drives the terminal app only. The desktop app's images

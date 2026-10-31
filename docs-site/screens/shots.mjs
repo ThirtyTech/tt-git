@@ -12,6 +12,8 @@
 //            ('right' | 'left' | 'above' | 'below', plus dx/dy/gap) to sit
 //            beside the target with a leader line instead of in the legend.
 //            text may use **bold**.
+//            Callouts get distinct colors automatically; tone overrides that
+//            choice when a color has meaning (for example pink for discard).
 // highlights { target, label?, tone? }: an outline, optionally labelled.
 //
 // Targets, in cells of the 190×51 screen:
