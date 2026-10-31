@@ -65,9 +65,8 @@ header.header {
 }
 
 /* Splash hero: a soft cyan glow behind the logo, like the merge node. */
-.hero > img,
-.hero > picture img {
-	filter: drop-shadow(0 0 3rem color-mix(in srgb, var(--tt-cyan) 35%, transparent));
+.hero-logo {
+	filter: drop-shadow(0 0 1.25rem color-mix(in srgb, var(--tt-cyan) 35%, transparent));
 }
 
 :root:not([data-theme='light']) .hero h1 {

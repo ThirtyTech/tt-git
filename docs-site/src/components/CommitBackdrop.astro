@@ -77,14 +77,15 @@
 			animation-delay: -4.5s;
 		}
 
-		:root[data-has-hero] .hero > img {
+		:root[data-has-hero] .hero-logo {
 			animation:
 				hero-rise 0.8s ease-out backwards,
 				logo-pulse 3.5s ease-in-out 0.8s infinite alternate;
 		}
 		:root[data-has-hero] .hero h1,
 		:root[data-has-hero] .hero .tagline,
-		:root[data-has-hero] .hero .actions {
+		:root[data-has-hero] .hero .actions,
+		:root[data-has-hero] .hero .shot {
 			animation: hero-rise 0.7s ease-out backwards;
 		}
 		:root[data-has-hero] .hero .tagline {
@@ -92,6 +93,9 @@
 		}
 		:root[data-has-hero] .hero .actions {
 			animation-delay: 0.24s;
+		}
+		:root[data-has-hero] .hero .shot {
+			animation-delay: 0.36s;
 		}
 
 		@supports (animation-timeline: view()) {
@@ -117,10 +121,10 @@
 	}
 	@keyframes logo-pulse {
 		from {
-			filter: drop-shadow(0 0 1.75rem color-mix(in srgb, var(--tt-cyan) 22%, transparent));
+			filter: drop-shadow(0 0 0.75rem color-mix(in srgb, var(--tt-cyan) 22%, transparent));
 		}
 		to {
-			filter: drop-shadow(0 0 4rem color-mix(in srgb, var(--tt-cyan) 60%, transparent));
+			filter: drop-shadow(0 0 1.75rem color-mix(in srgb, var(--tt-cyan) 60%, transparent));
 		}
 	}
 	@keyframes hero-rise {

@@ -1,0 +1,103 @@
+---
+// The homepage's hero: the logo beside the title, with the screenshot next to
+// them. Starlight's hero has one small image slot and resizes it to 400px,
+// which would blur the screenshot. Other pages keep Starlight's hero.
+import Default from '@astrojs/starlight/components/Hero.astro';
+import { LinkButton } from '@astrojs/starlight/components';
+import logo from '../assets/logo.svg';
+import Screenshot from './Screenshot.astro';
+
+const { id, entry } = Astro.locals.starlightRoute;
+const { title = entry.data.title, tagline, actions = [] } = entry.data.hero ?? {};
+---
+
+{
+	id !== '' ? (
+		<Default />
+	) : (
+		<div class="hero">
+			<div class="copy">
+				<div class="title">
+					<img class="hero-logo" src={logo.src} width="88" height="88" alt="" />
+					{/* The table of contents links to this ID, as it does on Starlight's hero. */}
+					<h1 id="_top" data-page-title set:html={title} />
+				</div>
+				{tagline && <div class="tagline" set:html={tagline} />}
+				<div class="actions">
+					{actions.map(({ attrs: { class: className, ...attrs } = {}, icon, link: href, text, variant }) => (
+						<LinkButton {href} {variant} icon={icon?.name} class:list={[className]} {...attrs}>
+							{text}
+							{icon?.html && <Fragment set:html={icon.html} />}
+						</LinkButton>
+					))}
+				</div>
+			</div>
+			<div class="shot">
+				<Screenshot name="hero" alt="tt-git on a web project: the commit graph on top, the status pane and the branch list below" />
+			</div>
+		</div>
+	)
+}
+
+<style>
+	.hero {
+		--hero-width: min(80rem, 100vw - 3rem);
+		display: grid;
+		gap: 2.5rem;
+		width: var(--hero-width);
+		margin-inline: calc((100% - var(--hero-width)) / 2);
+		padding-block: 1rem;
+	}
+	.copy {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+		align-items: center;
+		text-align: center;
+	}
+	.title {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+	.hero-logo {
+		flex: none;
+		width: clamp(3.5rem, calc(1.5rem + 5vw), 5.5rem);
+		height: auto;
+	}
+	h1 {
+		font-size: clamp(var(--sl-text-3xl), calc(0.25rem + 5vw), var(--sl-text-6xl));
+		line-height: var(--sl-line-height-headings);
+		font-weight: 600;
+		color: var(--sl-color-white);
+	}
+	.tagline {
+		max-width: 50ch;
+		font-size: clamp(var(--sl-text-base), calc(0.0625rem + 2vw), var(--sl-text-xl));
+		color: var(--sl-color-gray-2);
+	}
+	.actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 1rem 2rem;
+		justify-content: center;
+	}
+	.shot :global(.screenshot) {
+		margin-block: 0;
+	}
+	@media (min-width: 64rem) {
+		.hero {
+			grid-template-columns: minmax(0, 5fr) minmax(0, 8fr);
+			align-items: center;
+			gap: 3rem;
+			padding-block: clamp(2.5rem, calc(1rem + 6vmin), 6rem);
+		}
+		.copy {
+			align-items: flex-start;
+			text-align: start;
+		}
+		.actions {
+			justify-content: flex-start;
+		}
+	}
+</style>

@@ -71,7 +71,10 @@ export default defineConfig({
 			favicon: '/favicon.svg',
 			head,
 			customCss: ['./src/styles/theme.css'],
-				components: { Header: './src/components/Header.astro' },
+				components: {
+					Header: './src/components/Header.astro',
+					Hero: './src/components/Hero.astro',
+				},
 			social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/thirtytech/tt-git' }],
 			sidebar: [
 				{

@@ -4,8 +4,6 @@ description: A terminal git client with a GitLens-style commit graph, a lazygit-
 template: splash
 hero:
   tagline: A terminal git client with a GitLens-style commit graph, a lazygit-style status pane and plugins built like herdr's.
-  image:
-    file: ../../assets/logo.svg
   actions:
     - text: Get started
       link: getting-started/install/
@@ -20,13 +18,10 @@ hero:
 ---
 
 import CommitBackdrop from '../../components/CommitBackdrop.astro';
-import Screenshot from '../../components/Screenshot.astro';
 import YouTubeCallout from '../../components/YouTubeCallout.astro';
 import { Card, CardGrid, LinkCard } from '@astrojs/starlight/components';
 
 <CommitBackdrop />
-
-<Screenshot name="hero" alt="tt-git on a web project: the commit graph on top, the status pane and the branch list below" />
 
 <YouTubeCallout id="0xlyDJ5GcEE" title="tt-git: a fast git client for the terminal and the desktop" />
 
