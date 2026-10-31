@@ -350,7 +350,7 @@ changes.
 | Action | Runs |
 |---|---|
 | Open | Nothing in git: tt-git shuts down its panes, watcher and plugins, changes its working directory to the worktree, and starts over there |
-| Remove | `git worktree remove <path>`, then `git worktree remove --force <path>` if you confirm removing it with its changes |
+| Remove | `git worktree remove <path>`, then `git worktree remove --force <path>` if you confirm removing it with its changes. On Windows, tt-git first moves the folder aside and back, and runs neither if that shows it's in use. If git still fails to delete the folder, tt-git deletes what's left |
 | New worktree | `git worktree add -b <name> .worktrees/<name> <start>`, as in [Other branch commands](#other-branch-commands) |
 
 ### Undo
