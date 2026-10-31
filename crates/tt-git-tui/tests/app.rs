@@ -1,7 +1,7 @@
 use tt_git_testkit::{Sandbox, TestDriver};
 use tt_git_tui::Config;
 use tt_git_tui::app::Zoom;
-use tt_git_tui::panes::{DateStyle, DetailsSubject, GraphScope, PaneId};
+use tt_git_tui::panes::{DateStyle, DetailsSubject, GraphScope, PaneId, TextPos};
 
 #[test]
 fn initial_layout_empty_repo() {
@@ -500,6 +500,66 @@ fn c_in_details_copies_all_of_its_text() {
     // Says how much rather than all of it.
     let notice = format!("copied {} lines", text.lines().count());
     assert_eq!(t.app().notice(), Some(notice.as_str()));
+}
+
+#[test]
+fn the_error_popup_copies_its_message_or_the_selection() {
+    let sb = Sandbox::new();
+    sb.commit("one");
+    let mut t = TestDriver::new(&sb);
+    let message = "first line\nsecond line";
+    t.send(tt_git_tui::Action::Error(message.into()));
+
+    // c and ctrl+c copy all of it and leave the popup up.
+    for key in ["c", "ctrl+c"] {
+        t.press(key);
+        assert_eq!(t.app_mut().take_clipboard().as_deref(), Some(message), "{key}");
+        assert_eq!(t.app().notice(), Some("copied 2 lines"));
+        assert_eq!(t.app().error(), Some(message));
+    }
+
+    // The mouse picks part of it out (the GUI's), which is what they copy.
+    let at = |line, col| TextPos { line, col };
+    let select = |at, extend| tt_git_tui::Action::SelectError { at, extend };
+    t.send(select(at(0, 6), false));
+    t.send(select(at(1, 6), true));
+    assert!(t.app().selecting());
+    t.send(tt_git_tui::Action::SelectEnd);
+    assert!(!t.app().selecting());
+    t.send(select(at(1, 0), true));
+    assert_eq!(
+        t.app().error_selection().map(|s| s.text()).as_deref(),
+        Some("line\nsecond"),
+        "a move after the release changes nothing"
+    );
+    t.press("c");
+    assert_eq!(t.app_mut().take_clipboard().as_deref(), Some("line\nsecond"));
+
+    // Another error doesn't inherit it.
+    t.send(tt_git_tui::Action::Error("something else".into()));
+    assert!(t.app().error_selection().is_none());
+    t.press("c");
+    assert_eq!(t.app_mut().take_clipboard().as_deref(), Some("something else"));
+
+    // Nor does the same message shown again after closing the popup.
+    t.send(tt_git_tui::Action::Error(message.into()));
+    t.send(select(at(0, 0), false));
+    t.send(select(at(0, 5), true));
+    t.press("esc");
+    assert_eq!(t.app().error(), None);
+    t.send(tt_git_tui::Action::Error(message.into()));
+    assert!(t.app().error_selection().is_none());
+}
+
+#[test]
+fn the_error_popup_shows_its_keys() {
+    let sb = Sandbox::new();
+    sb.commit("one");
+    let mut t = TestDriver::new(&sb);
+    t.send(tt_git_tui::Action::Error("it broke".into()));
+    let screen = t.screen();
+    assert!(screen.contains("it broke"), "{screen}");
+    assert!(screen.contains("c copy · esc close"), "{screen}");
 }
 
 #[test]

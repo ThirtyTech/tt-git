@@ -104,6 +104,9 @@ impl DialogView<'_> {
     }
 }
 
+/// The error popup's keys.
+pub const ERROR_HINT: &str = "c copy · esc close";
+
 /// The error popup for `message`: its lines as they are, in a red box up to
 /// 70 columns of `cols`.
 pub fn error_view(message: &str, cols: usize) -> DialogView<'_> {
@@ -112,7 +115,7 @@ pub fn error_view(message: &str, cols: usize) -> DialogView<'_> {
         look: DialogLook::Error,
         width: 70.min(cols),
         body: message.lines().map(|l| vec![TextSpan::plain(l)]).collect(),
-        hint: None,
+        hint: Some(ERROR_HINT.into()),
     }
 }
 
@@ -157,7 +160,7 @@ mod tests {
         assert_eq!(view.title, "Error");
         let lines: Vec<String> = view.body.iter().map(|l| line_text(l)).collect();
         assert_eq!(lines, ["first", "second line"]);
-        assert_eq!(view.hint, None);
+        assert_eq!(view.hint.as_deref(), Some(ERROR_HINT));
         assert_eq!(error_view("x", 30).width, 30, "narrowed to the screen");
     }
 

@@ -72,11 +72,12 @@ impl Ui {
         }
     }
 
-    /// Whether a selection is being dragged out in the details pane's text.
+    /// Whether a selection is being dragged out, in the details pane's text
+    /// or the error popup.
     pub fn selecting(&self, cx: &App) -> bool {
         self.model
             .upgrade()
-            .is_some_and(|model| model.read(cx).app().details().selecting())
+            .is_some_and(|model| model.read(cx).app().selecting())
     }
 
     /// Sends the app an action, as if a job had sent it.

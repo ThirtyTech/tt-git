@@ -1,5 +1,5 @@
-//! Text picked out with the mouse in the details pane, for the front ends
-//! that draw it (the GUI) to copy.
+//! Text picked out with the mouse in the details pane or the error popup,
+//! for the front ends that draw it (the GUI) to copy.
 //!
 //! A selection is kept by line and column of the text it was made in, not
 //! by screen row, so it stays put as the text scrolls. It holds on to that
@@ -46,6 +46,12 @@ impl TextSelection {
     /// Whether it was made in `lines`, the text now shown.
     pub fn is_for(&self, lines: &Arc<Vec<String>>) -> bool {
         Arc::ptr_eq(&self.lines, lines)
+    }
+
+    /// Whether it was made in `text`, the lines of a message rather than a
+    /// pane's: the same words count.
+    pub fn is_of(&self, text: &str) -> bool {
+        self.lines.iter().map(String::as_str).eq(text.lines())
     }
 
     /// Whether it picks out nothing (a click without a drag).
@@ -111,6 +117,12 @@ fn byte_at(line: &str, col: usize) -> usize {
     line.len()
 }
 
+/// The column byte `byte` of `line` starts at: the other way from
+/// [`byte_at`], for a front end that hit-tests by byte.
+pub fn col_at(line: &str, byte: usize) -> usize {
+    line[..byte].chars().map(|ch| ch.width().unwrap_or(0)).sum()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -166,5 +178,20 @@ mod tests {
         assert_eq!(byte_at("日本語", 1), 0, "inside the first character");
         assert_eq!(byte_at("日本語", 2), 3);
         assert_eq!(byte_at("日本語", 7), 9);
+    }
+
+    #[test]
+    fn a_byte_has_a_column_and_back() {
+        assert_eq!(col_at("✗ plugin", 4), 2, "✗ is three bytes but one column");
+        assert_eq!(col_at("日本語", 6), 4);
+        assert_eq!(byte_at("日本語", col_at("日本語", 6)), 6);
+    }
+
+    #[test]
+    fn a_selection_knows_the_message_by_its_words() {
+        let sel = TextSelection::new(lines("one\ntwo"), pos(0, 0));
+        assert!(sel.is_of("one\ntwo"));
+        assert!(!sel.is_of("one\ntwo\nthree"));
+        assert!(!sel.is_of("one"));
     }
 }

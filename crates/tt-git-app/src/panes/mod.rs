@@ -12,7 +12,7 @@ pub use blame::BlameView;
 pub use branches::{BranchTab, BranchesPane, DECORATION_WIDTH};
 pub use details::{DetailsPane, DetailsSubject, SavedDetails};
 pub use graph::{BranchFocus, DateStyle, GraphPane, GraphScope, LabelKind, LoadToken, RefLabel, build_labels};
-pub use selection::{TextPos, TextSelection};
+pub use selection::{TextPos, TextSelection, col_at};
 pub use stage::{StageSideId, StageView};
 pub use status::StatusPane;
 

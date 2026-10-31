@@ -2,7 +2,7 @@
 
 use std::ops::Range;
 
-use gpui::{HighlightStyle, SharedString, StyledText};
+use gpui::{HighlightStyle, SharedString, StyledText, combine_highlights};
 use tt_git_app::view::{StyleRole, TextSpan};
 
 use crate::theme::GuiTheme;
@@ -39,6 +39,16 @@ impl StyledLine {
     /// The line as a text element.
     pub fn element(&self) -> StyledText {
         StyledText::new(self.text.clone()).with_highlights(self.highlights.clone())
+    }
+
+    /// Lays the selected text's look over `bytes`.
+    pub fn select(&mut self, theme: &GuiTheme, bytes: Range<usize>) {
+        let bytes = bytes.start.min(self.text.len())..bytes.end.min(self.text.len());
+        let look = HighlightStyle {
+            background_color: Some(theme.text_selection()),
+            ..HighlightStyle::default()
+        };
+        self.highlights = combine_highlights(std::mem::take(&mut self.highlights), [(bytes, look)]).collect();
     }
 }
 

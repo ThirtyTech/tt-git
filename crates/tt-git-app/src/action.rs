@@ -13,7 +13,7 @@ use crate::editor::{EditTarget, Snapshot};
 use crate::filter::{Choice, FilterTab};
 use crate::keymap::Command;
 use crate::modal::{GitOp, Modal};
-use crate::panes::{BranchFocus, DetailsSubject};
+use crate::panes::{BranchFocus, DetailsSubject, TextPos};
 use crate::syntax::{HunkTokens, LineTokens};
 
 /// Refs and HEAD, loaded together so labels and branch lists agree.
@@ -60,9 +60,17 @@ pub enum Action {
         col: usize,
         extend: bool,
     },
-    /// The mouse came up after [`SelectText`](Self::SelectText).
+    /// The mouse in the error popup's message, at `at`: down (a new
+    /// selection), or with `extend` moved while down.
+    SelectError {
+        at: TextPos,
+        extend: bool,
+    },
+    /// The mouse came up after [`SelectText`](Self::SelectText) or
+    /// [`SelectError`](Self::SelectError).
     SelectEnd,
-    /// Copy the details pane's selection, if there is one (the GUI's
+    /// Copy the error popup's selection or else its whole message; with no
+    /// popup, the details pane's selection, if there is one (the GUI's
     /// ctrl+c or cmd+c).
     CopySelection,
     /// The notice in the help bar was clicked: a plugin's failure opens the

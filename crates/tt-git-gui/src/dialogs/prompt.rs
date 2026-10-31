@@ -131,11 +131,16 @@ pub fn dialog_box(ui: &Ui, id: &'static str, look: DialogLook, width: usize, tit
 /// One line of view-model spans, wrapped to the dialog's width; in the UI
 /// font in the native style.
 pub fn line(ui: &Ui, spans: &[TextSpan]) -> Div {
+    wrapped_line(ui, StyledLine::new(&ui.theme, spans, None).element())
+}
+
+/// One line of `text`, as [`line`] draws it.
+pub fn wrapped_line(ui: &Ui, text: impl IntoElement) -> Div {
     div()
         .min_h(ui.font.line_height)
         .whitespace_normal()
         .when(ui.native(), |d| d.font_family(look::ui_font_family()))
-        .child(StyledLine::new(&ui.theme, spans, None).element())
+        .child(text)
 }
 
 /// One line that's cut at the dialog's edge rather than wrapped.
@@ -237,13 +242,19 @@ fn keys_line(ui: &Ui, hint: &str) -> Div {
 /// A dialog of text: the title, the body wrapped to the width, then a
 /// blank line and the keys.
 pub fn text_dialog(ui: &Ui, id: &'static str, view: DialogView) -> AnyElement {
+    let body = div().flex().flex_col().children(view.body.iter().map(|l| line(ui, l)));
+    layer(ui, text_box(ui, id, &view, body)).into_any_element()
+}
+
+/// The box of a [`text_dialog`], with `body` drawn in place of the view's
+/// lines.
+pub fn text_box(ui: &Ui, id: &'static str, view: &DialogView, body: Div) -> Div {
     let title = title(ui, &view.title, view.look).element();
-    let mut dialog = dialog_box(ui, id, view.look, view.width, title)
-        .child(div().flex().flex_col().children(view.body.iter().map(|l| line(ui, l))));
-    if let Some(hint) = &view.hint {
-        dialog = dialog.child(blank(ui)).child(keys_line(ui, hint));
+    let dialog = dialog_box(ui, id, view.look, view.width, title).child(body);
+    match &view.hint {
+        Some(hint) => dialog.child(blank(ui)).child(keys_line(ui, hint)),
+        None => dialog,
     }
-    layer(ui, dialog).into_any_element()
 }
 
 #[cfg(test)]
