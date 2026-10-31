@@ -1,0 +1,112 @@
+---
+// A callout for a YouTube video: its thumbnail and title, linking out so the
+// video plays on YouTube rather than in an embedded player.
+import { Icon } from '@astrojs/starlight/components';
+
+interface Props {
+	/** The video's ID, from its youtu.be link. */
+	id: string;
+	title: string;
+}
+
+const { id, title } = Astro.props;
+---
+
+<a class="video-callout not-content" href={`https://youtu.be/${id}`} target="_blank" rel="noopener">
+	<span class="thumbnail">
+		<img src={`https://i.ytimg.com/vi/${id}/maxresdefault.jpg`} width="1280" height="720" alt="" loading="lazy" decoding="async" />
+		<span class="play" aria-hidden="true"></span>
+	</span>
+	<span class="text">
+		<span class="label">Watch the video</span>
+		<span class="title">{title}</span>
+		<span class="action">
+			<Icon name="youtube" />
+			Watch on YouTube
+			<Icon name="external" size="0.9em" />
+		</span>
+	</span>
+</a>
+
+<style>
+	.video-callout {
+		display: grid;
+		grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+		align-items: center;
+		gap: 1.5rem;
+		margin-block: 1.5rem;
+		padding: 0.75rem;
+		border: 1px solid color-mix(in srgb, var(--tt-cyan) 30%, var(--sl-color-gray-5));
+		border-radius: 0.6rem;
+		background: var(--sl-color-gray-6);
+		color: var(--sl-color-white);
+		text-decoration: none;
+		transition: border-color 0.15s;
+	}
+	.video-callout:hover {
+		border-color: var(--tt-cyan);
+	}
+	.thumbnail {
+		position: relative;
+		display: block;
+		border-radius: 0.35rem;
+		overflow: hidden;
+	}
+	.thumbnail img {
+		display: block;
+		width: 100%;
+		height: auto;
+	}
+	.play {
+		position: absolute;
+		inset: 50% auto auto 50%;
+		width: 4rem;
+		height: 2.8rem;
+		border-radius: 0.7rem;
+		background: rgb(0 0 0 / 0.75);
+		transform: translate(-50%, -50%);
+		transition: background 0.15s;
+	}
+	.play::after {
+		content: '';
+		position: absolute;
+		inset: 50% auto auto 50%;
+		border-block: 0.6rem solid transparent;
+		border-inline-start: 1rem solid #ffffff;
+		transform: translate(-40%, -50%);
+	}
+	.video-callout:hover .play {
+		background: #ff0000;
+	}
+	.text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding-inline-end: 0.75rem;
+	}
+	.label {
+		color: var(--sl-color-gray-3);
+		font-size: var(--sl-text-sm);
+	}
+	.title {
+		font-size: var(--sl-text-xl);
+		font-weight: 600;
+		line-height: 1.3;
+	}
+	.action {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		color: var(--sl-color-text-accent);
+		font-weight: 600;
+	}
+	@media (max-width: 40rem) {
+		.video-callout {
+			grid-template-columns: minmax(0, 1fr);
+			gap: 0.75rem;
+		}
+		.text {
+			padding: 0 0.25rem 0.25rem;
+		}
+	}
+</style>
