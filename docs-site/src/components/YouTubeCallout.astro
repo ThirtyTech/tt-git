@@ -78,6 +78,22 @@ const { id, title } = Astro.props;
 	.video-callout:hover .play {
 		background: #ff0000;
 	}
+	@media (prefers-reduced-motion: no-preference) {
+		.play {
+			animation: play-pulse 2.4s ease-out infinite;
+		}
+		.video-callout:hover .play {
+			animation: none;
+		}
+	}
+	@keyframes play-pulse {
+		from {
+			box-shadow: 0 0 0 0 color-mix(in srgb, var(--tt-cyan) 60%, transparent);
+		}
+		to {
+			box-shadow: 0 0 0 1.25rem transparent;
+		}
+	}
 	.text {
 		display: flex;
 		flex-direction: column;
