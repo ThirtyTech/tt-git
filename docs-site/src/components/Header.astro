@@ -1,0 +1,65 @@
+---
+// Starlight's header, with commit lanes running across it behind its contents
+// on every page but the homepage, which has them in its background instead.
+import Default from '@astrojs/starlight/components/Header.astro';
+
+const isHome = Astro.locals.starlightRoute.id === '';
+---
+
+{!isHome && <canvas class="header-lanes print:hidden" aria-hidden="true"></canvas>}
+<Default><slot /></Default>
+
+<script>
+	import { startCommitLanes } from '../scripts/commit-lanes';
+
+	const canvas = document.querySelector<HTMLCanvasElement>('.header-lanes');
+	if (canvas) {
+		startCommitLanes(canvas, {
+			horizontal: true,
+			background: '--sl-color-bg-nav',
+			laneSpacing: 16,
+			minLanes: 3,
+			sway: [1.5, 3.5],
+			wavelength: [60, 110],
+			commitGap: [140, 260],
+			speed: [90, 150],
+			hopLength: 70,
+			trailLength: 120,
+			lineWidth: 1,
+			commitRadius: 2,
+			ringGrowth: 9,
+			glowRadius: 9,
+			parallax: 0,
+			quietMiddle: false,
+		});
+		canvas.classList.add('drawn');
+	}
+</script>
+
+<style>
+	/* The header is its own stacking context, so this sits on its background. */
+	.header-lanes {
+		position: absolute;
+		inset: 0;
+		z-index: -1;
+		width: 100%;
+		height: 100%;
+		opacity: 0;
+		pointer-events: none;
+	}
+	.header-lanes.drawn {
+		opacity: 1;
+	}
+	/* Each page load starts new lanes, and the homepage's header has none. Fade
+	   in from the first drawing so the lanes don't pop in. */
+	@media (prefers-reduced-motion: no-preference) {
+		.header-lanes.drawn {
+			animation: header-lanes-in 1.6s ease-out;
+		}
+	}
+	@keyframes header-lanes-in {
+		from {
+			opacity: 0;
+		}
+	}
+</style>
