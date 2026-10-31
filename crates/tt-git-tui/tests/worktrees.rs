@@ -260,6 +260,37 @@ fn removing_a_worktree_with_changes_asks_again_before_forcing() {
     );
 }
 
+#[cfg(windows)]
+#[test]
+fn removing_a_worktree_in_use_says_so_and_keeps_it() {
+    let sb = repo_with_worktrees();
+    let held = add_worktree(&sb, "held", &["-b", "held"]);
+    let mut t = on_worktrees_tab(&sb);
+    t.press("ctrl+r");
+    t.wait_idle();
+    select(&mut t, ".worktrees/held");
+
+    let mut holder = std::process::Command::new("ping")
+        .args(["-n", "60", "127.0.0.1"])
+        .current_dir(&held)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    // Once it has printed something, it really is in the folder.
+    let mut ready = [0; 1];
+    std::io::Read::read_exact(holder.stdout.as_mut().unwrap(), &mut ready).unwrap();
+    t.press("d").press("y");
+    let error = t.app().error().unwrap_or_default().to_string();
+    holder.kill().unwrap();
+    holder.wait().unwrap();
+
+    assert!(error.contains("is in use"), "{error}");
+    assert!(error.contains("Nothing was removed"), "{error}");
+    assert!(held.join(".git").exists(), "nothing was deleted");
+    assert_eq!(t.app().branches().worktrees().len(), 4, "still listed");
+}
+
 #[test]
 fn refuses_to_remove_the_main_current_or_a_locked_worktree() {
     let sb = repo_with_worktrees();
