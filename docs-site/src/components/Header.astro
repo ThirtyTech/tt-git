@@ -1,65 +1,93 @@
 ---
-// Starlight's header, with commit lanes running across it behind its contents
-// on every page but the homepage, which has them in its background instead.
+// A quiet commit graph behind the docs navigation.
 import Default from '@astrojs/starlight/components/Header.astro';
 
 const isHome = Astro.locals.starlightRoute.id === '';
 ---
 
-{!isHome && <canvas class="header-lanes print:hidden" aria-hidden="true"></canvas>}
+{!isHome && (
+	<div class="header-lanes print:hidden" aria-hidden="true">
+		<svg viewBox="0 0 1440 64" preserveAspectRatio="xMidYMid slice" focusable="false">
+			<defs>
+				<linearGradient id="header-route-color" gradientUnits="userSpaceOnUse" x1="0" x2="1440">
+					<stop offset="0%" stop-color="var(--tt-green)" />
+					<stop offset="32%" stop-color="var(--tt-green)" />
+					<stop offset="38%" stop-color="var(--sl-color-accent)" />
+					<stop offset="62%" stop-color="var(--sl-color-accent)" />
+					<stop offset="68%" stop-color="var(--tt-green)" />
+					<stop offset="100%" stop-color="var(--tt-green)" />
+				</linearGradient>
+			</defs>
+			<g class="main-lane">
+				<path d="M0 44H1440" />
+				<circle cx="280" cy="44" r="2.5" />
+				<circle cx="780" cy="44" r="2.5" />
+				<circle cx="1220" cy="44" r="2.5" />
+			</g>
+			<g class="branch-lane">
+				<path d="M0 20H460C500 20 500 44 540 44M900 44C940 44 940 20 980 20H1440" />
+				<circle cx="380" cy="20" r="2.5" />
+				<circle cx="1080" cy="20" r="2.5" />
+			</g>
+			<path class="lane-pulse" d="M0 44H1440" pathLength="1440" />
+			<path class="lane-pulse branch-pulse" d="M0 20H460C500 20 500 44 540 44H900C940 44 940 20 980 20H1440" pathLength="1440" />
+		</svg>
+	</div>
+)}
 <Default><slot /></Default>
 
-<script>
-	import { startCommitLanes } from '../scripts/commit-lanes';
-
-	const canvas = document.querySelector<HTMLCanvasElement>('.header-lanes');
-	if (canvas) {
-		startCommitLanes(canvas, {
-			horizontal: true,
-			background: '--sl-color-bg-nav',
-			laneSpacing: 16,
-			minLanes: 3,
-			sway: [1.5, 3.5],
-			wavelength: [60, 110],
-			commitGap: [140, 260],
-			speed: [90, 150],
-			hopLength: 70,
-			trailLength: 120,
-			lineWidth: 1,
-			commitRadius: 2,
-			ringGrowth: 9,
-			glowRadius: 9,
-			parallax: 0,
-			quietMiddle: false,
-		});
-		canvas.classList.add('drawn');
-	}
-</script>
-
 <style>
-	/* The header is its own stacking context, so this sits on its background. */
+	/* Keep the lanes faint and the motion slow so navigation stays in focus. */
 	.header-lanes {
 		position: absolute;
 		inset: 0;
 		z-index: -1;
+		overflow: hidden;
+		pointer-events: none;
+		background: linear-gradient(110deg, transparent 15%, color-mix(in srgb, var(--sl-color-accent) 5%, transparent) 70%, transparent);
+	}
+	svg {
 		width: 100%;
 		height: 100%;
-		opacity: 0;
-		pointer-events: none;
+		mask-image: linear-gradient(to right, transparent, #000 25%, #000 75%, transparent);
+		fill: var(--sl-color-bg-nav);
+		stroke-width: 1;
 	}
-	.header-lanes.drawn {
-		opacity: 1;
+	.main-lane {
+		stroke: var(--sl-color-accent);
+		opacity: 0.22;
 	}
-	/* Each page load starts new lanes, and the homepage's header has none. Fade
-	   in from the first drawing so the lanes don't pop in. */
+	.branch-lane {
+		stroke: var(--tt-green);
+		opacity: 0.14;
+	}
+	path {
+		fill: none;
+	}
+	.lane-pulse {
+		display: none;
+		stroke: var(--sl-color-accent);
+		stroke-width: 1.5;
+		stroke-linecap: round;
+		stroke-dasharray: 65 2815;
+		opacity: 0.65;
+	}
+	.branch-pulse {
+		stroke: url(#header-route-color);
+	}
 	@media (prefers-reduced-motion: no-preference) {
-		.header-lanes.drawn {
-			animation: header-lanes-in 1.6s ease-out;
+		.lane-pulse {
+			display: block;
+			animation: lane-drift 24s linear infinite;
+			animation-delay: -17s;
+		}
+		.branch-pulse {
+			animation-delay: -5s;
 		}
 	}
-	@keyframes header-lanes-in {
-		from {
-			opacity: 0;
+	@keyframes lane-drift {
+		to {
+			stroke-dashoffset: -2880;
 		}
 	}
 </style>

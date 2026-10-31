@@ -52,6 +52,13 @@ silver-grey `#929291`, the near-black tile `#11151c` as the dark background,
 and the merge node's green `#7bd938`. Dark mode is the default; light mode
 uses the deep cyan for contrast.
 
+On documentation pages, the header uses a faint commit graph over a soft
+cyan tint. Sparse nodes and smooth branch lines keep the git motif behind
+the navigation. Staggered pulses alternate between the main lane and a
+branch route, following its merge and split and changing between green
+and cyan as they cross lanes. Reduced-motion preferences keep the graph still. The homepage
+keeps its animated full-page backdrop.
+
 ## Screenshots
 
 Every image in `src/assets/screens/` is the real app drawing a mock
