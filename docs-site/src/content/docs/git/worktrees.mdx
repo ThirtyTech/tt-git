@@ -192,10 +192,19 @@ tt-git won't remove:
 A worktree whose folder you already deleted by hand shows as `missing`;
 <kbd>d</kbd> on it drops it from git's list.
 
+On Windows, a folder that a program has open (an editor, a terminal whose
+current directory is inside it, a running build) can't be deleted. tt-git
+checks for this before it runs git, by moving the folder aside and back. It
+tries for about a second, then says the folder is in use and removes nothing.
+Close the program and press <kbd>d</kbd> again. tt-git can't tell you which
+program it is.
+
 <Aside>
-	On Windows, a folder that a program has open (an editor, a terminal whose
-	current directory is inside it, a running build) can't be deleted, and the
-	removal fails with git's error. Close it and press <kbd>d</kbd> again.
+	Left to itself, git deletes what it can, forgets the worktree and then fails,
+	so there's nothing to try again. If that still happens, because something
+	opened the folder after tt-git checked, tt-git deletes what's left. If it
+	can't, it tells you the worktree is gone and where the folder is, and you
+	delete the folder yourself. Its branch stays either way.
 </Aside>
 
 ## A new worktree from the tab

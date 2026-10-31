@@ -7,6 +7,8 @@
 
 pub mod blame;
 pub mod branches;
+#[cfg(windows)]
+mod folder;
 pub mod git;
 pub mod ignored;
 pub mod model;

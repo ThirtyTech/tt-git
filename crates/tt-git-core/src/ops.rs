@@ -108,7 +108,8 @@ impl Repo {
     /// folder (ignored files too) and git's record of it; its branch stays.
     /// Without `force` git refuses one with uncommitted or untracked
     /// changes; it refuses a locked one either way. tt-git refuses the
-    /// main worktree and the one it's running in.
+    /// main worktree and the one it's running in, and on Windows one whose
+    /// folder is in use.
     pub fn remove_worktree(&self, path: &std::path::Path, force: bool) -> Result<String> {
         if crate::repo::same_path(path, self.root()) {
             return Err(GitError::Refused(
@@ -118,13 +119,43 @@ impl Repo {
         if crate::repo::same_path(path, self.main_root()) {
             return Err(GitError::Refused("the main worktree can't be removed".into()));
         }
-        let path = path.to_string_lossy();
+        #[cfg(windows)]
+        crate::folder::ensure_free(path)?;
+        let shown = path.to_string_lossy();
         let mut args = vec!["worktree", "remove"];
         if force {
             args.push("--force");
         }
-        args.push(&path);
-        self.git().run(&args).map(text)
+        args.push(&shown);
+        match self.git().run(&args) {
+            Err(e) if e.stderr().is_some_and(|err| err.contains("failed to delete")) => {
+                self.finish_worktree_removal(path, e)
+            }
+            result => result.map(text),
+        }
+    }
+
+    /// Finishes a `git worktree remove` that failed with `failure` because
+    /// it couldn't delete the folder at `path`. git forgets the worktree
+    /// anyway, so it can't be run again: what's left of the folder is
+    /// deleted here, or the error says it's still there. A worktree git
+    /// still lists gets `failure` back and is left alone.
+    pub fn finish_worktree_removal(&self, path: &std::path::Path, failure: GitError) -> Result<String> {
+        let listed = self.worktrees().map_or(true, |worktrees| {
+            worktrees.iter().any(|wt| crate::repo::same_path(&wt.path, path))
+        });
+        if listed {
+            return Err(failure);
+        }
+        match std::fs::remove_dir_all(path) {
+            Ok(()) => Ok(String::new()),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
+            Err(e) => Err(GitError::Refused(format!(
+                "git removed the worktree, but its folder is still at {}: {e}\n\
+                 Close any terminal, editor or program open in it, then delete the folder.",
+                path.display()
+            ))),
+        }
     }
 
     /// Deletes a local branch; without `force` git refuses unmerged ones.

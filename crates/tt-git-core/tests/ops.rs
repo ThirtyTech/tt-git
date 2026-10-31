@@ -889,6 +889,112 @@ fn remove_worktree_whose_folder_is_gone() {
     assert_eq!(repo.worktrees().unwrap().len(), 1);
 }
 
+/// A process sitting in `dir`, which Windows won't let anyone delete.
+#[cfg(windows)]
+struct Holder(std::process::Child);
+
+#[cfg(windows)]
+impl Holder {
+    /// Returns once it has printed something, so it really is in `dir`.
+    fn new(dir: &std::path::Path) -> Self {
+        let mut child = std::process::Command::new("ping")
+            .args(["-n", "60", "127.0.0.1"])
+            .current_dir(dir)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .spawn()
+            .unwrap();
+        let mut ready = [0; 1];
+        std::io::Read::read_exact(child.stdout.as_mut().unwrap(), &mut ready).unwrap();
+        Self(child)
+    }
+}
+
+#[cfg(windows)]
+impl Drop for Holder {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
+#[cfg(windows)]
+#[test]
+fn remove_worktree_refuses_a_folder_in_use_with_nothing_lost() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let repo = open(&sb);
+    repo.create_worktree("held", "main").unwrap();
+    let held = sb.path().join(".worktrees/held");
+    std::fs::create_dir(held.join("sub")).unwrap();
+    std::fs::write(held.join("sub/keep.txt"), "keep\n").unwrap();
+
+    let holder = Holder::new(&held.join("sub"));
+    let err = repo.remove_worktree(&held, true).unwrap_err();
+    assert!(err.to_string().contains("in use"), "{err}");
+    assert!(err.to_string().contains("Nothing was removed"), "{err}");
+    assert!(held.join("sub/keep.txt").is_file(), "nothing was deleted");
+    assert_eq!(repo.worktrees().unwrap().len(), 2, "git still has it");
+    let folders = std::fs::read_dir(sb.path().join(".worktrees")).unwrap().count();
+    assert_eq!(folders, 1, "nothing left beside it");
+
+    drop(holder);
+    repo.remove_worktree(&held, true).unwrap();
+    assert!(!held.exists());
+    assert_eq!(repo.worktrees().unwrap().len(), 1);
+}
+
+/// Runs `git worktree remove` itself with the folder held, as if it got
+/// past the check `remove_worktree` makes first.
+#[cfg(windows)]
+fn failed_removal(repo: &Repo, path: &std::path::Path) -> tt_git_core::GitError {
+    repo.git()
+        .run(&["worktree", "remove", "--force", path.to_str().unwrap()])
+        .unwrap_err()
+}
+
+#[cfg(windows)]
+#[test]
+fn finishing_a_failed_removal_deletes_the_folder_git_left() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let repo = open(&sb);
+    repo.create_worktree("left", "main").unwrap();
+    let left = sb.path().join(".worktrees/left");
+
+    let holder = Holder::new(&left);
+    let failure = failed_removal(&repo, &left);
+    assert!(
+        failure.stderr().unwrap_or_default().contains("failed to delete"),
+        "{failure}"
+    );
+    assert_eq!(repo.worktrees().unwrap().len(), 1, "git forgot it anyway");
+    assert!(left.exists());
+
+    let err = repo.finish_worktree_removal(&left, failure).unwrap_err();
+    assert!(err.to_string().contains("its folder is still at"), "{err}");
+    assert!(left.exists());
+
+    drop(holder);
+    repo.finish_worktree_removal(&left, tt_git_core::GitError::Refused("unused".into()))
+        .unwrap();
+    assert!(!left.exists());
+}
+
+#[test]
+fn finishing_a_removal_leaves_a_worktree_git_still_lists() {
+    let sb = Sandbox::new();
+    sb.commit("base");
+    let repo = open(&sb);
+    repo.create_worktree("kept", "main").unwrap();
+    let kept = sb.path().join(".worktrees/kept");
+
+    let failure = tt_git_core::GitError::Refused("git said no".into());
+    let err = repo.finish_worktree_removal(&kept, failure).unwrap_err();
+    assert!(err.to_string().contains("git said no"), "{err}");
+    assert!(kept.join(".git").exists(), "nothing was deleted");
+}
+
 mod hunks {
     use tt_git_core::PatchOp;
     use tt_git_core::patch::{FileDiff, LineKind};
