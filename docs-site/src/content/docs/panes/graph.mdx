@@ -84,7 +84,7 @@ To start with the lanes hidden, set `lanes = false` under `[graph]` in the
 
 ### Hiding merge commits
 
-Press <kbd>m</kbd> to hide merge commits, so the graph shows only the commits that made changes.
+Press <kbd>m</kbd> to hide merge commits, so the graph shows the commits that made changes.
 The title says `no merges`, as in `Graph [all · no merges]`. Press <kbd>m</kbd> again to show
 them.
 
@@ -95,9 +95,12 @@ it isn't a merge itself, and keeps its real parents in the [details](/panes/deta
 made after the merge connects to it.
 
 A commit can only take one merge's place. When a branch was merged twice, or a commit can't sit
-above the lines it would join, the next commit draws those lines coming straight into it. With
-nothing committed on top, such as a merge at a branch's tip, the highest of those lines joins the
-others instead, so a merged branch never looks unmerged.
+above the lines it would join, the next commit draws those lines coming straight into it. If
+there's no next commit, the highest of those lines joins the others, so a merged branch never
+looks unmerged.
+
+A merge that a branch or `HEAD` points at stays in the graph, so the branch keeps its badge and
+its place. A tag doesn't keep a merge in the graph.
 
 Hiding merges works with [the filters](#filtering-by-author-or-file) and with
 <kbd>a</kbd>. <kbd>esc</kbd> clears the filters but leaves merges hidden. The single branch the

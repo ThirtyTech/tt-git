@@ -128,6 +128,9 @@ The filtered log adds:
 - for [hidden merge commits](/panes/graph/#hiding-merge-commits), nothing:
   git lists them without `--max-count`, and tt-git leaves out each commit
   with more than one parent, stopping once `max_commits` others are listed.
+  A merge that a local or remote branch or `HEAD` points at stays listed
+  (`git for-each-ref` and `git rev-parse` find those), or the branch would
+  lose its badge.
   `--no-merges` would leave a commit's parent pointing at the merge it
   hid, which breaks every line through one. Instead the tip of what a
   merge brought in stands in for it: tt-git draws that commit joined to the
