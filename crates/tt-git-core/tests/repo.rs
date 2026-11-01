@@ -742,14 +742,20 @@ fn leaves_out_merges_drawing_what_they_merged_in_at_their_place() {
 }
 
 #[test]
-fn hidden_merges_at_the_tip_keep_their_lines_joined() {
+fn a_merge_a_branch_points_at_stays_listed() {
     let sb = Sandbox::new();
-    let c1 = sb.commit_file("a.txt", "1\n", "c1");
-    sb.checkout_new("side");
-    let s1 = sb.commit_file("s.txt", "1\n", "s1");
+    sb.commit_file("a.txt", "1\n", "c1");
+    sb.checkout_new("feat");
+    let f1 = sb.commit_file("f.txt", "1\n", "f1");
     sb.checkout("main");
-    let c2 = sb.commit_file("a.txt", "2\n", "c2");
-    sb.merge("side");
+    sb.checkout_new("fix");
+    let x1 = sb.commit_file("x.txt", "1\n", "x1");
+    sb.checkout("main");
+    let inside = sb.merge("fix");
+    sb.checkout("feat");
+    let feat_tip = sb.merge("main");
+    sb.checkout("main");
+    let main_tip = sb.merge("feat");
     let repo = open(&sb);
     let no_merges = LogFilter {
         no_merges: true,
@@ -757,11 +763,18 @@ fn hidden_merges_at_the_tip_keep_their_lines_joined() {
     };
 
     let log = repo.filtered_log(&LogScope::All, &no_merges, 100).unwrap();
-    let got: Vec<String> = log.drawn_parents[&s1.parse::<Oid>().unwrap()]
-        .iter()
-        .map(|p| p.to_string())
-        .collect();
-    assert_eq!(got, vec![c2, c1], "nothing above the merge, but both lines join");
+    let listed = |oid: &str| log.commits.iter().any(|c| c.oid == oid);
+    assert!(listed(&main_tip), "main's tip, with nothing on top");
+    assert!(listed(&feat_tip), "feat's tip, though main merged it");
+    assert!(!listed(&inside), "a merge no branch points at");
+    let drawn = |oid: &str| -> Vec<String> {
+        log.drawn_parents[&oid.parse::<Oid>().unwrap()]
+            .iter()
+            .map(|p| p.to_string())
+            .collect()
+    };
+    assert_eq!(drawn(&main_tip), vec![x1.clone(), feat_tip.clone()]);
+    assert_eq!(drawn(&feat_tip), vec![f1, x1]);
 }
 
 #[test]
@@ -1200,7 +1213,7 @@ fn merge_conflicts_name_every_conflicted_file() {
 }
 
 #[test]
-fn a_branch_merged_in_at_the_tip_after_syncing_stays_joined() {
+fn a_tagged_merge_with_nothing_on_top_keeps_its_lines_joined() {
     let sb = Sandbox::new();
     let c1 = sb.commit_file("a.txt", "1\n", "c1");
     sb.checkout_new("feat");
@@ -1210,11 +1223,15 @@ fn a_branch_merged_in_at_the_tip_after_syncing_stays_joined() {
     sb.commit_file("x.txt", "1\n", "x1");
     sb.checkout("main");
     sb.merge("fix");
-    // feat takes main in, then main takes feat: nothing is on top of either.
+    // feat takes main in, then main takes feat.
     sb.checkout("feat");
     sb.merge("main");
     sb.checkout("main");
     sb.merge("feat");
+    // Only a tag is left there, and a tag doesn't keep a merge listed.
+    sb.git(&["tag", "v1"]);
+    sb.git(&["switch", "-q", "--detach", &c1]);
+    sb.git(&["branch", "-q", "-D", "main", "feat", "fix"]);
     let repo = open(&sb);
     let no_merges = LogFilter {
         no_merges: true,

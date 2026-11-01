@@ -41,8 +41,9 @@ pub struct LogFilter {
     pub message: Option<String>,
     /// What `message` is matched against.
     pub search_in: SearchIn,
-    /// Leaves out merge commits. A commit merged in takes each one's place
-    /// in the drawing (see [`FilteredLog::drawn_parents`]).
+    /// Leaves out merge commits, except a branch's tip or HEAD, which would
+    /// take the branch's badge with them. A commit merged in takes each
+    /// one's place in the drawing (see [`FilteredLog::drawn_parents`]).
     pub no_merges: bool,
 }
 
@@ -829,10 +830,15 @@ impl Repo {
         args.push("--".into());
         args.extend(filter.path.clone());
         let mut commits = Vec::new();
+        let tips = if filter.no_merges {
+            self.branch_tips()?
+        } else {
+            HashSet::new()
+        };
         // Each merge left out, children before parents.
         let mut merges: Vec<(Oid, Parents)> = Vec::new();
         self.stream_log(&args, |mut c| {
-            if filter.no_merges && c.is_merge() {
+            if filter.no_merges && c.is_merge() && !tips.contains(&c.oid) {
                 merges.push((c.oid, c.parents));
                 return true;
             }
@@ -854,6 +860,19 @@ impl Repo {
         // Children come before their parents, so this waits for the merges.
         let drawn_parents = drawn_without_merges(&commits, &merges);
         Ok(FilteredLog { commits, drawn_parents })
+    }
+
+    /// The commits a branch, local or remote, or HEAD points at.
+    fn branch_tips(&self) -> Result<HashSet<Oid>> {
+        let out = self
+            .git
+            .run(&["for-each-ref", "--format=%(objectname)", "refs/heads", "refs/remotes"])?;
+        let mut tips: HashSet<Oid> = out.stdout_str().lines().filter_map(|l| l.parse().ok()).collect();
+        // Fails when HEAD is unborn, with no commit to point at.
+        if let Ok(head) = self.git.run(&["rev-parse", "--verify", "--quiet", "HEAD"]) {
+            tips.extend(head.stdout_str().trim().parse::<Oid>());
+        }
+        Ok(tips)
     }
 
     /// Adds the revisions for `scope` to a log command line. `false` when
