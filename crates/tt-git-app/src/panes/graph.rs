@@ -151,8 +151,8 @@ pub struct GraphPane {
     pub dates: DateStyle,
     /// Draws the branch lanes left of each commit.
     pub lanes: bool,
-    /// Lists merge commits; hiding them draws each merge's child joined to
-    /// the merge's parents (see [`LogFilter::no_merges`]).
+    /// Lists merge commits; hiding them draws the commit merged in at each
+    /// merge's place (see [`LogFilter::no_merges`]).
     pub merges: bool,
     /// Commit limit of the current load; reaching it means more may exist.
     pub limit: usize,

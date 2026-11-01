@@ -64,9 +64,9 @@ pub struct BranchHistory {
 pub struct FilteredLog {
     /// In topological order, each with its own parents.
     pub commits: Vec<Commit>,
-    /// The parents to draw a commit joined to, for each one whose parents
-    /// include a merge the log left out: that merge's parents stand in for
-    /// it, so a branch merged in still joins the line where it was merged.
+    /// The parents to draw a commit joined to, for each one a merge the log
+    /// left out changes: the commit merged in takes the merge's place, so
+    /// it joins the line it was merged into and the lanes keep their shape.
     pub drawn_parents: HashMap<Oid, Parents>,
 }
 

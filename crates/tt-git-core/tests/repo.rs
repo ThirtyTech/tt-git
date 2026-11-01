@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use tt_git_core::{
     BranchHistory, FileState, GitCli, GitError, Head, LogFilter, LogScope, Oid, Recency, RefKind, Repo, SearchIn,
     message_prefixes,
@@ -681,7 +683,7 @@ Co-authored-by: Ann <ann@example.com>",
 }
 
 #[test]
-fn leaves_out_merges_drawing_their_children_joined_to_their_parents() {
+fn leaves_out_merges_drawing_what_they_merged_in_at_their_place() {
     let sb = Sandbox::new();
     let c1 = sb.commit_file("a.txt", "1\n", "c1");
     sb.checkout_new("side");
@@ -691,7 +693,7 @@ fn leaves_out_merges_drawing_their_children_joined_to_their_parents() {
     let o1 = sb.commit_file("o.txt", "1\n", "o1");
     sb.checkout("main");
     let c2 = sb.commit_file("a.txt", "2\n", "c2");
-    // Two merges in a row: c3's parent passes through both.
+    // Two merges in a row: each one's place goes to its branch's tip.
     sb.merge("side");
     let other_merge = sb.merge("other");
     let c3 = sb.commit_file("a.txt", "3\n", "c3");
@@ -715,18 +717,85 @@ fn leaves_out_merges_drawing_their_children_joined_to_their_parents() {
     assert_eq!(strings(&c3.parents), vec![other_merge], "keeps its own parent");
     assert_eq!(
         strings(&log.drawn_parents[&c3.oid]),
-        vec![c2, s1.clone(), o1],
-        "drawn joined to both merges' parents, first parents first"
+        vec![o1.clone()],
+        "drawn joined to the last merge's tip alone"
+    );
+    assert_eq!(
+        strings(&log.drawn_parents[&o1.parse::<Oid>().unwrap()]),
+        vec![s1.clone(), c1.clone()],
+        "the tip continues the line it was merged into, then its own branch"
+    );
+    assert_eq!(
+        strings(&log.drawn_parents[&s1.parse::<Oid>().unwrap()]),
+        vec![c2, c1.clone()],
+        "and so does the tip of the merge before it"
     );
     assert_eq!(
         strings(&commit(&s1).parents),
         vec![c1],
         "a side branch keeps its own parent"
     );
-    assert_eq!(log.drawn_parents.len(), 1, "only c3's parent was a merge");
+    assert_eq!(log.drawn_parents.len(), 3, "only commits around a merge are redrawn");
 
     // The limit counts the commits kept, not the merges passed over.
     assert_eq!(repo.filtered_commits(&LogScope::All, &no_merges, 2).unwrap().len(), 2);
+}
+
+#[test]
+fn hidden_merges_at_the_tip_keep_their_lines_joined() {
+    let sb = Sandbox::new();
+    let c1 = sb.commit_file("a.txt", "1\n", "c1");
+    sb.checkout_new("side");
+    let s1 = sb.commit_file("s.txt", "1\n", "s1");
+    sb.checkout("main");
+    let c2 = sb.commit_file("a.txt", "2\n", "c2");
+    sb.merge("side");
+    let repo = open(&sb);
+    let no_merges = LogFilter {
+        no_merges: true,
+        ..LogFilter::default()
+    };
+
+    let log = repo.filtered_log(&LogScope::All, &no_merges, 100).unwrap();
+    let got: Vec<String> = log.drawn_parents[&s1.parse::<Oid>().unwrap()]
+        .iter()
+        .map(|p| p.to_string())
+        .collect();
+    assert_eq!(got, vec![c2, c1], "nothing above the merge, but both lines join");
+}
+
+#[test]
+fn a_merged_tip_stands_for_only_one_merge() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "1\n", "c1");
+    sb.checkout_new("side");
+    let s1 = sb.commit_file("s.txt", "1\n", "s1");
+    sb.checkout("main");
+    sb.checkout_new("other");
+    let o1 = sb.commit_file("o.txt", "1\n", "o1");
+    sb.merge("side");
+    sb.checkout("main");
+    let c2 = sb.commit_file("a.txt", "2\n", "c2");
+    sb.merge("side");
+    sb.merge("other");
+    let c3 = sb.commit_file("a.txt", "3\n", "c3");
+    let repo = open(&sb);
+    let no_merges = LogFilter {
+        no_merges: true,
+        ..LogFilter::default()
+    };
+
+    let log = repo.filtered_log(&LogScope::All, &no_merges, 100).unwrap();
+    let rows: HashMap<Oid, usize> = log.commits.iter().enumerate().map(|(i, c)| (c.oid, i)).collect();
+    // Every line drawn runs down the list, so each lane ends.
+    for (oid, parents) in &log.drawn_parents {
+        for parent in parents {
+            assert!(rows[oid] < rows[parent], "{oid} is above {parent}");
+        }
+    }
+    for oid in [&s1, &o1, &c2, &c3] {
+        assert!(rows.contains_key(&oid.parse::<Oid>().unwrap()));
+    }
 }
 
 #[test]
