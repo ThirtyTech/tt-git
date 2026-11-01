@@ -135,8 +135,9 @@ The filtered log adds:
   child joined to that commit. Replacing a merge with all its parents would
   fan a run of merges out into one lane per branch. Each commit stands in
   for one merge, and only if it's listed above the lines it would join;
-  otherwise the merge's child is drawn joined to the merge's parents. Each
-  commit keeps its real parents for everything else.
+  otherwise the merge's child is drawn joined to the merge's parents, or,
+  if it has no child, the highest of those parents is drawn joined to the
+  rest. Each commit keeps its real parents for everything else.
 - for a message on the diff, `-G<regex>`, and `--regexp-ignore-case` when
   the regex has no capital letter. git keeps only the commits whose patch
   adds or removes a line matching it, so `--max-count` stays. `-G` reads

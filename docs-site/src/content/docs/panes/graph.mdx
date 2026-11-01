@@ -95,7 +95,9 @@ it isn't a merge itself, and keeps its real parents in the [details](/panes/deta
 made after the merge connects to it.
 
 A commit can only take one merge's place. When a branch was merged twice, or a commit can't sit
-above the lines it would join, the next commit draws those lines coming straight into it.
+above the lines it would join, the next commit draws those lines coming straight into it. With
+nothing committed on top, such as a merge at a branch's tip, the highest of those lines joins the
+others instead, so a merged branch never looks unmerged.
 
 Hiding merges works with [the filters](#filtering-by-author-or-file) and with
 <kbd>a</kbd>. <kbd>esc</kbd> clears the filters but leaves merges hidden. The single branch the
