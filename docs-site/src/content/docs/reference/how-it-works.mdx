@@ -129,10 +129,13 @@ The filtered log adds:
   git lists them without `--max-count`, and tt-git leaves out each commit
   with more than one parent, stopping once `max_commits` others are listed.
   `--no-merges` would leave a commit's parent pointing at the merge it
-  hid, which breaks every line through one. Instead tt-git draws a commit
-  whose parent was a hidden merge joined to that merge's parents, first
-  parent first (through a run of merges, to the commits that aren't
-  merges), so a merged branch's lane still ends where it was merged. The
+  hid, which breaks every line through one. Instead the tip of what a
+  merge brought in stands in for it: tt-git draws that commit joined to the
+  merge's other parent as well as its own parents, and draws the merge's
+  child joined to that commit. Replacing a merge with all its parents would
+  fan a run of merges out into one lane per branch. Each commit stands in
+  for one merge, and only if it's listed above the lines it would join;
+  otherwise the merge's child is drawn joined to the merge's parents. Each
   commit keeps its real parents for everything else.
 - for a message on the diff, `-G<regex>`, and `--regexp-ignore-case` when
   the regex has no capital letter. git keeps only the commits whose patch

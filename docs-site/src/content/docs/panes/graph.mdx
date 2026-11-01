@@ -88,12 +88,14 @@ Press <kbd>m</kbd> to hide merge commits, so the graph shows only the commits th
 The title says `no merges`, as in `Graph [all · no merges]`. Press <kbd>m</kbd> again to show
 them.
 
-The lines still join up. The commit made after a merge takes the merge's place in the drawing:
-it connects to the commit before the merge on the same branch, and the merged branch's lane
-curves into it, so you still see where each branch came in. It's drawn as `●`, since it isn't a
-merge itself, and keeps its own parent, the merge, in the [details](/panes/details/). A merge
-nothing was committed on top of, such as a branch's tip, has nothing to take its place, so the
-lanes it joined start unconnected at the top.
+The graph keeps its shape. The commit just before a merge, the last one on the branch that was
+merged in, takes the merge's place: it sits on the line it was merged into, and the rest of its
+branch runs off it as a lane, so you still see where each branch came in. It's drawn as `●`, since
+it isn't a merge itself, and keeps its real parents in the [details](/panes/details/). A commit
+made after the merge connects to it.
+
+A commit can only take one merge's place. When a branch was merged twice, or a commit can't sit
+above the lines it would join, the next commit draws those lines coming straight into it.
 
 Hiding merges works with [the filters](#filtering-by-author-or-file) and with
 <kbd>a</kbd>. <kbd>esc</kbd> clears the filters but leaves merges hidden. The single branch the
