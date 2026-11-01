@@ -1198,3 +1198,35 @@ fn merge_conflicts_name_every_conflicted_file() {
         vec!["one.txt".to_string(), "sub dir/two words.txt".to_string()]
     );
 }
+
+#[test]
+fn a_branch_merged_in_at_the_tip_after_syncing_stays_joined() {
+    let sb = Sandbox::new();
+    let c1 = sb.commit_file("a.txt", "1\n", "c1");
+    sb.checkout_new("feat");
+    let f1 = sb.commit_file("f.txt", "1\n", "f1");
+    sb.checkout("main");
+    sb.checkout_new("fix");
+    sb.commit_file("x.txt", "1\n", "x1");
+    sb.checkout("main");
+    sb.merge("fix");
+    // feat takes main in, then main takes feat: nothing is on top of either.
+    sb.checkout("feat");
+    sb.merge("main");
+    sb.checkout("main");
+    sb.merge("feat");
+    let repo = open(&sb);
+    let no_merges = LogFilter {
+        no_merges: true,
+        ..LogFilter::default()
+    };
+
+    let log = repo.filtered_log(&LogScope::All, &no_merges, 100).unwrap();
+    let f1: Oid = f1.parse().unwrap();
+    assert!(
+        log.drawn_parents.values().any(|parents| parents.contains(&f1)),
+        "feat's line joins something, in {:#?}",
+        log.commits.iter().map(|c| (&c.summary, &c.parents)).collect::<Vec<_>>()
+    );
+    assert!(log.commits.iter().any(|c| c.oid == c1));
+}

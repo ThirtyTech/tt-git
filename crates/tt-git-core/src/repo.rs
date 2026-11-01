@@ -1412,6 +1412,21 @@ fn drawn_without_merges(commits: &[Commit], merges: &[(Oid, Parents)]) -> HashMa
             }
         }
     }
+    // A merge with no child leaves no one to draw the tips it kept, so the
+    // highest joins the rest; otherwise they'd show as never merged.
+    let children: HashSet<&Oid> = commits
+        .iter()
+        .map(|c| &c.parents)
+        .chain(merges.iter().map(|(_, parents)| parents))
+        .flatten()
+        .collect();
+    for (oid, _) in merges.iter().filter(|(oid, _)| !children.contains(oid)) {
+        let tips = &replaced[oid];
+        if let Some(top) = tips.iter().filter(|t| rows.contains_key(t)).min_by_key(|t| rows[t]) {
+            let (_, after) = joined.entry(*top).or_default();
+            after.extend(tips.iter().filter(|t| *t != top).copied());
+        }
+    }
     commits
         .iter()
         .filter(|c| joined.contains_key(&c.oid) || c.parents.iter().any(|p| replaced.contains_key(p)))
