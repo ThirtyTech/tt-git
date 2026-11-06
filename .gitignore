@@ -2,3 +2,4 @@
 *.snap.new
 *.pending-snap
 /.worktrees/
+/.playwright-mcp/
