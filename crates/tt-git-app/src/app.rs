@@ -679,6 +679,15 @@ impl App {
         }
     }
 
+    /// What the graph's border says about the repo while zoom has it on
+    /// screen without the status pane: the branch, its upstream and the
+    /// changed files ([`StatusPane::zoomed_summary`]). `None` when status
+    /// is showing or the graph isn't.
+    pub fn zoomed_summary(&self) -> Option<String> {
+        let zoomed = self.zoom != Zoom::Off;
+        (zoomed && self.shows(PaneId::Graph) && !self.shows(PaneId::Status)).then(|| self.status.zoomed_summary())
+    }
+
     pub fn repo(&self) -> &Repo {
         &self.repo
     }

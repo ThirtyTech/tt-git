@@ -39,6 +39,44 @@ impl StatusPane {
         format!("Status: {}", self.summary())
     }
 
+    /// What the graph's bottom border says while zoom hides this pane: the
+    /// [summary](StatusPane::summary) and how many files are staged,
+    /// changed, untracked and conflicted, or `clean`. Counts every changed
+    /// file, even with a folder filter on.
+    pub fn zoomed_summary(&self) -> String {
+        let mut s = self.summary();
+        let Some(status) = self.status() else {
+            return s;
+        };
+        let (mut staged, mut changed, mut untracked, mut conflicted) = (0, 0, 0, 0);
+        for e in &status.entries {
+            if e.is_conflicted() {
+                conflicted += 1;
+            } else if e.is_untracked() {
+                untracked += 1;
+            } else {
+                staged += usize::from(e.has_staged());
+                changed += usize::from(e.has_unstaged());
+            }
+        }
+        let counts: Vec<String> = [
+            (conflicted, "conflicted"),
+            (staged, "staged"),
+            (changed, "changed"),
+            (untracked, "untracked"),
+        ]
+        .into_iter()
+        .filter(|(n, _)| *n > 0)
+        .map(|(n, what)| format!("{n} {what}"))
+        .collect();
+        if counts.is_empty() {
+            s.push_str(" · clean");
+        } else {
+            s.push_str(&format!(" · {}", counts.join(" · ")));
+        }
+        s
+    }
+
     /// What the pane says instead of rows when no file is listed (in
     /// [`StyleRole::Muted`]).
     pub fn empty_message(&self) -> Option<String> {
@@ -214,6 +252,40 @@ mod tests {
         p.set_folder(Some("docs/".into()));
         assert_eq!(p.empty_message().as_deref(), Some("no changes in docs/ (. shows all)"));
         assert_eq!(p.title(), "Status: repo · main · in docs/ · +1 outside");
+    }
+
+    #[test]
+    fn the_zoomed_summary_counts_the_files() {
+        let mut p = StatusPane::new("repo".into());
+        assert_eq!(p.zoomed_summary(), "repo");
+        p = pane(vec![]);
+        assert_eq!(p.zoomed_summary(), "repo · main · clean");
+
+        let mut p = pane(vec![
+            modified("a.rs"),
+            staged("b.rs"),
+            entry("c.rs", FileState::Unmerged, FileState::Unmerged),
+            entry("d.rs", FileState::Untracked, FileState::Untracked),
+            entry("e.rs", FileState::Modified, FileState::Modified),
+        ]);
+        p.set_status(Status {
+            branch: BranchStatus {
+                head: Some("main".into()),
+                upstream: Some("origin/main".into()),
+                ahead: 2,
+                behind: 1,
+                ..BranchStatus::default()
+            },
+            entries: p.all_entries().to_vec(),
+            in_progress: Some(InProgress::Merge),
+        });
+        // A folder filter doesn't hide files from the counts.
+        p.set_folder(Some("docs/".into()));
+        assert_eq!(
+            p.zoomed_summary(),
+            "repo · main · MERGING → origin/main ↑2 ↓1 · in docs/ · +4 outside (2 staged) \
+             · 1 conflicted · 2 staged · 2 changed · 1 untracked"
+        );
     }
 
     #[test]

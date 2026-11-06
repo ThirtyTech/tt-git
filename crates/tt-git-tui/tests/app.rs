@@ -584,6 +584,36 @@ fn zoom_puts_the_graph_fullscreen_and_back() {
 }
 
 #[test]
+fn a_zoomed_graph_sums_up_status_on_its_bottom_border() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "a\n", "first");
+    sb.commit_file("b.txt", "b\n", "second");
+    sb.write("a.txt", "changed\n");
+    sb.write("b.txt", "staged\n");
+    sb.git(&["add", "b.txt"]);
+    sb.write("new.txt", "hello\n");
+    let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);
+    let bottom = |t: &TestDriver| t.screen().lines().nth(22).unwrap_or_default().to_string();
+    let note = " · main · 1 staged · 1 changed · 1 untracked";
+    assert!(t.app().zoomed_summary().is_none(), "status is on screen");
+
+    t.press("+");
+    assert_eq!(t.app().zoom(), Zoom::Full(PaneId::Graph));
+    assert!(bottom(&t).contains(note), "{}", t.screen());
+    insta::assert_snapshot!(t.screen());
+
+    // Wide hides status too.
+    t.press("space");
+    assert_eq!(t.app().zoom(), Zoom::Wide);
+    assert!(t.app().zoomed_summary().unwrap().ends_with(note));
+
+    t.press("+");
+    assert_eq!(t.app().zoom(), Zoom::Off);
+    assert!(t.app().zoomed_summary().is_none());
+    assert!(!t.screen().contains(note), "{}", t.screen());
+}
+
+#[test]
 fn space_in_a_fullscreen_graph_opens_details_below_it() {
     let sb = Sandbox::new();
     let mut t = TestDriver::with_size(Config::default(), &sb, 100, 24);

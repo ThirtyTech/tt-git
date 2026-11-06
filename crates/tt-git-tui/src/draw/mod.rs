@@ -83,7 +83,12 @@ fn draw_app(app: &mut App, frame: &mut Frame, hits: &mut Hits) {
         match pane {
             PaneId::Status => app.status_mut().draw(frame, area, focus == pane, theme, hits),
             PaneId::Branches => app.branches_mut().draw(frame, area, focus == pane, theme, hits),
-            PaneId::Graph => app.graph_mut().draw(frame, area, focus == pane, theme, hits),
+            PaneId::Graph => {
+                app.graph_mut().draw(frame, area, focus == pane, theme, hits);
+                if let Some(summary) = app.zoomed_summary() {
+                    draw_border_note(frame, area, summary, focus == pane, theme);
+                }
+            }
             PaneId::Details => {}
         }
     }
@@ -254,6 +259,24 @@ pub fn pane_block<'a>(pane: PaneId, title: impl Into<Line<'a>>, focused: bool, t
         .border_type(BorderType::Rounded)
         .border_style(border)
         .title(title)
+}
+
+/// `text` on the bottom border of a pane drawn with [`pane_block`] in
+/// `area`, between its corners, styled like the pane's title.
+fn draw_border_note(frame: &mut Frame, area: Rect, text: String, focused: bool, theme: &Theme) {
+    if area.width < 3 || area.height < 2 {
+        return;
+    }
+    let style = if focused { theme.title_focused } else { theme.title };
+    let row = Rect {
+        x: area.x + 1,
+        y: area.bottom() - 1,
+        width: area.width - 2,
+        height: 1,
+    };
+    let text = crate::widgets::truncate(&text, row.width as usize);
+    let width = (text.width() as u16).min(row.width);
+    frame.render_widget(Paragraph::new(text).style(style), Rect { width, ..row });
 }
 
 /// A `width` by `height` area in the middle of `area`.

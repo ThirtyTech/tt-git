@@ -1,0 +1,28 @@
+---
+source: crates/tt-git-tui/tests/app.rs
+expression: t.screen()
+---
+╭[1] Graph [all] 1/2───────────────────────────────────────────────────────────────────────────────╮
+│●   main  second                                                     Test User         23h 18ce805│
+│●  first                                                             Test User         23h a504551│
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+╰repo · main · 1 staged · 1 changed · 1 untracked──────────────────────────────────────────────────╯
+enter files + diff  space show/hide details  a all/current  c copy  tab next pane  ? help  q quit
