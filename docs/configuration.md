@@ -220,7 +220,9 @@ below the diff.
 
 `+` zooms whichever layout you use: the focused pane (details, or else the
 graph) fills the screen, and the next `+` goes back. `space` in a fullscreen
-graph opens details below it at full width and closes it again. From the
+graph opens details below it at full width and closes it again. While the
+status pane is hidden, the graph's bottom border sums up the branch, its
+upstream and the changed files. From the
 status pane, `+` instead puts status in a full-height column on the left
 (27% of the width) and lays out the other panes beside it as the layout has
 them.

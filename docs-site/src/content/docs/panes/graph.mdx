@@ -380,6 +380,19 @@ To check out a branch by name, use the [Branches](/panes/branches/#checking-out)
 Press <kbd>+</kbd> to make the graph fill the screen, and <kbd>+</kbd> again to go back. With the graph
 fullscreen, <kbd>space</kbd> opens details below it at full width.
 
+While zoom hides the status and branches panes, the graph's bottom border sums them up: the
+repository, the branch, its upstream with how far ahead (↑) and behind (↓) it is, any merge or
+rebase in progress, and how many files are conflicted, staged, changed and untracked, or `clean`
+when there's nothing to commit:
+
+```
+╰tt-git · main → origin/main ↑2 · 1 staged · 3 changed · 1 untracked──────╯
+```
+
+The counts take in every changed file, even with the status pane
+[filtered to a folder](/panes/status/). When the border is too narrow, the summary is cut short
+with `…`.
+
 <Screenshot name="graph-zoom" alt="The graph zoomed to fill the screen with details open below it" />
 
 ## Large histories
