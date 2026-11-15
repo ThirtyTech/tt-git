@@ -120,11 +120,16 @@ Badges sit between the lanes and the subject:
 | `[feature]` (green) | A local branch |
 | `[origin/main]` (magenta) | A remote branch |
 | `[feature 🔗]` | A branch at the same commit as its upstream |
+| `[feature 🌳]` | A branch checked out in another [worktree](/git/worktrees/) |
 | `<v1.0>` (yellow) | A tag |
 
 When a branch and its upstream point at the same commit, the upstream gets no badge of its own.
 The branch's badge takes a 🔗 instead, so ` main 🔗 ` replaces ` main ` `[origin/main]`. Once
 either side moves on, the two badges come back on their own commits.
+
+A branch that another worktree has checked out gets a 🌳 after its name (and after the 🔗, as in
+`[feature 🔗 🌳]`). The branch checked out in the worktree you're in is the green badge and gets
+no 🌳.
 
 Symbolic refs like `origin/HEAD` are left out, since they only repeat another badge. When a row is
 too narrow for everything, badges are dropped before the subject is.

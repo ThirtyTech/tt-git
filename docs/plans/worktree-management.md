@@ -112,6 +112,7 @@ count. Titles that fit are unchanged.
   a `repo.closed` event before the restart would help them clean up.
 - Change counts for other worktrees go stale between refs reloads (the
   watcher only watches the open one); <kbd>ctrl+r</kbd> recounts.
-- Branches checked out in other worktrees aren't marked on the Branches tab
+- ~~Branches checked out in other worktrees aren't marked on the Branches tab
   yet; checking one out still fails with git's "already used by worktree"
-  error.
+  error.~~ Done: they show a 🌳 in the branches pane and on their graph
+  badge, and checking one out opens its worktree.

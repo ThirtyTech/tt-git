@@ -679,7 +679,7 @@ export const shots = [
 		capture: 'worktree-switch',
 		view: { region: { cells: [95, 35, 95, 16] } },
 		callouts: [
-			{ target: { find: 'fix/bell-a11y', in: 'branches' }, text: '**enter** on a branch another worktree has', markerSide: 'left' },
+			{ target: { find: 'fix/bell-a11y', in: 'branches' }, text: '**enter** on a branch another worktree has, marked 🌳', markerSide: 'right' },
 			{ target: { find: 'fix/bell-a11y is checked out', w: 69 }, text: 'tt-git **opens that worktree** instead of failing', tone: 'green', markerSide: 'above' },
 		],
 	},

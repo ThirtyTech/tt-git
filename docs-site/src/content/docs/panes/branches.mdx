@@ -60,18 +60,23 @@ Local and remote branches with the same name are grouped into one row:
 - `origin/HEAD` and other symbolic refs are left out, since they only repeat
   another branch.
 
-Each row shows a marker (`*` for the checked-out branch, in green), the name,
-the status column and how long ago the branch was last active:
+Each row shows a marker (`*` for the checked-out branch, in green, 🌳 for a
+branch checked out in another [worktree](/git/worktrees/)), the name, the
+status column and how long ago the branch was last active:
 
 ```
 * main            ✓          2h
-  feature/login   ↑2         3h
+🌳feature/login   ↑2         3h
   fix-typo        local      1d
   release/2.0     origin     4d
   old-spike       gone       3w
 ```
 
 Moving the selection moves the [graph](/panes/graph/) to that branch's tip.
+
+The 🌳 also shows on the Unmerged and Merged tabs. Checking out a branch with
+a 🌳 opens the worktree that has it; see
+[Checking out a branch another worktree has](/git/worktrees/#checking-out-a-branch-another-worktree-has).
 
 ## Sorted by activity
 

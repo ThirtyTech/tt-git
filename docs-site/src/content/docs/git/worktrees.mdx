@@ -147,6 +147,10 @@ staged changes and any merge or rebase in progress are separate.
 
 ## Checking out a branch another worktree has
 
+A branch checked out in another worktree has a 🌳 in front of it in the
+[branches pane](/panes/branches/) and after its name on its
+[graph badge](/panes/graph/), like `[fix-login 🌳]`.
+
 Git only lets a branch be checked out in one worktree at a time, so
 `git switch fix-login` in your main checkout fails while
 `.worktrees/fix-login` has it. tt-git doesn't run it. When you check out
