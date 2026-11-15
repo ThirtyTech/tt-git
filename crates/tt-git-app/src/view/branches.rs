@@ -10,6 +10,7 @@ use tt_git_core::time::relative;
 use tt_git_core::{BaseBranches, BranchEntry, BranchState, GitRef, Stash, Worktree};
 use unicode_width::UnicodeWidthStr;
 
+use super::graph::WORKTREE;
 use super::{StyleRole, TextSpan};
 use crate::panes::branches::{AUTHOR_WIDTH, DATE_WIDTH, STATE_WIDTH, SUBJECT_MIN_WIDTH};
 use crate::panes::{BranchTab, BranchesPane};
@@ -281,7 +282,7 @@ fn entry_spans(
     let conflicts = if conflict_width > 0 { conflict_width + 1 } else { 0 };
     let name_width = width.saturating_sub(2 + 1 + STATE_WIDTH + 1 + DATE_WIDTH + decorations + conflicts);
     let mut spans = vec![
-        marker(entry),
+        marker(pane, entry),
         TextSpan::new(fit(&entry.name, name_width), name_role(entry)),
     ];
     if conflict_width > 0 {
@@ -320,7 +321,7 @@ fn compared_spans(
         .and_then(|t| pane.base.as_ref()?.authors.get(&t.full_name))
         .map_or("", String::as_str);
     let mut spans = vec![
-        marker(entry),
+        marker(pane, entry),
         TextSpan::new(fit(&entry.name, name_width), name_role(entry)),
     ];
     let mut used = 2 + name_width;
@@ -426,9 +427,13 @@ fn name_role(entry: &BranchEntry) -> StyleRole {
     }
 }
 
-fn marker(entry: &BranchEntry) -> TextSpan<'static> {
+/// `*` for the branch checked out here, a tree (two columns wide) for one
+/// another worktree has checked out.
+fn marker(pane: &BranchesPane, entry: &BranchEntry) -> TextSpan<'static> {
     if entry.is_head {
         TextSpan::new("* ", StyleRole::LabelLocal)
+    } else if entry.local.is_some() && pane.worktree_with_branch(&entry.name).is_some() {
+        TextSpan::plain(WORKTREE)
     } else {
         TextSpan::plain("  ")
     }
@@ -808,6 +813,29 @@ mod tests {
             pane.footer(60).total,
             Some(TextSpan::new(" total … ", StyleRole::Muted))
         );
+    }
+
+    #[test]
+    fn a_branch_checked_out_in_another_worktree_gets_a_tree() {
+        let mut pane = pane();
+        let entries = pane.entries().to_vec();
+        let worktrees = vec![
+            worktree("/repo", Some("main"), true),
+            worktree("/repo-old", Some("old"), false),
+        ];
+        pane.set_entries(entries, None, &[], Vec::new(), worktrees);
+        let view = rows(&mut pane, 10, 60);
+        let row = |name: &str| {
+            view.rows
+                .iter()
+                .map(|r| &r.spans)
+                .find(|s| s[1].text.trim() == name)
+                .unwrap_or_else(|| panic!("a row for {name}"))
+        };
+        assert_eq!(row("main")[0], TextSpan::new("* ", StyleRole::LabelLocal));
+        assert_eq!(row("old")[0], TextSpan::plain("🌳"));
+        assert_eq!(text(row("old")).width(), 60, "the tree takes the marker's two columns");
+        assert_eq!(row("feature")[0], TextSpan::plain("  "));
     }
 
     #[test]

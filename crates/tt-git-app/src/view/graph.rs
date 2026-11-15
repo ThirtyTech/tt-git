@@ -339,12 +339,20 @@ fn push_fit<'a>(spans: &mut Vec<TextSpan<'a>>, s: &'a str, width: usize, role: S
 /// Marks a branch label whose upstream is at the same commit.
 const SYNCED: &str = " 🔗";
 
+/// Marks a branch label that another worktree has checked out.
+pub const WORKTREE: &str = "🌳";
+
 fn label_text(label: &RefLabel) -> (String, StyleRole) {
     let synced = if label.synced { SYNCED } else { "" };
+    let worktree = if label.worktree {
+        format!(" {WORKTREE}")
+    } else {
+        String::new()
+    };
     match label.kind {
         LabelKind::Head => (format!(" {}{synced} ", label.name), StyleRole::LabelHead),
         LabelKind::DetachedHead => (" HEAD ".to_string(), StyleRole::LabelDetached),
-        LabelKind::Local => (format!("[{}{synced}]", label.name), StyleRole::LabelLocal),
+        LabelKind::Local => (format!("[{}{synced}{worktree}]", label.name), StyleRole::LabelLocal),
         LabelKind::Remote => (format!("[{}]", label.name), StyleRole::LabelRemote),
         LabelKind::Tag => (format!("<{}>", label.name), StyleRole::LabelTag),
     }
@@ -746,5 +754,18 @@ mod tests {
         assert_eq!(graph.empty_message(), Some("loading…"));
         let graph = loaded(vec![commit(&"a".repeat(40), &[])]);
         assert_eq!(graph.empty_message(), None);
+    }
+
+    #[test]
+    fn a_branch_in_another_worktree_has_a_tree_on_its_label() {
+        let label = |synced, worktree| RefLabel {
+            name: "feat".into(),
+            kind: LabelKind::Local,
+            synced,
+            worktree,
+        };
+        assert_eq!(label_text(&label(false, true)).0, "[feat 🌳]");
+        assert_eq!(label_text(&label(true, true)).0, "[feat 🔗 🌳]");
+        assert_eq!(label_text(&label(false, false)).0, "[feat]");
     }
 }

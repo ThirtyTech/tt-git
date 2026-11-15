@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tt_git_core::time::SharedClock;
-use tt_git_core::{BranchHistory, CheckoutPlan, Commit, GitRef, Head, LogFilter, Oid, Parents, RefKind};
+use tt_git_core::{BranchHistory, CheckoutPlan, Commit, GitRef, Head, LogFilter, Oid, Parents, RefKind, Worktree};
 use tt_git_graph::{GraphBuilder, NodeId, Rows};
 
 use super::DrawnDates;
@@ -102,6 +102,8 @@ pub struct RefLabel {
     /// A branch whose upstream points at the same commit. The upstream
     /// gets no label of its own.
     pub synced: bool,
+    /// A local branch checked out in another worktree.
+    pub worktree: bool,
 }
 
 /// One graph load, as handed to its background job: batches carry its
@@ -510,7 +512,7 @@ impl GraphPane {
 
     /// Rebuilds ref labels (badges) from a refs snapshot.
     pub fn set_refs(&mut self, snapshot: &RefsSnapshot) {
-        self.labels = build_labels(&snapshot.head, &snapshot.refs);
+        self.labels = build_labels(&snapshot.head, &snapshot.refs, &snapshot.worktrees);
     }
 
     /// Where the commit whose id reads `oid` is in the list.
@@ -738,16 +740,23 @@ fn intern(ids: &mut HashMap<Oid, NodeId>, oid: Oid) -> NodeId {
 
 /// Labels per commit: HEAD first, then local branches, remotes and tags,
 /// each alphabetical. A branch at the same commit as its upstream takes
-/// the upstream's label into its own.
-pub fn build_labels(head: &Head, refs: &[GitRef]) -> HashMap<String, Vec<RefLabel>> {
+/// the upstream's label into its own. A local branch that one of the other
+/// `worktrees` has checked out is marked as such.
+pub fn build_labels(head: &Head, refs: &[GitRef], worktrees: &[Worktree]) -> HashMap<String, Vec<RefLabel>> {
     let mut labels: HashMap<String, Vec<RefLabel>> = HashMap::new();
     if let Head::Detached { oid } = head {
         labels.entry(oid.clone()).or_default().push(RefLabel {
             name: "HEAD".into(),
             kind: LabelKind::DetachedHead,
             synced: false,
+            worktree: false,
         });
     }
+    let elsewhere: HashSet<&str> = worktrees
+        .iter()
+        .filter(|w| !w.current)
+        .filter_map(|w| w.branch.as_deref())
+        .collect();
     let targets: HashMap<&str, &str> = refs
         .iter()
         .filter(|r| r.symref.is_none() && matches!(r.kind, RefKind::RemoteBranch { .. }))
@@ -775,6 +784,7 @@ pub fn build_labels(head: &Head, refs: &[GitRef]) -> HashMap<String, Vec<RefLabe
             name: r.short_name.clone(),
             kind,
             synced: synced_upstream(r, &targets).is_some(),
+            worktree: kind == LabelKind::Local && elsewhere.contains(r.short_name.as_str()),
         });
     }
     for list in labels.values_mut() {
@@ -1001,7 +1011,7 @@ mod tests {
             r("refs/heads/main", "a"),
             r("refs/heads/other", "b"),
         ];
-        let labels = build_labels(&head, &refs);
+        let labels = build_labels(&head, &refs, &[]);
         let a: Vec<(&str, LabelKind)> = labels["a"].iter().map(|l| (l.name.as_str(), l.kind)).collect();
         assert_eq!(
             a,
@@ -1034,12 +1044,45 @@ mod tests {
             tracking("refs/heads/feat", "d", "refs/remotes/origin/feat"),
             r("refs/remotes/origin/other", "d"),
         ];
-        let labels = build_labels(&head, &refs);
+        let labels = build_labels(&head, &refs, &[]);
         let at = |oid: &str| -> Vec<(&str, bool)> { labels[oid].iter().map(|l| (l.name.as_str(), l.synced)).collect() };
         assert_eq!(at("a"), [("main", true)]);
         assert_eq!(at("b"), [("ahead", false)]);
         assert_eq!(at("c"), [("origin/ahead", false)]);
         assert_eq!(at("d"), [("feat", false), ("origin/other", false)]);
+    }
+
+    #[test]
+    fn a_branch_checked_out_in_another_worktree_is_marked() {
+        let head = Head::Branch {
+            name: "main".into(),
+            oid: "a".into(),
+        };
+        let refs = vec![
+            r("refs/heads/main", "a"),
+            r("refs/heads/feat", "b"),
+            r("refs/heads/idle", "b"),
+            r("refs/remotes/origin/feat", "b"),
+        ];
+        let worktree = |path: &str, branch: &str, current: bool| Worktree {
+            path: path.into(),
+            head: Some("a".into()),
+            branch: Some(branch.into()),
+            main: current,
+            bare: false,
+            locked: None,
+            prunable: None,
+            current,
+        };
+        let worktrees = [
+            worktree("/r", "main", true),
+            worktree("/r/.worktrees/feat", "feat", false),
+        ];
+        let labels = build_labels(&head, &refs, &worktrees);
+        let at =
+            |oid: &str| -> Vec<(&str, bool)> { labels[oid].iter().map(|l| (l.name.as_str(), l.worktree)).collect() };
+        assert_eq!(at("a"), [("main", false)], "this worktree's own branch isn't marked");
+        assert_eq!(at("b"), [("feat", true), ("idle", false), ("origin/feat", false)]);
     }
 
     fn commit(oid: &str, parents: &[&str]) -> Commit {
@@ -1075,7 +1118,7 @@ mod tests {
         let lanes: Vec<usize> = graph.rows().iter().map(|r| r.node_lane()).collect();
         assert_eq!(lanes, [0, 0, 0], "one straight line");
 
-        graph.labels = build_labels(&Head::Detached { oid: b.clone() }, &[r("refs/heads/feat", &a)]);
+        graph.labels = build_labels(&Head::Detached { oid: b.clone() }, &[r("refs/heads/feat", &a)], &[]);
         assert_eq!(graph.selected_ref().as_deref(), Some("feat"));
         assert!(graph.select_oid(&b, &ctx));
         assert_eq!(graph.selected_ref(), Some(b.clone()), "HEAD isn't a branch label");
@@ -1092,7 +1135,7 @@ mod tests {
 
     #[test]
     fn detached_head_label() {
-        let labels = build_labels(&Head::Detached { oid: "c".into() }, &[]);
+        let labels = build_labels(&Head::Detached { oid: "c".into() }, &[], &[]);
         assert_eq!(labels["c"][0].kind, LabelKind::DetachedHead);
     }
 }
