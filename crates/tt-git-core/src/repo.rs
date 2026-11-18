@@ -10,7 +10,8 @@ use regex::{Regex, RegexBuilder};
 use crate::branches::AheadBehind;
 use crate::git::{GitCli, GitError, Result};
 use crate::model::{
-    BranchHistory, Checkout, Commit, CommitFile, FilteredLog, GitRef, Head, Oid, Parents, Stash, Status, Worktree,
+    BranchHistory, Checkout, Commit, CommitFile, Drawn, FilteredLog, GitRef, Head, Oid, Parents, RefKind, Stash,
+    Status, Worktree,
 };
 use crate::parse;
 
@@ -41,9 +42,8 @@ pub struct LogFilter {
     pub message: Option<String>,
     /// What `message` is matched against.
     pub search_in: SearchIn,
-    /// Leaves out merge commits, except a branch's tip or HEAD, which would
-    /// take the branch's badge with them. A commit merged in takes each
-    /// one's place in the drawing (see [`FilteredLog::drawn_parents`]).
+    /// Leaves out merge commits, drawing what each one merged in the line
+    /// it was merged into (see [`Drawn`](crate::Drawn)).
     pub no_merges: bool,
 }
 
@@ -780,8 +780,8 @@ impl Repo {
         self.filtered_log(scope, filter, limit).map(|log| log.commits)
     }
 
-    /// [`filtered_commits`](Self::filtered_commits), with the parents to
-    /// draw the commits around a merge left out joined to.
+    /// [`filtered_commits`](Self::filtered_commits), with how to draw the
+    /// commits around the merges left out.
     pub fn filtered_log(&self, scope: &LogScope, filter: &LogFilter, limit: usize) -> Result<FilteredLog> {
         let diff = filter.message.as_deref().filter(|_| filter.search_in == SearchIn::Diff);
         let pattern = filter.message.as_deref().filter(|_| diff.is_none());
@@ -830,17 +830,17 @@ impl Repo {
         args.push("--".into());
         args.extend(filter.path.clone());
         let mut commits = Vec::new();
-        let tips = if filter.no_merges {
-            self.branch_tips()?
-        } else {
-            HashSet::new()
-        };
-        // Each merge left out, children before parents.
-        let mut merges: Vec<(Oid, Parents)> = Vec::new();
+        // Every commit git listed, merges included, children first: what
+        // the hidden merges are worked out from.
+        let mut walked: Vec<(Oid, Parents)> = Vec::new();
+        let mut merges: HashSet<Oid> = HashSet::new();
         self.stream_log(&args, |mut c| {
-            if filter.no_merges && c.is_merge() && !tips.contains(&c.oid) {
-                merges.push((c.oid, c.parents));
-                return true;
+            if filter.no_merges {
+                walked.push((c.oid, c.parents.clone()));
+                if c.is_merge() {
+                    merges.insert(c.oid);
+                    return true;
+                }
             }
             let matched = match &message {
                 None => true,
@@ -857,22 +857,43 @@ impl Repo {
             }
             commits.len() < limit
         })?;
-        // Children come before their parents, so this waits for the merges.
-        let drawn_parents = drawn_without_merges(&commits, &merges);
-        Ok(FilteredLog { commits, drawn_parents })
+        let drawn = if merges.is_empty() {
+            Drawn::default()
+        } else {
+            let trunk = self.trunk()?;
+            drawn_without_merges(&commits, &walked, &merges, &trunk)
+        };
+        Ok(FilteredLog { commits, drawn })
     }
 
-    /// The commits a branch, local or remote, or HEAD points at.
-    fn branch_tips(&self) -> Result<HashSet<Oid>> {
-        let out = self
-            .git
-            .run(&["for-each-ref", "--format=%(objectname)", "refs/heads", "refs/remotes"])?;
-        let mut tips: HashSet<Oid> = out.stdout_str().lines().filter_map(|l| l.parse().ok()).collect();
-        // Fails when HEAD is unborn, with no commit to point at.
-        if let Ok(head) = self.git.run(&["rev-parse", "--verify", "--quiet", "HEAD"]) {
-            tips.extend(head.stdout_str().trim().parse::<Oid>());
+    /// The commits on the base branch's first-parent line: the base picked
+    /// for the repo or else the detected one, with its local or remote
+    /// branch of the same name. HEAD's line when there's no base.
+    fn trunk(&self) -> Result<HashSet<Oid>> {
+        let refs = self.refs()?;
+        let setting = self.base_branch_setting();
+        let mut args = vec!["rev-list".to_string(), "--first-parent".to_string()];
+        match crate::branches::resolve_base(&refs, setting.as_deref()) {
+            Some(base) => {
+                let name = base.branch_name();
+                args.extend(
+                    refs.iter()
+                        .filter(|r| r.symref.is_none() && r.branch_name() == name)
+                        .filter(|r| matches!(r.kind, RefKind::LocalBranch | RefKind::RemoteBranch { .. }))
+                        .map(|r| r.full_name.clone()),
+                );
+            }
+            None => {
+                if self.head()?.oid().is_none() {
+                    return Ok(HashSet::new());
+                }
+                args.push("HEAD".into());
+            }
         }
-        Ok(tips)
+        args.push("--".into());
+        let args: Vec<&str> = args.iter().map(String::as_str).collect();
+        let out = self.git.run(&args)?;
+        Ok(out.stdout_str().lines().filter_map(|l| l.parse().ok()).collect())
     }
 
     /// Adds the revisions for `scope` to a log command line. `false` when
@@ -1375,95 +1396,198 @@ fn ref_pattern_matches(pattern: &str, refname: &str) -> bool {
         .is_some_and(|rest| rest.is_empty() || rest.starts_with('/') || pattern.ends_with('/'))
 }
 
-/// The parents to draw `commits` joined to with `merges` left out (children
-/// before parents, as listed): see [`FilteredLog::drawn_parents`].
+/// How to draw `commits` with `merges` left out: see [`Drawn`]. `walked`
+/// is every commit git listed, merges included, children before parents;
+/// `trunk` the base branch's first-parent line ([`Repo::trunk`]).
 ///
-/// Each merge's place goes to the tip of what it merged in, which then joins
-/// the merge's other lines as well as its own parents, so the lanes keep the
-/// shape they have with the merge shown. Replacing a merge with all its
-/// parents instead fans a run of them out into one lane per branch.
-fn drawn_without_merges(commits: &[Commit], merges: &[(Oid, Parents)]) -> HashMap<Oid, Parents> {
-    let rows: HashMap<Oid, usize> = commits.iter().enumerate().map(|(i, c)| (c.oid, i)).collect();
-    // What stands for each merge: one commit, or its tips if none could.
-    let mut replaced: HashMap<Oid, Parents> = HashMap::new();
-    // The lines each stand-in took over, to go before and after its own
-    // parents: the line it was merged into stays in its column.
-    let mut joined: HashMap<Oid, (Parents, Parents)> = HashMap::new();
-    // Parents first, so a merge's parents are already replaced.
-    for (oid, parents) in merges.iter().rev() {
-        let tips_of = |p: &Oid| replaced.get(p).cloned().unwrap_or_else(|| Parents::from_slice(&[*p]));
-        let mut tips = Parents::new();
-        for tip in parents.iter().flat_map(tips_of) {
-            if !tips.contains(&tip) {
-                tips.push(tip);
-            }
+/// A merge off the trunk that took a trunk commit in only kept a branch up
+/// to date, so it stands for its first parent and draws nothing. Any other
+/// merge brought a branch's work in: those commits are drawn in the line
+/// they were merged into, as if they'd been made there, and the merge
+/// stands for the tip of what it merged. That needs all of the work listed
+/// above where it lands; when some is further down (a long-lived branch),
+/// the branch keeps its own lane to where it forked and joins the line it
+/// was merged into at the merge's place.
+fn drawn_without_merges(
+    commits: &[Commit],
+    walked: &[(Oid, Parents)],
+    merges: &HashSet<Oid>,
+    trunk: &HashSet<Oid>,
+) -> Drawn {
+    let rows: HashMap<Oid, usize> = walked.iter().enumerate().map(|(i, (oid, _))| (*oid, i)).collect();
+    // What each merge stands for, before following merges that stand for
+    // merges.
+    let mut instead: HashMap<Oid, Oid> = HashMap::new();
+    fn resolve(instead: &HashMap<Oid, Oid>, mut oid: Oid) -> Oid {
+        while let Some(next) = instead.get(&oid) {
+            oid = *next;
         }
-        // It must come above every line it joins, or those would never end,
-        // and it can only stand for one merge.
-        let free = |tip: &Oid| {
-            let row = rows.get(tip);
-            !joined.contains_key(tip)
-                && row.is_some()
-                && tips
-                    .iter()
-                    .all(|o| o == tip || rows.get(o).is_none_or(|r| Some(r) > row))
+        oid
+    }
+    // The work each merge drawn inline brought in, and the line it landed in.
+    let mut runs: HashMap<Oid, (HashSet<Oid>, Oid)> = HashMap::new();
+    // Lines joined to a commit standing in for a merge.
+    let mut joined: HashMap<Oid, Parents> = HashMap::new();
+    let mut landed = HashSet::new();
+    // Parents first, so what they stand for is settled.
+    for (oid, parents) in walked.iter().rev().filter(|(oid, _)| merges.contains(oid)) {
+        let first = parents[0];
+        let merged = &parents[1..];
+        let sync = !trunk.contains(oid) && merged.iter().any(|p| trunk.contains(p));
+        let run = if sync {
+            HashSet::new()
+        } else {
+            brought_in(walked, &rows, first, merged)
         };
-        let stand_in = parents
+        // The last parent's line is drawn on top, and it is the tip of the
+        // work unless that parent was already in.
+        let Some(tip) = merged.iter().rev().find(|p| run.contains(p)).copied() else {
+            instead.insert(*oid, first);
+            continue;
+        };
+        let into = resolve(&instead, first);
+        let below = |o: &Oid| rows.get(o).copied().unwrap_or(usize::MAX);
+        // The commits whose drawn lines leave the work: they go on in `into`,
+        // so must be above it.
+        let inline = run
             .iter()
-            .enumerate()
-            .rev()
-            .find_map(|(i, p)| tips_of(p).first().filter(|tip| free(tip)).map(|tip| (i, *tip)));
-        match stand_in {
-            Some((i, tip)) if tips.len() > 1 => {
-                let others: Parents = tips.into_iter().filter(|o| *o != tip).collect();
-                joined.insert(
-                    tip,
-                    if i == 0 {
-                        (Parents::new(), others)
-                    } else {
-                        (others, Parents::new())
-                    },
-                );
-                replaced.insert(*oid, Parents::from_slice(&[tip]));
-            }
-            _ => {
-                replaced.insert(*oid, tips);
-            }
+            .filter(|c| !merges.contains(c))
+            .filter(|c| walked[rows[*c]].1.iter().any(|p| !run.contains(&resolve(&instead, *p))))
+            .all(|c| rows[c] < below(&into));
+        if inline {
+            instead.insert(*oid, tip);
+            landed.insert(*oid);
+            runs.insert(*oid, (run, into));
+            continue;
+        }
+        // The higher of the two lines takes the merge's place and joins
+        // the other.
+        let tip = resolve(&instead, tip);
+        let (stand, other) = if below(&tip) < below(&into) {
+            (tip, into)
+        } else {
+            (into, tip)
+        };
+        instead.insert(*oid, stand);
+        landed.insert(*oid);
+        if rows.contains_key(&other) {
+            joined.entry(stand).or_default().push(other);
         }
     }
-    // A merge with no child leaves no one to draw the tips it kept, so the
-    // highest joins the rest; otherwise they'd show as never merged.
-    let children: HashSet<&Oid> = commits
-        .iter()
-        .map(|c| &c.parents)
-        .chain(merges.iter().map(|(_, parents)| parents))
-        .flatten()
-        .collect();
-    for (oid, _) in merges.iter().filter(|(oid, _)| !children.contains(oid)) {
-        let tips = &replaced[oid];
-        if let Some(top) = tips.iter().filter(|t| rows.contains_key(t)).min_by_key(|t| rows[t]) {
-            let (_, after) = joined.entry(*top).or_default();
-            after.extend(tips.iter().filter(|t| *t != top).copied());
+    // The runs each commit brought in is in, smallest first: a branch
+    // merged into a branch that was merged in turn.
+    let mut within: HashMap<Oid, Vec<&(HashSet<Oid>, Oid)>> = HashMap::new();
+    for run in runs.values() {
+        for oid in &run.0 {
+            within.entry(*oid).or_default().push(run);
         }
     }
-    commits
-        .iter()
-        .filter(|c| joined.contains_key(&c.oid) || c.parents.iter().any(|p| replaced.contains_key(p)))
-        .map(|c| {
-            let (before, after) = joined.get(&c.oid).cloned().unwrap_or_default();
-            let own = c
-                .parents
-                .iter()
-                .flat_map(|p| replaced.get(p).cloned().unwrap_or_else(|| Parents::from_slice(&[*p])));
-            let mut drawn = Parents::new();
-            for parent in before.into_iter().chain(own).chain(after) {
-                if !drawn.contains(&parent) {
-                    drawn.push(parent);
+    for list in within.values_mut() {
+        list.sort_by_key(|(run, _)| run.len());
+    }
+    let mut parents = HashMap::new();
+    for c in commits {
+        let runs = within.get(&c.oid).map_or(&[][..], Vec::as_slice);
+        let mut drawn = Parents::new();
+        let own = c.parents.iter().map(|p| {
+            let mut p = resolve(&instead, *p);
+            for (run, into) in runs {
+                // Leaving the work brought in: go on in the line it landed in.
+                if !run.contains(&p) {
+                    p = *into;
                 }
             }
-            (c.oid, drawn)
-        })
-        .collect()
+            p
+        });
+        for p in own.chain(joined.get(&c.oid).into_iter().flatten().copied()) {
+            let p = resolve(&instead, p);
+            if p != c.oid && !drawn.contains(&p) {
+                drawn.push(p);
+            }
+        }
+        if drawn != c.parents {
+            parents.insert(c.oid, drawn);
+        }
+    }
+    let listed: HashSet<Oid> = commits.iter().map(|c| c.oid).collect();
+    let stand_ins: HashMap<Oid, Oid> = merges
+        .iter()
+        .map(|m| (*m, resolve(&instead, *m)))
+        .filter(|(_, o)| listed.contains(o))
+        .collect();
+    let landed = landed.iter().filter_map(|m| stand_ins.get(m).copied()).collect();
+    Drawn {
+        parents,
+        stand_ins,
+        landed,
+    }
+}
+
+/// The commits `merged` reach that `first` doesn't, among `walked`: what
+/// a merge of them into `first` brought in. Walks down from the merge's
+/// parents in list order, which has every child before its parents, and
+/// stops once nothing left to visit is reached from `merged` alone.
+fn brought_in(walked: &[(Oid, Parents)], rows: &HashMap<Oid, usize>, first: Oid, merged: &[Oid]) -> HashSet<Oid> {
+    let mut walk = Walk::default();
+    if let Some(&row) = rows.get(&first) {
+        walk.reach(row, Walk::FIRST);
+    }
+    for p in merged {
+        if let Some(&row) = rows.get(p) {
+            walk.reach(row, Walk::MERGED);
+        }
+    }
+    let mut run = HashSet::new();
+    while walk.only_merged > 0 {
+        let Some(std::cmp::Reverse(row)) = walk.queue.pop() else {
+            break;
+        };
+        // Every child is above, so the flags are final.
+        let flag = walk.flags[&row];
+        if flag == Walk::MERGED {
+            walk.only_merged -= 1;
+            run.insert(walked[row].0);
+        }
+        for p in &walked[row].1 {
+            if let Some(&prow) = rows.get(p) {
+                walk.reach(prow, flag);
+            }
+        }
+    }
+    run
+}
+
+/// [`brought_in`]'s walk: which side reaches each row, and the rows left.
+#[derive(Default)]
+struct Walk {
+    flags: HashMap<usize, u8>,
+    queue: std::collections::BinaryHeap<std::cmp::Reverse<usize>>,
+    /// Rows queued that only the merged side reaches.
+    only_merged: usize,
+}
+
+impl Walk {
+    const MERGED: u8 = 1;
+    const FIRST: u8 = 2;
+
+    fn reach(&mut self, row: usize, flag: u8) {
+        let before = self.flags.get(&row).copied();
+        let after = before.unwrap_or(0) | flag;
+        if before == Some(after) {
+            return;
+        }
+        self.flags.insert(row, after);
+        match before {
+            None => {
+                self.queue.push(std::cmp::Reverse(row));
+                if after == Self::MERGED {
+                    self.only_merged += 1;
+                }
+            }
+            Some(Self::MERGED) => self.only_merged -= 1,
+            Some(_) => {}
+        }
+    }
 }
 
 /// `git log` in topological order with [`parse::LOG_FORMAT`], up to `limit`.

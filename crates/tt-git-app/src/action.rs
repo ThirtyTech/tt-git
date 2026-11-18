@@ -1,10 +1,8 @@
 //! Messages that drive [`App::update`](crate::App::update).
 
-use std::collections::HashMap;
-
 use tt_git_core::{
-    BaseBranches, BranchDeletes, BranchEntry, BranchHistory, Checkout, CheckoutPlan, Commit, CommitFile, GitRef,
-    GoneBranches, Head, NoStep, Oid, Parents, ResetPlan, StageSide, Stash, Status, StatusEntry, UndoStep, Worktree,
+    BaseBranches, BranchDeletes, BranchEntry, BranchHistory, Checkout, CheckoutPlan, Commit, CommitFile, Drawn, GitRef,
+    GoneBranches, Head, NoStep, ResetPlan, StageSide, Stash, Status, StatusEntry, UndoStep, Worktree,
 };
 use tt_git_plugin::runtime::CommandLog;
 use tt_git_plugin::socket::Call;
@@ -84,8 +82,8 @@ pub enum Action {
     GraphBatch {
         generation: u64,
         commits: Vec<Commit>,
-        /// See [`FilteredLog::drawn_parents`](tt_git_core::FilteredLog::drawn_parents).
-        drawn_parents: HashMap<Oid, Parents>,
+        /// How to draw the commits around the merges the load left out.
+        drawn: Drawn,
         done: bool,
     },
     GraphFailed {

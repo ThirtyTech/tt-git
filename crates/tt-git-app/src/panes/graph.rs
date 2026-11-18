@@ -3,7 +3,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use tt_git_core::time::SharedClock;
-use tt_git_core::{BranchHistory, CheckoutPlan, Commit, GitRef, Head, LogFilter, Oid, Parents, RefKind, Worktree};
+use tt_git_core::{BranchHistory, CheckoutPlan, Commit, Drawn, GitRef, Head, LogFilter, Oid, RefKind, Worktree};
 use tt_git_graph::{GraphBuilder, NodeId, Rows};
 
 use super::DrawnDates;
@@ -104,6 +104,8 @@ pub struct RefLabel {
     pub synced: bool,
     /// A local branch checked out in another worktree.
     pub worktree: bool,
+    /// The ref points at a merge the graph leaves out, drawn here instead.
+    pub moved: bool,
 }
 
 /// One graph load, as handed to its background job: batches carry its
@@ -153,8 +155,8 @@ pub struct GraphPane {
     pub dates: DateStyle,
     /// Draws the branch lanes left of each commit.
     pub lanes: bool,
-    /// Lists merge commits; hiding them draws the commit merged in at each
-    /// merge's place (see [`LogFilter::no_merges`]).
+    /// Lists merge commits; hiding them draws what each one merged in the
+    /// line it was merged into (see [`LogFilter::no_merges`]).
     pub merges: bool,
     /// Commit limit of the current load; reaching it means more may exist.
     pub limit: usize,
@@ -167,7 +169,13 @@ pub struct GraphPane {
     /// Node ids of the commits (and parents) the running load has pushed
     /// into `builder`; emptied once it's done, since only loads use it.
     ids: HashMap<Oid, NodeId>,
+    /// The labels shown: `ref_labels`, with those on a merge left out
+    /// moved to the commit drawn in its place.
     labels: HashMap<String, Vec<RefLabel>>,
+    /// Each ref's label, by the commit it points at.
+    ref_labels: HashMap<String, Vec<RefLabel>>,
+    /// How the merges this load leaves out are drawn.
+    hidden: Drawn,
     /// Notes on the focused branch's fork and merge commits.
     notes: HashMap<Oid, String>,
     cursor: Cursor,
@@ -207,6 +215,8 @@ impl GraphPane {
             builder: GraphBuilder::new(),
             ids: HashMap::new(),
             labels: HashMap::new(),
+            ref_labels: HashMap::new(),
+            hidden: Drawn::default(),
             notes: HashMap::new(),
             cursor: Cursor::default(),
             generation: 0,
@@ -244,6 +254,11 @@ impl GraphPane {
     /// The ref labels (badges) on `commit`.
     pub fn labels(&self, commit: &Commit) -> &[RefLabel] {
         self.labels.get(commit.oid.hex().as_str()).map_or(&[], Vec::as_slice)
+    }
+
+    /// Whether a merge left out landed its work at `commit`.
+    pub fn landed(&self, commit: &Commit) -> bool {
+        self.hidden.landed.contains(&commit.oid)
     }
 
     /// A note on a focused branch's fork or merge commit.
@@ -407,6 +422,10 @@ impl GraphPane {
         self.ids.clear();
         self.notes.clear();
         self.builder = GraphBuilder::new();
+        if !self.hidden.stand_ins.is_empty() || !self.hidden.landed.is_empty() {
+            self.hidden = Drawn::default();
+            self.relabel();
+        }
     }
 
     /// Selects `oid` now if it is loaded, otherwise once the running load
@@ -419,19 +438,12 @@ impl GraphPane {
 
     /// Appends a batch from load `generation`; stale batches are ignored.
     pub fn apply_batch(&mut self, generation: u64, commits: Vec<Commit>, done: bool, ctx: &Ctx) {
-        self.apply_drawn_batch(generation, commits, &HashMap::new(), done, ctx);
+        self.apply_drawn_batch(generation, commits, Drawn::default(), done, ctx);
     }
 
-    /// [`apply_batch`](Self::apply_batch), drawing each commit in
-    /// `drawn_parents` joined to those parents instead of its own.
-    pub fn apply_drawn_batch(
-        &mut self,
-        generation: u64,
-        commits: Vec<Commit>,
-        drawn_parents: &HashMap<Oid, Parents>,
-        done: bool,
-        ctx: &Ctx,
-    ) {
+    /// [`apply_batch`](Self::apply_batch), drawing the commits as `drawn`
+    /// says around the merges the load left out.
+    pub fn apply_drawn_batch(&mut self, generation: u64, commits: Vec<Commit>, drawn: Drawn, done: bool, ctx: &Ctx) {
         if generation != self.generation {
             return;
         }
@@ -447,7 +459,8 @@ impl GraphPane {
             let id = intern(&mut self.ids, commit.oid);
             parents.clear();
             parents.extend(
-                drawn_parents
+                drawn
+                    .parents
                     .get(&commit.oid)
                     .unwrap_or(&commit.parents)
                     .iter()
@@ -456,6 +469,11 @@ impl GraphPane {
             );
             self.rows.push(&self.builder.push(id, &parents));
             self.commits.push(commit);
+        }
+        if !drawn.stand_ins.is_empty() || !drawn.landed.is_empty() {
+            self.hidden.stand_ins.extend(drawn.stand_ins);
+            self.hidden.landed.extend(drawn.landed);
+            self.relabel();
         }
         if let Some((oid, at)) = &mut self.range {
             *at = self.commits.iter().position(|c| c.oid == *oid);
@@ -512,7 +530,37 @@ impl GraphPane {
 
     /// Rebuilds ref labels (badges) from a refs snapshot.
     pub fn set_refs(&mut self, snapshot: &RefsSnapshot) {
-        self.labels = build_labels(&snapshot.head, &snapshot.refs, &snapshot.worktrees);
+        self.ref_labels = build_labels(&snapshot.head, &snapshot.refs, &snapshot.worktrees);
+        self.relabel();
+    }
+
+    /// Rebuilds the labels shown from `ref_labels`, moving those on a merge
+    /// left out to the commit drawn in its place.
+    fn relabel(&mut self) {
+        if self.hidden.stand_ins.is_empty() {
+            self.labels.clone_from(&self.ref_labels);
+            return;
+        }
+        let mut labels: HashMap<String, Vec<RefLabel>> = HashMap::with_capacity(self.ref_labels.len());
+        for (oid, list) in &self.ref_labels {
+            let stand_in = Oid::from_hex(oid).and_then(|o| self.hidden.stand_ins.get(&o));
+            match stand_in {
+                Some(at) => labels
+                    .entry(at.to_string())
+                    .or_default()
+                    .extend(list.iter().cloned().map(|l| RefLabel { moved: true, ..l })),
+                None => labels.entry(oid.clone()).or_default().extend(list.iter().cloned()),
+            }
+        }
+        for list in labels.values_mut() {
+            list.sort_by(|a, b| {
+                rank(a.kind)
+                    .cmp(&rank(b.kind))
+                    .then(a.moved.cmp(&b.moved))
+                    .then_with(|| a.name.cmp(&b.name))
+            });
+        }
+        self.labels = labels;
     }
 
     /// Where the commit whose id reads `oid` is in the list.
@@ -520,6 +568,8 @@ impl GraphPane {
         // Only canonical text parses, so this matches exactly the commits
         // whose id reads `oid`.
         let oid = Oid::from_hex(oid)?;
+        // A merge left out is found at the commit drawn in its place.
+        let oid = self.hidden.stand_ins.get(&oid).copied().unwrap_or(oid);
         self.commits.iter().position(|c| c.oid == oid)
     }
 
@@ -750,6 +800,7 @@ pub fn build_labels(head: &Head, refs: &[GitRef], worktrees: &[Worktree]) -> Has
             kind: LabelKind::DetachedHead,
             synced: false,
             worktree: false,
+            moved: false,
         });
     }
     let elsewhere: HashSet<&str> = worktrees
@@ -785,6 +836,7 @@ pub fn build_labels(head: &Head, refs: &[GitRef], worktrees: &[Worktree]) -> Has
             kind,
             synced: synced_upstream(r, &targets).is_some(),
             worktree: kind == LabelKind::Local && elsewhere.contains(r.short_name.as_str()),
+            moved: false,
         });
     }
     for list in labels.values_mut() {

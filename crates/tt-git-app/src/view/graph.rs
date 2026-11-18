@@ -175,8 +175,9 @@ impl LaneCell {
 }
 
 /// `row` in `lanes` columns: past that, one column marks the rest. `merge`
-/// is the commit's, since a graph without merges can draw one with a
-/// single parent joined to several.
+/// draws the node as a merge: a merge commit, or where a merge left out
+/// landed. It's not the row's, since a graph without merges can draw a
+/// commit with one parent joined to several lines.
 fn lane_row(row: RowRef, lanes: usize, merge: bool) -> LaneRow {
     let overflow = row.width() > lanes;
     let shown = if overflow { lanes.saturating_sub(1) } else { row.width() };
@@ -247,7 +248,7 @@ fn row_parts(
 
     // Graph columns.
     let lane_row = if lanes > 0 {
-        lane_row(row, lanes, commit.is_merge())
+        lane_row(row, lanes, commit.is_merge() || graph.landed(commit))
     } else {
         LaneRow::default()
     };
@@ -342,19 +343,27 @@ const SYNCED: &str = " 🔗";
 /// Marks a branch label that another worktree has checked out.
 pub const WORKTREE: &str = "🌳";
 
+/// Marks a label moved off a merge the graph leaves out, onto the commit
+/// drawn in its place: the ref is a merge above it.
+const MOVED: &str = " ↑";
+
 fn label_text(label: &RefLabel) -> (String, StyleRole) {
     let synced = if label.synced { SYNCED } else { "" };
+    let moved = if label.moved { MOVED } else { "" };
     let worktree = if label.worktree {
         format!(" {WORKTREE}")
     } else {
         String::new()
     };
     match label.kind {
-        LabelKind::Head => (format!(" {}{synced} ", label.name), StyleRole::LabelHead),
-        LabelKind::DetachedHead => (" HEAD ".to_string(), StyleRole::LabelDetached),
-        LabelKind::Local => (format!("[{}{synced}{worktree}]", label.name), StyleRole::LabelLocal),
-        LabelKind::Remote => (format!("[{}]", label.name), StyleRole::LabelRemote),
-        LabelKind::Tag => (format!("<{}>", label.name), StyleRole::LabelTag),
+        LabelKind::Head => (format!(" {}{synced}{moved} ", label.name), StyleRole::LabelHead),
+        LabelKind::DetachedHead => (format!(" HEAD{moved} "), StyleRole::LabelDetached),
+        LabelKind::Local => (
+            format!("[{}{synced}{moved}{worktree}]", label.name),
+            StyleRole::LabelLocal,
+        ),
+        LabelKind::Remote => (format!("[{}{moved}]", label.name), StyleRole::LabelRemote),
+        LabelKind::Tag => (format!("<{}{moved}>", label.name), StyleRole::LabelTag),
     }
 }
 
@@ -763,6 +772,7 @@ mod tests {
             kind: LabelKind::Local,
             synced,
             worktree,
+            moved: false,
         };
         assert_eq!(label_text(&label(false, true)).0, "[feat 🌳]");
         assert_eq!(label_text(&label(true, true)).0, "[feat 🔗 🌳]");

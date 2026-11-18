@@ -3,12 +3,11 @@
 use tt_git_core::patch::FileDiff;
 use tt_git_core::update;
 use tt_git_core::{
-    BaseBranches, BranchEntry, CommitFile, GitError, GitRef, LogFilter, LogScope, Recency, RemoteConfig, Repo,
+    BaseBranches, BranchEntry, CommitFile, Drawn, GitError, GitRef, LogFilter, LogScope, Recency, RemoteConfig, Repo,
 };
 
 use crate::action::{Action, RefsSnapshot};
 use crate::config::BranchesConfig;
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use crate::editor::{EditTarget, Snapshot, abs_path, write_snapshot};
@@ -281,7 +280,7 @@ fn log_graph(
             Ok(log) => Action::GraphBatch {
                 generation,
                 commits: log.commits,
-                drawn_parents: log.drawn_parents,
+                drawn: log.drawn,
                 done: true,
             },
             Err(e) => Action::GraphFailed {
@@ -300,7 +299,7 @@ fn log_graph(
             ctx.emit(Action::GraphBatch {
                 generation,
                 commits: std::mem::replace(&mut batch, Vec::with_capacity(GRAPH_BATCH)),
-                drawn_parents: HashMap::new(),
+                drawn: Drawn::default(),
                 done: false,
             });
         }
@@ -310,7 +309,7 @@ fn log_graph(
         Ok(()) => Action::GraphBatch {
             generation,
             commits: batch,
-            drawn_parents: HashMap::new(),
+            drawn: Drawn::default(),
             done: true,
         },
         Err(e) => Action::GraphFailed {

@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use tt_git_core::{
-    BranchHistory, FileState, GitCli, GitError, Head, LogFilter, LogScope, Oid, Recency, RefKind, Repo, SearchIn,
-    message_prefixes,
+    BranchHistory, FileState, FilteredLog, GitCli, GitError, Head, LogFilter, LogScope, Oid, Recency, RefKind, Repo,
+    SearchIn, message_prefixes,
 };
 use tt_git_testkit::{BASE_TIME, Sandbox};
 
@@ -683,135 +683,6 @@ Co-authored-by: Ann <ann@example.com>",
 }
 
 #[test]
-fn leaves_out_merges_drawing_what_they_merged_in_at_their_place() {
-    let sb = Sandbox::new();
-    let c1 = sb.commit_file("a.txt", "1\n", "c1");
-    sb.checkout_new("side");
-    let s1 = sb.commit_file("s.txt", "1\n", "s1");
-    sb.checkout("main");
-    sb.checkout_new("other");
-    let o1 = sb.commit_file("o.txt", "1\n", "o1");
-    sb.checkout("main");
-    let c2 = sb.commit_file("a.txt", "2\n", "c2");
-    // Two merges in a row: each one's place goes to its branch's tip.
-    sb.merge("side");
-    let other_merge = sb.merge("other");
-    let c3 = sb.commit_file("a.txt", "3\n", "c3");
-    let repo = open(&sb);
-    let no_merges = LogFilter {
-        no_merges: true,
-        ..LogFilter::default()
-    };
-    assert!(!no_merges.is_empty());
-
-    let log = repo.filtered_log(&LogScope::All, &no_merges, 100).unwrap();
-    let commits = &log.commits;
-    let mut got: Vec<String> = commits.iter().map(|c| c.oid.to_string()).collect();
-    got.sort();
-    let mut want = vec![c1.clone(), s1.clone(), o1.clone(), c2.clone(), c3.clone()];
-    want.sort();
-    assert_eq!(got, want, "no merges listed");
-    let strings = |parents: &[Oid]| parents.iter().map(|p| p.to_string()).collect::<Vec<_>>();
-    let commit = |oid: &str| commits.iter().find(|c| c.oid == oid).unwrap();
-    let c3 = commit(&c3);
-    assert_eq!(strings(&c3.parents), vec![other_merge], "keeps its own parent");
-    assert_eq!(
-        strings(&log.drawn_parents[&c3.oid]),
-        vec![o1.clone()],
-        "drawn joined to the last merge's tip alone"
-    );
-    assert_eq!(
-        strings(&log.drawn_parents[&o1.parse::<Oid>().unwrap()]),
-        vec![s1.clone(), c1.clone()],
-        "the tip continues the line it was merged into, then its own branch"
-    );
-    assert_eq!(
-        strings(&log.drawn_parents[&s1.parse::<Oid>().unwrap()]),
-        vec![c2, c1.clone()],
-        "and so does the tip of the merge before it"
-    );
-    assert_eq!(
-        strings(&commit(&s1).parents),
-        vec![c1],
-        "a side branch keeps its own parent"
-    );
-    assert_eq!(log.drawn_parents.len(), 3, "only commits around a merge are redrawn");
-
-    // The limit counts the commits kept, not the merges passed over.
-    assert_eq!(repo.filtered_commits(&LogScope::All, &no_merges, 2).unwrap().len(), 2);
-}
-
-#[test]
-fn a_merge_a_branch_points_at_stays_listed() {
-    let sb = Sandbox::new();
-    sb.commit_file("a.txt", "1\n", "c1");
-    sb.checkout_new("feat");
-    let f1 = sb.commit_file("f.txt", "1\n", "f1");
-    sb.checkout("main");
-    sb.checkout_new("fix");
-    let x1 = sb.commit_file("x.txt", "1\n", "x1");
-    sb.checkout("main");
-    let inside = sb.merge("fix");
-    sb.checkout("feat");
-    let feat_tip = sb.merge("main");
-    sb.checkout("main");
-    let main_tip = sb.merge("feat");
-    let repo = open(&sb);
-    let no_merges = LogFilter {
-        no_merges: true,
-        ..LogFilter::default()
-    };
-
-    let log = repo.filtered_log(&LogScope::All, &no_merges, 100).unwrap();
-    let listed = |oid: &str| log.commits.iter().any(|c| c.oid == oid);
-    assert!(listed(&main_tip), "main's tip, with nothing on top");
-    assert!(listed(&feat_tip), "feat's tip, though main merged it");
-    assert!(!listed(&inside), "a merge no branch points at");
-    let drawn = |oid: &str| -> Vec<String> {
-        log.drawn_parents[&oid.parse::<Oid>().unwrap()]
-            .iter()
-            .map(|p| p.to_string())
-            .collect()
-    };
-    assert_eq!(drawn(&main_tip), vec![x1.clone(), feat_tip.clone()]);
-    assert_eq!(drawn(&feat_tip), vec![f1, x1]);
-}
-
-#[test]
-fn a_merged_tip_stands_for_only_one_merge() {
-    let sb = Sandbox::new();
-    sb.commit_file("a.txt", "1\n", "c1");
-    sb.checkout_new("side");
-    let s1 = sb.commit_file("s.txt", "1\n", "s1");
-    sb.checkout("main");
-    sb.checkout_new("other");
-    let o1 = sb.commit_file("o.txt", "1\n", "o1");
-    sb.merge("side");
-    sb.checkout("main");
-    let c2 = sb.commit_file("a.txt", "2\n", "c2");
-    sb.merge("side");
-    sb.merge("other");
-    let c3 = sb.commit_file("a.txt", "3\n", "c3");
-    let repo = open(&sb);
-    let no_merges = LogFilter {
-        no_merges: true,
-        ..LogFilter::default()
-    };
-
-    let log = repo.filtered_log(&LogScope::All, &no_merges, 100).unwrap();
-    let rows: HashMap<Oid, usize> = log.commits.iter().enumerate().map(|(i, c)| (c.oid, i)).collect();
-    // Every line drawn runs down the list, so each lane ends.
-    for (oid, parents) in &log.drawn_parents {
-        for parent in parents {
-            assert!(rows[oid] < rows[parent], "{oid} is above {parent}");
-        }
-    }
-    for oid in [&s1, &o1, &c2, &c3] {
-        assert!(rows.contains_key(&oid.parse::<Oid>().unwrap()));
-    }
-}
-
-#[test]
 fn message_prefixes_ranks_subject_prefixes_by_use() {
     let summaries = [
         "docs(graph): Describe it",
@@ -1212,38 +1083,189 @@ fn merge_conflicts_name_every_conflicted_file() {
     );
 }
 
+/// `log` with merges left out, as tt-git draws it: each commit's drawn
+/// parents, those listed, by row.
+fn drawn_rows(log: &FilteredLog) -> Vec<(String, Vec<String>)> {
+    let rows: HashMap<Oid, usize> = log.commits.iter().enumerate().map(|(i, c)| (c.oid, i)).collect();
+    log.commits
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            let parents = log.drawn.parents.get(&c.oid).unwrap_or(&c.parents);
+            let listed: Vec<String> = parents
+                .iter()
+                .filter(|p| rows.contains_key(p))
+                .inspect(|p| assert!(rows[p] > i, "{} is drawn joined to {p}, above it", c.summary))
+                .map(|p| log.commits[rows[p]].summary.to_string())
+                .collect();
+            (c.summary.to_string(), listed)
+        })
+        .collect()
+}
+
+fn no_merges() -> LogFilter {
+    LogFilter {
+        no_merges: true,
+        ..LogFilter::default()
+    }
+}
+
 #[test]
-fn a_tagged_merge_with_nothing_on_top_keeps_its_lines_joined() {
+fn hidden_merges_draw_merged_work_in_the_line_it_landed_in() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "1\n", "c1");
+    sb.checkout_new("side");
+    sb.commit_file("s.txt", "1\n", "s1");
+    sb.checkout("main");
+    sb.checkout_new("other");
+    sb.commit_file("o.txt", "1\n", "o1");
+    sb.checkout("main");
+    sb.commit_file("a.txt", "2\n", "c2");
+    let side_merge = sb.merge("side");
+    let other_merge = sb.merge("other");
+    sb.commit_file("a.txt", "3\n", "c3");
+    let repo = open(&sb);
+    assert!(!no_merges().is_empty());
+
+    let log = repo.filtered_log(&LogScope::All, &no_merges(), 100).unwrap();
+    let line = |names: &[&str]| -> Vec<(String, Vec<String>)> {
+        names
+            .windows(2)
+            .map(|w| (w[0].to_string(), vec![w[1].to_string()]))
+            .chain(std::iter::once((names[names.len() - 1].to_string(), vec![])))
+            .collect()
+    };
+    assert_eq!(
+        drawn_rows(&log),
+        line(&["c3", "o1", "s1", "c2", "c1"]),
+        "one line: each branch's work where it was merged"
+    );
+    let summary = |oid: &Oid| log.commits.iter().find(|c| c.oid == *oid).unwrap().summary.to_string();
+    let stand_in = |merge: &str| summary(&log.drawn.stand_ins[&merge.parse::<Oid>().unwrap()]);
+    assert_eq!(stand_in(&other_merge), "o1");
+    assert_eq!(stand_in(&side_merge), "s1");
+    let mut landed: Vec<String> = log.drawn.landed.iter().map(summary).collect();
+    landed.sort();
+    assert_eq!(landed, vec!["o1", "s1"], "marked where a merge landed");
+    let c3 = log.commits.iter().find(|c| &*c.summary == "c3").unwrap();
+    assert_eq!(
+        c3.parents.to_vec(),
+        vec![other_merge.parse::<Oid>().unwrap()],
+        "keeps its own parents"
+    );
+
+    // The limit counts the commits kept, not the merges passed over.
+    assert_eq!(repo.filtered_commits(&LogScope::All, &no_merges(), 2).unwrap().len(), 2);
+}
+
+#[test]
+fn hidden_merges_of_the_base_into_a_branch_draw_nothing() {
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "1\n", "c1");
+    sb.checkout_new("feat");
+    sb.commit_file("f.txt", "1\n", "f1");
+    sb.checkout("main");
+    sb.commit_file("a.txt", "2\n", "x1");
+    sb.checkout("feat");
+    // Keeping feat up to date with main, twice; a branch is left at the second.
+    sb.merge("main");
+    sb.checkout("main");
+    sb.commit_file("a.txt", "3\n", "x2");
+    sb.checkout("feat");
+    let sync = sb.merge("main");
+    sb.git(&["branch", "synced"]);
+    sb.commit_file("f.txt", "2\n", "f2");
+    sb.checkout("main");
+    let landed = sb.merge("feat");
+    let repo = open(&sb);
+
+    let log = repo.filtered_log(&LogScope::All, &no_merges(), 100).unwrap();
+    let listed = |oid: &str| log.commits.iter().any(|c| c.oid == oid);
+    assert!(!listed(&landed), "main points at it, but it's still left out");
+    assert!(!listed(&sync), "so is the one synced points at");
+    let rows = drawn_rows(&log);
+    let drawn = |name: &str| rows.iter().find(|(n, _)| n == name).unwrap().1.clone();
+    // git lists x2 between the syncs, above f1, so feat keeps its lane and
+    // joins main where it landed.
+    assert_eq!(drawn("f2"), vec!["f1", "x2"], "feat joins main at its last commit");
+    assert_eq!(drawn("f1"), vec!["c1"], "the syncs from main leave no line");
+    assert_eq!(drawn("x2"), vec!["x1"]);
+    let summary = |oid: &str| {
+        let oid = log.drawn.stand_ins[&oid.parse::<Oid>().unwrap()];
+        log.commits.iter().find(|c| c.oid == oid).unwrap().summary.to_string()
+    };
+    assert_eq!(summary(&landed), "f2", "main's badge goes to where feat landed");
+    assert_eq!(summary(&sync), "f1", "synced's to its own last commit");
+}
+
+#[test]
+fn hidden_merges_always_draw_lines_down_the_list() {
+    // A long-lived branch, kept up to date, with a branch of its own merged
+    // into it, landing after other work on main.
+    let sb = Sandbox::new();
+    sb.commit_file("a.txt", "1\n", "c1");
+    sb.checkout_new("long");
+    sb.commit_file("l.txt", "1\n", "l1");
+    sb.checkout_new("sub");
+    sb.commit_file("u.txt", "1\n", "u1");
+    sb.checkout("main");
+    for i in 2..5 {
+        sb.checkout_new(&format!("pr{i}"));
+        sb.commit_file(&format!("p{i}.txt"), "1\n", &format!("p{i}"));
+        sb.checkout("main");
+        sb.commit_file("a.txt", &format!("{i}\n"), &format!("m{i}"));
+        sb.merge(&format!("pr{i}"));
+        sb.checkout("long");
+        sb.merge("main");
+        sb.commit_file("l.txt", &format!("{i}\n"), &format!("l{i}"));
+        sb.checkout("main");
+    }
+    sb.checkout("long");
+    sb.merge("sub");
+    sb.checkout("main");
+    sb.merge("long");
+    sb.commit_file("a.txt", "9\n", "top");
+    let repo = open(&sb);
+
+    let log = repo.filtered_log(&LogScope::All, &no_merges(), 100).unwrap();
+    // Asserts every line goes down.
+    let rows = drawn_rows(&log);
+    assert_eq!(rows.len(), 13, "every commit but the merges: {rows:#?}");
+    let lines_into = |name: &str| rows.iter().filter(|(_, ps)| ps.iter().any(|p| p == name)).count();
+    assert!(lines_into("u1") > 0, "sub's line is joined: {rows:#?}");
+    assert!(lines_into("l1") > 0, "and long's: {rows:#?}");
+    assert!(log.commits.iter().all(|c| !c.is_merge()), "no merges listed: {rows:#?}");
+}
+
+#[test]
+fn hidden_merges_with_no_base_branch_follow_head() {
     let sb = Sandbox::new();
     let c1 = sb.commit_file("a.txt", "1\n", "c1");
     sb.checkout_new("feat");
-    let f1 = sb.commit_file("f.txt", "1\n", "f1");
+    sb.commit_file("f.txt", "1\n", "f1");
     sb.checkout("main");
     sb.checkout_new("fix");
     sb.commit_file("x.txt", "1\n", "x1");
     sb.checkout("main");
     sb.merge("fix");
-    // feat takes main in, then main takes feat.
     sb.checkout("feat");
     sb.merge("main");
     sb.checkout("main");
     sb.merge("feat");
-    // Only a tag is left there, and a tag doesn't keep a merge listed.
+    // Only a tag is left, and no branch to call the base.
     sb.git(&["tag", "v1"]);
     sb.git(&["switch", "-q", "--detach", &c1]);
     sb.git(&["branch", "-q", "-D", "main", "feat", "fix"]);
     let repo = open(&sb);
-    let no_merges = LogFilter {
-        no_merges: true,
-        ..LogFilter::default()
-    };
 
-    let log = repo.filtered_log(&LogScope::All, &no_merges, 100).unwrap();
-    let f1: Oid = f1.parse().unwrap();
+    let log = repo.filtered_log(&LogScope::All, &no_merges(), 100).unwrap();
+    let rows = drawn_rows(&log);
+    let lines_into = |name: &str| rows.iter().filter(|(_, ps)| ps.iter().any(|p| p == name)).count();
     assert!(
-        log.drawn_parents.values().any(|parents| parents.contains(&f1)),
-        "feat's line joins something, in {:#?}",
-        log.commits.iter().map(|c| (&c.summary, &c.parents)).collect::<Vec<_>>()
+        lines_into("f1") + lines_into("x1") > 0,
+        "the branches are joined: {rows:#?}"
     );
     assert!(log.commits.iter().any(|c| c.oid == c1));
+    let v1 = sb.rev_parse("v1").parse::<Oid>().unwrap();
+    assert!(log.drawn.stand_ins.contains_key(&v1), "the tag's merge has a stand-in");
 }

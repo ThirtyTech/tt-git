@@ -1,6 +1,6 @@
 //! Plain data types produced by the parsers.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use serde::Serialize;
@@ -64,10 +64,26 @@ pub struct BranchHistory {
 pub struct FilteredLog {
     /// In topological order, each with its own parents.
     pub commits: Vec<Commit>,
-    /// The parents to draw a commit joined to, for each one a merge the log
-    /// left out changes: the commit merged in takes the merge's place, so
-    /// it joins the line it was merged into and the lanes keep their shape.
-    pub drawn_parents: HashMap<Oid, Parents>,
+    /// How to draw the commits with the merges the log left out.
+    pub drawn: Drawn,
+}
+
+/// How to draw a log that leaves merges out (see
+/// [`LogFilter::no_merges`](crate::LogFilter::no_merges)). Empty when it
+/// leaves none out.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Drawn {
+    /// The parents to draw a commit joined to, for each one whose lines a
+    /// merge left out changes. What a branch merged in is drawn in the line
+    /// it was merged into, and a merge that only brought the base branch
+    /// into a branch leaves no line at all.
+    pub parents: HashMap<Oid, Parents>,
+    /// Each merge left out, mapped to the listed commit drawn in its place,
+    /// so refs pointing at the merge can be shown there.
+    pub stand_ins: HashMap<Oid, Oid>,
+    /// The commits in the place of a merge that brought a branch's work
+    /// in: where that work landed.
+    pub landed: HashSet<Oid>,
 }
 
 /// [`Commit::short_oid`]: up to 7 hex digits, on the stack.
