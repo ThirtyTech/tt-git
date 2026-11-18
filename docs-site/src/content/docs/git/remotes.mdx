@@ -74,7 +74,8 @@ The help bar shows `fetching all remotes` while it runs, then
 ## Background fetch
 
 While a repository is open, tt-git also fetches every remote on its own
-every minute, so the remote branches, the ahead and behind counts and the
+every minute, starting as soon as you open it: a repository that hasn't
+been fetched within the interval is fetched straight away, so the remote branches, the ahead and behind counts and the
 [new commit notifications](/desktop/using/#notifications) stay current
 without you pressing <kbd>f</kbd>. It runs the same
 `git fetch --all --prune`, in the terminal app and the desktop app. Set
