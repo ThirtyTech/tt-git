@@ -64,14 +64,20 @@ pub fn install_dir(exe: &Path) -> Result<PathBuf, UpdateError> {
     if !named_tt_git {
         return Err(UpdateError::NotTtGit(exe.to_path_buf()));
     }
-    // Every cargo profile directory (target/debug, target/release) has one.
-    if dir.join(".fingerprint").is_dir() {
+    if is_cargo_profile_dir(dir) {
         return Err(UpdateError::CargoBuild(dir.to_path_buf()));
     }
     if let Some(app) = app_bundle(dir).or_else(|| windows_installer(dir)) {
         return Err(UpdateError::DesktopApp(app.to_path_buf()));
     }
     Ok(dir.to_path_buf())
+}
+
+/// Whether `dir` is a cargo profile directory (target/debug, target/release).
+/// Every cargo keeps its `.cargo-lock` there. Cargo before 1.100 also kept
+/// `.fingerprint` there; 1.100 moved fingerprints under `build/`.
+fn is_cargo_profile_dir(dir: &Path) -> bool {
+    dir.join(".cargo-lock").is_file() || dir.join(".fingerprint").is_dir()
 }
 
 /// The folder the desktop app's Windows installer installed into, if `dir`
@@ -360,6 +366,16 @@ mod tests {
         let err = install_dir(&exe).unwrap_err();
         assert!(matches!(err, UpdateError::CargoBuild(_)));
         assert!(err.to_string().contains("cargo build directory"), "{err}");
+    }
+
+    #[test]
+    fn refuses_a_cargo_build_without_fingerprints_beside_it() {
+        // Cargo 1.100 and later keep fingerprints under build/, not in the
+        // profile directory; its lock file is still there.
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join(".cargo-lock"), "").unwrap();
+        let err = install_dir(&dir.path().join("tt-git")).unwrap_err();
+        assert!(matches!(err, UpdateError::CargoBuild(_)), "{err}");
     }
 
     #[test]
