@@ -128,19 +128,20 @@ The filtered log adds:
 - for [hidden merge commits](/panes/graph/#hiding-merge-commits), nothing:
   git lists them without `--max-count`, and tt-git leaves out each commit
   with more than one parent, stopping once `max_commits` others are listed.
-  A merge that a local or remote branch or `HEAD` points at stays listed
-  (`git for-each-ref` and `git rev-parse` find those), or the branch would
-  lose its badge.
   `--no-merges` would leave a commit's parent pointing at the merge it
-  hid, which breaks every line through one. Instead the tip of what a
-  merge brought in stands in for it: tt-git draws that commit joined to the
-  merge's other parent as well as its own parents, and draws the merge's
-  child joined to that commit. Replacing a merge with all its parents would
-  fan a run of merges out into one lane per branch. Each commit stands in
-  for one merge, and only if it's listed above the lines it would join;
-  otherwise the merge's child is drawn joined to the merge's parents, or,
-  if it has no child, the highest of those parents is drawn joined to the
-  rest. Each commit keeps its real parents for everything else.
+  hid, which breaks every line through one, so tt-git works out how to draw
+  around each merge itself. It reads the base branch's first-parent line
+  with `git rev-list --first-parent`, for both the local branch and its
+  remote branch (`HEAD`'s line when there's no base branch). A merge off
+  that line whose other parent is on it only synced the base into a
+  branch, so it draws nothing. For any other merge, tt-git walks down the
+  listed commits to find what the merge brought in: what its other parents
+  reach that its first parent doesn't. If those commits are all listed
+  above the line they landed in, they're drawn in that line and the merge's
+  child joins the top one. Otherwise the branch keeps its lane and its top
+  commit joins the line it was merged into. A badge on a hidden merge goes
+  on the commit drawn in its place. Each commit keeps its real parents for
+  everything else.
 - for a message on the diff, `-G<regex>`, and `--regexp-ignore-case` when
   the regex has no capital letter. git keeps only the commits whose patch
   adds or removes a line matching it, so `--max-count` stays. `-G` reads

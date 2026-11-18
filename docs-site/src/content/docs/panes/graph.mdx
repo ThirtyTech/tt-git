@@ -88,19 +88,25 @@ Press <kbd>m</kbd> to hide merge commits, so the graph shows the commits that ma
 The title says `no merges`, as in `Graph [all · no merges]`. Press <kbd>m</kbd> again to show
 them.
 
-The graph keeps its shape. The commit just before a merge, the last one on the branch that was
-merged in, takes the merge's place: it sits on the line it was merged into, and the rest of its
-branch runs off it as a lane, so you still see where each branch came in. It's drawn as `●`, since
-it isn't a merge itself, and keeps its real parents in the [details](/panes/details/). A commit
-made after the merge connects to it.
+Hiding merges also simplifies the lanes. Each merged branch's commits are drawn in the line they
+were merged into, as if they'd been made there, so a branch that's already merged doesn't need a
+lane of its own. The top commit of each merged run is drawn as `◉`, to show where a merge landed.
+It keeps its real parents in the [details](/panes/details/). Branches that aren't merged yet still
+fork off in their own lanes.
 
-A commit can only take one merge's place. When a branch was merged twice, or a commit can't sit
-above the lines it would join, the next commit draws those lines coming straight into it. If
-there's no next commit, the highest of those lines joins the others, so a merged branch never
-looks unmerged.
+A merge that only brought the base branch into a branch, like
+`Merge branch 'development' into feature`, leaves nothing behind: the branch's lane runs straight
+on. The base branch is the one you picked on the
+[Unmerged and Merged tabs](/panes/merged-unmerged/), or the one tt-git detects. Without one,
+tt-git goes by `HEAD`'s line.
 
-A merge that a branch or `HEAD` points at stays in the graph, so the branch keeps its badge and
-its place. A tag doesn't keep a merge in the graph.
+A long-lived branch whose older commits are listed below where it was merged can't be drawn that
+way. It keeps its own lane down to where it started, and joins the line it was merged into at
+the commit that took the merge's place, drawn as `◉`.
+
+Every merge is hidden, including one that a branch, a tag or `HEAD` points at. Its badge moves to
+the commit drawn in its place, marked with an arrow, as in `[main ↑]`: the branch is at the merge
+just above that commit.
 
 Hiding merges works with [the filters](#filtering-by-author-or-file) and with
 <kbd>a</kbd>. <kbd>esc</kbd> clears the filters but leaves merges hidden. The single branch the
