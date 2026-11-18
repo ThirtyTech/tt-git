@@ -1,9 +1,9 @@
 //! Fetching every remote on a timer while a repository is open
 //! (`[fetch] interval`).
 //!
-//! [`App`](crate::App) asks every [`CHECK_EVERY`] whether a fetch is due and,
-//! if no fetch, pull or push is running, starts one [`run`] off the UI
-//! thread. `run` decides: a fetch is due once the newest fetch of the
+//! [`App`](crate::App) asks as soon as the repository opens, then every
+//! [`CHECK_EVERY`], whether a fetch is due and, if no fetch, pull or push is
+//! running, starts one [`run`] off the UI thread. `run` decides: a fetch is due once the newest fetch of the
 //! repository (any worktree's `FETCH_HEAD`, so a fetch in a terminal counts
 //! too, or the last background attempt) is older than the interval the
 //! [`Policy`] gives. A lock in tt-git's state dir, keyed by the repository's
@@ -19,10 +19,6 @@ use tt_git_core::Repo;
 
 /// How often the app asks whether a fetch is due.
 pub const CHECK_EVERY: Duration = Duration::from_secs(30);
-
-/// How long after the repository opens the first check waits, so opening
-/// it isn't slowed by a fetch.
-pub const FIRST_CHECK: Duration = Duration::from_secs(10);
 
 /// A lock older than this was left by a process that died mid-fetch.
 const STALE_LOCK: Duration = Duration::from_secs(10 * 60);

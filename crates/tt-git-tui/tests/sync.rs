@@ -212,16 +212,15 @@ fn last_fetched_an_hour_ago(sb: &Sandbox) {
         .expect("FETCH_HEAD");
 }
 
-/// Ticks to the app's first background fetch check.
-const FIRST_CHECK: u64 = 10 * 4;
+/// The app checks whether a background fetch is due on its first tick.
+const FIRST_CHECK: u64 = 1;
 
 #[test]
 fn a_background_fetch_says_nothing() {
     let sb = behind_a_push_elsewhere();
     let mut t = TestDriver::with_background_fetch(Config::default(), &sb);
-    t.tick(FIRST_CHECK - 1).wait_idle();
     assert!(!sb.git(&["branch", "-r"]).contains("origin/theirs"));
-    t.tick(1);
+    t.tick(FIRST_CHECK);
     assert!(!help_bar(&t).contains('│'), "{}", help_bar(&t));
     t.wait_idle();
     assert!(sb.git(&["branch", "-r"]).contains("origin/theirs"));
@@ -250,7 +249,8 @@ fn a_fetch_asked_for_during_a_background_fetch_waits_for_it() {
     let mut t = TestDriver::with_background_fetch(Config::default(), &sb);
     t.tick(FIRST_CHECK);
     t.send_frame(Action::Run(GitOp::FetchAll));
-    assert!(help_bar(&t).ends_with("│ ⠋ fetching all remotes"), "{}", help_bar(&t));
+    let bar = help_bar(&t);
+    assert!(bar.contains("│ ") && bar.ends_with(" fetching all remotes"), "{bar}");
     t.wait_idle();
     assert_eq!(t.app().notice(), Some("✓ fetched all remotes"));
     assert!(sb.git(&["branch", "-r"]).contains("origin/theirs"));
@@ -262,6 +262,6 @@ fn background_fetching_can_be_turned_off() {
     let mut config = Config::default();
     config.fetch.interval = 0;
     let mut t = TestDriver::with_background_fetch(config, &sb);
-    t.tick(FIRST_CHECK * 2).wait_idle();
+    t.tick(40).wait_idle();
     assert!(!sb.git(&["branch", "-r"]).contains("origin/theirs"));
 }

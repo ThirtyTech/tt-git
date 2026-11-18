@@ -20,7 +20,9 @@ pub(super) struct BackgroundFetch {
     /// Set by [`App::set_fetch_policy`]; otherwise it follows
     /// `[fetch] conserve`.
     policy: Option<Arc<dyn Policy>>,
-    /// [`App::ticks`] of the next check.
+    /// [`App::ticks`] of the next check. The first is on the first tick,
+    /// so a repository that hasn't been fetched in a while is fetched as
+    /// soon as it opens.
     next_check: u64,
     /// A check is running.
     running: bool,
@@ -34,7 +36,7 @@ impl Default for BackgroundFetch {
         Self {
             dir: tt_git_core::paths::state_dir().join("fetch"),
             policy: None,
-            next_check: bg_fetch::FIRST_CHECK.as_secs() * TICKS_PER_SEC,
+            next_check: 0,
             running: false,
             joined: false,
         }
